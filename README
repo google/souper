@@ -1,0 +1,64 @@
+Souper is a superoptimizer for LLVM IR. It uses an SMT solver to help identify
+missing peephole optimizations in LLVM's midend optimizers.
+
+Requirements
+------------
+
+You will need a reasonably modern compiler toolchain. LLVM has instructions
+on how to get one for Linux:
+http://llvm.org/docs/GettingStarted.html#getting-a-modern-host-c-toolchain
+
+You will also need CMake to build Souper and its dependencies.
+
+To run Souper over a bitcode file, you will need an SMT solver. Souper can
+use Boolector, CVC4 or STP. (Note that CVC4 has a bug which prevents it from
+being used as the solver at the moment. A patch [1] which fixes the bug is
+under review.)
+
+[1] https://github.com/CVC4/CVC4/pull/21
+
+Building Souper
+---------------
+
+1. Download and build dependencies:
+     $ ./update_deps.sh $buildtype
+   $buildtype may be Debug or Release.
+
+2. Run CMake from a build directory:
+     $ mkdir /path/to/souper-build
+     $ cd /path/to/souper-build
+     $ cmake -DCMAKE_BUILD_TYPE=$buildtype /path/to/souper
+   Be sure to select the same build type used when compiling the dependencies.
+
+3. Run 'make' from the build directory.
+
+Using Souper
+------------
+
+After following the above instructions, you will have a Souper
+executable in /path/to/souper-build/souper and a Clang executable in
+/path/to/souper/third_party/llvm/$buildtype/bin/clang.  You can use the
+Clang executable to create an LLVM bitcode file like this:
+    $ /path/to/clang -emit-llvm -c -o /path/to/file.bc /path/to/file.c
+
+Once you have a bitcode file you can invoke Souper with the path to the
+bitcode file as a command line argument. You will also need one of these
+flags to tell Souper where the SMT solver executable is:
+
+  -boolector-path=<path>       - Path to Boolector executable
+  -cvc4-path=<path>            - Path to CVC4 executable
+  -stp-path=<path>             - Path to STP executable
+
+For example:
+    $ /path/to/souper -stp-path=/path/to/stp-build/stp /path/to/file.bc
+
+Souper will extract SMT queries from the bitcode file and list them together
+with the result from the SMT solver. Any unsatisfiable queries (which represent
+missed optimization opportunities) will have "unsat" printed after them,
+while satisfiable queries will have "sat".
+
+Disclaimer
+----------
+
+Please note that although some of the authors are employed by Google, this
+is not an official Google product.
