@@ -67,9 +67,11 @@ struct ExprBuilder {
 }
 
 ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name) {
-  Array *A = new Array(ArrayNames.makeName(Name), Width);
+  Array *A = new Array(ArrayNames.makeName(Name), 1, 0, 0, Expr::Int32, Width);
   Arrays.emplace_back(A);
-  return Expr::createTempRead(A, Width);
+
+  UpdateList UL(A, 0);
+  return ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
 }
 
 ref<Expr> ExprBuilder::makeArrayRead(Value *V) {

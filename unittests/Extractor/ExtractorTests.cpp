@@ -96,12 +96,12 @@ define void @f(i32 %p, i32 %q) {
   auto EC = Extract(M.get());
 
   EXPECT_TRUE(
-      HasExprCandidate(EC, "(Ult (ReadLSB w32 0 p) (ReadLSB w32 0 q))"));
+      HasExprCandidate(EC, "(Ult (Read w32 0 p) (Read w32 0 q))"));
   EXPECT_TRUE(HasExprCandidate(
-      EC, "(Eq false (Ult (ReadLSB w32 0 p) (ReadLSB w32 0 q)))"));
+      EC, "(Eq false (Ult (Read w32 0 p) (Read w32 0 q)))"));
 
   EXPECT_TRUE(HasExprCandidate(
-      EC, "(Ult N0:(ReadLSB w32 0 p) (Add w32 N0 (ReadLSB w32 0 q)))"));
+      EC, "(Ult N0:(Read w32 0 p) (Add w32 N0 (Read w32 0 q)))"));
 }
 
 TEST(ExtractorTest, Nsw) {
@@ -117,10 +117,10 @@ define void @f(i32 %p, i32 %q) {
   auto EC = Extract(M.get());
 
   EXPECT_TRUE(HasExprCandidate(EC,
-                               "(Or (And (Eq N0:(Extract 7 N1:(Read w8 3 p)) "
-                               "(Extract 7 N2:(Read w8 3 q))) (Eq false (Eq N0 "
-                               "(Extract 31 N3:(Add w32 N4:(ReadLSB w32 0 p) "
-                               "(ReadLSB w32 0 q)))))) (Ult N4 N3))"));
+                               "(Or (And (Eq N0:(Extract 31 N1:(Read w32 0 p)) "
+                               "(Extract 31 N2:(Read w32 0 q))) (Eq false (Eq "
+                               "N0 (Extract 31 N3:(Add w32 N1 N2))))) (Ult N1 "
+                               "N3))"));
 }
 
 TEST(ExtractorTest, PhiCond) {
@@ -148,9 +148,9 @@ cont:
   auto EC = Extract(M.get());
 
   EXPECT_TRUE(HasExprCandidate(EC,
-                               "(Ult N0:(ReadLSB w32 0 p) (Select w32 (Extract "
-                               "0 (Read w8 0 arr)) (Add w32 N0 N1:(ReadLSB w32 "
-                               "0 q)) (Mul w32 N0 N1)))"));
+                               "(Ult N0:(Read w32 0 p) (Select w32 (Read 0 "
+                               "arr) (Add w32 N0 N1:(Read w32 0 q)) (Mul w32 "
+                               "N0 N1)))"));
 }
 
 TEST(ExtractorTest, PhiLoop) {
