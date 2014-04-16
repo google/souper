@@ -354,8 +354,9 @@ std::pair<ref<Expr>, ref<Expr>> GetExprPair(
   ref<Expr> E = EB.get(I);
   ref<Expr> PC = EB.getPathCondition(I->getParent());
   ref<Expr> Cond = AndExpr::create(EB.InstCondition, PC);
-  return std::make_pair(Expr::createImplies(Cond, E),
-                        Expr::createImplies(Cond, Expr::createIsZero(E)));
+  return std::make_pair(
+      Expr::createIsZero(Expr::createImplies(Cond, Expr::createIsZero(E))),
+      Expr::createIsZero(Expr::createImplies(Cond, E)));
 }
 
 typedef std::set<std::pair<const Array *, uint64_t>> OffsetSet;

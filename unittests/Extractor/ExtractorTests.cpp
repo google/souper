@@ -117,10 +117,10 @@ define void @f(i32 %p, i32 %q) {
   auto EC = Extract(M.get());
 
   EXPECT_TRUE(HasExprCandidate(EC,
-                               "(Or (And (Eq N0:(Extract 31 N1:(Read w32 0 p)) "
-                               "(Extract 31 N2:(Read w32 0 q))) (Eq false (Eq "
-                               "N0 (Extract 31 N3:(Add w32 N1 N2))))) (Ult N1 "
-                               "N3))"));
+                               "(And (Eq false (And (Eq N0:(Extract 31 "
+                               "N1:(Read w32 0 p)) (Extract 31 N2:(Read w32 0 "
+                               "q))) (Eq false (Eq N0 (Extract 31 N3:(Add w32 "
+                               "N1 N2)))))) (Ult N1 N3))"));
 }
 
 TEST(ExtractorTest, PhiCond) {
