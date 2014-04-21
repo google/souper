@@ -22,6 +22,7 @@
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/CandidateMap.h"
 #include "souper/SMTLIB2/Solver.h"
+#include "souper/Tool/CandidateMapUtils.h"
 #include <functional>
 #include <memory>
 
@@ -32,43 +33,55 @@ using namespace souper;
 namespace {
 
 class ExtractorAction : public CodeGenAction {
-  ExprCandidateMap &CandMap;
-  PerTranslationUnitCallback CB;
+  InstContext &IC;
+  ExprBuilderContext &EBC;
+  std::vector<std::unique_ptr<Module>> &Mods;
+  CandidateMap &CandMap;
 
- public:
-  ExtractorAction(ExprCandidateMap &CandMap, PerTranslationUnitCallback CB)
-      : CodeGenAction(Backend_EmitNothing), CandMap(CandMap), CB(CB) {}
+public:
+  ExtractorAction(LLVMContext &VMC, InstContext &IC, ExprBuilderContext &EBC,
+                  std::vector<std::unique_ptr<Module>> &Mods,
+                  CandidateMap &CandMap)
+      : CodeGenAction(Backend_EmitNothing, &VMC),
+        IC(IC),
+        EBC(EBC),
+        Mods(Mods),
+        CandMap(CandMap) {}
 
   void EndSourceFileAction() {
     CodeGenAction::EndSourceFileAction();
     std::unique_ptr<Module> Mod(takeModule());
 
     if (Mod) {
-      auto Cands = ExtractExprCandidates(Mod.get());
-      AddToCandidateMap(CandMap, Cands);
-      if (CB)
-        CB(CandMap);
+      AddModuleToCandidateMap(IC, EBC, CandMap, Mod.get());
+      Mods.emplace_back(std::move(Mod));
     }
   }
 };
 
 class ExtractorActionFactory : public tooling::FrontendActionFactory {
-  ExprCandidateMap &CandMap;
-  PerTranslationUnitCallback CB;
+  LLVMContext &VMC;
+  InstContext &IC;
+  ExprBuilderContext &EBC;
+  std::vector<std::unique_ptr<Module>> &Mods;
+  CandidateMap &CandMap;
 
  public:
-  ExtractorActionFactory(ExprCandidateMap& CandMap,
-                         PerTranslationUnitCallback CB)
-      : CandMap(CandMap), CB(CB) {}
+  ExtractorActionFactory(LLVMContext &VMC, InstContext &IC,
+                         ExprBuilderContext &EBC,
+                         std::vector<std::unique_ptr<Module>> &Mods,
+                         CandidateMap &CandMap)
+      : VMC(VMC), IC(IC), EBC(EBC), Mods(Mods), CandMap(CandMap) {}
 
-  FrontendAction* create() {
-    return new ExtractorAction(CandMap, CB);
+  FrontendAction *create() {
+    return new ExtractorAction(VMC, IC, EBC, Mods, CandMap);
   }
 };
 
 }
 
 tooling::FrontendActionFactory *souper::CreateExtractorActionFactory(
-    ExprCandidateMap &CandMap, PerTranslationUnitCallback CB) {
-  return new ExtractorActionFactory(CandMap, CB);
+    LLVMContext &VMC, InstContext &IC, ExprBuilderContext &EBC,
+    std::vector<std::unique_ptr<Module>> &Mods, CandidateMap &CandMap) {
+  return new ExtractorActionFactory(VMC, IC, EBC, Mods, CandMap);
 }

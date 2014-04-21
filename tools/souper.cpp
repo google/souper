@@ -30,6 +30,8 @@
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/CandidateMap.h"
 #include "souper/SMTLIB2/Solver.h"
+#include "souper/Tool/CandidateMapUtils.h"
+#include "souper/Tool/GetSolverFromArgs.h"
 
 #include <iostream>
 
@@ -43,18 +45,6 @@ InputFilename(cl::Positional, cl::desc("<input bitcode file>"),
 static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"),
     cl::init(""), cl::value_desc("filename"));
-
-static cl::opt<std::string> BoolectorPath(
-    "boolector-path", cl::desc("Path to Boolector executable"), cl::init(""),
-    cl::value_desc("path"));
-
-static cl::opt<std::string> CVC4Path("cvc4-path",
-                                     cl::desc("Path to CVC4 executable"),
-                                     cl::init(""), cl::value_desc("path"));
-
-static cl::opt<std::string> STPPath("stp-path",
-                                    cl::desc("Path to STP executable"),
-                                    cl::init(""), cl::value_desc("path"));
 
 int main(int argc, char **argv) {
   sys::PrintStackTraceOnErrorSignal();
@@ -98,42 +88,13 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  std::unique_ptr<SMTLIBSolver> Solver;
-  if (!BoolectorPath.empty()) {
-    Solver = createBoolectorSolver(makeExternalSolverProgram(BoolectorPath));
-  } else if (!CVC4Path.empty()) {
-    Solver = createCVC4Solver(makeExternalSolverProgram(CVC4Path));
-  } else if (!STPPath.empty()) {
-    Solver = createSTPSolver(makeExternalSolverProgram(STPPath));
-  }
+  std::unique_ptr<SMTLIBSolver> Solver = GetSolverFromArgs();
 
-  std::vector<ExprCandidate> Cands = ExtractExprCandidates(M.get());
-  ExprCandidateMap CandMap;
-  AddToCandidateMap(CandMap, Cands);
+  InstContext IC;
+  ExprBuilderContext EBC;
+  CandidateMap CandMap;
 
-  for (const auto &Cand : CandMap) {
-    llvm::outs() << Cand.first();
+  AddModuleToCandidateMap(IC, EBC, CandMap, M.get());
 
-    llvm::outs() << "Priority: " << Cand.second.Priority << "\n\n";
-    llvm::outs() << "Functions:\n";
-    for (const auto &F : Cand.second.Functions) {
-      llvm::outs() << F.first() << '\n';
-    }
-    llvm::outs() << '\n';
-
-    if (Solver) {
-      bool Sat;
-      if (error_code EC = Solver->isSatisfiable(Cand.first(), Sat)) {
-        llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
-        return 1;
-      }
-      if (Sat) {
-        llvm::outs() << "sat\n\n";
-      } else {
-        llvm::outs() << "unsat\n\n";
-      }
-    }
-  }
-
-  return 0;
+  return SolveCandidateMap(llvm::outs(), CandMap, Solver.get()) ? 0 : 1;
 }

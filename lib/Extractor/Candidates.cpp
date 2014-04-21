@@ -28,169 +28,136 @@
 #include "llvm/PassManager.h"
 #include "klee/Expr.h"
 #include "klee/util/Ref.h"
+#include "souper/Inst/Inst.h"
 #include "souper/Util/UniqueNameSet.h"
 
 using namespace llvm;
 using namespace klee;
 using namespace souper;
 
+void souper::PrintReplacement(llvm::raw_ostream &Out,
+                              const std::vector<InstMapping> &PCs,
+                              InstMapping Mapping) {
+  PrintContext Printer(Out);
+  for (const auto &PC : PCs) {
+    std::string SRef = Printer.printInst(PC.Source);
+    std::string RRef = Printer.printInst(PC.Replacement);
+    Out << "pc " << SRef << " " << RRef << '\n';
+  }
+
+  std::string SRef = Printer.printInst(Mapping.Source);
+  std::string RRef = Printer.printInst(Mapping.Replacement);
+  Out << "cand " << SRef << " " << RRef << '\n';
+}
+
+
+void CandidateReplacement::print(llvm::raw_ostream &Out) const {
+  Out << "; Priority: " << Priority << '\n';
+  PrintReplacement(Out, Parent->PCs, Mapping);
+}
+
 namespace {
 
 struct ExprBuilder {
   ExprBuilder(const ExprBuilderOptions &Opts, Module *M, const LoopInfo *LI,
-              std::vector<std::unique_ptr<Array>> &Arrays)
-      : Opts(Opts),
-        DL(M->getDataLayout()),
-        LI(LI),
-        Arrays(Arrays),
-        InstCondition(klee::ConstantExpr::create(1, Expr::Bool)) {}
+              InstContext &IC, ExprBuilderContext &EBC)
+      : Opts(Opts), DL(M->getDataLayout()), LI(LI), IC(IC), EBC(EBC) {}
 
   const ExprBuilderOptions &Opts;
   const DataLayout *DL;
   const LoopInfo *LI;
-  std::map<const Value *, ref<Expr>> ExprMap;
-  std::vector<std::unique_ptr<Array>> &Arrays;
-  UniqueNameSet ArrayNames;
-  ref<Expr> InstCondition;
+  InstContext &IC;
+  ExprBuilderContext &EBC;
 
-  ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name = "arr");
-  ref<Expr> makeArrayRead(Value *V);
-  ref<Expr> buildConstant(Constant *c);
-  ref<Expr> buildGEP(ref<Expr> Ptr, gep_type_iterator begin,
-                     gep_type_iterator end);
-  ref<Expr> build(Value *V);
-  void addInstCondition(ref<Expr> E);
-  ref<Expr> getPathCondition(BasicBlock *BB);
-  ref<Expr> get(Value *V);
+  Inst *makeArrayRead(Value *V);
+  Inst *buildConstant(Constant *c);
+  Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
+  Inst *build(Value *V);
+  Inst *getPathCondition(BasicBlock *BB);
+  void addPathConditions(std::vector<InstMapping> &PCs, BasicBlock *BB);
+  Inst *get(Value *V);
 };
 
 }
 
-ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name) {
-  Array *A = new Array(ArrayNames.makeName(Name), 1, 0, 0, Expr::Int32, Width);
-  Arrays.emplace_back(A);
-
-  UpdateList UL(A, 0);
-  return ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
-}
-
-ref<Expr> ExprBuilder::makeArrayRead(Value *V) {
+Inst *ExprBuilder::makeArrayRead(Value *V) {
   StringRef Name = V->getName();
   if (Name.empty() || !Opts.NamedArrays)
     Name = "arr";
   unsigned Width = DL->getTypeSizeInBits(V->getType());
-  return makeSizedArrayRead(Width, Name);
+  return IC.createVar(Width, Name);
 }
 
-void ExprBuilder::addInstCondition(ref<Expr> E) {
-  InstCondition = AndExpr::create(InstCondition, E);
-}
-
-ref<Expr> ExprBuilder::buildConstant(Constant *c) {
+Inst *ExprBuilder::buildConstant(Constant *c) {
   if (auto ci = dyn_cast<ConstantInt>(c)) {
-    return klee::ConstantExpr::alloc(ci->getValue());
+    return IC.getConst(ci->getValue());
   } else if (auto cf = dyn_cast<ConstantFP>(c)) {
-    return klee::ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
-  } else if (auto gv = dyn_cast<GlobalValue>(c)) {
-    return makeArrayRead(gv);
+    return IC.getConst(cf->getValueAPF().bitcastToAPInt());
   } else if (isa<ConstantPointerNull>(c) || isa<UndefValue>(c) ||
              isa<ConstantAggregateZero>(c)) {
-    return klee::ConstantExpr::create(0, DL->getTypeSizeInBits(c->getType()));
-  } else if (auto cds = dyn_cast<ConstantDataSequential>(c)) {
-    std::vector<ref<Expr>> kids;
-    for (unsigned i = 0, e = cds->getNumElements(); i != e; ++i) {
-      ref<Expr> kid = get(cds->getElementAsConstant(i));
-      kids.push_back(kid);
-    }
-    ref<Expr> res = ConcatExpr::createN(kids.size(), kids.data());
-    return cast<klee::ConstantExpr>(res);
-  } else if (auto cs = dyn_cast<ConstantStruct>(c)) {
-    const StructLayout *sl = DL->getStructLayout(cs->getType());
-    SmallVector<ref<Expr>, 4> kids;
-    for (unsigned i = cs->getNumOperands(); i != 0; --i) {
-      unsigned op = i-1;
-      ref<Expr> kid = get(cs->getOperand(op));
-
-      uint64_t thisOffset = sl->getElementOffsetInBits(op),
-               nextOffset = (op == cs->getNumOperands() - 1)
-                            ? sl->getSizeInBits()
-                            : sl->getElementOffsetInBits(op+1);
-      if (nextOffset-thisOffset > kid->getWidth()) {
-        uint64_t paddingWidth = nextOffset-thisOffset-kid->getWidth();
-        kids.push_back(klee::ConstantExpr::create(0, paddingWidth));
-      }
-
-      kids.push_back(kid);
-    }
-    return ConcatExpr::createN(kids.size(), kids.data());
-  } else if (auto ca = dyn_cast<ConstantArray>(c)) {
-    SmallVector<ref<Expr>, 4> kids;
-    for (unsigned i = ca->getNumOperands(); i != 0; --i) {
-      unsigned op = i-1;
-      ref<Expr> kid = get(ca->getOperand(op));
-      kids.push_back(kid);
-    }
-    return ConcatExpr::createN(kids.size(), kids.data());
+    return IC.getConst(APInt(DL->getTypeSizeInBits(c->getType()), 0));
   } else {
-    // Constant{Expr, Vector}
+    // Constant{Expr, Vector, DataSequential, Struct, Array}
     return makeArrayRead(c);
   }
 }
 
-ref<Expr> ExprBuilder::buildGEP(ref<Expr> Ptr, gep_type_iterator begin,
-                                gep_type_iterator end) {
+Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
+                            gep_type_iterator end) {
+  unsigned PSize = DL->getPointerSizeInBits();
   for (auto i = begin; i != end; ++i) {
     if (StructType *ST = dyn_cast<StructType>(*i)) {
       const StructLayout *SL = DL->getStructLayout(ST);
       ConstantInt *CI = cast<ConstantInt>(i.getOperand());
       uint64_t Addend = SL->getElementOffset((unsigned) CI->getZExtValue());
-      Ptr = AddExpr::create(
-          Ptr, klee::ConstantExpr::create(Addend, DL->getPointerSizeInBits()));
+      if (Addend != 0) {
+        Ptr = IC.getInst(Inst::Add, PSize,
+                         {Ptr, IC.getConst(APInt(PSize, Addend))});
+      }
     } else {
       SequentialType *SET = cast<SequentialType>(*i);
       uint64_t ElementSize =
         DL->getTypeStoreSize(SET->getElementType());
       Value *Operand = i.getOperand();
-      ref<Expr> Index = get(Operand);
-      Index = SExtExpr::create(Index, DL->getPointerSizeInBits());
-      ref<Expr> Addend = MulExpr::create(
-          Index,
-          klee::ConstantExpr::create(ElementSize, DL->getPointerSizeInBits()));
-      Ptr = AddExpr::create(Ptr, Addend);
+      Inst *Index = get(Operand);
+      Index = IC.getInst(Inst::SExt, PSize, {Index});
+      Inst *Addend = IC.getInst(
+          Inst::Mul, PSize, {Index, IC.getConst(APInt(PSize, ElementSize))});
+      Ptr = IC.getInst(Inst::Add, PSize, {Ptr, Addend});
     }
   }
   return Ptr;
 }
 
-ref<Expr> ExprBuilder::build(Value *V) {
+Inst *ExprBuilder::build(Value *V) {
   if (auto C = dyn_cast<Constant>(V)) {
     return buildConstant(C);
-  } else if (auto IC = dyn_cast<ICmpInst>(V)) {
-    if (!isa<IntegerType>(IC->getType()))
+  } else if (auto ICI = dyn_cast<ICmpInst>(V)) {
+    if (!isa<IntegerType>(ICI->getType()))
       return makeArrayRead(V); // could be a vector operation
 
-    ref<Expr> L = get(IC->getOperand(0)), R = get(IC->getOperand(1));
-    switch (IC->getPredicate()) {
+    Inst *L = get(ICI->getOperand(0)), *R = get(ICI->getOperand(1));
+    switch (ICI->getPredicate()) {
       case ICmpInst::ICMP_EQ:
-        return EqExpr::create(L, R);
+        return IC.getInst(Inst::Eq, 1, {L, R});
       case ICmpInst::ICMP_NE:
-        return NeExpr::create(L, R);
+        return IC.getInst(Inst::Ne, 1, {L, R});
       case ICmpInst::ICMP_UGT:
-        return UgtExpr::create(L, R);
+        return IC.getInst(Inst::Ult, 1, {R, L});
       case ICmpInst::ICMP_UGE:
-        return UgeExpr::create(L, R);
+        return IC.getInst(Inst::Ule, 1, {R, L});
       case ICmpInst::ICMP_ULT:
-        return UltExpr::create(L, R);
+        return IC.getInst(Inst::Ult, 1, {L, R});
       case ICmpInst::ICMP_ULE:
-        return UleExpr::create(L, R);
+        return IC.getInst(Inst::Ule, 1, {L, R});
       case ICmpInst::ICMP_SGT:
-        return SgtExpr::create(L, R);
+        return IC.getInst(Inst::Slt, 1, {R, L});
       case ICmpInst::ICMP_SGE:
-        return SgeExpr::create(L, R);
+        return IC.getInst(Inst::Sle, 1, {R, L});
       case ICmpInst::ICMP_SLT:
-        return SltExpr::create(L, R);
+        return IC.getInst(Inst::Slt, 1, {L, R});
       case ICmpInst::ICMP_SLE:
-        return SleExpr::create(L, R);
+        return IC.getInst(Inst::Sle, 1, {L, R});
       default:
         llvm_unreachable("not ICmp");
     }
@@ -198,65 +165,66 @@ ref<Expr> ExprBuilder::build(Value *V) {
     if (!isa<IntegerType>(BO->getType()))
       return makeArrayRead(V); // could be a vector operation
 
-    ref<Expr> L = get(BO->getOperand(0)), R = get(BO->getOperand(1));
+    Inst *L = get(BO->getOperand(0)), *R = get(BO->getOperand(1));
+    Inst::Kind K;
     switch (BO->getOpcode()) {
-      case Instruction::Add: {
-        ref<Expr> Add = AddExpr::create(L, R);
-        if (BO->hasNoSignedWrap()) {
-          unsigned Width = L->getWidth();
-          ref<Expr> LMSB = ExtractExpr::create(L, Width-1, Expr::Bool);
-          ref<Expr> RMSB = ExtractExpr::create(R, Width-1, Expr::Bool);
-          ref<Expr> AddMSB = ExtractExpr::create(Add, Width-1, Expr::Bool);
-          addInstCondition(Expr::createImplies(EqExpr::create(LMSB, RMSB),
-                                               EqExpr::create(LMSB, AddMSB)));
-        }
-        return Add;
-      }
-      case Instruction::Sub: {
-        ref<Expr> Sub = SubExpr::create(L, R);
-        if (BO->hasNoSignedWrap()) {
-          unsigned Width = L->getWidth();
-          ref<Expr> LMSB = ExtractExpr::create(L, Width-1, Expr::Bool);
-          ref<Expr> RMSB = ExtractExpr::create(R, Width-1, Expr::Bool);
-          ref<Expr> SubMSB = ExtractExpr::create(Sub, Width-1, Expr::Bool);
-          addInstCondition(Expr::createImplies(NeExpr::create(LMSB, RMSB),
-                                               EqExpr::create(LMSB, SubMSB)));
-        }
-        return Sub;
-      }
+      case Instruction::Add:
+        if (BO->hasNoSignedWrap())
+          K = Inst::AddNSW;
+        else
+          K = Inst::Add;
+        break;
+      case Instruction::Sub:
+        if (BO->hasNoSignedWrap())
+          K = Inst::SubNSW;
+        else
+          K = Inst::Sub;
+        break;
       case Instruction::Mul:
-        return MulExpr::create(L, R);
+        K = Inst::Mul;
+        break;
       case Instruction::UDiv:
-        return UDivExpr::create(L, R);
+        K = Inst::UDiv;
+        break;
       case Instruction::SDiv:
-        return SDivExpr::create(L, R);
+        K = Inst::SDiv;
+        break;
       case Instruction::URem:
-        return URemExpr::create(L, R);
+        K = Inst::URem;
+        break;
       case Instruction::SRem:
-        return SRemExpr::create(L, R);
+        K = Inst::SRem;
+        break;
       case Instruction::And:
-        return AndExpr::create(L, R);
+        K = Inst::And;
+        break;
       case Instruction::Or:
-        return OrExpr::create(L, R);
+        K = Inst::Or;
+        break;
       case Instruction::Xor:
-        return XorExpr::create(L, R);
+        K = Inst::Xor;
+        break;
       case Instruction::Shl:
-        return ShlExpr::create(L, R);
+        K = Inst::Shl;
+        break;
       case Instruction::LShr:
-        return LShrExpr::create(L, R);
+        K = Inst::LShr;
+        break;
       case Instruction::AShr:
-        return AShrExpr::create(L, R);
+        K = Inst::AShr;
+        break;
       default:
         llvm_unreachable("not BinOp");
     }
+    return IC.getInst(K, L->Width, {L, R});
   } else if (auto Sel = dyn_cast<SelectInst>(V)) {
     if (!isa<IntegerType>(Sel->getType()))
       return makeArrayRead(V); // could be a vector operation
-    return SelectExpr::create(get(Sel->getCondition()),
-                              get(Sel->getTrueValue()),
-                              get(Sel->getFalseValue()));
+    Inst *C = get(Sel->getCondition()), *T = get(Sel->getTrueValue()),
+         *F = get(Sel->getFalseValue());
+    return IC.getInst(Inst::Select, T->Width, {C, T, F});
   } else if (auto Cast = dyn_cast<CastInst>(V)) {
-    ref<Expr> Op = get(Cast->getOperand(0));
+    Inst *Op = get(Cast->getOperand(0));
     unsigned DestSize = DL->getTypeSizeInBits(Cast->getType());
 
     switch (Cast->getOpcode()) {
@@ -265,20 +233,27 @@ ref<Expr> ExprBuilder::build(Value *V) {
 
     case Instruction::IntToPtr:
     case Instruction::PtrToInt:
+      if (Op->Width > DestSize)
+        return IC.getInst(Inst::Trunc, DestSize, {Op});
+      else if (Op->Width < DestSize)
+        return IC.getInst(Inst::ZExt, DestSize, {Op});
+      else
+        return Op;
+
     case Instruction::ZExt:
       if (!isa<IntegerType>(Cast->getType()))
         break; // could be a vector operation
-      return ZExtExpr::create(Op, DestSize);
+      return IC.getInst(Inst::ZExt, DestSize, {Op});
 
     case Instruction::SExt:
       if (!isa<IntegerType>(Cast->getType()))
         break; // could be a vector operation
-      return SExtExpr::create(Op, DestSize);
+      return IC.getInst(Inst::SExt, DestSize, {Op});
 
     case Instruction::Trunc:
       if (!isa<IntegerType>(Cast->getType()))
         break; // could be a vector operation
-      return ExtractExpr::create(Op, 0, DestSize);
+      return IC.getInst(Inst::Trunc, DestSize, {Op});
 
     default:
       ; // fallthrough to return below
@@ -292,135 +267,76 @@ ref<Expr> ExprBuilder::build(Value *V) {
     // TODO: In principle we could track loop iterations and maybe even maintain
     // a separate set of values for each iteration (as in bounded model
     // checking).
-    if (!LI->isLoopHeader(Phi->getParent())) {
-      ref<Expr> Val = get(Phi->getIncomingValue(0));
-      for (unsigned i = 1, e = Phi->getNumIncomingValues(); i != e; ++i) {
-        Val = SelectExpr::create(makeSizedArrayRead(Expr::Bool), Val,
-                                 get(Phi->getIncomingValue(i)));
+    BasicBlock *BB = Phi->getParent();
+    if (!LI->isLoopHeader(BB)) {
+      BlockInfo &BI = EBC.BlockMap[BB];
+      if (!BI.B) {
+        std::copy(Phi->block_begin(), Phi->block_end(), std::back_inserter(BI.Preds));
+        BI.B = IC.createBlock(BI.Preds.size());
       }
-      return Val;
+      std::vector<Inst *> Incomings;
+      for (auto Pred : BI.Preds) {
+        Incomings.push_back(get(Phi->getIncomingValueForBlock(Pred)));
+      }
+      return IC.getPhi(BI.B, Incomings);
     }
   }
 
   return makeArrayRead(V);
 }
 
-ref<Expr> ExprBuilder::get(Value *V) {
-  ref<Expr> &E = ExprMap[V];
-  if (E.isNull()) {
+Inst *ExprBuilder::get(Value *V) {
+  Inst *&E = EBC.InstMap[V];
+  if (!E) {
     E = build(V);
   }
   return E;
 }
 
-ref<Expr> ExprBuilder::getPathCondition(BasicBlock *BB) {
+void ExprBuilder::addPathConditions(std::vector<InstMapping> &PCs,
+                                    BasicBlock *BB) {
   if (auto Pred = BB->getSinglePredecessor()) {
-    ref<Expr> PC = getPathCondition(Pred);
+    addPathConditions(PCs, Pred);
     if (auto Branch = dyn_cast<BranchInst>(Pred->getTerminator())) {
       if (Branch->isConditional()) {
-        if (Branch->getSuccessor(0) == Pred) {
-          return AndExpr::create(PC, get(Branch->getCondition()));
-        } else {
-          return AndExpr::create(
-              PC, Expr::createIsZero(get(Branch->getCondition())));
-        }
+        PCs.emplace_back(
+            get(Branch->getCondition()),
+            IC.getConst(APInt(1, Branch->getSuccessor(0) == Pred)));
       }
     } else if (auto Switch = dyn_cast<SwitchInst>(Pred->getTerminator())) {
-      ref<Expr> Cond = get(Switch->getCondition());
+      Inst *Cond = get(Switch->getCondition());
       ConstantInt *Case = Switch->findCaseDest(BB);
       if (Case) {
-        return AndExpr::create(PC, EqExpr::create(Cond, get(Case)));
+        PCs.emplace_back(Cond, get(Case));
       } else {
         // default
+        std::vector<Inst *> Cases;
         for (auto I = Switch->case_begin(), E = Switch->case_end(); I != E;
              ++I) {
-          PC = AndExpr::create(PC, NeExpr::create(Cond, get(I.getCaseValue())));
+          Cases.push_back(
+              IC.getInst(Inst::Ne, 1, {Cond, get(I.getCaseValue())}));
         }
+        PCs.emplace_back(IC.getInst(Inst::And, 1, Cases),
+                         IC.getConst(APInt(1, true)));
       }
     }
-
-    return PC;
   }
-
-  return klee::ConstantExpr::create(1, Expr::Bool);
 }
 
 namespace {
 
-std::pair<ref<Expr>, ref<Expr>> GetExprPair(
-    const ExprBuilderOptions &Opts, Module *M, LoopInfo *LI, Instruction *I,
-    std::vector<std::unique_ptr<Array>> &Arrays) {
-  ExprBuilder EB(Opts, M, LI, Arrays);
-  ref<Expr> E = EB.get(I);
-  ref<Expr> PC = EB.getPathCondition(I->getParent());
-  ref<Expr> Cond = AndExpr::create(EB.InstCondition, PC);
-  return std::make_pair(
-      Expr::createIsZero(Expr::createImplies(Cond, Expr::createIsZero(E))),
-      Expr::createIsZero(Expr::createImplies(Cond, E)));
-}
-
-typedef std::set<std::pair<const Array *, uint64_t>> OffsetSet;
-
-bool IsPurelySymbolic(ref<Expr> E, OffsetSet &Offsets) {
-  if (auto RE = dyn_cast<ReadExpr>(E)) {
-    auto Offset = dyn_cast<klee::ConstantExpr>(RE->index);
-    if (!Offset)
-      return false;
-    // Check whether we're reading from this array/offset more than once.
-    // Such expressions are internally constrained and may be unsat.
-    return Offsets.insert(std::make_pair(RE->updates.root,
-                                         Offset->getZExtValue())).second;
-  }
-  else if (auto CE = dyn_cast<ConcatExpr>(E))
-    return IsPurelySymbolic(CE->getLeft(), Offsets) &&
-           IsPurelySymbolic(CE->getRight(), Offsets);
-  else if (auto EE = dyn_cast<ExtractExpr>(E))
-    return IsPurelySymbolic(EE->expr, Offsets);
-  else
-    return false;
-}
-
-bool IsPurelySymbolic(ref<Expr> E) {
-  OffsetSet Offsets;
-  return IsPurelySymbolic(E, Offsets);
-}
-
-bool IsTriviallySat(ref<Expr> E) {
-  // !E => E.
-  if (auto EE = dyn_cast<EqExpr>(E)) {
-    if (EE->left->getWidth() == 1) {
-      if (EE->left->isZero())
-        E = EE->right;
-      else if (EE->right->isZero())
-        E = EE->left;
-    }
-  }
-
-  if (IsPurelySymbolic(E))
-    return true;
-
-  if (auto CE = dyn_cast<CmpExpr>(E)) {
-    // e.g. x u< 0 or x s< INT_MIN. TODO: check for these.
-    if (isa<UltExpr>(CE) || isa<SltExpr>(CE))
-      return false;
-    if (isa<klee::ConstantExpr>(CE->left) && IsPurelySymbolic(CE->right))
-      return true;
-    if (isa<klee::ConstantExpr>(CE->right) && IsPurelySymbolic(CE->left))
-      return true;
-  }
-
-  return false;
-}
-
 class ExtractExprCandidatesPass : public FunctionPass {
   static char ID;
   const ExprBuilderOptions &Opts;
-  std::vector<ExprCandidate> &Result;
+  InstContext &IC;
+  ExprBuilderContext &EBC;
+  FunctionCandidateSet &Result;
 
 public:
- ExtractExprCandidatesPass(const ExprBuilderOptions &Opts,
-                           std::vector<ExprCandidate> &Result)
-     : FunctionPass(ID), Opts(Opts), Result(Result) {}
+ ExtractExprCandidatesPass(const ExprBuilderOptions &Opts, InstContext &IC,
+                           ExprBuilderContext &EBC,
+                           FunctionCandidateSet &Result)
+     : FunctionPass(ID), Opts(Opts), IC(IC), EBC(EBC), Result(Result) {}
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfo>();
@@ -429,21 +345,25 @@ public:
 
   bool runOnFunction(Function &F) {
     LoopInfo *LI = &getAnalysis<LoopInfo>();
+    ExprBuilder EB(Opts, F.getParent(), LI, IC, EBC);
+
+    Inst *False = IC.getConst(APInt(1, false));
+    Inst *True = IC.getConst(APInt(1, true));
 
     for (auto &BB : F) {
-      for (auto &Inst : BB) {
-        if (Inst.getType()->isIntegerTy(1)) {
-          ExprCandidate Cand;
-          Cand.Origin = &Inst;
-          std::vector<std::unique_ptr<Array>> Arrays;
-          auto E = GetExprPair(Opts, F.getParent(), LI, &Inst, Cand.Arrays);
-          if (!IsTriviallySat(E.first))
-            Cand.Queries.emplace_back(E.first, false, 1);
-          if (!IsTriviallySat(E.second))
-            Cand.Queries.emplace_back(E.second, true, 1);
-          if (!Cand.Queries.empty())
-            Result.emplace_back(std::move(Cand));
+      auto BCS = new BlockCandidateSet;
+      for (auto &I : BB) {
+        if (I.getType()->isIntegerTy(1)) {
+          Inst *SI = EB.get(&I);
+          BCS->Replacements.emplace_back(BCS, &I, InstMapping(SI, False), 1);
+          BCS->Replacements.emplace_back(BCS, &I, InstMapping(SI, True), 1);
         }
+      }
+      if (BCS->Replacements.empty()) {
+        delete BCS;
+      } else {
+        Result.Blocks.emplace_back(BCS);
+        EB.addPathConditions(BCS->PCs, &BB);
       }
     }
 
@@ -455,16 +375,17 @@ char ExtractExprCandidatesPass::ID = 0;
 
 }
 
-std::vector<ExprCandidate> souper::ExtractExprCandidates(
-    Module *M, const ExprBuilderOptions &Opts) {
-  std::vector<ExprCandidate> Result;
+FunctionCandidateSet souper::ExtractCandidates(Function *F, InstContext &IC,
+                                               ExprBuilderContext &EBC,
+                                               const ExprBuilderOptions &Opts) {
+  FunctionCandidateSet Result;
 
   PassRegistry &Registry = *PassRegistry::getPassRegistry();
   initializeAnalysis(Registry);
 
-  PassManager PM;
-  PM.add(new ExtractExprCandidatesPass(Opts, Result));
-  PM.run(*M);
+  FunctionPassManager FPM(F->getParent());
+  FPM.add(new ExtractExprCandidatesPass(Opts, IC, EBC, Result));
+  FPM.run(*F);
 
   return Result;
 }

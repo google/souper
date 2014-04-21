@@ -37,16 +37,22 @@ SMTLIBSolver::~SMTLIBSolver() {}
 namespace {
 
 class ProcessSMTLIBSolver : public SMTLIBSolver {
+  std::string Name;
   SolverProgram Prog;
   std::vector<std::string> Args;
   std::vector<const char *> ArgPtrs;
 
 public:
- ProcessSMTLIBSolver(SolverProgram Prog, const std::vector<std::string> &Args)
-     : Prog(Prog), Args(Args) {
+  ProcessSMTLIBSolver(std::string Name, SolverProgram Prog,
+                      const std::vector<std::string> &Args)
+      : Name(Name), Prog(Prog), Args(Args) {
     std::transform(Args.begin(), Args.end(), std::back_inserter(ArgPtrs),
                    [](const std::string &Arg) { return Arg.c_str(); });
     ArgPtrs.push_back(0);
+  }
+
+  std::string getName() const {
+    return Name;
   }
 
   error_code isSatisfiable(StringRef Query, bool &Result,
@@ -168,15 +174,15 @@ SolverProgram souper::makeInternalSolverProgram(int MainPtr(int argc,
 
 std::unique_ptr<SMTLIBSolver> souper::createBoolectorSolver(SolverProgram Prog) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver(Prog, {"--smt2"}));
+      new ProcessSMTLIBSolver("Boolector", Prog, {"--smt2"}));
 }
 
 std::unique_ptr<SMTLIBSolver> souper::createCVC4Solver(SolverProgram Prog) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver(Prog, {"--lang=smt"}));
+      new ProcessSMTLIBSolver("CVC4", Prog, {"--lang=smt"}));
 }
 
 std::unique_ptr<SMTLIBSolver> souper::createSTPSolver(SolverProgram Prog) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver(Prog, {"--SMTLIB2"}));
+      new ProcessSMTLIBSolver("STP", Prog, {"--SMTLIB2"}));
 }

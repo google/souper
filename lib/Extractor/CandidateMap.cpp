@@ -19,40 +19,66 @@
 #include "klee/Solver.h"
 #include "klee/util/Ref.h"
 #include "klee/util/ExprSMTLIBLetPrinter.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Module.h"
 #include "souper/Extractor/Candidates.h"
+#include "souper/Extractor/KLEEBuilder.h"
 
 using namespace souper;
 using namespace klee;
 using namespace llvm;
 
-void souper::AddToCandidateMap(ExprCandidateMap &M,
-                               const std::vector<ExprCandidate> &Cands) {
-  for (const auto &Cand : Cands) {
+void CandidateMapEntry::print(llvm::raw_ostream &OS) const {
+  std::set<std::string> Functions;
+
+  OS << "; Priority: " << Priority << '\n';
+
+  for (Instruction *O : Origins) {
     std::string FunctionName;
-    const Function *F = Cand.Origin->getParent()->getParent();
+    const Function *F = O->getParent()->getParent();
     if (F->hasLocalLinkage()) {
       FunctionName =
           (F->getParent()->getModuleIdentifier() + ":" + F->getName()).str();
     } else {
       FunctionName = F->getName();
     }
+    Functions.insert(FunctionName);
+  }
 
-    for (const auto &Q : Cand.Queries) {
+  for (auto F : Functions) {
+    OS << "; Function: " << F << '\n';
+  }
+
+  PrintReplacement(OS, PCs, Mapping);
+}
+
+void souper::AddToCandidateMap(CandidateMap &M,
+                               const CandidateReplacement &CR) {
+  CandidateExpr CE = GetCandidateExprForReplacement(CR);
+  if (!IsTriviallyInvalid(CE.E)) {
+    std::string InstStr;
+    llvm::raw_string_ostream InstSS(InstStr);
+    PrintReplacement(InstSS, CR.Parent->PCs, CR.Mapping);
+
+    CandidateMapEntry &Entry = M[InstSS.str()];
+    if (Entry.Query.empty()) {
       std::ostringstream SMTSS;
       ConstraintManager Manager;
-      Query KQuery(Manager, Expr::createIsZero(Q.Expr));
+      Query KQuery(Manager, CE.E);
       ExprSMTLIBLetPrinter Printer;
       Printer.setOutput(SMTSS);
       Printer.setQuery(KQuery);
       Printer.generateOutput();
+      Entry.Query = SMTSS.str();
 
-      ExprCandidateInfo &Info = M[SMTSS.str()];
-      Info.Functions.insert(FunctionName);
-      Info.Priority += Q.Priority;
+      Entry.PCs = CR.Parent->PCs;
+      Entry.Mapping = CR.Mapping;
     }
+
+    Entry.Origins.push_back(CR.Origin);
+    Entry.Priority += CR.Priority;
   }
 }

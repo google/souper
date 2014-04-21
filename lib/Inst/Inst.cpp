@@ -92,8 +92,8 @@ std::string PrintContext::printInst(Inst *I) {
     break;
 
   case Inst::Const:
-    SS << "i" << I->Val.getBitWidth() << " ";
     I->Val.print(SS, false);
+    SS << ":i" << I->Val.getBitWidth();
     return SS.str();
 
   case Inst::Phi:
@@ -114,7 +114,7 @@ std::string PrintContext::printInst(Inst *I) {
   unsigned InstNum = PrintNums.size();
   PrintNums[static_cast<void *>(I)] = InstNum;
 
-  Out << "%" << InstNum << " = i" << I->Width << " " << Inst::getKindName(I->K)
+  Out << "%" << InstNum << ":i" << I->Width << " = " << Inst::getKindName(I->K)
       << OpsSS.str() << '\n';
 
   SS << "%" << InstNum;
@@ -231,11 +231,57 @@ Inst *InstContext::getConst(const llvm::APInt &Val) {
   if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
     return I;
 
-  Insts.emplace_front();
-  Inst *N = &Insts.front();
+  auto N = new Inst;
+  Insts.emplace_back(N);
   N->K = Inst::Const;
   N->Width = Val.getBitWidth();
   N->Val = Val;
+  InstSet.InsertNode(N, IP);
+  return N;
+}
+
+Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
+  auto &InstList = VarInstsByWidth[Width];
+  unsigned Number = InstList.size();
+  auto I = new Inst;
+  InstList.emplace_back(I);
+
+  I->K = Inst::Var;
+  I->Number = Number;
+  I->Width = Width;
+  I->Name = Name;
+  return I;
+}
+
+Block *InstContext::createBlock(unsigned Preds) {
+  auto &BlockList = BlocksByPreds[Preds];
+  unsigned Number = BlockList.size();
+  auto B = new Block;
+  BlockList.emplace_back(B);
+
+  B->Number = Number;
+  B->Preds = Preds;
+  return B;
+}
+
+Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
+  llvm::FoldingSetNodeID ID;
+  ID.AddInteger(Inst::Phi);
+  ID.AddInteger(Ops[0]->Width);
+  ID.AddPointer(B);
+  for (auto O : Ops)
+    ID.AddPointer(O);
+
+  void *IP = 0;
+  if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
+    return I;
+
+  auto N = new Inst;
+  Insts.emplace_back(N);
+  N->K = Inst::Phi;
+  N->Width = Ops[0]->Width;
+  N->B = B;
+  N->Ops = Ops;
   InstSet.InsertNode(N, IP);
   return N;
 }
@@ -245,7 +291,16 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   std::vector<Inst *> OrderedOps;
 
   const std::vector<Inst *> *InstOps;
-  if (Inst::isCommutative(K)) {
+  if (Inst::isAssociative(K)) {
+    for (Inst *Op : Ops) {
+      if (Op->K == K)
+        OrderedOps.insert(OrderedOps.end(), Op->Ops.begin(), Op->Ops.end());
+      else
+        OrderedOps.push_back(Op);
+    }
+    std::sort(OrderedOps.begin(), OrderedOps.end());
+    InstOps = &OrderedOps;
+  } else if (Inst::isCommutative(K)) {
     OrderedOps = Ops;
     std::sort(OrderedOps.begin(), OrderedOps.end());
     InstOps = &OrderedOps;
@@ -263,13 +318,26 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
     return I;
 
-  Insts.emplace_front();
-  Inst *N = &Insts.front();
+  auto N = new Inst;
+  Insts.emplace_back(N);
   N->K = K;
   N->Width = Width;
   N->Ops = *InstOps;
   InstSet.InsertNode(N, IP);
   return N;
+}
+
+bool Inst::isAssociative(Inst::Kind K) {
+  switch (K) {
+  case Add:
+  case Mul:
+  case And:
+  case Or:
+  case Xor:
+    return true;
+  default:
+    return false;
+  }
 }
 
 bool Inst::isCommutative(Inst::Kind K) {

@@ -15,9 +15,9 @@
 #ifndef SOUPER_INST_INST_H
 #define SOUPER_INST_INST_H
 
-#include <forward_list>
-#include <list>
+#include <memory>
 #include <string>
+#include <vector>
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
@@ -26,6 +26,7 @@ namespace souper {
 
 struct Block {
   std::string Name;
+  unsigned Preds;
   unsigned Number;
 };
 
@@ -82,17 +83,7 @@ struct Inst : llvm::FoldingSetNode {
   static bool isCommutative(Kind K);
 };
 
-struct InstVal {
-  Inst *I;
-  bool Val;
-};
-
-struct Candidate {
-  std::vector<InstVal> PC;
-  InstVal Expr;
-};
-
-struct PrintContext {
+class PrintContext {
   llvm::raw_ostream &Out;
   llvm::DenseMap<void *, unsigned> PrintNums;
 
@@ -104,22 +95,23 @@ public:
 };
 
 class InstContext {
-  typedef llvm::DenseMap<unsigned, std::list<Block>> BlockMap;
+  typedef llvm::DenseMap<unsigned, std::vector<std::unique_ptr<Block>>>
+      BlockMap;
   BlockMap BlocksByPreds;
 
-  typedef llvm::DenseMap<unsigned, std::list<Inst>> InstMap;
+  typedef llvm::DenseMap<unsigned, std::vector<std::unique_ptr<Inst>>> InstMap;
   InstMap VarInstsByWidth;
 
-  std::forward_list<Inst> Insts;
+  std::vector<std::unique_ptr<Inst>> Insts;
   llvm::FoldingSet<Inst> InstSet;
 
 public:
   Inst *getConst(const llvm::APInt &I);
 
   Inst *createVar(unsigned Width, llvm::StringRef Name);
-  Block *createBlock();
+  Block *createBlock(unsigned Preds);
 
-  Inst *getPhi(Block *B);
+  Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
 
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops);
 };

@@ -12,36 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SOUPER_CLANGTOOL_ACTIONS_H
-#define SOUPER_CLANGTOOL_ACTIONS_H
+#ifndef SOUPER_EXTRACTOR_KLEEBUILDER_H
+#define SOUPER_EXTRACTOR_KLEEBUILDER_H
 
-#include <functional>
-#include "souper/Extractor/CandidateMap.h"
+#include <memory>
+#include <vector>
 
-namespace llvm {
-
-class LLVMContext;
-class Module;
-
-}
-
-namespace clang {
-namespace tooling {
-
-class FrontendActionFactory;
-
-}
-}
+#include "klee/Expr.h"
+#include "klee/util/Ref.h"
+#include "souper/Extractor/Candidates.h"
 
 namespace souper {
 
-struct ExprBuilderContext;
-class InstContext;
+struct CandidateExpr {
+  std::vector<std::unique_ptr<klee::Array>> Arrays;
+  klee::ref<klee::Expr> E;
+};
 
-clang::tooling::FrontendActionFactory *CreateExtractorActionFactory(
-    llvm::LLVMContext &VMC, InstContext &IC, ExprBuilderContext &EBC,
-    std::vector<std::unique_ptr<llvm::Module>> &Mods, CandidateMap &CandMap);
+CandidateExpr GetCandidateExprForReplacement(const CandidateReplacement &CR);
+bool IsTriviallyInvalid(klee::ref<klee::Expr> E);
 
 }
 
-#endif  // SOUPER_CLANGTOOL_ACTIONS_H
+#endif  // SOUPER_EXTRACTOR_KLEEBUILDER_H

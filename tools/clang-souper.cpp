@@ -18,6 +18,8 @@
 #include "clang/Tooling/CompilationDatabase.h"
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
@@ -25,6 +27,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/system_error.h"
 #include "souper/ClangTool/Actions.h"
+#include "souper/Tool/CandidateMapUtils.h"
+#include "souper/Tool/GetSolverFromArgs.h"
 
 using namespace clang;
 using namespace clang::tooling;
@@ -57,8 +61,14 @@ int main(int argc, const char **argv) {
   }
 
   ClangTool Tool(*Compilations, SourcePaths);
-  ExprCandidateMap CandMap;
-  std::unique_ptr<FrontendActionFactory> Factory(
-      CreateExtractorActionFactory(CandMap));
+  InstContext IC;
+  ExprBuilderContext EBC;
+  CandidateMap CandMap;
+  std::vector<std::unique_ptr<llvm::Module>> OwnedMods;
+  std::unique_ptr<FrontendActionFactory> Factory(CreateExtractorActionFactory(
+      getGlobalContext(), IC, EBC, OwnedMods, CandMap));
   Tool.run(Factory.get());
+
+  std::unique_ptr<SMTLIBSolver> Solver = GetSolverFromArgs();
+  return SolveCandidateMap(llvm::outs(), CandMap, Solver.get()) ? 0 : 1;
 }

@@ -15,42 +15,77 @@
 #ifndef SOUPER_EXTRACTOR_CANDIDATES_H
 #define SOUPER_EXTRACTOR_CANDIDATES_H
 
+#include <map>
 #include <memory>
 #include <vector>
 #include "klee/Expr.h"
 #include "klee/util/Ref.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/raw_ostream.h"
+#include "souper/Inst/Inst.h"
 
 namespace llvm {
 
+class BasicBlock;
+class Function;
 class Instruction;
-class Module;
+class Value;
 
 }
 
 namespace souper {
 
-struct ExprCandidateQuery {
-  ExprCandidateQuery(klee::ref<klee::Expr> Expr, bool Replacement,
-                     unsigned Priority)
-      : Expr(Expr), Replacement(Replacement), Priority(Priority) {}
+/// A mapping from an Inst to a replacement. This may either represent a
+/// path condition or a candidate replacement.
+struct InstMapping {
+  InstMapping() : Source(0), Replacement(0) {}
+  InstMapping(Inst *Source, Inst *Replacement)
+      : Source(Source), Replacement(Replacement) {}
 
-  /// The expression which we want to prove unsatisfiable.
-  klee::ref<klee::Expr> Expr;
+  Inst *Source, *Replacement;
+};
 
-  /// If proven unsatisfiable, the value to replace Origin with.
-  bool Replacement;
+/// Represents a candidate with its path conditions.
+struct Candidate {
+  InstMapping Cand;
+
+  void print(llvm::raw_ostream &Out) const;
+};
+
+struct BlockCandidateSet;
+
+struct CandidateReplacement {
+  CandidateReplacement(BlockCandidateSet *Parent, llvm::Instruction *Origin,
+                       InstMapping Mapping, unsigned Priority)
+      : Parent(Parent), Origin(Origin), Mapping(Mapping), Priority(Priority) {}
+
+  BlockCandidateSet *Parent;
+
+  /// The instruction from which the candidate was derived.
+  llvm::Instruction *Origin;
+
+  /// The replacement mapping.
+  InstMapping Mapping;
 
   /// The priority of this replacement, i.e. the number of instructions saved by
   /// performing the replacement.
   unsigned Priority;
+
+  void print(llvm::raw_ostream &Out) const;
 };
 
-struct ExprCandidate {
-  llvm::Instruction *Origin;
+void PrintReplacement(llvm::raw_ostream &Out,
+                      const std::vector<InstMapping> &PCs, InstMapping Mapping);
 
-  std::vector<std::unique_ptr<klee::Array>> Arrays;
-  std::vector<ExprCandidateQuery> Queries;
+struct BlockCandidateSet {
+  llvm::BasicBlock *Origin;
+
+  std::vector<InstMapping> PCs;
+  std::vector<CandidateReplacement> Replacements;
+};
+
+struct FunctionCandidateSet {
+  std::vector<std::unique_ptr<BlockCandidateSet>> Blocks;
 };
 
 struct ExprBuilderOptions {
@@ -63,8 +98,26 @@ struct ExprBuilderOptions {
   ExprBuilderOptions() : NamedArrays(false) {}
 };
 
-std::vector<ExprCandidate> ExtractExprCandidates(
-    llvm::Module *M, const ExprBuilderOptions &Opts = ExprBuilderOptions());
+struct BlockInfo {
+  Block *B;
+
+  // Each phi derived from this block must visit the predecessors in the same
+  // order, as a consumer may wish to use the same predicates to control each phi.
+  // This vector stores the blocks in the order observed in the first phi node
+  // we visit in the block. This allows us to write deterministic tests by
+  // controlling the order in which predecessors appear in each phi.
+  std::vector<llvm::BasicBlock *> Preds;
+};
+
+struct ExprBuilderContext {
+  std::map<const llvm::Value *, Inst *> InstMap;
+  std::map<llvm::BasicBlock *, BlockInfo> BlockMap;
+};
+
+FunctionCandidateSet ExtractCandidates(
+    llvm::Function *F, InstContext &IC, ExprBuilderContext &EBC,
+    const ExprBuilderOptions &Opts = ExprBuilderOptions());
+
 }
 
 #endif  // SOUPER_EXTRACTOR_CANDIDATES_H

@@ -17,24 +17,39 @@
 
 #include <string>
 #include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/StringSet.h"
+#include "llvm/Support/raw_ostream.h"
+#include "souper/Extractor/Candidates.h"
+
+namespace llvm {
+
+class Instruction;
+
+}
 
 namespace souper {
 
-struct ExprCandidate;
+struct CandidateReplacement;
 
-struct ExprCandidateInfo {
-  llvm::StringSet<> Functions;
+struct CandidateMapEntry {
+  /// The SMT-LIB2 query for this candidate.
+  std::string Query;
 
-  /// Cumulative priority of each candidate solvable with this query.
+  std::vector<InstMapping> PCs;
+  InstMapping Mapping;
+
+  std::vector<llvm::Instruction *> Origins;
+
+  /// Cumulative priority of each instruction for which this candidate applies.
   unsigned Priority;
+
+  void print(llvm::raw_ostream &OS) const;
 };
 
-/// Map from queries to candidate information.
-typedef llvm::StringMap<ExprCandidateInfo> ExprCandidateMap;
+/// Map from candidate string representations to candidate information.
+typedef llvm::StringMap<CandidateMapEntry> CandidateMap;
 
-void AddToCandidateMap(ExprCandidateMap &M,
-                       const std::vector<ExprCandidate> &Cands);
+void AddToCandidateMap(CandidateMap &M, const CandidateReplacement &CR);
+void PrintCandidateMap(llvm::raw_ostream &OS, CandidateMap &M);
 
 }
 

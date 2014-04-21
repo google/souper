@@ -28,6 +28,7 @@ typedef std::function<
 class SMTLIBSolver {
 public:
   virtual ~SMTLIBSolver();
+  virtual std::string getName() const = 0;
   virtual llvm::error_code isSatisfiable(llvm::StringRef Query, bool &Result,
                                          unsigned Timeout = 0) = 0;
 };

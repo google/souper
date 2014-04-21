@@ -12,36 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SOUPER_CLANGTOOL_ACTIONS_H
-#define SOUPER_CLANGTOOL_ACTIONS_H
+#ifndef SOUPER_TOOL_CANDIDATEMAPUTILS_H
+#define SOUPER_TOOL_CANDIDATEMAPUTILS_H
 
-#include <functional>
+#include "llvm/Support/raw_ostream.h"
 #include "souper/Extractor/CandidateMap.h"
 
 namespace llvm {
 
-class LLVMContext;
 class Module;
 
 }
 
-namespace clang {
-namespace tooling {
-
-class FrontendActionFactory;
-
-}
-}
-
 namespace souper {
 
-struct ExprBuilderContext;
-class InstContext;
+class SMTLIBSolver;
 
-clang::tooling::FrontendActionFactory *CreateExtractorActionFactory(
-    llvm::LLVMContext &VMC, InstContext &IC, ExprBuilderContext &EBC,
-    std::vector<std::unique_ptr<llvm::Module>> &Mods, CandidateMap &CandMap);
+void AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
+                             CandidateMap &CandMap, llvm::Module *M);
+
+bool SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
+                       SMTLIBSolver *Solver);
 
 }
 
-#endif  // SOUPER_CLANGTOOL_ACTIONS_H
+#endif  // SOUPER_TOOL_CANDIDATEMAPUTILS_H
