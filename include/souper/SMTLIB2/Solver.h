@@ -36,9 +36,10 @@ public:
 SolverProgram makeExternalSolverProgram(llvm::StringRef Path);
 SolverProgram makeInternalSolverProgram(int MainPtr(int argc, char **argv));
 
-std::unique_ptr<SMTLIBSolver> createBoolectorSolver(SolverProgram Prog);
-std::unique_ptr<SMTLIBSolver> createCVC4Solver(SolverProgram Prog);
-std::unique_ptr<SMTLIBSolver> createSTPSolver(SolverProgram Prog);
+std::unique_ptr<SMTLIBSolver> createBoolectorSolver(SolverProgram Prog,
+                                                    bool Keep);
+std::unique_ptr<SMTLIBSolver> createCVC4Solver(SolverProgram Prog, bool Keep);
+std::unique_ptr<SMTLIBSolver> createSTPSolver(SolverProgram Prog, bool Keep);
 
 }
 

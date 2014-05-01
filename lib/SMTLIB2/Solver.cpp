@@ -38,14 +38,15 @@ namespace {
 
 class ProcessSMTLIBSolver : public SMTLIBSolver {
   std::string Name;
+  bool Keep;
   SolverProgram Prog;
   std::vector<std::string> Args;
   std::vector<const char *> ArgPtrs;
 
 public:
-  ProcessSMTLIBSolver(std::string Name, SolverProgram Prog,
+  ProcessSMTLIBSolver(std::string Name, bool Keep, SolverProgram Prog,
                       const std::vector<std::string> &Args)
-      : Name(Name), Prog(Prog), Args(Args) {
+      : Name(Name), Keep(Keep), Prog(Prog), Args(Args) {
     std::transform(Args.begin(), Args.end(), std::back_inserter(ArgPtrs),
                    [](const std::string &Arg) { return Arg.c_str(); });
     ArgPtrs.push_back(0);
@@ -75,7 +76,12 @@ public:
     ::close(OutputFD);
 
     int ExitCode = Prog(Args, InputPath, OutputPath, Timeout);
-    ::remove(InputPath.c_str());
+
+    if (Keep) {
+      llvm::errs() << "Solver input saved to " << InputPath << '\n';
+    } else {
+      ::remove(InputPath.c_str());
+    }
 
     switch (ExitCode) {
     case -2:
@@ -172,17 +178,20 @@ SolverProgram souper::makeInternalSolverProgram(int MainPtr(int argc,
   };
 }
 
-std::unique_ptr<SMTLIBSolver> souper::createBoolectorSolver(SolverProgram Prog) {
+std::unique_ptr<SMTLIBSolver> souper::createBoolectorSolver(SolverProgram Prog,
+                                                            bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("Boolector", Prog, {"--smt2"}));
+      new ProcessSMTLIBSolver("Boolector", Keep, Prog, {"--smt2"}));
 }
 
-std::unique_ptr<SMTLIBSolver> souper::createCVC4Solver(SolverProgram Prog) {
+std::unique_ptr<SMTLIBSolver> souper::createCVC4Solver(SolverProgram Prog,
+                                                       bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("CVC4", Prog, {"--lang=smt"}));
+      new ProcessSMTLIBSolver("CVC4", Keep, Prog, {"--lang=smt"}));
 }
 
-std::unique_ptr<SMTLIBSolver> souper::createSTPSolver(SolverProgram Prog) {
+std::unique_ptr<SMTLIBSolver> souper::createSTPSolver(SolverProgram Prog,
+                                                      bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("STP", Prog, {"--SMTLIB2"}));
+      new ProcessSMTLIBSolver("STP", Keep, Prog, {"--SMTLIB2"}));
 }

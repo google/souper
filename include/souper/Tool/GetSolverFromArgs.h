@@ -34,13 +34,20 @@ static llvm::cl::opt<std::string> STPPath(
     "stp-path", llvm::cl::desc("Path to STP executable"), llvm::cl::init(""),
     llvm::cl::value_desc("path"));
 
+static llvm::cl::opt<bool> KeepSolverInputs(
+    "keep-solver-inputs", llvm::cl::desc("Do not clean up solver inputs"),
+    llvm::cl::init(false));
+
 static std::unique_ptr<SMTLIBSolver> GetSolverFromArgs() {
   if (!BoolectorPath.empty()) {
-    return createBoolectorSolver(makeExternalSolverProgram(BoolectorPath));
+    return createBoolectorSolver(makeExternalSolverProgram(BoolectorPath),
+                                 KeepSolverInputs);
   } else if (!CVC4Path.empty()) {
-    return createCVC4Solver(makeExternalSolverProgram(CVC4Path));
+    return createCVC4Solver(makeExternalSolverProgram(CVC4Path),
+                            KeepSolverInputs);
   } else if (!STPPath.empty()) {
-    return createSTPSolver(makeExternalSolverProgram(STPPath));
+    return createSTPSolver(makeExternalSolverProgram(STPPath),
+                           KeepSolverInputs);
   } else {
     return nullptr;
   }
