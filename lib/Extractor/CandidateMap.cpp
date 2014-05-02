@@ -68,7 +68,7 @@ void souper::AddToCandidateMap(CandidateMap &M,
   if (!IsTriviallyInvalid(CE.E)) {
     std::string InstStr;
     llvm::raw_string_ostream InstSS(InstStr);
-    PrintReplacement(InstSS, CR.Parent->PCs, CR.Mapping);
+    PrintReplacement(InstSS, CR.PCs, CR.Mapping);
 
     CandidateMapEntry &Entry = M[InstSS.str()];
     if (Entry.Query.empty()) {
@@ -91,7 +91,7 @@ void souper::AddToCandidateMap(CandidateMap &M,
 
       Entry.Query = SMTSS.str();
 
-      Entry.PCs = CR.Parent->PCs;
+      Entry.PCs = CR.PCs;
       Entry.Mapping = CR.Mapping;
     }
 

@@ -69,6 +69,20 @@ struct ExtractorTest : testing::Test {
     return true;
   }
 
+  bool hasCandidate(std::string Expected) {
+    for (auto &B : CS.Blocks) {
+      for (auto &R : B->Replacements) {
+        std::string Str;
+        llvm::raw_string_ostream SS(Str);
+        R.print(SS);
+
+        if (SS.str() == Expected)
+          return true;
+      }
+    }
+    return false;
+  }
+
   bool hasCandidateExpr(std::string Expected) {
     for (const auto &Cand : CandExprs) {
       std::ostringstream SS;
@@ -178,4 +192,53 @@ cont:
 )m"));
 
   EXPECT_EQ(0u, CandExprs.size());
+}
+
+TEST_F(ExtractorTest, PathCondition) {
+  // Expected equivalence classes are {p, q, r} and {s}.
+  ASSERT_TRUE(extractFromIR(R"m(
+define void @f(i1 %p, i1 %q, i1 %r, i1 %s) {
+entry:
+  %pq = and i1 %p, %q
+  br i1 %pq, label %bb1, label %u
+
+bb1:
+  %qr = and i1 %q, %r
+  br i1 %qr, label %u, label %bb2
+
+bb2:
+  br i1 %r, label %bb3, label %u
+
+bb3:
+  br i1 %s, label %bb4, label %u
+
+bb4:
+  %cmp1 = icmp eq i1 %p, true
+  %cmp2 = icmp eq i1 %s, true
+  ret void
+
+u:
+  unreachable
+}
+)m"));
+
+  EXPECT_TRUE(hasCandidate(R"c(; Priority: 1
+%0:i1 = var ; p
+%1:i1 = var ; q
+%2:i1 = and %0, %1
+pc %2 1:i1
+%3:i1 = var ; r
+%4:i1 = and %1, %3
+pc %4 0:i1
+pc %3 1:i1
+%5:i1 = eq 1:i1, %0
+cand %5 1:i1
+)c"));
+
+  EXPECT_TRUE(hasCandidate(R"c(; Priority: 1
+%0:i1 = var ; s
+pc %0 1:i1
+%1:i1 = eq 1:i1, %0
+cand %1 1:i1
+)c"));
 }

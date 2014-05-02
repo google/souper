@@ -184,7 +184,7 @@ CandidateExpr souper::GetCandidateExprForReplacement(
 
   ref<Expr> Cons = EB.getInstMapping(CR.Mapping);
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-  for (const auto &PC : CR.Parent->PCs) {
+  for (const auto &PC : CR.PCs) {
     Ante = AndExpr::create(Ante, EB.getInstMapping(PC));
   }
   Ante = AndExpr::create(Ante, EB.InstCondition);

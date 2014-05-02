@@ -48,17 +48,18 @@ struct InstMapping {
 struct BlockCandidateSet;
 
 struct CandidateReplacement {
-  CandidateReplacement(BlockCandidateSet *Parent, llvm::Instruction *Origin,
-                       InstMapping Mapping, unsigned Priority)
-      : Parent(Parent), Origin(Origin), Mapping(Mapping), Priority(Priority) {}
-
-  BlockCandidateSet *Parent;
+  CandidateReplacement(llvm::Instruction *Origin, InstMapping Mapping,
+                       unsigned Priority)
+      : Origin(Origin), Mapping(Mapping), Priority(Priority) {}
 
   /// The instruction from which the candidate was derived.
   llvm::Instruction *Origin;
 
   /// The replacement mapping.
   InstMapping Mapping;
+
+  /// The path conditions relevant to this replacement.
+  std::vector<InstMapping> PCs;
 
   /// The priority of this replacement, i.e. the number of instructions saved by
   /// performing the replacement.

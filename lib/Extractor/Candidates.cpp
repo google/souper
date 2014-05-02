@@ -18,6 +18,7 @@
 #include <memory>
 #include <sstream>
 
+#include "llvm/ADT/EquivalenceClasses.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -53,7 +54,7 @@ void souper::PrintReplacement(llvm::raw_ostream &Out,
 
 void CandidateReplacement::print(llvm::raw_ostream &Out) const {
   Out << "; Priority: " << Priority << '\n';
-  PrintReplacement(Out, Parent->PCs, Mapping);
+  PrintReplacement(Out, PCs, Mapping);
 }
 
 namespace {
@@ -325,6 +326,56 @@ void ExprBuilder::addPathConditions(std::vector<InstMapping> &PCs,
 
 namespace {
 
+typedef llvm::EquivalenceClasses<Inst *> InstClasses;
+
+// Add the variable set of I as an equivalence class to Vars, and return a
+// reference to the leader of that equivalence class.
+InstClasses::member_iterator AddVarSet(InstClasses::member_iterator Leader,
+                                       InstClasses &Vars, Inst *I) {
+  if (I->K == Inst::Var) {
+    if (Leader != Vars.member_end()) {
+      return Vars.unionSets(Leader, Vars.findLeader(Vars.insert(I)));
+    } else {
+      return Vars.findLeader(Vars.insert(I));
+    }
+  } else {
+    for (auto Op : I->Ops) {
+      Leader = AddVarSet(Leader, Vars, Op);
+    }
+    return Leader;
+  }
+}
+
+// Add the variable sets of PCs as equivalence classes to Vars. Return a vector
+// PCSets of the same size as PCs such that PCSets[i] is an arbitrary member of
+// the equivalence class for PCs[i] (not necessarily its leader).
+std::vector<Inst *> AddPCSets(const std::vector<InstMapping> &PCs,
+                              InstClasses &Vars) {
+  std::vector<Inst *> PCSets(PCs.size());
+  for (unsigned i = 0; i != PCs.size(); ++i) {
+    auto PCLeader = AddVarSet(Vars.member_end(), Vars, PCs[i].Source);
+    if (PCLeader != Vars.member_end())
+      PCSets[i] = *PCLeader;
+  }
+  return PCSets;
+}
+
+// Return a vector of relevant PCs for a candidate, namely those whose variable
+// sets are in the same equivalence class as the candidate's.
+std::vector<InstMapping> GetRelevantPCs(const std::vector<InstMapping> &PCs,
+                                        const std::vector<Inst *> &PCSets,
+                                        InstClasses Vars,
+                                        InstMapping Cand) {
+  auto Leader = AddVarSet(Vars.member_end(), Vars, Cand.Source);
+
+  std::vector<InstMapping> RelevantPCs;
+  for (unsigned i = 0; i != PCs.size(); ++i) {
+    if (PCSets[i] != 0 && Vars.findLeader(PCSets[i]) == Leader)
+      RelevantPCs.emplace_back(PCs[i]);
+  }
+  return RelevantPCs;
+}
+
 class ExtractExprCandidatesPass : public FunctionPass {
   static char ID;
   const ExprBuilderOptions &Opts;
@@ -351,19 +402,25 @@ public:
     Inst *True = IC.getConst(APInt(1, true));
 
     for (auto &BB : F) {
-      auto BCS = new BlockCandidateSet;
+      std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
       for (auto &I : BB) {
         if (I.getType()->isIntegerTy(1)) {
           Inst *SI = EB.get(&I);
-          BCS->Replacements.emplace_back(BCS, &I, InstMapping(SI, False), 1);
-          BCS->Replacements.emplace_back(BCS, &I, InstMapping(SI, True), 1);
+          BCS->Replacements.emplace_back(&I, InstMapping(SI, False), 1);
+          BCS->Replacements.emplace_back(&I, InstMapping(SI, True), 1);
         }
       }
-      if (BCS->Replacements.empty()) {
-        delete BCS;
-      } else {
-        Result.Blocks.emplace_back(BCS);
+      if (!BCS->Replacements.empty()) {
         EB.addPathConditions(BCS->PCs, &BB);
+
+        InstClasses Vars;
+        auto PCSets = AddPCSets(BCS->PCs, Vars);
+
+        for (auto &R : BCS->Replacements) {
+          R.PCs = GetRelevantPCs(BCS->PCs, PCSets, Vars, R.Mapping);
+        }
+
+        Result.Blocks.emplace_back(std::move(BCS));
       }
     }
 
