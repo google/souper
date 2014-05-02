@@ -45,13 +45,6 @@ struct InstMapping {
   Inst *Source, *Replacement;
 };
 
-/// Represents a candidate with its path conditions.
-struct Candidate {
-  InstMapping Cand;
-
-  void print(llvm::raw_ostream &Out) const;
-};
-
 struct BlockCandidateSet;
 
 struct CandidateReplacement {
