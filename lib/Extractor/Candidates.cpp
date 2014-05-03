@@ -301,7 +301,7 @@ void ExprBuilder::addPathConditions(std::vector<InstMapping> &PCs,
       if (Branch->isConditional()) {
         PCs.emplace_back(
             get(Branch->getCondition()),
-            IC.getConst(APInt(1, Branch->getSuccessor(0) == Pred)));
+            IC.getConst(APInt(1, Branch->getSuccessor(0) == BB)));
       }
     } else if (auto Switch = dyn_cast<SwitchInst>(Pred->getTerminator())) {
       Inst *Cond = get(Switch->getCondition());
