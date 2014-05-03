@@ -115,7 +115,13 @@ std::string PrintContext::printInst(Inst *I) {
   PrintNums[static_cast<void *>(I)] = InstNum;
 
   Out << "%" << InstNum << ":i" << I->Width << " = " << Inst::getKindName(I->K)
-      << OpsSS.str() << '\n';
+      << OpsSS.str();
+
+  if (!I->Name.empty()) {
+    Out << " ; " << I->Name;
+  }
+
+  Out << '\n';
 
   SS << "%" << InstNum;
   return SS.str();
