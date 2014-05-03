@@ -20,6 +20,9 @@
 using namespace souper;
 
 bool Inst::operator<(const Inst &Other) const {
+  if (this == &Other)
+    return false;
+
   if (K < Other.K)
     return true;
   if (K > Other.K)
