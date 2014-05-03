@@ -30,58 +30,63 @@ using namespace klee;
 using namespace llvm;
 using namespace souper;
 
-std::unique_ptr<Module> ParseIR(const char *IR) {
-  LLVMContext &C = getGlobalContext();
-  SMDiagnostic Err;
-  auto M = ParseAssemblyString(IR, 0, Err, C);
-  if (!M) {
-    Err.print("ExtractorTest", errs());
-  }
-  return std::unique_ptr<Module>(M);
-}
+struct ExtractorTest : testing::Test {
+  std::unique_ptr<Module> M;
 
-std::vector<std::unique_ptr<CandidateExpr>> ExtractExprs(Module *M) {
   InstContext IC;
-  ExprBuilderContext IBC;
-  std::vector<std::unique_ptr<CandidateExpr>> Result;
+  ExprBuilderContext EBC;
+  FunctionCandidateSet CS;
+  std::vector<std::unique_ptr<CandidateExpr>> CandExprs;
 
-  ExprBuilderOptions Opts;
-  Opts.NamedArrays = true;
+  bool extractFromIR(const char *IR) {
+    LLVMContext &C = getGlobalContext();
+    SMDiagnostic Err;
+    M.reset(ParseAssemblyString(IR, 0, Err, C));
+    if (!M.get()) {
+      Err.print("ExtractorTest", errs());
+      return false;
+    }
 
-  for (auto &F : *M) {
-    auto CS = ExtractCandidates(&F, IC, IBC, Opts);
+    if (M->size() != 1) {
+      EXPECT_EQ(1u, M->size());
+      return false;
+    }
+
+    ExprBuilderOptions Opts;
+    Opts.NamedArrays = true;
+
+    CS = ExtractCandidates(&*M->begin(), IC, EBC, Opts);
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
         std::unique_ptr<CandidateExpr> CE(
             new CandidateExpr(GetCandidateExprForReplacement(R)));
         if (!IsTriviallyInvalid(CE->E)) {
-          Result.emplace_back(std::move(CE));
+          CandExprs.emplace_back(std::move(CE));
         }
       }
     }
+
+    return true;
   }
 
-  return Result;
-}
+  bool hasCandidateExpr(std::string Expected) {
+    for (const auto &Cand : CandExprs) {
+      std::ostringstream SS;
 
-bool HasExprCandidate(const std::vector<std::unique_ptr<CandidateExpr>> &Cands,
-                      std::string Expected) {
-  for (const auto &Cand : Cands) {
-    std::ostringstream SS;
+      std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SS));
+      PP->setForceNoLineBreaks(true);
+      PP->scan(Cand->E);
+      PP->print(Cand->E);
 
-    std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SS));
-    PP->setForceNoLineBreaks(true);
-    PP->scan(Cand->E);
-    PP->print(Cand->E);
-
-    if (SS.str() == Expected)
-      return true;
+      if (SS.str() == Expected)
+        return true;
+    }
+    return false;
   }
-  return false;
-}
+};
 
-TEST(ExtractorTest, TriviallySat) {
-  auto M = ParseIR(R"m(
+TEST_F(ExtractorTest, TriviallySat) {
+  ASSERT_TRUE(extractFromIR(R"m(
 define void @f(i32 %p) {
   %ule = icmp ule i32 %p, 0
   %sle = icmp sle i32 %p, 0
@@ -89,16 +94,13 @@ define void @f(i32 %p) {
   %ne = icmp ne i32 %p, 0
   ret void
 }
-)m");
-  ASSERT_TRUE(M.get());
+)m"));
 
-  auto EC = ExtractExprs(M.get());
-
-  EXPECT_EQ(0u, EC.size());
+  EXPECT_EQ(0u, CandExprs.size());
 }
 
-TEST(ExtractorTest, Simple) {
-  auto M = ParseIR(R"m(
+TEST_F(ExtractorTest, Simple) {
+  ASSERT_TRUE(extractFromIR(R"m(
 define void @f(i32 %p, i32 %q) {
   %ult = icmp ult i32 %p, %q
 
@@ -107,41 +109,33 @@ define void @f(i32 %p, i32 %q) {
 
   ret void
 }
-)m");
-  ASSERT_TRUE(M.get());
+)m"));
 
-  auto EC = ExtractExprs(M.get());
+  EXPECT_TRUE(hasCandidateExpr("(Ult (Read w32 0 p) (Read w32 0 q))"));
+  EXPECT_TRUE(
+      hasCandidateExpr("(Eq false (Ult (Read w32 0 p) (Read w32 0 q)))"));
 
   EXPECT_TRUE(
-      HasExprCandidate(EC, "(Ult (Read w32 0 p) (Read w32 0 q))"));
-  EXPECT_TRUE(HasExprCandidate(
-      EC, "(Eq false (Ult (Read w32 0 p) (Read w32 0 q)))"));
-
-  EXPECT_TRUE(HasExprCandidate(
-      EC, "(Ult N0:(Read w32 0 p) (Add w32 N0 (Read w32 0 q)))"));
+      hasCandidateExpr("(Ult N0:(Read w32 0 p) (Add w32 N0 (Read w32 0 q)))"));
 }
 
-TEST(ExtractorTest, Nsw) {
-  auto M = ParseIR(R"m(
+TEST_F(ExtractorTest, Nsw) {
+  ASSERT_TRUE(extractFromIR(R"m(
 define void @f(i32 %p, i32 %q) {
   %add = add nsw i32 %p, %q
   %ult = icmp ult i32 %p, %add
   ret void
 }
-)m");
-  ASSERT_TRUE(M.get());
+)m"));
 
-  auto EC = ExtractExprs(M.get());
-
-  EXPECT_TRUE(HasExprCandidate(EC,
-                               "(Or (And (Eq N0:(Extract 31 N1:(Read w32 0 p)) "
-                               "(Extract 31 N2:(Read w32 0 q))) (Eq false (Eq "
-                               "N0 (Extract 31 N3:(Add w32 N1 N2))))) (Ult N1 "
-                               "N3))"));
+  EXPECT_TRUE(hasCandidateExpr(
+      "(Or (And (Eq N0:(Extract 31 N1:(Read w32 0 p)) (Extract 31 N2:(Read w32 "
+      "0 q))) (Eq false (Eq N0 (Extract 31 N3:(Add w32 N1 N2))))) (Ult N1 "
+      "N3))"));
 }
 
-TEST(ExtractorTest, PhiCond) {
-  auto M = ParseIR(R"m(
+TEST_F(ExtractorTest, PhiCond) {
+  ASSERT_TRUE(extractFromIR(R"m(
 define void @f(i32 %p, i32 %q) {
 entry:
   br i1 undef, label %t, label %f
@@ -159,19 +153,15 @@ cont:
   %ult = icmp ult i32 %p, %phi
   ret void
 }
-)m");
-  ASSERT_TRUE(M.get());
+)m"));
 
-  auto EC = ExtractExprs(M.get());
-
-  EXPECT_TRUE(HasExprCandidate(EC,
-                               "(Ult N0:(Read w32 0 p) (Select w32 (Read 0 "
-                               "blockpred) (Add w32 N0 N1:(Read w32 0 q)) (Mul "
-                               "w32 N0 N1)))"));
+  EXPECT_TRUE(hasCandidateExpr(
+      "(Ult N0:(Read w32 0 p) (Select w32 (Read 0 blockpred) (Add w32 N0 "
+      "N1:(Read w32 0 q)) (Mul w32 N0 N1)))"));
 }
 
-TEST(ExtractorTest, PhiLoop) {
-  auto M = ParseIR(R"m(
+TEST_F(ExtractorTest, PhiLoop) {
+  ASSERT_TRUE(extractFromIR(R"m(
 define void @f(i32 %p, i32 %q) {
 entry:
   br label %loop
@@ -185,10 +175,7 @@ loop:
 cont:
   ret void
 }
-)m");
-  ASSERT_TRUE(M.get());
+)m"));
 
-  auto EC = ExtractExprs(M.get());
-
-  EXPECT_EQ(0u, EC.size());
+  EXPECT_EQ(0u, CandExprs.size());
 }
