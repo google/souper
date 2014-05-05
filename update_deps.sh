@@ -20,6 +20,7 @@ klee_commit=7f44b9346356c91f633c6de6939c33a45756ae7e
 llvm_build_type=Debug
 if [ -n "$1" ] ; then
   llvm_build_type="$1"
+  shift
 fi
 
 llvmdir=third_party/llvm
@@ -33,10 +34,10 @@ mkdir -p $llvm_builddir
 cmake_flags=".. -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type"
 
 if [ -n "`which ninja`" ] ; then
-  (cd $llvm_builddir && cmake -G Ninja $cmake_flags)
+  (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")
   ninja -C $llvm_builddir
 else
-  (cd $llvm_builddir && cmake $cmake_flags)
+  (cd $llvm_builddir && cmake $cmake_flags "$@")
   make -C $llvm_builddir -j4
 fi
 
