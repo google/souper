@@ -17,8 +17,9 @@ Building Souper
 ---------------
 
 1. Download and build dependencies:
-     $ ./update_deps.sh $buildtype
-   $buildtype may be Debug or Release.
+     $ ./update_deps.sh $buildtype $extra_cmake_flags
+   $buildtype may be Debug or Release. It is optional and defaults to Debug.
+   $extra_cmake_flags is optional. It is passed to CMake.
 
 2. Run CMake from a build directory:
      $ mkdir /path/to/souper-build
@@ -27,6 +28,9 @@ Building Souper
    Be sure to select the same build type used when compiling the dependencies.
 
 3. Run 'make' from the build directory.
+
+Note that GCC 4.8 and earlier have a bug in handling multiline string
+literals. You should build Souper using GCC 4.9+ or Clang.
 
 Using Souper
 ------------

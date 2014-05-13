@@ -23,6 +23,12 @@ if [ -n "$1" ] ; then
   shift
 fi
 
+extra_cmake_flags=
+if [ -n "$1" ] ; then
+  extra_cmake_flags="$1"
+  shift
+fi
+
 llvmdir=third_party/llvm
 llvm_builddir=$llvmdir/$llvm_build_type
 
@@ -31,7 +37,7 @@ svn co -r $llvm_revision https://llvm.org/svn/llvm-project/cfe/trunk $llvmdir/to
 
 mkdir -p $llvm_builddir
 
-cmake_flags=".. -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type"
+cmake_flags=".. -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type $extra_cmake_flags"
 
 if [ -n "`which ninja`" ] ; then
   (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")
