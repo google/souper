@@ -15,7 +15,7 @@
 # limitations under the License.
 
 llvm_revision=205611
-klee_commit=7f44b9346356c91f633c6de6939c33a45756ae7e
+klee_commit=5d8db05524f5216900e952c3e1fc2aac9c424391
 
 llvm_build_type=Debug
 if [ -n "$1" ] ; then
