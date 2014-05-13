@@ -331,7 +331,9 @@ typedef llvm::EquivalenceClasses<Inst *> InstClasses;
 // Add the variable set of I as an equivalence class to Vars, and return a
 // reference to the leader of that equivalence class.
 InstClasses::member_iterator AddVarSet(InstClasses::member_iterator Leader,
-                                       InstClasses &Vars, Inst *I) {
+                                       InstClasses &Vars,
+                                       llvm::DenseSet<Inst *> &SeenInsts,
+                                       Inst *I) {
   if (I->K == Inst::Var) {
     if (Leader != Vars.member_end()) {
       return Vars.unionSets(Leader, Vars.findLeader(Vars.insert(I)));
@@ -339,8 +341,10 @@ InstClasses::member_iterator AddVarSet(InstClasses::member_iterator Leader,
       return Vars.findLeader(Vars.insert(I));
     }
   } else {
+    if (!SeenInsts.insert(I).second)
+      return Leader;
     for (auto Op : I->Ops) {
-      Leader = AddVarSet(Leader, Vars, Op);
+      Leader = AddVarSet(Leader, Vars, SeenInsts, Op);
     }
     return Leader;
   }
@@ -353,7 +357,9 @@ std::vector<Inst *> AddPCSets(const std::vector<InstMapping> &PCs,
                               InstClasses &Vars) {
   std::vector<Inst *> PCSets(PCs.size());
   for (unsigned i = 0; i != PCs.size(); ++i) {
-    auto PCLeader = AddVarSet(Vars.member_end(), Vars, PCs[i].Source);
+    llvm::DenseSet<Inst *> SeenInsts;
+    auto PCLeader =
+        AddVarSet(Vars.member_end(), Vars, SeenInsts, PCs[i].Source);
     if (PCLeader != Vars.member_end())
       PCSets[i] = *PCLeader;
   }
@@ -366,7 +372,8 @@ std::vector<InstMapping> GetRelevantPCs(const std::vector<InstMapping> &PCs,
                                         const std::vector<Inst *> &PCSets,
                                         InstClasses Vars,
                                         InstMapping Cand) {
-  auto Leader = AddVarSet(Vars.member_end(), Vars, Cand.Source);
+  llvm::DenseSet<Inst *> SeenInsts;
+  auto Leader = AddVarSet(Vars.member_end(), Vars, SeenInsts, Cand.Source);
 
   std::vector<InstMapping> RelevantPCs;
   for (unsigned i = 0; i != PCs.size(); ++i) {
