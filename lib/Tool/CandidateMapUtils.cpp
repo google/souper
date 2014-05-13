@@ -30,7 +30,6 @@ void souper::AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
       }
     }
   }
-
 }
 
 bool souper::SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
@@ -40,7 +39,8 @@ bool souper::SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
     OS << "; Using solver: " << Solver->getName() << '\n';
     for (const auto &Cand : M) {
       bool Sat;
-      if (llvm::error_code EC = Solver->isSatisfiable(Cand.second.Query, Sat)) {
+      if (llvm::error_code EC =
+              Solver->isSatisfiable(Cand.second.getQuery(), Sat)) {
         llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
         return false;
       }
@@ -50,8 +50,7 @@ bool souper::SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
       }
     }
   } else {
-    OS
-        << "; No solver specified; listing all candidate replacements.\n";
+    OS << "; No solver specified; listing all candidate replacements.\n";
     for (const auto &Cand : M) {
       OS << '\n';
       Cand.second.print(OS);

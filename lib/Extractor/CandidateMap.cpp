@@ -62,6 +62,27 @@ void CandidateMapEntry::print(llvm::raw_ostream &OS) const {
   PrintReplacement(OS, PCs, Mapping);
 }
 
+std::string CandidateMapEntry::getQuery() const {
+  std::ostringstream SMTSS;
+  ConstraintManager Manager;
+  Query KQuery(Manager, CandExpr.E);
+  ExprSMTLIBLetPrinter Printer;
+  Printer.setOutput(SMTSS);
+  Printer.setQuery(KQuery);
+  Printer.generateOutput();
+
+  if (DumpKLEEExprs) {
+    SMTSS << "; KLEE expression:\n; ";
+    std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SMTSS));
+    PP->setForceNoLineBreaks(true);
+    PP->scan(CandExpr.E);
+    PP->print(CandExpr.E);
+    SMTSS << std::endl;
+  }
+
+  return SMTSS.str();
+}
+
 void souper::AddToCandidateMap(CandidateMap &M,
                                const CandidateReplacement &CR) {
   CandidateExpr CE = GetCandidateExprForReplacement(CR);
@@ -71,25 +92,8 @@ void souper::AddToCandidateMap(CandidateMap &M,
     PrintReplacement(InstSS, CR.PCs, CR.Mapping);
 
     CandidateMapEntry &Entry = M[InstSS.str()];
-    if (Entry.Query.empty()) {
-      std::ostringstream SMTSS;
-      ConstraintManager Manager;
-      Query KQuery(Manager, CE.E);
-      ExprSMTLIBLetPrinter Printer;
-      Printer.setOutput(SMTSS);
-      Printer.setQuery(KQuery);
-      Printer.generateOutput();
-
-      if (DumpKLEEExprs) {
-        SMTSS << "; KLEE expression:\n; ";
-        std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SMTSS));
-        PP->setForceNoLineBreaks(true);
-        PP->scan(CE.E);
-        PP->print(CE.E);
-        SMTSS << std::endl;
-      }
-
-      Entry.Query = SMTSS.str();
+    if (Entry.CandExpr.E.isNull()) {
+      Entry.CandExpr = std::move(CE);
 
       Entry.PCs = CR.PCs;
       Entry.Mapping = CR.Mapping;

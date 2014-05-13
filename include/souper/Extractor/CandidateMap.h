@@ -15,10 +15,11 @@
 #ifndef SOUPER_EXTRACTOR_CANDIDATEMAP_H
 #define SOUPER_EXTRACTOR_CANDIDATEMAP_H
 
+#include <map>
 #include <string>
-#include "llvm/ADT/StringMap.h"
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Extractor/Candidates.h"
+#include "souper/Extractor/KLEEBuilder.h"
 
 namespace llvm {
 
@@ -31,8 +32,8 @@ namespace souper {
 struct CandidateReplacement;
 
 struct CandidateMapEntry {
-  /// The SMT-LIB2 query for this candidate.
-  std::string Query;
+  /// The KLEE expr for this candidate.
+  CandidateExpr CandExpr;
 
   std::vector<InstMapping> PCs;
   InstMapping Mapping;
@@ -43,10 +44,13 @@ struct CandidateMapEntry {
   unsigned Priority;
 
   void print(llvm::raw_ostream &OS) const;
+
+  /// Return the SMT-LIB2 query for this candidate.
+  std::string getQuery() const;
 };
 
 /// Map from candidate string representations to candidate information.
-typedef llvm::StringMap<CandidateMapEntry> CandidateMap;
+typedef std::map<std::string, CandidateMapEntry> CandidateMap;
 
 void AddToCandidateMap(CandidateMap &M, const CandidateReplacement &CR);
 void PrintCandidateMap(llvm::raw_ostream &OS, CandidateMap &M);
