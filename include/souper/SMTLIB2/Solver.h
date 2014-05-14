@@ -17,7 +17,9 @@
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/system_error.h"
+#include <functional>
 #include <memory>
+#include <vector>
 
 namespace souper {
 
