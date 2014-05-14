@@ -34,6 +34,10 @@ static llvm::cl::opt<std::string> STPPath(
     "stp-path", llvm::cl::desc("Path to STP executable"), llvm::cl::init(""),
     llvm::cl::value_desc("path"));
 
+static llvm::cl::opt<std::string> Z3Path(
+    "z3-path", llvm::cl::desc("Path to Z3 executable"), llvm::cl::init(""),
+    llvm::cl::value_desc("path"));
+
 static llvm::cl::opt<bool> KeepSolverInputs(
     "keep-solver-inputs", llvm::cl::desc("Do not clean up solver inputs"),
     llvm::cl::init(false));
@@ -48,6 +52,9 @@ static std::unique_ptr<SMTLIBSolver> GetSolverFromArgs() {
   } else if (!STPPath.empty()) {
     return createSTPSolver(makeExternalSolverProgram(STPPath),
                            KeepSolverInputs);
+  } else if (!Z3Path.empty()) {
+    return createZ3Solver(makeExternalSolverProgram(Z3Path),
+                          KeepSolverInputs);
   } else {
     return nullptr;
   }

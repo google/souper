@@ -11,7 +11,7 @@ http://llvm.org/docs/GettingStarted.html#getting-a-modern-host-c-toolchain
 You will also need CMake to build Souper and its dependencies.
 
 To run Souper over a bitcode file, you will need an SMT solver. Souper can
-use Boolector, CVC4 or STP.
+use Boolector, CVC4, STP or Z3.
 
 Building Souper
 ---------------
@@ -44,6 +44,7 @@ flags to tell Souper where the SMT solver executable is:
   -boolector-path=<path>       - Path to Boolector executable
   -cvc4-path=<path>            - Path to CVC4 executable
   -stp-path=<path>             - Path to STP executable
+  -z3-path=<path>              - Path to Z3 executable
 
 For example:
     $ /path/to/souper -stp-path=/path/to/stp-build/stp /path/to/file.bc
