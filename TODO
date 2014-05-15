@@ -1,5 +1,15 @@
 ----------------------------------------------------------------------
 
+instruction support:
+- add checked overflow intrinsics
+  - implement using bitvectors of size n+1 or 2n?
+- finish adding undefined behaviors
+  - nuw for add, sub, mul
+  - shift overflows
+  - exact shifts and divs
+  - mul and div overflows
+- add vector, FP, and memory instructions?
+
 candidate improvements:
 - attempt to synthesize arbitrary width integer constants
 - attempt to synthesize undef
@@ -13,6 +23,8 @@ Souper's findings into LLVM passes.
 
 extraction improvements
 
+add deserialization; test it by making sure x==deserialize(serialize(x))
+
 caching:
 - local, using std::unordered_map or something
 - remote, using Redis or something
@@ -23,6 +35,9 @@ caching:
   - solver timeout
   - solver hasn't been run on this one yet
   - flagged for manual inspection
+- optionally print cache statistics
+
+make exploitation of undefined behavior conditional based on a command
+line flag
 
 ----------------------------------------------------------------------
-
