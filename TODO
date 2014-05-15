@@ -15,7 +15,7 @@ extraction improvements
 
 caching:
 - local, using std::unordered_map or something
-- remote, using Redid or something
+- remote, using Redis or something
 - key: the extracted expression
 - value: 
   - best known solution
