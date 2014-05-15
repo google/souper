@@ -1,0 +1,28 @@
+----------------------------------------------------------------------
+
+candidate improvements:
+- attempt to synthesize arbitrary width integer constants
+- attempt to synthesize undef
+- put instructions in candidates
+
+Make it possible to run Souper as a Clang pass. Hack Clang to run it
+after each invocation of InstCombine. This serves two purposes: first,
+making it trivial to run Souper on large codes; second, establishing
+an upper bound on the speedup that can be gained by integrating
+Souper's findings into LLVM passes.
+
+extraction improvements
+
+caching:
+- local, using std::unordered_map or something
+- remote, using Redid or something
+- key: the extracted expression
+- value: 
+  - best known solution
+  - no solution
+  - solver timeout
+  - solver hasn't been run on this one yet
+  - flagged for manual inspection
+
+----------------------------------------------------------------------
+
