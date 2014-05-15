@@ -53,10 +53,11 @@ flags to tell Souper where the SMT solver executable is:
 For example:
     $ /path/to/souper -stp-path=/path/to/stp-build/stp /path/to/file.bc
 
-Souper will extract SMT queries from the bitcode file and list them together
-with the result from the SMT solver. Any unsatisfiable queries (which represent
-missed optimization opportunities) will have "unsat" printed after them,
-while satisfiable queries will have "sat".
+Souper will extract SMT queries from the bitcode file and pass them to
+a solver. Unsatisfiable queries (which represent missed optimization
+opportunities) will cause Souper to print its internal representation
+of the optimizable expression along with the shorter expression that
+refines the original one.
 
 Disclaimer
 ----------

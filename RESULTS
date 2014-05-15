@@ -1,0 +1,10 @@
+----------------------------------------------------------------------
+
+This file lists bugs filed against LLVM, and commits made to LLVM, as
+a result of Souper.
+
+http://llvm.org/viewvc/llvm-project?view=revision&revision=208809
+http://llvm.org/viewvc/llvm-project?view=revision&revision=208750
+http://llvm.org/bugs/show_bug.cgi?id=19711
+
+----------------------------------------------------------------------
