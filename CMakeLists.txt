@@ -58,13 +58,18 @@ set(CLANG_LIBS "-lclangCodeGen -lclangTooling -lclangRewriteCore -lclangFrontend
 set(GTEST_CXXFLAGS "-I\"${LLVM_SRC}/utils/unittest/googletest/include\" -DGTEST_HAS_RTTI=0")
 set(GTEST_LIBS "-lgtest_main -lgtest")
 
+set(PASS_CXXFLAGS "${LLVM_CXXFLAGS}")
+
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++0x")
+  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++0x -Wno-strict-aliasing")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++11")
   set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++11")
+  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++11")
+  set(PASS_LDFLAGS "-Wl,-undefined,dynamic_lookup")
 endif()
 
 include_directories(include third_party/klee/include)
@@ -106,6 +111,10 @@ add_library(souperTool STATIC
   lib/Tool/CandidateMapUtils.cpp
 )
 
+add_library(souperPass SHARED
+  lib/Pass/Pass.cpp
+)
+
 add_executable(clang-souper
   tools/clang-souper.cpp
 )
@@ -128,12 +137,15 @@ add_executable(inst_tests
 
 set_target_properties(souper internal-solver-test souperExtractor souperInst souperSMTLIB2 souperTool kleeExpr
   PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS} -Wno-covered-switch-default")
+set_target_properties(souperPass
+  PROPERTIES COMPILE_FLAGS "${PASS_CXXFLAGS} -Wno-covered-switch-default")
 set_target_properties(souperClangTool clang-souper
   PROPERTIES COMPILE_FLAGS "${CLANG_CXXFLAGS} ${LLVM_CXXFLAGS} -Wno-covered-switch-default")
 set_target_properties(extractor_tests inst_tests
   PROPERTIES COMPILE_FLAGS "${GTEST_CXXFLAGS} ${LLVM_CXXFLAGS} -Wno-covered-switch-default")
 
 # Executables
+target_link_libraries(souperPass -Wl,-force_load souperTool -Wl,-force_load souperExtractor -Wl,-force_load souperInst -Wl,-force_load souperSMTLIB2 -Wl,-force_load kleeExpr ${PASS_LDFLAGS})
 target_link_libraries(souper souperTool souperExtractor souperInst souperSMTLIB2 kleeExpr ${LLVM_LDFLAGS} ${LLVM_LIBS})
 target_link_libraries(clang-souper souperClangTool souperTool souperExtractor souperInst souperSMTLIB2 kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 
