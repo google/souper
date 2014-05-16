@@ -86,24 +86,32 @@ add_library(kleeExpr STATIC
 
 add_library(souperClangTool STATIC
   lib/ClangTool/Actions.cpp
+  include/souper/ClangTool/Actions.h
 )
 
 add_library(souperExtractor STATIC
   lib/Extractor/CandidateMap.cpp
   lib/Extractor/Candidates.cpp
   lib/Extractor/KLEEBuilder.cpp
+  include/souper/Extractor/CandidateMap.h
+  include/souper/Extractor/Candidates.h
+  include/souper/Extractor/KLEEBuilder.h
 )
 
 add_library(souperInst STATIC
   lib/Inst/Inst.cpp
+  include/souper/Inst/Inst.h
 )
 
 add_library(souperSMTLIB2 STATIC
   lib/SMTLIB2/Solver.cpp
+  include/souper/SMTLIB2/Solver.h
 )
 
 add_library(souperTool STATIC
   lib/Tool/CandidateMapUtils.cpp
+  include/souper/Tool/CandidateMapUtils.h
+  include/souper/Tool/GetSolverFromArgs.h
 )
 
 add_executable(clang-souper
