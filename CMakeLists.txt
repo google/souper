@@ -14,6 +14,7 @@ execute_process(
 )
 
 set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -fno-exceptions -fno-rtti")
+set(PASS_CXXFLAGS "${LLVM_CXXFLAGS}")
 
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --libs bitreader bitwriter instrumentation ipo irreader linker mc mcparser objcarcopts option profiledata scalaropts transformutils
@@ -33,6 +34,8 @@ execute_process(
   OUTPUT_VARIABLE LLVM_LDFLAGS
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+set(PASS_LDFLAGS "${LLVM_LDFLAGS}")
 
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --bindir
@@ -60,11 +63,14 @@ set(GTEST_LIBS "-lgtest_main -lgtest")
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++0x")
+  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++0x -Wno-strict-aliasing")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++11")
   set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++11")
+  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++11")
+  set(PASS_LDFLAGS "-Wl,-undefined,dynamic_lookup")
 endif()
 
 include_directories(include third_party/klee/include)
@@ -140,6 +146,15 @@ add_library(souperTool STATIC
   ${SOUPER_TOOL_FILES}
 )
 
+add_library(souperPass SHARED
+  ${KLEE_EXPR_FILES}
+  ${SOUPER_EXTRACTOR_FILES}
+  ${SOUPER_INST_FILES}
+  ${SOUPER_SMTLIB2_FILES}
+  ${SOUPER_TOOL_FILES}
+  lib/Pass/Pass.cpp
+)
+
 add_executable(clang-souper
   tools/clang-souper.cpp
 )
@@ -162,6 +177,8 @@ add_executable(inst_tests
 
 set_target_properties(souper internal-solver-test souperExtractor souperInst souperSMTLIB2 souperTool kleeExpr
   PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS} -Wno-covered-switch-default")
+set_target_properties(souperPass
+  PROPERTIES COMPILE_FLAGS "${PASS_CXXFLAGS} -Wno-covered-switch-default")
 set_target_properties(souperClangTool clang-souper
   PROPERTIES COMPILE_FLAGS "${CLANG_CXXFLAGS} ${LLVM_CXXFLAGS} -Wno-covered-switch-default")
 set_target_properties(extractor_tests inst_tests
@@ -173,6 +190,7 @@ target_link_libraries(souperExtractor souperInst kleeExpr)
 target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
+target_link_libraries(souperPass ${PASS_LDFLAGS})
 target_link_libraries(souper souperExtractor souperSMTLIB2 souperTool kleeExpr)
 target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(clang-souper souperClangTool souperExtractor souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
