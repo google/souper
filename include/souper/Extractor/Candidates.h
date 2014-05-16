@@ -27,6 +27,7 @@
 namespace llvm {
 
 class BasicBlock;
+class LoopInfo;
 class Function;
 class Instruction;
 class Value;
@@ -107,6 +108,11 @@ struct ExprBuilderContext {
   std::map<const llvm::Value *, Inst *> InstMap;
   std::map<llvm::BasicBlock *, BlockInfo> BlockMap;
 };
+
+FunctionCandidateSet ExtractCandidatesFromPass(
+    llvm::Function *F, const llvm::LoopInfo *LI, InstContext &IC,
+    ExprBuilderContext &EBC,
+    const ExprBuilderOptions &Opts = ExprBuilderOptions());
 
 FunctionCandidateSet ExtractCandidates(
     llvm::Function *F, InstContext &IC, ExprBuilderContext &EBC,

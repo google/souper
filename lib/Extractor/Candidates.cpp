@@ -383,6 +383,39 @@ std::vector<InstMapping> GetRelevantPCs(const std::vector<InstMapping> &PCs,
   return RelevantPCs;
 }
 
+void ExtractExprCandidates(Function &F, const LoopInfo *LI,
+                           const ExprBuilderOptions &Opts, InstContext &IC,
+                           ExprBuilderContext &EBC,
+                           FunctionCandidateSet &Result) {
+  ExprBuilder EB(Opts, F.getParent(), LI, IC, EBC);
+
+  Inst *False = IC.getConst(APInt(1, false));
+  Inst *True = IC.getConst(APInt(1, true));
+
+  for (auto &BB : F) {
+    std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
+    for (auto &I : BB) {
+      if (I.getType()->isIntegerTy(1)) {
+        Inst *SI = EB.get(&I);
+        BCS->Replacements.emplace_back(&I, InstMapping(SI, False), 1);
+        BCS->Replacements.emplace_back(&I, InstMapping(SI, True), 1);
+      }
+    }
+    if (!BCS->Replacements.empty()) {
+      EB.addPathConditions(BCS->PCs, &BB);
+
+      InstClasses Vars;
+      auto PCSets = AddPCSets(BCS->PCs, Vars);
+
+      for (auto &R : BCS->Replacements) {
+        R.PCs = GetRelevantPCs(BCS->PCs, PCSets, Vars, R.Mapping);
+      }
+
+      Result.Blocks.emplace_back(std::move(BCS));
+    }
+  }
+}
+
 class ExtractExprCandidatesPass : public FunctionPass {
   static char ID;
   const ExprBuilderOptions &Opts;
@@ -403,40 +436,21 @@ public:
 
   bool runOnFunction(Function &F) {
     LoopInfo *LI = &getAnalysis<LoopInfo>();
-    ExprBuilder EB(Opts, F.getParent(), LI, IC, EBC);
-
-    Inst *False = IC.getConst(APInt(1, false));
-    Inst *True = IC.getConst(APInt(1, true));
-
-    for (auto &BB : F) {
-      std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
-      for (auto &I : BB) {
-        if (I.getType()->isIntegerTy(1)) {
-          Inst *SI = EB.get(&I);
-          BCS->Replacements.emplace_back(&I, InstMapping(SI, False), 1);
-          BCS->Replacements.emplace_back(&I, InstMapping(SI, True), 1);
-        }
-      }
-      if (!BCS->Replacements.empty()) {
-        EB.addPathConditions(BCS->PCs, &BB);
-
-        InstClasses Vars;
-        auto PCSets = AddPCSets(BCS->PCs, Vars);
-
-        for (auto &R : BCS->Replacements) {
-          R.PCs = GetRelevantPCs(BCS->PCs, PCSets, Vars, R.Mapping);
-        }
-
-        Result.Blocks.emplace_back(std::move(BCS));
-      }
-    }
-
+    ExtractExprCandidates(F, LI, Opts, IC, EBC, Result);
     return false;
   }
 };
 
 char ExtractExprCandidatesPass::ID = 0;
 
+}
+
+FunctionCandidateSet souper::ExtractCandidatesFromPass(
+    Function *F, const LoopInfo *LI, InstContext &IC, ExprBuilderContext &EBC,
+    const ExprBuilderOptions &Opts) {
+  FunctionCandidateSet Result;
+  ExtractExprCandidates(*F, LI, Opts, IC, EBC, Result);
+  return Result;
 }
 
 FunctionCandidateSet souper::ExtractCandidates(Function *F, InstContext &IC,
