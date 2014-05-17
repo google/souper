@@ -22,6 +22,10 @@
 
 namespace souper {
 
+static llvm::cl::opt<bool> Cache(
+    "cache", llvm::cl::desc("Cache query results"),
+    llvm::cl::init(false));
+
 static llvm::cl::opt<std::string> BoolectorPath(
     "boolector-path", llvm::cl::desc("Path to Boolector executable"),
     llvm::cl::init(""), llvm::cl::value_desc("path"));
@@ -42,7 +46,7 @@ static llvm::cl::opt<bool> KeepSolverInputs(
     "keep-solver-inputs", llvm::cl::desc("Do not clean up solver inputs"),
     llvm::cl::init(false));
 
-static std::unique_ptr<SMTLIBSolver> GetSolverFromArgs() {
+static std::unique_ptr<SMTLIBSolver> GetActualSolverFromArgs() {
   if (!BoolectorPath.empty()) {
     return createBoolectorSolver(makeExternalSolverProgram(BoolectorPath),
                                  KeepSolverInputs);
@@ -57,6 +61,14 @@ static std::unique_ptr<SMTLIBSolver> GetSolverFromArgs() {
                           KeepSolverInputs);
   } else {
     return nullptr;
+  }
+}
+
+static std::unique_ptr<SMTLIBSolver> GetSolverFromArgs() {
+  if (Cache) {
+    return createCachingSolver(GetActualSolverFromArgs());
+  } else {
+    return GetActualSolverFromArgs();
   }
 }
 

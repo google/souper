@@ -117,6 +117,26 @@ public:
 
 };
 
+class CachingSolver : public SMTLIBSolver {
+  std::unique_ptr<SMTLIBSolver> solver;
+
+public:
+  CachingSolver(std::unique_ptr<SMTLIBSolver> _solver) {
+    solver = std::move(_solver);
+  }
+
+  std::string getName() const {
+    // FIXME
+    return "foo";
+  }
+
+  error_code isSatisfiable(StringRef Query, bool &Result,
+                           unsigned Timeout) override {
+    // FIXME
+    return error_code();
+  }
+};
+  
 }
 
 SolverProgram souper::makeExternalSolverProgram(StringRef Path) {
@@ -200,4 +220,10 @@ std::unique_ptr<SMTLIBSolver> souper::createZ3Solver(SolverProgram Prog,
                                                      bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
       new ProcessSMTLIBSolver("Z3", Keep, Prog, {"-smt2", "-in"}));
+}
+
+std::unique_ptr<SMTLIBSolver> souper::createCachingSolver(std::unique_ptr<SMTLIBSolver> ActualSolver)
+{
+  return std::unique_ptr<SMTLIBSolver>(
+      new CachingSolver(std::move(ActualSolver)));
 }
