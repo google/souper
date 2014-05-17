@@ -82,9 +82,9 @@ struct ExprBuilder {
 }
 
 Inst *ExprBuilder::makeArrayRead(Value *V) {
-  StringRef Name = V->getName();
-  if (Name.empty() || !Opts.NamedArrays)
-    Name = "arr";
+  StringRef Name;
+  if (Opts.NamedArrays)
+    Name = V->getName();
   unsigned Width = DL->getTypeSizeInBits(V->getType());
   return IC.createVar(Width, Name);
 }

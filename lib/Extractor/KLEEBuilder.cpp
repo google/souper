@@ -60,6 +60,8 @@ struct ExprBuilder {
 }
 
 ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name) {
+  if (Name.empty())
+    Name = "arr";
   Arrays.emplace_back(
       new Array(ArrayNames.makeName(Name), 1, 0, 0, Expr::Int32, Width));
 
