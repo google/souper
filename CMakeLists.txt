@@ -93,9 +93,11 @@ add_library(souperExtractor STATIC
   lib/Extractor/CandidateMap.cpp
   lib/Extractor/Candidates.cpp
   lib/Extractor/KLEEBuilder.cpp
+  lib/Extractor/Solver.cpp
   include/souper/Extractor/CandidateMap.h
   include/souper/Extractor/Candidates.h
   include/souper/Extractor/KLEEBuilder.h
+  include/souper/Extractor/Solver.h
 )
 
 add_library(souperInst STATIC
