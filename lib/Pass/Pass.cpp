@@ -5,6 +5,7 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -43,8 +44,18 @@ public:
     }
 
     if (Solver) {
+      DenseSet<Instruction *> ReplacedInsts;
+
       if (DebugSouperPass) {
-        errs() << "; Listing valid replacements.\n";
+        std::string FunctionName;
+        if (F.hasLocalLinkage()) {
+          FunctionName =
+              (F.getParent()->getModuleIdentifier() + ":" + F.getName()).str();
+        } else {
+          FunctionName = F.getName();
+        }
+        errs() << "\n";
+        errs() << "; Listing applied replacements for " << FunctionName << "\n";
         errs() << "; Using solver: " << Solver->getName() << '\n';
       }
 
@@ -57,15 +68,10 @@ public:
         }
 
         if (!Sat) {
-          if (DebugSouperPass) {
-            errs() << '\n';
-            Cand.second.print(errs());
-          }
-
-          // We are assuming that at most one candidate applies per instruction.
-          // If not, then the instruction will already have been replaced and
-          // this code will crash badly.
           for (auto *O : Cand.second.Origins) {
+            if (ReplacedInsts.find(O) != ReplacedInsts.end())
+              continue;
+
             BasicBlock *BB = O->getParent();
             BasicBlock::iterator BI = BB->begin();
             while (&(*BI) != O)
@@ -73,13 +79,17 @@ public:
             Constant *CI = ConstantInt::get(
                 O->getType(), Cand.second.Mapping.Replacement->Val);
             if (DebugSouperPass) {
+              errs() << "\n";
+              errs() << "; Priority: " << Cand.second.Priority << '\n';
               errs() << "; Replacing \"";
               O->print(errs());
               errs() << "\" with \"";
               CI->print(errs());
-              errs() << "\"\n";
+              errs() << "\" in:\n";
+              PrintReplacement(errs(), Cand.second.PCs, Cand.second.Mapping);
             }
             ReplaceInstWithValue(BB->getInstList(), BI, CI);
+            ReplacedInsts.insert(O);
             changed = true;
           }
         }
