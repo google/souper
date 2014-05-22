@@ -69,7 +69,7 @@ endif()
 
 include_directories(include third_party/klee/include)
 
-add_library(kleeExpr STATIC
+set(KLEE_EXPR_FILES
   third_party/klee/lib/Expr/Constraints.cpp
   third_party/klee/lib/Expr/ExprBuilder.cpp
   third_party/klee/lib/Expr/Expr.cpp
@@ -84,12 +84,20 @@ add_library(kleeExpr STATIC
   third_party/klee/lib/Expr/Updates.cpp
 )
 
-add_library(souperClangTool STATIC
+add_library(kleeExpr STATIC
+  ${KLEE_EXPR_FILES}
+)
+
+set(SOUPER_CLANG_TOOL_FILES
   lib/ClangTool/Actions.cpp
   include/souper/ClangTool/Actions.h
 )
 
-add_library(souperExtractor STATIC
+add_library(souperClangTool STATIC
+  ${SOUPER_CLANG_TOOL_FILES}
+)
+
+set(SOUPER_EXTRACTOR_FILES
   lib/Extractor/CandidateMap.cpp
   lib/Extractor/Candidates.cpp
   lib/Extractor/KLEEBuilder.cpp
@@ -100,20 +108,36 @@ add_library(souperExtractor STATIC
   include/souper/Extractor/Solver.h
 )
 
-add_library(souperInst STATIC
+add_library(souperExtractor STATIC
+  ${SOUPER_EXTRACTOR_FILES}
+)
+
+set(SOUPER_INST_FILES
   lib/Inst/Inst.cpp
   include/souper/Inst/Inst.h
 )
 
-add_library(souperSMTLIB2 STATIC
+add_library(souperInst STATIC
+  ${SOUPER_INST_FILES}
+)
+
+set(SOUPER_SMTLIB2_FILES
   lib/SMTLIB2/Solver.cpp
   include/souper/SMTLIB2/Solver.h
 )
 
-add_library(souperTool STATIC
+add_library(souperSMTLIB2 STATIC
+  ${SOUPER_SMTLIB2_FILES}
+)
+
+set(SOUPER_TOOL_FILES
   lib/Tool/CandidateMapUtils.cpp
   include/souper/Tool/CandidateMapUtils.h
   include/souper/Tool/GetSolverFromArgs.h
+)
+
+add_library(souperTool STATIC
+  ${SOUPER_TOOL_FILES}
 )
 
 add_executable(clang-souper
