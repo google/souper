@@ -57,6 +57,8 @@ public:
 
 namespace souper {
 
+Solver::~Solver() {}
+
 std::unique_ptr<Solver> createBaseSolver(
     std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout) {
   return std::unique_ptr<Solver>(new BaseSolver(std::move(SMTSolver), Timeout));

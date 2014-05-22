@@ -24,6 +24,7 @@ namespace souper {
 
 class Solver {
 public:
+  virtual ~Solver();
   virtual llvm::error_code isValid(const std::vector<InstMapping> &PCs,
                                    InstMapping Mapping, bool &IsValid) = 0;
 };
