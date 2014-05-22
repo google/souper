@@ -68,8 +68,8 @@ endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++11")
-  set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++11")
-  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++11")
+  set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++11 -fvisibility-inlines-hidden")
+  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++11 -fvisibility-inlines-hidden")
   set(PASS_LDFLAGS "-Wl,-undefined,dynamic_lookup")
 endif()
 
