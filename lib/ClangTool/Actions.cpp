@@ -17,7 +17,6 @@
 #include "clang/CodeGen/BackendUtil.h"
 #include "clang/CodeGen/CodeGenAction.h"
 #include "clang/Tooling/Tooling.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/IR/Module.h"
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/CandidateMap.h"

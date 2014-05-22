@@ -17,7 +17,6 @@
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/system_error.h"
-#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "souper/SMTLIB2/Solver.h"
