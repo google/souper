@@ -93,7 +93,7 @@ public:
       return make_error_code(errc::executable_format_error);
 
     default: {
-      OwningPtr<MemoryBuffer> MB;
+      std::unique_ptr<MemoryBuffer> MB;
       if (error_code EC = MemoryBuffer::getFile(OutputPath.str(), MB)) {
         ::remove(OutputPath.c_str());
         return EC;
