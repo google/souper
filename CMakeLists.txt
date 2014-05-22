@@ -143,18 +143,16 @@ set_target_properties(souperClangTool clang-souper
 set_target_properties(extractor_tests inst_tests
   PROPERTIES COMPILE_FLAGS "${GTEST_CXXFLAGS} ${LLVM_CXXFLAGS} -Wno-covered-switch-default")
 
-target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
-target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
-target_link_libraries(souperExtractor souperInst kleeExpr)
-target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
-target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
-target_link_libraries(souperTool souperExtractor souperSMTLIB2)
-target_link_libraries(souper souperExtractor souperSMTLIB2 souperTool kleeExpr)
-target_link_libraries(internal-solver-test souperSMTLIB2)
-target_link_libraries(clang-souper souperClangTool souperExtractor souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
-target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
-target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
+# Executables
+target_link_libraries(souper souperTool souperExtractor souperInst souperSMTLIB2 kleeExpr ${LLVM_LDFLAGS} ${LLVM_LIBS})
+target_link_libraries(clang-souper souperClangTool souperTool souperExtractor souperInst souperSMTLIB2 kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 
+# Tests
+target_link_libraries(internal-solver-test souperSMTLIB2 ${LLVM_LDFLAGS} ${LLVM_LIBS})
+target_link_libraries(extractor_tests souperExtractor souperInst kleeExpr ${GTEST_LIBS} ${LLVM_LDFLAGS} ${LLVM_LIBS})
+target_link_libraries(inst_tests souperInst ${GTEST_LIBS} ${LLVM_LDFLAGS} ${LLVM_LIBS})
+
+# Custom targets
 add_custom_target(run_extractor_tests COMMAND ./extractor_tests DEPENDS extractor_tests)
 add_custom_target(run_inst_tests COMMAND ./inst_tests DEPENDS inst_tests)
 
