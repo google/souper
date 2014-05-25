@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-llvm_revision=209252
+llvm_revision=209595
 klee_commit=5d8db05524f5216900e952c3e1fc2aac9c424391
 
 llvm_build_type=Debug
