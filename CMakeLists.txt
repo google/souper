@@ -63,7 +63,7 @@ set(GTEST_LIBS "-lgtest_main -lgtest")
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++0x")
-  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++0x -Wno-strict-aliasing")
+  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++0x")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

@@ -1,3 +1,17 @@
+// Copyright 2014 The Souper Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/GetSolverFromArgs.h"
 #include "souper/Tool/CandidateMapUtils.h"
@@ -22,7 +36,10 @@ struct SouperPass : public FunctionPass {
   std::unique_ptr<SMTLIBSolver> Solver;
 
 public:
-  SouperPass() : FunctionPass(ID), Solver(GetSolverFromArgs()) {}
+  SouperPass() : FunctionPass(ID), Solver(GetSolverFromArgs()) {
+    if (!Solver)
+      report_fatal_error("Souper requires a solver to be specified");
+  }
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfo>();
@@ -43,62 +60,49 @@ public:
       }
     }
 
-    if (Solver) {
-      DenseSet<Instruction *> ReplacedInsts;
-
-      if (DebugSouperPass) {
-        std::string FunctionName;
-        if (F.hasLocalLinkage()) {
-          FunctionName =
-              (F.getParent()->getModuleIdentifier() + ":" + F.getName()).str();
-        } else {
-          FunctionName = F.getName();
-        }
-        errs() << "\n";
-        errs() << "; Listing applied replacements for " << FunctionName << "\n";
-        errs() << "; Using solver: " << Solver->getName() << '\n';
+    if (DebugSouperPass) {
+      std::string FunctionName;
+      if (F.hasLocalLinkage()) {
+        FunctionName =
+            (F.getParent()->getModuleIdentifier() + ":" + F.getName()).str();
+      } else {
+        FunctionName = F.getName();
       }
+      errs() << "\n";
+      errs() << "; Listing applied replacements for " << FunctionName << "\n";
+      errs() << "; Using solver: " << Solver->getName() << '\n';
+    }
 
-      for (const auto &Cand : CandMap) {
-        bool Sat;
-        if (llvm::error_code EC =
-                Solver->isSatisfiable(Cand.second.getQuery(), Sat)) {
-          llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
-          return changed;
+    DenseSet<Instruction *> ReplacedInsts;
+
+    for (const auto &Cand : CandMap) {
+      bool Sat;
+      if (llvm::error_code EC =
+              Solver->isSatisfiable(Cand.second.getQuery(), Sat))
+        report_fatal_error("Unable to query solver: " + EC.message() + "\n");
+
+      if (Sat)
+        continue;
+
+      for (auto *O : Cand.second.Origins) {
+        if (!ReplacedInsts.insert(O).second)
+          continue;
+
+        Constant *CI = ConstantInt::get(
+            O->getType(), Cand.second.Mapping.Replacement->Val);
+        if (DebugSouperPass) {
+          errs() << "\n";
+          errs() << "; Priority: " << Cand.second.Priority << '\n';
+          errs() << "; Replacing \"";
+          O->print(errs());
+          errs() << "\" with \"";
+          CI->print(errs());
+          errs() << "\" in:\n";
+          PrintReplacement(errs(), Cand.second.PCs, Cand.second.Mapping);
         }
-
-        if (!Sat) {
-          for (auto *O : Cand.second.Origins) {
-            if (ReplacedInsts.find(O) != ReplacedInsts.end())
-              continue;
-
-            BasicBlock *BB = O->getParent();
-            BasicBlock::iterator BI = BB->begin();
-            while (&(*BI) != O)
-              BI++;
-            Constant *CI = ConstantInt::get(
-                O->getType(), Cand.second.Mapping.Replacement->Val);
-            if (DebugSouperPass) {
-              errs() << "\n";
-              errs() << "; Priority: " << Cand.second.Priority << '\n';
-              errs() << "; Replacing \"";
-              O->print(errs());
-              errs() << "\" with \"";
-              CI->print(errs());
-              errs() << "\" in:\n";
-              PrintReplacement(errs(), Cand.second.PCs, Cand.second.Mapping);
-            }
-            ReplaceInstWithValue(BB->getInstList(), BI, CI);
-            ReplacedInsts.insert(O);
-            changed = true;
-          }
-        }
-      }
-    } else if (DebugSouperPass) {
-      errs() << "; No solver specified; listing all candidate replacements.\n";
-      for (const auto &Cand : CandMap) {
-        errs() << '\n';
-        Cand.second.print(errs());
+        BasicBlock::iterator BI = O;
+        ReplaceInstWithValue(O->getParent()->getInstList(), BI, CI);
+        changed = true;
       }
     }
 
