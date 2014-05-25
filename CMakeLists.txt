@@ -14,7 +14,6 @@ execute_process(
 )
 
 set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -fno-exceptions -fno-rtti")
-set(PASS_CXXFLAGS "${LLVM_CXXFLAGS}")
 
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --libs bitreader bitwriter instrumentation ipo irreader linker mc mcparser objcarcopts option profiledata scalaropts transformutils
@@ -61,15 +60,11 @@ set(CLANG_LIBS "-lclangCodeGen -lclangTooling -lclangRewriteCore -lclangFrontend
 set(GTEST_CXXFLAGS "-I\"${LLVM_SRC}/utils/unittest/googletest/include\" -DGTEST_HAS_RTTI=0")
 set(GTEST_LIBS "-lgtest_main -lgtest")
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++0x")
-  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++0x")
-endif()
+set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++11")
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++11")
-  set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++11 -fvisibility-inlines-hidden")
-  set(PASS_CXXFLAGS "${PASS_CXXFLAGS} -std=c++11 -fvisibility-inlines-hidden")
+  set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -fvisibility-inlines-hidden")
   set(PASS_LDFLAGS "-Wl,-undefined,dynamic_lookup")
 endif()
 
@@ -175,14 +170,12 @@ add_executable(inst_tests
   unittests/Inst/InstTests.cpp
 )
 
-set_target_properties(souper internal-solver-test souperExtractor souperInst souperSMTLIB2 souperTool kleeExpr
-  PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS} -Wno-covered-switch-default")
-set_target_properties(souperPass
-  PROPERTIES COMPILE_FLAGS "${PASS_CXXFLAGS} -Wno-covered-switch-default")
+set_target_properties(souper internal-solver-test souperExtractor souperInst souperSMTLIB2 souperTool souperPass kleeExpr
+  PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
 set_target_properties(souperClangTool clang-souper
-  PROPERTIES COMPILE_FLAGS "${CLANG_CXXFLAGS} ${LLVM_CXXFLAGS} -Wno-covered-switch-default")
+  PROPERTIES COMPILE_FLAGS "${CLANG_CXXFLAGS} ${LLVM_CXXFLAGS}")
 set_target_properties(extractor_tests inst_tests
-  PROPERTIES COMPILE_FLAGS "${GTEST_CXXFLAGS} ${LLVM_CXXFLAGS} -Wno-covered-switch-default")
+  PROPERTIES COMPILE_FLAGS "${GTEST_CXXFLAGS} ${LLVM_CXXFLAGS}")
 
 target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
