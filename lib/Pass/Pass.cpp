@@ -15,13 +15,15 @@
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/GetSolverFromArgs.h"
 #include "souper/Tool/CandidateMapUtils.h"
-#include "llvm/Pass.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Pass.h"
+#include "llvm/PassManager.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 using namespace souper;
@@ -113,5 +115,22 @@ public:
 char SouperPass::ID = 0;
 }
 
-static RegisterPass<SouperPass> X("souper", "Souper super-optimizer pass",
-                                  false, false);
+namespace llvm {
+void initializeSouperPassPass(llvm::PassRegistry &);
+}
+
+INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
+                      false, false)
+INITIALIZE_PASS_DEPENDENCY(LoopInfo)
+INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
+                    false)
+
+static void registerSouperPass(
+    const llvm::PassManagerBuilder &Builder, llvm::PassManagerBase &PM) {
+  initializeSouperPassPass(*llvm::PassRegistry::getPassRegistry());
+  PM.add(new SouperPass);
+}
+
+static llvm::RegisterStandardPasses
+RegisterSouperOptimizer(llvm::PassManagerBuilder::EP_Peephole,
+                        registerSouperPass);
