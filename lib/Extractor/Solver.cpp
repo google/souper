@@ -46,11 +46,9 @@ public:
   BaseSolver(std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout)
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
-  llvm::error_code isValid(const std::vector<InstMapping> &PCs,
-                           InstMapping Mapping, bool &IsValid) {
+  llvm::error_code isValid(const CandidateMapEntry &E, bool &IsValid) {
     bool IsSat;
-    // TODO: Build a query here.
-    llvm::error_code EC = SMTSolver->isSatisfiable("", IsSat, Timeout);
+    llvm::error_code EC = SMTSolver->isSatisfiable(E.getQuery(), IsSat, Timeout);
     IsValid = !IsSat;
     return EC;
   }
@@ -67,15 +65,13 @@ public:
   CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
 
-  llvm::error_code isValid(const std::vector<InstMapping> &PCs,
-                           InstMapping Mapping, bool &IsValid) {
-    // TODO: Make this do caching.
-    return UnderlyingSolver->isValid(PCs, Mapping, IsValid);
+  llvm::error_code isValid(const CandidateMapEntry &E, bool &IsValid) {
+    // FIXME: Make this do caching.
+    return UnderlyingSolver->isValid(E, IsValid);
   }
 
   std::string getName() {
-    // FIXME
-    return "";
+    return "caching + " + UnderlyingSolver->getName();
   }
 
 };

@@ -42,15 +42,10 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
     OS << "; Using solver: " << S->getName() << '\n';
     for (const auto &Cand : M) {
       bool Valid;
-#if 1 // FIXME
-      Valid = true;
-#else
-      if (llvm::error_code EC =
-              S->isSatisfiable(Cand.second.getQuery(), Sat)) {
+      if (llvm::error_code EC = S->isValid(Cand.second, Valid)) {
         llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
         return false;
       }
-#endif
       if (Valid) {
         OS << '\n';
         Cand.second.print(OS);

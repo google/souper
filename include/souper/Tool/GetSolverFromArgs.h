@@ -66,11 +66,11 @@ static llvm::cl::opt<bool> Cache(
   llvm::cl::init(false));
 
 static std::unique_ptr<Solver> GetSolverFromArgs() {
+  std::unique_ptr<Solver> S = createBaseSolver (GetUnderlyingSolverFromArgs(), 0);
   if (Cache) {
-    // FIXME 
-    return createBaseSolver (GetUnderlyingSolverFromArgs(), 0);
+    return createCachingSolver (std::move(S));
   } else {
-    return createBaseSolver (GetUnderlyingSolverFromArgs(), 0);
+    return S;
   }
 }
 

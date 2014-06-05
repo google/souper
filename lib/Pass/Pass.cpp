@@ -79,13 +79,8 @@ public:
 
     for (const auto &Cand : CandMap) {
       bool Valid;      
-#if 1 // FIXME
-      Valid = true;
-#else
-      if (llvm::error_code EC =
-              S->isSatisfiable(Cand.second.getQuery(), Sat))
+      if (llvm::error_code EC = S->isValid(Cand.second, Valid))
         report_fatal_error("Unable to query solver: " + EC.message() + "\n");
-#endif
       if (!Valid)
         continue;
 
