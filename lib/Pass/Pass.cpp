@@ -35,11 +35,11 @@ static cl::opt<bool> DebugSouperPass("debug-souper", cl::Hidden,
 
 struct SouperPass : public FunctionPass {
   static char ID;
-  std::unique_ptr<SMTLIBSolver> Solver;
+  std::unique_ptr<Solver> S;
 
 public:
-  SouperPass() : FunctionPass(ID), Solver(GetSolverFromArgs()) {
-    if (!Solver)
+  SouperPass() : FunctionPass(ID), S(GetSolverFromArgs()) {
+    if (!S)
       report_fatal_error("Souper requires a solver to be specified");
   }
 
@@ -72,18 +72,21 @@ public:
       }
       errs() << "\n";
       errs() << "; Listing applied replacements for " << FunctionName << "\n";
-      errs() << "; Using solver: " << Solver->getName() << '\n';
+      errs() << "; Using solver: " << S->getName() << '\n';
     }
 
     DenseSet<Instruction *> ReplacedInsts;
 
     for (const auto &Cand : CandMap) {
-      bool Sat;
+      bool Valid;      
+#if 1 // FIXME
+      Valid = true;
+#else
       if (llvm::error_code EC =
-              Solver->isSatisfiable(Cand.second.getQuery(), Sat))
+              S->isSatisfiable(Cand.second.getQuery(), Sat))
         report_fatal_error("Unable to query solver: " + EC.message() + "\n");
-
-      if (Sat)
+#endif
+      if (!Valid)
         continue;
 
       for (auto *O : Cand.second.Origins) {

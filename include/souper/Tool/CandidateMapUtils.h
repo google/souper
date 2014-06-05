@@ -17,6 +17,7 @@
 
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Extractor/CandidateMap.h"
+#include "souper/Extractor/Solver.h"
 
 namespace llvm {
 
@@ -32,7 +33,7 @@ void AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
                              CandidateMap &CandMap, llvm::Module *M);
 
 bool SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
-                       SMTLIBSolver *Solver);
+                       Solver *Solver);
 
 }
 

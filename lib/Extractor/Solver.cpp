@@ -13,9 +13,26 @@
 // limitations under the License.
 
 #include "souper/Extractor/Solver.h"
-
+#include <map>
+#include <string>
+#include "llvm/Support/raw_ostream.h"
+#include "souper/Extractor/Candidates.h"
+#include "souper/Extractor/KLEEBuilder.h"
 #include "llvm/Support/system_error.h"
 #include "souper/SMTLIB2/Solver.h"
+#include "klee/Expr.h"
+#include "klee/Solver.h"
+#include "klee/util/Ref.h"
+#include "klee/util/ExprPPrinter.h"
+#include "klee/util/ExprSMTLIBLetPrinter.h"
+#include "llvm/ADT/StringSet.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Module.h"
+#include "llvm/Support/CommandLine.h"
+#include "souper/Extractor/Candidates.h"
+#include "souper/Extractor/KLEEBuilder.h"
 
 using namespace souper;
 
@@ -37,6 +54,10 @@ public:
     IsValid = !IsSat;
     return EC;
   }
+
+  std::string getName() {
+    return SMTSolver->getName();
+  }
 };
 
 class CachingSolver : public Solver {
@@ -51,6 +72,12 @@ public:
     // TODO: Make this do caching.
     return UnderlyingSolver->isValid(PCs, Mapping, IsValid);
   }
+
+  std::string getName() {
+    // FIXME
+    return "";
+  }
+
 };
 
 }

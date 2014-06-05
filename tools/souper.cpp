@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  std::unique_ptr<SMTLIBSolver> Solver = GetSolverFromArgs();
+  std::unique_ptr<Solver> S = GetSolverFromArgs();
 
   InstContext IC;
   ExprBuilderContext EBC;
@@ -96,5 +96,5 @@ int main(int argc, char **argv) {
 
   AddModuleToCandidateMap(IC, EBC, CandMap, M.get());
 
-  return SolveCandidateMap(llvm::outs(), CandMap, Solver.get()) ? 0 : 1;
+  return SolveCandidateMap(llvm::outs(), CandMap, S.get()) ? 0 : 1;
 }
