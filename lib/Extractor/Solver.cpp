@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "souper/Extractor/Solver.h"
 #include <map>
 #include <string>
+#include <utility>
+#include <unordered_map>
+#include "souper/Extractor/Solver.h"
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/KLEEBuilder.h"
@@ -60,18 +62,34 @@ public:
 
 class CachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
+  typedef std::pair<llvm::error_code,bool> cache_result;
+  std::unordered_map<std::string,cache_result> cache;
+  int hits = 0, misses = 0;
 
 public:
   CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
 
   llvm::error_code isValid(const CandidateMapEntry &E, bool &IsValid) {
-    // FIXME: Make this do caching.
-    return UnderlyingSolver->isValid(E, IsValid);
+    std::string buf;
+    llvm::raw_string_ostream OS(buf);
+    E.print(OS);
+
+    const auto &ent = cache.find(OS.str());
+    if (ent == cache.end()) {
+      misses++;
+      llvm::error_code EC = UnderlyingSolver->isValid(E, IsValid);
+      cache.emplace (OS.str(), std::make_pair (EC, IsValid));
+      return EC;
+    } else {
+      hits++;
+      IsValid = ent->second.second;
+      return ent->second.first;
+    }
   }
 
   std::string getName() {
-    return "caching + " + UnderlyingSolver->getName();
+    return UnderlyingSolver->getName() + " + internal cache";
   }
 
 };
