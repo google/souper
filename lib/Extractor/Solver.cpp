@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <iostream> // fixme
+
 #include <map>
 #include <string>
 #include <utility>
@@ -60,12 +62,11 @@ public:
   }
 };
 
-typedef std::pair<llvm::error_code,bool> cache_result;
-std::unordered_map<std::string,cache_result> cache;
-int hits = 0, misses = 0;
-
 class CachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
+  typedef std::pair<llvm::error_code,bool> cache_result;
+  std::unordered_map<std::string,cache_result> cache;
+  int hits = 0, misses = 0;
 
 public:
   CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
@@ -74,16 +75,18 @@ public:
   llvm::error_code isValid(const CandidateMapEntry &E, bool &IsValid) {
     std::string buf;
     llvm::raw_string_ostream OS(buf);
-    E.print(OS);
+    souper::PrintReplacement(OS, E.PCs, E.Mapping);
 
     const auto &ent = cache.find(OS.str());
     if (ent == cache.end()) {
       misses++;
+      std::cout << "miss\n";
       llvm::error_code EC = UnderlyingSolver->isValid(E, IsValid);
       cache.emplace (OS.str(), std::make_pair (EC, IsValid));
       return EC;
     } else {
       hits++;
+      std::cout << "hit\n";
       IsValid = ent->second.second;
       return ent->second.first;
     }

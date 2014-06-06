@@ -30,17 +30,21 @@ using namespace souper;
 using namespace llvm;
 
 namespace {
+std::unique_ptr<Solver> S;
+
 static cl::opt<bool> DebugSouperPass("debug-souper", cl::Hidden,
                                      cl::init(false), cl::desc("Debug Souper"));
 
 struct SouperPass : public FunctionPass {
   static char ID;
-  std::unique_ptr<Solver> S;
 
 public:
-  SouperPass() : FunctionPass(ID), S(GetSolverFromArgs()) {
-    if (!S)
-      report_fatal_error("Souper requires a solver to be specified");
+  SouperPass() : FunctionPass(ID) {
+    if (!S) {
+      S = GetSolverFromArgs();
+      if (!S)
+	report_fatal_error("Souper requires a solver to be specified");
+    }
   }
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
