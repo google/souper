@@ -59,7 +59,7 @@ struct ExtractorTest : testing::Test {
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
         std::unique_ptr<CandidateExpr> CE(
-            new CandidateExpr(GetCandidateExprForReplacement(R)));
+	    new CandidateExpr(GetCandidateExprForReplacement(R.PCs,R.Mapping)));
         if (!IsTriviallyInvalid(CE->E)) {
           CandExprs.emplace_back(std::move(CE));
         }

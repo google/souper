@@ -83,7 +83,8 @@ public:
 
     for (const auto &Cand : CandMap) {
       bool Valid;      
-      if (llvm::error_code EC = S->isValid(Cand.second, Valid))
+      if (llvm::error_code EC = S->isValid(Cand.second.PCs, 
+					   Cand.second.Mapping, Valid))
         report_fatal_error("Unable to query solver: " + EC.message() + "\n");
       if (!Valid)
         continue;

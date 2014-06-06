@@ -26,8 +26,8 @@ namespace souper {
 class Solver {
 public:
   virtual ~Solver();
-  virtual llvm::error_code isValid(const CandidateMapEntry &E,
-                                   bool &IsValid) = 0;
+  virtual llvm::error_code isValid(const std::vector<InstMapping> &PCs,
+				   InstMapping Mapping, bool &IsValid) = 0;
   virtual std::string getName() = 0;
 };
 

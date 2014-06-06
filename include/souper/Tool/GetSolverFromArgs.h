@@ -62,7 +62,7 @@ static std::unique_ptr<SMTLIBSolver> GetUnderlyingSolverFromArgs() {
 }
 
 static llvm::cl::opt<bool> Cache(
-  "cache", llvm::cl::desc("Cache solver results"),
+  "internal-cache-souper", llvm::cl::desc("Cache solver results in memory"),
   llvm::cl::init(false));
 
 static std::unique_ptr<Solver> GetSolverFromArgs() {

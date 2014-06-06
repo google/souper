@@ -42,7 +42,8 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
     OS << "; Using solver: " << S->getName() << '\n';
     for (const auto &Cand : M) {
       bool Valid;
-      if (llvm::error_code EC = S->isValid(Cand.second, Valid)) {
+      if (llvm::error_code EC = S->isValid(Cand.second.PCs, 
+					   Cand.second.Mapping, Valid)) {
         llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
         return false;
       }

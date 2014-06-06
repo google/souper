@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <iostream> // fixme
-
 #include <map>
 #include <string>
 #include <utility>
@@ -50,9 +48,11 @@ public:
   BaseSolver(std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout)
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
-  llvm::error_code isValid(const CandidateMapEntry &E, bool &IsValid) {
+  llvm::error_code isValid(const std::vector<InstMapping> &PCs,
+			   InstMapping Mapping, bool &IsValid) {
     bool IsSat;
-    llvm::error_code EC = SMTSolver->isSatisfiable(E.getQuery(), IsSat, Timeout);
+    std::string Q = BuildQuery (PCs, Mapping);
+    llvm::error_code EC = SMTSolver->isSatisfiable(Q, IsSat, Timeout);
     IsValid = !IsSat;
     return EC;
   }
@@ -72,21 +72,20 @@ public:
   CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
 
-  llvm::error_code isValid(const CandidateMapEntry &E, bool &IsValid) {
+  llvm::error_code isValid(const std::vector<InstMapping> &PCs,
+			   InstMapping Mapping, bool &IsValid) {
     std::string buf;
     llvm::raw_string_ostream OS(buf);
-    souper::PrintReplacement(OS, E.PCs, E.Mapping);
+    souper::PrintReplacement(OS, PCs, Mapping);
 
     const auto &ent = cache.find(OS.str());
     if (ent == cache.end()) {
       misses++;
-      std::cout << "miss\n";
-      llvm::error_code EC = UnderlyingSolver->isValid(E, IsValid);
+      llvm::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
       cache.emplace (OS.str(), std::make_pair (EC, IsValid));
       return EC;
     } else {
       hits++;
-      std::cout << "hit\n";
       IsValid = ent->second.second;
       return ent->second.first;
     }

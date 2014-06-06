@@ -29,8 +29,11 @@ struct CandidateExpr {
   klee::ref<klee::Expr> E;
 };
 
-CandidateExpr GetCandidateExprForReplacement(const CandidateReplacement &CR);
+ CandidateExpr GetCandidateExprForReplacement(const std::vector<InstMapping> &PCs,
+					      InstMapping Mapping);
 bool IsTriviallyInvalid(klee::ref<klee::Expr> E);
+std::string BuildQuery(const std::vector<InstMapping> &PCs,
+		       InstMapping Mapping);
 
 }
 
