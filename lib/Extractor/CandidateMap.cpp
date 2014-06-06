@@ -29,11 +29,6 @@
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/KLEEBuilder.h"
 
-static llvm::cl::opt<bool> DumpKLEEExprs(
-    "dump-klee-exprs",
-    llvm::cl::desc("Dump KLEE expressions after SMTLIB queries"),
-    llvm::cl::init(false));
-
 using namespace souper;
 using namespace klee;
 using namespace llvm;
@@ -62,30 +57,9 @@ void CandidateMapEntry::print(llvm::raw_ostream &OS) const {
   PrintReplacement(OS, PCs, Mapping);
 }
 
-std::string CandidateMapEntry::getQuery() const {
-  std::ostringstream SMTSS;
-  ConstraintManager Manager;
-  Query KQuery(Manager, CandExpr.E);
-  ExprSMTLIBLetPrinter Printer;
-  Printer.setOutput(SMTSS);
-  Printer.setQuery(KQuery);
-  Printer.generateOutput();
-
-  if (DumpKLEEExprs) {
-    SMTSS << "; KLEE expression:\n; ";
-    std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SMTSS));
-    PP->setForceNoLineBreaks(true);
-    PP->scan(CandExpr.E);
-    PP->print(CandExpr.E);
-    SMTSS << std::endl;
-  }
-
-  return SMTSS.str();
-}
-
 void souper::AddToCandidateMap(CandidateMap &M,
                                const CandidateReplacement &CR) {
-  CandidateExpr CE = GetCandidateExprForReplacement(CR);
+  CandidateExpr CE = GetCandidateExprForReplacement(CR.PCs, CR.Mapping);
   if (!IsTriviallyInvalid(CE.E)) {
     std::string InstStr;
     llvm::raw_string_ostream InstSS(InstStr);
