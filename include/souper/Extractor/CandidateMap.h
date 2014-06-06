@@ -44,9 +44,6 @@ struct CandidateMapEntry {
   unsigned Priority;
 
   void print(llvm::raw_ostream &OS) const;
-
-  /// Return the SMT-LIB2 query for this candidate.
-  std::string getQuery() const;
 };
 
 /// Map from candidate string representations to candidate information.

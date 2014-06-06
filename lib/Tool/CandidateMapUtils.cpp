@@ -19,6 +19,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Extractor/CandidateMap.h"
 #include "souper/SMTLIB2/Solver.h"
+#include "souper/Extractor/Solver.h"
 
 void souper::AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
                                      CandidateMap &CandMap, llvm::Module *M) {
@@ -32,19 +33,21 @@ void souper::AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
   }
 }
 
-bool souper::SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
-                               SMTLIBSolver *Solver) {
-  if (Solver) {
+namespace souper {
+
+bool SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
+		       Solver *S) {
+  if (S) {
     OS << "; Listing valid replacements.\n";
-    OS << "; Using solver: " << Solver->getName() << '\n';
+    OS << "; Using solver: " << S->getName() << '\n';
     for (const auto &Cand : M) {
-      bool Sat;
-      if (llvm::error_code EC =
-              Solver->isSatisfiable(Cand.second.getQuery(), Sat)) {
+      bool Valid;
+      if (llvm::error_code EC = S->isValid(Cand.second.PCs, 
+					   Cand.second.Mapping, Valid)) {
         llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
         return false;
       }
-      if (!Sat) {
+      if (Valid) {
         OS << '\n';
         Cand.second.print(OS);
       }
@@ -58,4 +61,6 @@ bool souper::SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
   }
 
   return true;
+}
+
 }

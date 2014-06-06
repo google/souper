@@ -12,10 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <map>
+#include <string>
+#include <utility>
+#include <unordered_map>
 #include "souper/Extractor/Solver.h"
-
+#include "llvm/Support/raw_ostream.h"
+#include "souper/Extractor/Candidates.h"
+#include "souper/Extractor/KLEEBuilder.h"
 #include "llvm/Support/system_error.h"
 #include "souper/SMTLIB2/Solver.h"
+#include "klee/Expr.h"
+#include "klee/Solver.h"
+#include "klee/util/Ref.h"
+#include "klee/util/ExprPPrinter.h"
+#include "klee/util/ExprSMTLIBLetPrinter.h"
+#include "llvm/ADT/StringSet.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Module.h"
+#include "llvm/Support/CommandLine.h"
+#include "souper/Extractor/Candidates.h"
+#include "souper/Extractor/KLEEBuilder.h"
 
 using namespace souper;
 
@@ -30,27 +49,52 @@ public:
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
   llvm::error_code isValid(const std::vector<InstMapping> &PCs,
-                           InstMapping Mapping, bool &IsValid) {
+			   InstMapping Mapping, bool &IsValid) {
     bool IsSat;
-    // TODO: Build a query here.
-    llvm::error_code EC = SMTSolver->isSatisfiable("", IsSat, Timeout);
+    std::string Q = BuildQuery (PCs, Mapping);
+    llvm::error_code EC = SMTSolver->isSatisfiable(Q, IsSat, Timeout);
     IsValid = !IsSat;
     return EC;
+  }
+
+  std::string getName() {
+    return SMTSolver->getName();
   }
 };
 
 class CachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
+  typedef std::pair<llvm::error_code,bool> cache_result;
+  std::unordered_map<std::string,cache_result> cache;
+  int hits = 0, misses = 0;
 
 public:
   CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
 
   llvm::error_code isValid(const std::vector<InstMapping> &PCs,
-                           InstMapping Mapping, bool &IsValid) {
-    // TODO: Make this do caching.
-    return UnderlyingSolver->isValid(PCs, Mapping, IsValid);
+			   InstMapping Mapping, bool &IsValid) {
+    std::string buf;
+    llvm::raw_string_ostream OS(buf);
+    souper::PrintReplacement(OS, PCs, Mapping);
+
+    const auto &ent = cache.find(OS.str());
+    if (ent == cache.end()) {
+      misses++;
+      llvm::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
+      cache.emplace (OS.str(), std::make_pair (EC, IsValid));
+      return EC;
+    } else {
+      hits++;
+      IsValid = ent->second.second;
+      return ent->second.first;
+    }
   }
+
+  std::string getName() {
+    return UnderlyingSolver->getName() + " + internal cache";
+  }
+
 };
 
 }
