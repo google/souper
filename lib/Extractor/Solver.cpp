@@ -60,11 +60,12 @@ public:
   }
 };
 
+typedef std::pair<llvm::error_code,bool> cache_result;
+std::unordered_map<std::string,cache_result> cache;
+int hits = 0, misses = 0;
+
 class CachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
-  typedef std::pair<llvm::error_code,bool> cache_result;
-  std::unordered_map<std::string,cache_result> cache;
-  int hits = 0, misses = 0;
 
 public:
   CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
