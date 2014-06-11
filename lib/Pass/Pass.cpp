@@ -30,17 +30,21 @@ using namespace souper;
 using namespace llvm;
 
 namespace {
+std::unique_ptr<Solver> S;
+
 static cl::opt<bool> DebugSouperPass("debug-souper", cl::Hidden,
                                      cl::init(false), cl::desc("Debug Souper"));
 
 struct SouperPass : public FunctionPass {
   static char ID;
-  std::unique_ptr<SMTLIBSolver> Solver;
 
 public:
-  SouperPass() : FunctionPass(ID), Solver(GetSolverFromArgs()) {
-    if (!Solver)
-      report_fatal_error("Souper requires a solver to be specified");
+  SouperPass() : FunctionPass(ID) {
+    if (!S) {
+      S = GetSolverFromArgs();
+      if (!S)
+        report_fatal_error("Souper requires a solver to be specified");
+    }
   }
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
@@ -72,18 +76,18 @@ public:
       }
       errs() << "\n";
       errs() << "; Listing applied replacements for " << FunctionName << "\n";
-      errs() << "; Using solver: " << Solver->getName() << '\n';
+      errs() << "; Using solver: " << S->getName() << '\n';
     }
 
     DenseSet<Instruction *> ReplacedInsts;
 
     for (const auto &Cand : CandMap) {
-      bool Sat;
+      bool Valid;
       if (llvm::error_code EC =
-              Solver->isSatisfiable(Cand.second.getQuery(), Sat))
+              S->isValid(Cand.second.PCs, Cand.second.Mapping, Valid))
         report_fatal_error("Unable to query solver: " + EC.message() + "\n");
 
-      if (Sat)
+      if (!Valid)
         continue;
 
       for (auto *O : Cand.second.Origins) {

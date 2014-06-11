@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include "llvm/Support/CommandLine.h"
+#include "souper/Extractor/Solver.h"
 #include "souper/SMTLIB2/Solver.h"
 
 namespace souper {
@@ -42,7 +43,7 @@ static llvm::cl::opt<bool> KeepSolverInputs(
     "keep-solver-inputs", llvm::cl::desc("Do not clean up solver inputs"),
     llvm::cl::init(false));
 
-static std::unique_ptr<SMTLIBSolver> GetSolverFromArgs() {
+static std::unique_ptr<SMTLIBSolver> GetUnderlyingSolverFromArgs() {
   if (!BoolectorPath.empty()) {
     return createBoolectorSolver(makeExternalSolverProgram(BoolectorPath),
                                  KeepSolverInputs);
@@ -57,6 +58,19 @@ static std::unique_ptr<SMTLIBSolver> GetSolverFromArgs() {
                           KeepSolverInputs);
   } else {
     return nullptr;
+  }
+}
+
+static llvm::cl::opt<bool> Cache(
+  "internal-cache-souper", llvm::cl::desc("Cache solver results in memory"),
+  llvm::cl::init(false));
+
+static std::unique_ptr<Solver> GetSolverFromArgs() {
+  std::unique_ptr<Solver> S = createBaseSolver (GetUnderlyingSolverFromArgs(), 0);
+  if (Cache) {
+    return createCachingSolver (std::move(S));
+  } else {
+    return S;
   }
 }
 
