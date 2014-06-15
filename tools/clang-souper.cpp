@@ -69,6 +69,6 @@ int main(int argc, const char **argv) {
       getGlobalContext(), IC, EBC, OwnedMods, CandMap));
   Tool.run(Factory.get());
 
-  std::unique_ptr<SMTLIBSolver> Solver = GetSolverFromArgs();
-  return SolveCandidateMap(llvm::outs(), CandMap, Solver.get()) ? 0 : 1;
+  std::unique_ptr<Solver> S = GetSolverFromArgs();
+  return SolveCandidateMap(llvm::outs(), CandMap, S.get()) ? 0 : 1;
 }

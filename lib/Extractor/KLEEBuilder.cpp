@@ -27,10 +27,18 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/PassManager.h"
+#include "llvm/Support/CommandLine.h"
 #include "klee/Expr.h"
+#include "klee/util/ExprPPrinter.h"
+#include "klee/util/ExprSMTLIBLetPrinter.h"
 #include "klee/util/Ref.h"
 #include "souper/Inst/Inst.h"
 #include "souper/Util/UniqueNameSet.h"
+
+static llvm::cl::opt<bool> DumpKLEEExprs(
+    "dump-klee-exprs",
+    llvm::cl::desc("Dump KLEE expressions after SMTLIB queries"),
+    llvm::cl::init(false));
 
 using namespace llvm;
 using namespace klee;
@@ -180,13 +188,13 @@ ref<Expr> ExprBuilder::getInstMapping(const InstMapping &IM) {
 
 // Return an expression which must be proven valid for the candidate to apply.
 CandidateExpr souper::GetCandidateExprForReplacement(
-    const CandidateReplacement &CR) {
+    const std::vector<InstMapping> &PCs, InstMapping Mapping) {
   CandidateExpr CE;
   ExprBuilder EB(CE.Arrays);
 
-  ref<Expr> Cons = EB.getInstMapping(CR.Mapping);
+  ref<Expr> Cons = EB.getInstMapping(Mapping);
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-  for (const auto &PC : CR.PCs) {
+  for (const auto &PC : PCs) {
     Ante = AndExpr::create(Ante, EB.getInstMapping(PC));
   }
   Ante = AndExpr::create(Ante, EB.InstCondition);
@@ -251,4 +259,27 @@ bool souper::IsTriviallyInvalid(ref<Expr> E) {
   }
 
   return false;
+}
+
+std::string souper::BuildQuery(const std::vector<InstMapping> &PCs,
+                               InstMapping Mapping) {
+  std::ostringstream SMTSS;
+  ConstraintManager Manager;
+  CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
+  Query KQuery(Manager, CE.E);
+  ExprSMTLIBLetPrinter Printer;
+  Printer.setOutput(SMTSS);
+  Printer.setQuery(KQuery);
+  Printer.generateOutput();
+
+  if (DumpKLEEExprs) {
+    SMTSS << "; KLEE expression:\n; ";
+    std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SMTSS));
+    PP->setForceNoLineBreaks(true);
+    PP->scan(CE.E);
+    PP->print(CE.E);
+    SMTSS << std::endl;
+  }
+
+  return SMTSS.str();
 }

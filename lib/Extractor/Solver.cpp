@@ -14,8 +14,7 @@
 
 #include "souper/Extractor/Solver.h"
 
-#include "llvm/Support/system_error.h"
-#include "souper/SMTLIB2/Solver.h"
+#include <unordered_map>
 
 using namespace souper;
 
@@ -32,15 +31,21 @@ public:
   llvm::error_code isValid(const std::vector<InstMapping> &PCs,
                            InstMapping Mapping, bool &IsValid) {
     bool IsSat;
-    // TODO: Build a query here.
-    llvm::error_code EC = SMTSolver->isSatisfiable("", IsSat, Timeout);
+    llvm::error_code EC = SMTSolver->isSatisfiable(BuildQuery (PCs, Mapping),
+                                                   IsSat, Timeout);
     IsValid = !IsSat;
     return EC;
+  }
+
+  std::string getName() {
+    return SMTSolver->getName();
   }
 };
 
 class CachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
+  std::unordered_map<std::string,std::pair<llvm::error_code,bool>> Cache;
+  int Hits = 0, Misses = 0;
 
 public:
   CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
@@ -48,9 +53,27 @@ public:
 
   llvm::error_code isValid(const std::vector<InstMapping> &PCs,
                            InstMapping Mapping, bool &IsValid) {
-    // TODO: Make this do caching.
-    return UnderlyingSolver->isValid(PCs, Mapping, IsValid);
+    std::string buf;
+    llvm::raw_string_ostream OS(buf);
+    souper::PrintReplacement(OS, PCs, Mapping);
+
+    const auto &ent = Cache.find(OS.str());
+    if (ent == Cache.end()) {
+      Misses++;
+      llvm::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
+      Cache.emplace (OS.str(), std::make_pair (EC, IsValid));
+      return EC;
+    } else {
+      Hits++;
+      IsValid = ent->second.second;
+      return ent->second.first;
+    }
   }
+
+  std::string getName() {
+    return UnderlyingSolver->getName() + " + internal cache";
+  }
+
 };
 
 }
