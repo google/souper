@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "souper/SMTLIB2/Solver.h"
-#include "souper/Tool/GetSolverFromArgs.h"
-#include "souper/Tool/CandidateMapUtils.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
@@ -25,6 +22,9 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "souper/SMTLIB2/Solver.h"
+#include "souper/Tool/GetSolverFromArgs.h"
+#include "souper/Tool/CandidateMapUtils.h"
 
 using namespace souper;
 using namespace llvm;

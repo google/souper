@@ -15,12 +15,12 @@
 #ifndef SOUPER_INST_INST_H
 #define SOUPER_INST_INST_H
 
-#include <memory>
-#include <string>
-#include <vector>
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace souper {
 

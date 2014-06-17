@@ -14,12 +14,11 @@
 
 #include "souper/Extractor/CandidateMap.h"
 
-#include <vector>
 #include "klee/Expr.h"
 #include "klee/Solver.h"
-#include "klee/util/Ref.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprSMTLIBLetPrinter.h"
+#include "klee/util/Ref.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
@@ -28,6 +27,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/KLEEBuilder.h"
+#include <vector>
 
 using namespace souper;
 using namespace klee;

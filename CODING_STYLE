@@ -1,0 +1,17 @@
+Souper generally follows the LLVM coding conventions.
+
+These settings will help Emacs follow the conventions:
+
+(setq-default c++-indent-level 2)
+(setq-default c-basic-offset 2)
+(setq-default fill-column 80)
+(setq-default indent-tabs-mode nil)
+
+TODO: vim settings
+
+Includes should be ordered like this:
+
+#include "souper/Whatever/Thisfile.h"
+
+#include "{klee,llvm,souper}/..." // ordered by name
+#include system headers // ordered by name

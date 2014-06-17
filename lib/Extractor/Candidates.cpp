@@ -14,10 +14,8 @@
 
 #include "souper/Extractor/Candidates.h"
 
-#include <map>
-#include <memory>
-#include <sstream>
-
+#include "klee/Expr.h"
+#include "klee/util/Ref.h"
 #include "llvm/ADT/EquivalenceClasses.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/BasicBlock.h"
@@ -27,10 +25,11 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/PassManager.h"
-#include "klee/Expr.h"
-#include "klee/util/Ref.h"
 #include "souper/Inst/Inst.h"
 #include "souper/Util/UniqueNameSet.h"
+#include <map>
+#include <memory>
+#include <sstream>
 
 using namespace llvm;
 using namespace klee;

@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "klee/util/ExprSMTLIBLetPrinter.h"
+#include "klee/Solver.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Bitcode/ReaderWriter.h"
-#include "llvm/PassManager.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/PassManager.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/DataStream.h"
 #include "llvm/Support/Debug.h"
@@ -25,14 +27,11 @@
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
-#include "klee/util/ExprSMTLIBLetPrinter.h"
-#include "klee/Solver.h"
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/CandidateMap.h"
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/CandidateMapUtils.h"
 #include "souper/Tool/GetSolverFromArgs.h"
-
 #include <iostream>
 
 using namespace llvm;
