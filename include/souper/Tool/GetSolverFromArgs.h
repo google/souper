@@ -66,7 +66,9 @@ static llvm::cl::opt<bool> Cache(
   llvm::cl::init(false));
 
 static std::unique_ptr<Solver> GetSolverFromArgs() {
-  std::unique_ptr<Solver> S = createBaseSolver (GetUnderlyingSolverFromArgs(), 0);
+  std::unique_ptr<SMTLIBSolver> US = GetUnderlyingSolverFromArgs();
+  if (!US) return NULL;
+  std::unique_ptr<Solver> S = createBaseSolver (std::move(US), 0);
   if (Cache) {
     return createCachingSolver (std::move(S));
   } else {
