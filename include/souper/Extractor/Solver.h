@@ -15,11 +15,11 @@
 #ifndef SOUPER_EXTRACTOR_SOLVER_H
 #define SOUPER_EXTRACTOR_SOLVER_H
 
-#include <vector>
 #include "llvm/Support/system_error.h"
 #include "souper/Extractor/CandidateMap.h"
 #include "souper/Extractor/Candidates.h"
 #include "souper/SMTLIB2/Solver.h"
+#include <vector>
 
 namespace souper {
 

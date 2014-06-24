@@ -15,12 +15,11 @@
 #ifndef SOUPER_EXTRACTOR_KLEEBUILDER_H
 #define SOUPER_EXTRACTOR_KLEEBUILDER_H
 
-#include <memory>
-#include <vector>
-
 #include "klee/Expr.h"
 #include "klee/util/Ref.h"
 #include "souper/Extractor/Candidates.h"
+#include <memory>
+#include <vector>
 
 namespace souper {
 

@@ -15,11 +15,11 @@
 #ifndef SOUPER_EXTRACTOR_CANDIDATEMAP_H
 #define SOUPER_EXTRACTOR_CANDIDATEMAP_H
 
-#include <map>
-#include <string>
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/KLEEBuilder.h"
+#include <map>
+#include <string>
 
 namespace llvm {
 

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <unistd.h>
 #include "llvm/Support/raw_ostream.h"
 #include "souper/SMTLIB2/Solver.h"
+#include <unistd.h>
 
 using namespace souper;
 

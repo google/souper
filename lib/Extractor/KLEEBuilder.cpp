@@ -14,11 +14,10 @@
 
 #include "souper/Extractor/KLEEBuilder.h"
 
-#include <functional>
-#include <map>
-#include <memory>
-#include <sstream>
-
+#include "klee/Expr.h"
+#include "klee/util/ExprPPrinter.h"
+#include "klee/util/ExprSMTLIBLetPrinter.h"
+#include "klee/util/Ref.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -28,12 +27,12 @@
 #include "llvm/IR/Type.h"
 #include "llvm/PassManager.h"
 #include "llvm/Support/CommandLine.h"
-#include "klee/Expr.h"
-#include "klee/util/ExprPPrinter.h"
-#include "klee/util/ExprSMTLIBLetPrinter.h"
-#include "klee/util/Ref.h"
 #include "souper/Inst/Inst.h"
 #include "souper/Util/UniqueNameSet.h"
+#include <functional>
+#include <map>
+#include <memory>
+#include <sstream>
 
 static llvm::cl::opt<bool> DumpKLEEExprs(
     "dump-klee-exprs",

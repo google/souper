@@ -15,14 +15,14 @@
 #ifndef SOUPER_EXTRACTOR_CANDIDATES_H
 #define SOUPER_EXTRACTOR_CANDIDATES_H
 
-#include <map>
-#include <memory>
-#include <vector>
 #include "klee/Expr.h"
 #include "klee/util/Ref.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Inst/Inst.h"
+#include <map>
+#include <memory>
+#include <vector>
 
 namespace llvm {
 

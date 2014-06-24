@@ -15,11 +15,11 @@
 #ifndef SOUPER_TOOL_GETSOLVERFROMARGS_H
 #define SOUPER_TOOL_GETSOLVERFROMARGS_H
 
-#include <memory>
-#include <string>
 #include "llvm/Support/CommandLine.h"
 #include "souper/Extractor/Solver.h"
 #include "souper/SMTLIB2/Solver.h"
+#include <memory>
+#include <string>
 
 namespace souper {
 

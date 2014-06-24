@@ -14,7 +14,6 @@
 
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Inst/Inst.h"
-
 #include "gtest/gtest.h"
 
 using namespace souper;
