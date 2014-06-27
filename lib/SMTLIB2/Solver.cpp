@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define DEBUG_TYPE "souper"
+
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -30,6 +33,10 @@
 
 using namespace llvm;
 using namespace souper;
+
+STATISTIC(Errors, "Number of SMT solver errors");
+STATISTIC(Sats, "Number of satisfiable SMT queries");
+STATISTIC(Unsats, "Number of unsatisfiable SMT queries");
 
 SMTLIBSolver::~SMTLIBSolver() {}
 
@@ -55,8 +62,8 @@ public:
     return Name;
   }
 
-  error_code isSatisfiable(StringRef Query, bool &Result,
-                           unsigned Timeout) override {
+  error_code isSatisfiableHelper(StringRef Query, bool &Result,
+                                 unsigned Timeout) {
     int InputFD;
     SmallString<64> InputPath;
     if (error_code EC =
@@ -114,6 +121,19 @@ public:
     }
   }
 
+  error_code isSatisfiable(StringRef Query, bool &Result,
+                           unsigned Timeout) override {
+    llvm::error_code EC = isSatisfiableHelper(Query, Result, Timeout);
+    if (EC) {
+      ++Errors;
+    } else {
+      if (Result)
+        ++Sats;
+      else
+        ++Unsats;
+    }
+    return EC;
+  }
 };
 
 }

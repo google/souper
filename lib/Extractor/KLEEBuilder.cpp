@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define DEBUG_TYPE "souper"
+
 #include "souper/Extractor/KLEEBuilder.h"
 
 #include "klee/Expr.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprSMTLIBLetPrinter.h"
 #include "klee/util/Ref.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -33,6 +36,8 @@
 #include <map>
 #include <memory>
 #include <sstream>
+
+STATISTIC(TriviallyInvalid, "Number of trivially invalid expressions");
 
 static llvm::cl::opt<bool> DumpKLEEExprs(
     "dump-klee-exprs",
@@ -233,7 +238,7 @@ bool IsPurelySymbolic(ref<Expr> E) {
 
 }
 
-bool souper::IsTriviallyInvalid(ref<Expr> E) {
+bool IsTriviallyInvalidHelper(ref<Expr> E) {
   // !E => E.
   if (auto EE = dyn_cast<EqExpr>(E)) {
     if (EE->left->getWidth() == 1) {
@@ -258,6 +263,12 @@ bool souper::IsTriviallyInvalid(ref<Expr> E) {
   }
 
   return false;
+}
+
+bool souper::IsTriviallyInvalid(ref<Expr> E) {
+  bool TI = IsTriviallyInvalidHelper(E);
+  if (TI) TriviallyInvalid++;
+  return TI;
 }
 
 std::string souper::BuildQuery(const std::vector<InstMapping> &PCs,

@@ -12,9 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define DEBUG_TYPE "souper"
+
+#include "llvm/ADT/Statistic.h"
 #include "souper/Extractor/Solver.h"
 
 #include <unordered_map>
+
+STATISTIC(Hits, "Number of internal cache hits");
+STATISTIC(Misses, "Number of internal cache misses");
 
 using namespace souper;
 
@@ -45,7 +51,6 @@ public:
 class CachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
   std::unordered_map<std::string,std::pair<llvm::error_code,bool>> Cache;
-  int Hits = 0, Misses = 0;
 
 public:
   CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
@@ -59,12 +64,12 @@ public:
 
     const auto &ent = Cache.find(OS.str());
     if (ent == Cache.end()) {
-      Misses++;
+      ++Misses;
       llvm::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
       Cache.emplace (OS.str(), std::make_pair (EC, IsValid));
       return EC;
     } else {
-      Hits++;
+      ++Hits;
       IsValid = ent->second.second;
       return ent->second.first;
     }
