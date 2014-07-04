@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define DEBUG_TYPE "souper"
+
 #include "souper/Extractor/CandidateMap.h"
 
 #include "klee/Expr.h"
@@ -19,6 +21,7 @@
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprSMTLIBLetPrinter.h"
 #include "klee/util/Ref.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
@@ -32,6 +35,8 @@
 using namespace souper;
 using namespace klee;
 using namespace llvm;
+
+STATISTIC(TriviallyInvalid, "Number of trivially invalid expressions");
 
 void CandidateMapEntry::print(llvm::raw_ostream &OS) const {
   std::set<std::string> Functions;
@@ -60,7 +65,9 @@ void CandidateMapEntry::print(llvm::raw_ostream &OS) const {
 void souper::AddToCandidateMap(CandidateMap &M,
                                const CandidateReplacement &CR) {
   CandidateExpr CE = GetCandidateExprForReplacement(CR.PCs, CR.Mapping);
-  if (!IsTriviallyInvalid(CE.E)) {
+  if (IsTriviallyInvalid(CE.E)) {
+    ++TriviallyInvalid;
+  } else {
     std::string InstStr;
     llvm::raw_string_ostream InstSS(InstStr);
     PrintReplacement(InstSS, CR.PCs, CR.Mapping);

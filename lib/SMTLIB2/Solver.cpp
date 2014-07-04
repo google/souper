@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define DEBUG_TYPE "souper"
+
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -30,6 +33,10 @@
 
 using namespace llvm;
 using namespace souper;
+
+STATISTIC(Errors, "Number of SMT solver errors");
+STATISTIC(Sats, "Number of satisfiable SMT queries");
+STATISTIC(Unsats, "Number of unsatisfiable SMT queries");
 
 SMTLIBSolver::~SMTLIBSolver() {}
 
@@ -60,8 +67,10 @@ public:
     int InputFD;
     SmallString<64> InputPath;
     if (error_code EC =
-            sys::fs::createTemporaryFile("input", "smt2", InputFD, InputPath))
+            sys::fs::createTemporaryFile("input", "smt2", InputFD, InputPath)) {
+      ++Errors;
       return EC;
+    }
 
     raw_fd_ostream InputFile(InputFD, true, /*unbuffered=*/true);
     InputFile << Query;
@@ -70,8 +79,10 @@ public:
     int OutputFD;
     SmallString<64> OutputPath;
     if (error_code EC =
-            sys::fs::createTemporaryFile("output", "out", OutputFD, OutputPath))
+            sys::fs::createTemporaryFile("output", "out", OutputFD, OutputPath)) {
+      ++Errors;
       return EC;
+    }
     ::close(OutputFD);
 
     int ExitCode = Prog(Args, InputPath, OutputPath, Timeout);
@@ -85,29 +96,35 @@ public:
     switch (ExitCode) {
     case -2:
       ::remove(OutputPath.c_str());
+      ++Errors;
       return make_error_code(errc::timed_out);
 
     case -1:
       ::remove(OutputPath.c_str());
+      ++Errors;
       return make_error_code(errc::executable_format_error);
 
     default: {
       std::unique_ptr<MemoryBuffer> MB;
       if (error_code EC = MemoryBuffer::getFile(OutputPath.str(), MB)) {
         ::remove(OutputPath.c_str());
+        ++Errors;
         return EC;
       }
 
       if (MB->getBuffer() == "sat\n") {
         ::remove(OutputPath.c_str());
+        ++Sats;
         Result = true;
         return error_code();
       } else if (MB->getBuffer() == "unsat\n") {
         ::remove(OutputPath.c_str());
         Result = false;
+        ++Unsats;
         return error_code();
       } else {
         ::remove(OutputPath.c_str());
+        ++Errors;
         return make_error_code(errc::protocol_error);
       }
     }
