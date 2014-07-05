@@ -169,25 +169,46 @@ Inst *ExprBuilder::build(Value *V) {
     Inst::Kind K;
     switch (BO->getOpcode()) {
       case Instruction::Add:
-        if (BO->hasNoSignedWrap())
+        if (BO->hasNoSignedWrap() && BO->hasNoUnsignedWrap())
+          K = Inst::AddNW;
+        else if (BO->hasNoSignedWrap())
           K = Inst::AddNSW;
+        else if (BO->hasNoUnsignedWrap())
+          K = Inst::AddNUW;
         else
           K = Inst::Add;
         break;
       case Instruction::Sub:
-        if (BO->hasNoSignedWrap())
+        if (BO->hasNoSignedWrap() && BO->hasNoUnsignedWrap())
+          K = Inst::SubNW;
+        else if (BO->hasNoSignedWrap())
           K = Inst::SubNSW;
+        else if (BO->hasNoUnsignedWrap())
+          K = Inst::SubNUW;
         else
           K = Inst::Sub;
         break;
       case Instruction::Mul:
-        K = Inst::Mul;
+        if (BO->hasNoSignedWrap() && BO->hasNoUnsignedWrap())
+          K = Inst::MulNW;
+        else if (BO->hasNoSignedWrap())
+          K = Inst::MulNSW;
+        else if (BO->hasNoUnsignedWrap())
+          K = Inst::MulNUW;
+        else
+          K = Inst::Mul;
         break;
       case Instruction::UDiv:
-        K = Inst::UDiv;
+        if (BO->isExact())
+          K = Inst::UDivExact;
+        else
+          K = Inst::UDiv;
         break;
       case Instruction::SDiv:
-        K = Inst::SDiv;
+        if (BO->isExact())
+          K = Inst::SDivExact;
+        else
+          K = Inst::SDiv;
         break;
       case Instruction::URem:
         K = Inst::URem;
@@ -205,13 +226,26 @@ Inst *ExprBuilder::build(Value *V) {
         K = Inst::Xor;
         break;
       case Instruction::Shl:
-        K = Inst::Shl;
+        if (BO->hasNoSignedWrap() && BO->hasNoUnsignedWrap())
+          K = Inst::ShlNW;
+        else if (BO->hasNoSignedWrap())
+          K = Inst::ShlNSW;
+        else if (BO->hasNoUnsignedWrap())
+          K = Inst::ShlNUW;
+        else
+          K = Inst::Shl;
         break;
       case Instruction::LShr:
-        K = Inst::LShr;
+        if (BO->isExact())
+          K = Inst::LShrExact;
+        else
+          K = Inst::LShr;
         break;
       case Instruction::AShr:
-        K = Inst::AShr;
+        if (BO->isExact())
+          K = Inst::AShrExact;
+        else
+          K = Inst::AShr;
         break;
       default:
         llvm_unreachable("not BinOp");
