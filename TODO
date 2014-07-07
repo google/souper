@@ -1,43 +1,48 @@
 ----------------------------------------------------------------------
 
-instruction support:
-- add checked overflow intrinsics
-  - implement using bitvectors of size n+1 or 2n?
-- finish adding undefined behaviors
-  - nuw for add, sub, mul
-  - shift overflows
-  - exact shifts and divs
-  - mul and div overflows
-- add vector, FP, and memory instructions?
+add instrinsics: bswap, x.with.overflow, ctpop, ctlz, cttz
+add unreachable instruction
+add insertvalue/extractvalue
+add bitcast?
 
-candidate improvements:
-- attempt to synthesize arbitrary width integer constants
-- attempt to synthesize undef
-- put instructions in candidates
+finish adding undefined behaviors
+- nuw for add, sub, mul
+- shift overflows
+- exact shifts and divs
+- mul and div overflows
 
-Make it possible to run Souper as a Clang pass. Hack Clang to run it
-after each invocation of InstCombine. This serves two purposes: first,
-making it trivial to run Souper on large codes; second, establishing
-an upper bound on the speedup that can be gained by integrating
-Souper's findings into LLVM passes.
+factor UBs out of instructions to support fixing issue #13 and then to support
+refinement proofs
 
-extraction improvements
+make exploitation of undefined behavior on the LHS conditional on a command line
+flag
 
-add deserialization; test it by making sure x==deserialize(serialize(x))
+RHS improvements:
+- synthesize arbitrary-width integer constants
+- synthesize undef values
+- to guess instructions on the RHS, we need to implement the refinement check: 
+  LHS assertion => (LHS == RHS) && RHS assertion 
+- we can probably use techniques from here: 
+  http://www.eecs.berkeley.edu/~jha/pubs/pldi-2011.pdf
 
-caching:
-- local, using std::unordered_map or something
-- remote, using Redis or something
-- key: the extracted expression
-- value: 
+external caching:
+- add deserialization; test it by making sure x==deserialize(serialize(x))
+- use Redis probably
+- key is the same as in the internal cache, the serialized souper IR
+- value is one of:
   - best known solution
   - no solution
   - solver timeout
   - solver hasn't been run on this one yet
   - flagged for manual inspection
-- optionally print cache statistics
+- DB should encode souper verison and LLVM stuff such as target and version
+- are there additional opportunities for canonicalizing souper IR?
 
-make exploitation of undefined behavior conditional based on a command
-line flag
+interaction with dataflow analyses
+- get intervals from LazyValueInfo, ConstantRange.cpp
+- get bit info from computeKnownBits() functions from include/llvm/Analysis/ValueTracking.h
+- teach souper to use assume, maybe using Philip's hack
+
+eventually add vector, FP, and memory instructions
 
 ----------------------------------------------------------------------
