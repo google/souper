@@ -65,10 +65,14 @@ static llvm::cl::opt<bool> Cache(
   "internal-cache-souper", llvm::cl::desc("Cache solver results in memory"),
   llvm::cl::init(false));
 
+static llvm::cl::opt<int> SolverTimeout(
+  "solver-timeout", llvm::cl::desc("Solver timeout in seconds (default=no timeout)"),
+  llvm::cl::init(0));
+
 static std::unique_ptr<Solver> GetSolverFromArgs() {
   std::unique_ptr<SMTLIBSolver> US = GetUnderlyingSolverFromArgs();
   if (!US) return NULL;
-  std::unique_ptr<Solver> S = createBaseSolver (std::move(US), 0);
+  std::unique_ptr<Solver> S = createBaseSolver (std::move(US), SolverTimeout);
   if (Cache) {
     return createCachingSolver (std::move(S));
   } else {
