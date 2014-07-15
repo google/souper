@@ -25,10 +25,10 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Signals.h"
-#include "llvm/Support/system_error.h"
 #include "souper/ClangTool/Actions.h"
 #include "souper/Tool/CandidateMapUtils.h"
 #include "souper/Tool/GetSolverFromArgs.h"
+#include <system_error>
 
 using namespace clang;
 using namespace clang::tooling;

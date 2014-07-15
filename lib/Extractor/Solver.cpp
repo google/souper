@@ -34,11 +34,11 @@ public:
   BaseSolver(std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout)
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
-  llvm::error_code isValid(const std::vector<InstMapping> &PCs,
-                           InstMapping Mapping, bool &IsValid) {
+  std::error_code isValid(const std::vector<InstMapping> &PCs,
+                          InstMapping Mapping, bool &IsValid) {
     bool IsSat;
-    llvm::error_code EC = SMTSolver->isSatisfiable(BuildQuery (PCs, Mapping),
-                                                   IsSat, Timeout);
+    std::error_code EC =
+        SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping), IsSat, Timeout);
     IsValid = !IsSat;
     return EC;
   }
@@ -50,14 +50,14 @@ public:
 
 class CachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
-  std::unordered_map<std::string,std::pair<llvm::error_code,bool>> Cache;
+  std::unordered_map<std::string, std::pair<std::error_code, bool>> Cache;
 
 public:
   CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
 
-  llvm::error_code isValid(const std::vector<InstMapping> &PCs,
-                           InstMapping Mapping, bool &IsValid) {
+  std::error_code isValid(const std::vector<InstMapping> &PCs,
+                          InstMapping Mapping, bool &IsValid) {
     std::string buf;
     llvm::raw_string_ostream OS(buf);
     souper::PrintReplacement(OS, PCs, Mapping);
@@ -65,7 +65,7 @@ public:
     const auto &ent = Cache.find(OS.str());
     if (ent == Cache.end()) {
       ++Misses;
-      llvm::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
+      std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
       Cache.emplace (OS.str(), std::make_pair (EC, IsValid));
       return EC;
     } else {

@@ -16,9 +16,9 @@
 #define SOUPER_SMTLIB2_SOLVER_H
 
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/system_error.h"
 #include <functional>
 #include <memory>
+#include <system_error>
 #include <vector>
 
 namespace souper {
@@ -31,8 +31,8 @@ class SMTLIBSolver {
 public:
   virtual ~SMTLIBSolver();
   virtual std::string getName() const = 0;
-  virtual llvm::error_code isSatisfiable(llvm::StringRef Query, bool &Result,
-                                         unsigned Timeout = 0) = 0;
+  virtual std::error_code isSatisfiable(llvm::StringRef Query, bool &Result,
+                                        unsigned Timeout = 0) = 0;
 };
 
 SolverProgram makeExternalSolverProgram(llvm::StringRef Path);

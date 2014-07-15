@@ -15,10 +15,10 @@
 #ifndef SOUPER_EXTRACTOR_SOLVER_H
 #define SOUPER_EXTRACTOR_SOLVER_H
 
-#include "llvm/Support/system_error.h"
 #include "souper/Extractor/CandidateMap.h"
 #include "souper/Extractor/Candidates.h"
 #include "souper/SMTLIB2/Solver.h"
+#include <system_error>
 #include <vector>
 
 namespace souper {
@@ -26,8 +26,8 @@ namespace souper {
 class Solver {
 public:
   virtual ~Solver();
-  virtual llvm::error_code isValid(const std::vector<InstMapping> &PCs,
-                                   InstMapping Mapping, bool &IsValid) = 0;
+  virtual std::error_code isValid(const std::vector<InstMapping> &PCs,
+                                  InstMapping Mapping, bool &IsValid) = 0;
   virtual std::string getName() = 0;
 };
 

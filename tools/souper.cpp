@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
     M.reset(getStreamedBitcodeModule(DisplayFilename, streamer, Context,
                                      &ErrorMessage));
     if (M.get() != 0) {
-      if (error_code EC = M->materializeAllPermanently()) {
+      if (std::error_code EC = M->materializeAllPermanently()) {
         ErrorMessage = EC.message();
         M.reset();
       }

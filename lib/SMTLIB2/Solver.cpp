@@ -21,7 +21,6 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/system_error.h"
 #include "souper/SMTLIB2/Solver.h"
 #include <fcntl.h>
 #include <stdio.h>
@@ -30,6 +29,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <system_error>
 
 using namespace llvm;
 using namespace souper;
@@ -62,11 +62,11 @@ public:
     return Name;
   }
 
-  error_code isSatisfiable(StringRef Query, bool &Result,
-                           unsigned Timeout) override {
+  std::error_code isSatisfiable(StringRef Query, bool &Result,
+                                unsigned Timeout) override {
     int InputFD;
     SmallString<64> InputPath;
-    if (error_code EC =
+    if (std::error_code EC =
             sys::fs::createTemporaryFile("input", "smt2", InputFD, InputPath)) {
       ++Errors;
       return EC;
@@ -78,7 +78,7 @@ public:
 
     int OutputFD;
     SmallString<64> OutputPath;
-    if (error_code EC =
+    if (std::error_code EC =
             sys::fs::createTemporaryFile("output", "out", OutputFD, OutputPath)) {
       ++Errors;
       return EC;
@@ -97,35 +97,36 @@ public:
     case -2:
       ::remove(OutputPath.c_str());
       ++Errors;
-      return make_error_code(errc::timed_out);
+      return std::make_error_code(std::errc::timed_out);
 
     case -1:
       ::remove(OutputPath.c_str());
       ++Errors;
-      return make_error_code(errc::executable_format_error);
+      return std::make_error_code(std::errc::executable_format_error);
 
     default: {
-      std::unique_ptr<MemoryBuffer> MB;
-      if (error_code EC = MemoryBuffer::getFile(OutputPath.str(), MB)) {
+      llvm::ErrorOr<std::unique_ptr<MemoryBuffer>> MB =
+          MemoryBuffer::getFile(OutputPath.str());
+      if (std::error_code EC = MB.getError()) {
         ::remove(OutputPath.c_str());
         ++Errors;
         return EC;
       }
 
-      if (MB->getBuffer() == "sat\n") {
+      if ((*MB)->getBuffer() == "sat\n") {
         ::remove(OutputPath.c_str());
         ++Sats;
         Result = true;
-        return error_code();
-      } else if (MB->getBuffer() == "unsat\n") {
+        return std::error_code();
+      } else if ((*MB)->getBuffer() == "unsat\n") {
         ::remove(OutputPath.c_str());
         Result = false;
         ++Unsats;
-        return error_code();
+        return std::error_code();
       } else {
         ::remove(OutputPath.c_str());
         ++Errors;
-        return make_error_code(errc::protocol_error);
+        return std::make_error_code(std::errc::protocol_error);
       }
     }
     }

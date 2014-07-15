@@ -28,7 +28,7 @@ int main() {
   std::unique_ptr<SMTLIBSolver> Solver =
       createBoolectorSolver(makeInternalSolverProgram(solver_main), false);
   bool Sat;
-  if (llvm::error_code EC = Solver->isSatisfiable("foo", Sat, 1)) {
+  if (std::error_code EC = Solver->isSatisfiable("foo", Sat, 1)) {
     llvm::errs() << EC.message() << '\n';
     return 1;
   }
