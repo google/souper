@@ -126,9 +126,12 @@ ref<Expr> ExprBuilder::addnswUB(Inst *I) {
 ref<Expr> ExprBuilder::addnuwUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-   ref<Expr> Add = AddExpr::create(L, R);
-   return AndExpr::create(UgeExpr::create(Add, L),
-                          UgeExpr::create(Add, R));
+   Expr::Width width = L->getWidth();
+   ref<Expr> Lext = ZExtExpr::create(L, width+1);
+   ref<Expr> Rext = ZExtExpr::create(R, width+1);
+   ref<Expr> Add = AddExpr::create(Lext, Rext);
+   ref<Expr> AddMSB = ExtractExpr::create(Add, width, Expr::Bool);
+   return Expr::createIsZero(AddMSB);
 }
 
 ref<Expr> ExprBuilder::subInst(Inst *I) {
@@ -152,8 +155,12 @@ ref<Expr> ExprBuilder::subnswUB(Inst *I) {
 ref<Expr> ExprBuilder::subnuwUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-   ref<Expr> Sub = SubExpr::create(L, R);
-   return UleExpr::create(Sub, L);
+   Expr::Width width = L->getWidth();
+   ref<Expr> Lext = ZExtExpr::create(L, width+1);
+   ref<Expr> Rext = ZExtExpr::create(R, width+1);
+   ref<Expr> Sub = SubExpr::create(Lext, Rext);
+   ref<Expr> SubMSB = ExtractExpr::create(Sub, width, Expr::Bool);
+   return Expr::createIsZero(SubMSB);
 }
 
 ref<Expr> ExprBuilder::mulInst(Inst *I) {
@@ -169,9 +176,8 @@ ref<Expr> ExprBuilder::mulnswUB(Inst *I) {
    ref<Expr> Lext = SExtExpr::create(L, 2*width);
    ref<Expr> Rext = SExtExpr::create(R, 2*width);
    ref<Expr> Mul = MulExpr::create(Lext, Rext);
-   ref<Expr> Truncated = ExtractExpr::create(Mul, 0, width);
-   ref<Expr> ExtendTruncated = SExtExpr::create(Truncated, 2*width);
-   return EqExpr::create(Mul, ExtendTruncated);
+   ref<Expr> Truncated = ExtractExpr::create(Mul, width, width);
+   return Expr::createIsZero(Truncated);
 }
 
 ref<Expr> ExprBuilder::mulnuwUB(Inst *I) {
@@ -181,9 +187,8 @@ ref<Expr> ExprBuilder::mulnuwUB(Inst *I) {
    ref<Expr> Lext = ZExtExpr::create(L, 2*width);
    ref<Expr> Rext = ZExtExpr::create(R, 2*width);
    ref<Expr> Mul = MulExpr::create(Lext, Rext);
-   ref<Expr> Truncated = ExtractExpr::create(Mul, 0, width);
-   ref<Expr> ExtendTruncated = ZExtExpr::create(Truncated, 2*width);
-   return EqExpr::create(Mul, ExtendTruncated);
+   ref<Expr> Truncated = ExtractExpr::create(Mul, width, width);
+   return Expr::createIsZero(Truncated);
 }
 
 ref<Expr> ExprBuilder::udivInst(Inst *I) {
