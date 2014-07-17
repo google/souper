@@ -84,8 +84,13 @@ public:
     for (const auto &Cand : CandMap) {
       bool Valid;
       if (std::error_code EC =
-              S->isValid(Cand.second.PCs, Cand.second.Mapping, Valid))
-        report_fatal_error("Unable to query solver: " + EC.message() + "\n");
+              S->isValid(Cand.second.PCs, Cand.second.Mapping, Valid)) {
+        if (EC == std::errc::timed_out) {
+          continue;
+        } else {
+          report_fatal_error("Unable to query solver: " + EC.message() + "\n");
+        }
+      }
 
       if (!Valid)
         continue;

@@ -36,6 +36,7 @@ using namespace souper;
 
 STATISTIC(Errors, "Number of SMT solver errors");
 STATISTIC(Sats, "Number of satisfiable SMT queries");
+STATISTIC(Timeouts, "Number of SMT solver timeouts");
 STATISTIC(Unsats, "Number of unsatisfiable SMT queries");
 
 SMTLIBSolver::~SMTLIBSolver() {}
@@ -96,7 +97,7 @@ public:
     switch (ExitCode) {
     case -2:
       ::remove(OutputPath.c_str());
-      ++Errors;
+      ++Timeouts;
       return std::make_error_code(std::errc::timed_out);
 
     case -1:
