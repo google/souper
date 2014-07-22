@@ -26,9 +26,7 @@ RHS improvements:
   http://www.eecs.berkeley.edu/~jha/pubs/pldi-2011.pdf
 
 external caching:
-- drop the function name and the priority from serialized Souper IR
-- cache versioning: refuse to use a cache created by different version of
-  souper, a different target triple, or a different datalayout
+- add souper version to the cache, refuse to use an incompatible cache
 - add an option to only populate the cache -- don't call the solver
 - write a tool that pulls unsolved entries out of the cache and runs them
   through the solver -- this makes it easy to distribute Souper across a cluster
@@ -38,6 +36,7 @@ external caching:
   - whether the solver hasn't been run on this one yet
 - look for any additional opportunties to canonicalize or compress the
   serialized Souper IR
+- add usage stats to cache entries, but make updating them optional
 - add deserialization; test it by making sure x==deserialize(serialize(x))
 
 interaction with dataflow analyses

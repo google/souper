@@ -100,14 +100,9 @@ public:
 
     struct timeval timeout = { 1, 500000 }; // 1.5 seconds
     ctx = redisConnectWithTimeout(hostname, port, timeout);
-    if (ctx == NULL || ctx->err) {
-      if (ctx) {
-        llvm::report_fatal_error((std::string)"Redis connection error: " +
-            ctx->errstr + "\n");
-      } else {
-        llvm::report_fatal_error("Can't allocate redis context\n");
-      }
-    }
+    if (!ctx) llvm::report_fatal_error("Can't allocate redis context\n");
+    if (ctx->err) llvm::report_fatal_error(
+        (std::string)"Redis connection error: " + ctx->errstr + "\n");
   }
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
