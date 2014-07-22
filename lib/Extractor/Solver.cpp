@@ -15,12 +15,17 @@
 #define DEBUG_TYPE "souper"
 
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
 
+#include "hiredis/hiredis.h"
+#include <sstream>
 #include <unordered_map>
 
-STATISTIC(Hits, "Number of internal cache hits");
-STATISTIC(Misses, "Number of internal cache misses");
+STATISTIC(MemHits, "Number of internal cache hits");
+STATISTIC(MemMisses, "Number of internal cache misses");
+STATISTIC(RedisHits, "Number of external cache hits");
+STATISTIC(RedisMisses, "Number of external cache misses");
 
 using namespace souper;
 
@@ -48,12 +53,12 @@ public:
   }
 };
 
-class CachingSolver : public Solver {
+class MemCachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
   std::unordered_map<std::string, std::pair<std::error_code, bool>> Cache;
 
 public:
-  CachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
+  MemCachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
@@ -64,12 +69,12 @@ public:
 
     const auto &ent = Cache.find(OS.str());
     if (ent == Cache.end()) {
-      ++Misses;
+      ++MemMisses;
       std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
       Cache.emplace (OS.str(), std::make_pair (EC, IsValid));
       return EC;
     } else {
-      ++Hits;
+      ++MemHits;
       IsValid = ent->second.second;
       return ent->second.first;
     }
@@ -77,6 +82,77 @@ public:
 
   std::string getName() {
     return UnderlyingSolver->getName() + " + internal cache";
+  }
+
+};
+
+class RedisCachingSolver : public Solver {
+  std::unique_ptr<Solver> UnderlyingSolver;
+  redisContext *ctx;
+
+public:
+  RedisCachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
+      : UnderlyingSolver(std::move(UnderlyingSolver)) {
+
+    // get these from cmd line?
+    const char *hostname = "127.0.0.1";
+    int port = 6379;
+
+    struct timeval timeout = { 1, 500000 }; // 1.5 seconds
+    ctx = redisConnectWithTimeout(hostname, port, timeout);
+    if (!ctx) {
+      llvm::report_fatal_error("Can't allocate redis context\n");
+    }
+    if (ctx->err) {
+      llvm::report_fatal_error((std::string)"Redis connection error: " +
+                               ctx->errstr + "\n");
+    }
+  }
+
+  std::error_code isValid(const std::vector<InstMapping> &PCs,
+                          InstMapping Mapping, bool &IsValid) {
+    std::string buf;
+    llvm::raw_string_ostream OS(buf);
+    souper::PrintReplacement(OS, PCs, Mapping);
+
+    redisReply *reply = (redisReply *)redisCommand(ctx, "GET %s",
+        OS.str().c_str());
+    if (!reply) {
+      llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
+    }
+
+    if (reply->type == REDIS_REPLY_NIL) {
+      freeReplyObject(reply);
+      ++RedisMisses;
+      std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
+      if (!EC) {
+        reply = (redisReply *)redisCommand(ctx, "SET %s %d", OS.str().c_str(),
+            IsValid);
+        if (!reply) {
+          llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
+        }
+        if (reply->type != REDIS_REPLY_STATUS) {
+          llvm::report_fatal_error(
+              "Redis protocol error, didn't expect reply type " +
+              std::to_string(reply->type));
+        }
+        freeReplyObject(reply);
+      }
+      return EC;
+    } else if (reply->type == REDIS_REPLY_STRING) {
+      std::istringstream(reply->str) >> IsValid;
+      freeReplyObject(reply);
+      ++RedisHits;
+      return std::error_code();
+    } else {
+      llvm::report_fatal_error(
+          "Redis protocol error, didn't expect reply type " +
+          std::to_string(reply->type));
+    }
+  }
+
+  std::string getName() {
+    return UnderlyingSolver->getName() + " + external cache";
   }
 
 };
@@ -92,10 +168,16 @@ std::unique_ptr<Solver> createBaseSolver(
   return std::unique_ptr<Solver>(new BaseSolver(std::move(SMTSolver), Timeout));
 }
 
-std::unique_ptr<Solver> createCachingSolver(
+std::unique_ptr<Solver> createMemCachingSolver(
     std::unique_ptr<Solver> UnderlyingSolver) {
   return std::unique_ptr<Solver>(
-      new CachingSolver(std::move(UnderlyingSolver)));
+      new MemCachingSolver(std::move(UnderlyingSolver)));
+}
+
+std::unique_ptr<Solver> createRedisCachingSolver(
+    std::unique_ptr<Solver> UnderlyingSolver) {
+  return std::unique_ptr<Solver>(
+      new RedisCachingSolver(std::move(UnderlyingSolver)));
 }
 
 }

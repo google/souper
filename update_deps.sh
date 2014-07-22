@@ -16,6 +16,7 @@
 
 llvm_revision=213048
 klee_commit=5d8db05524f5216900e952c3e1fc2aac9c424391
+hiredis_commit=2602e1b6bc19dc191df0c50cd6502578fe492710
 
 llvm_build_type=Debug
 if [ -n "$1" ] ; then
@@ -50,3 +51,13 @@ else
 fi
 
 (cd $kleedir && git checkout $klee_commit)
+
+hiredisdir=third_party/hiredis
+
+if [ -d $hiredisdir/.git ] ; then
+  (cd $hiredisdir && git fetch)
+else
+  git clone https://github.com/redis/hiredis.git $hiredisdir
+fi
+
+(cd $hiredisdir && git checkout $hiredis_commit && PREFIX=install make install)
