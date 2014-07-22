@@ -73,6 +73,10 @@ Or to run the pass on its own:
                    -z3-path=/path/to/z3-build/z3 -o /path/to/file.opt.bc \
                    /path/to/file.bc
 
+When you ask Souper to use an external Redis cache, Redis >= 1.2.0 must be
+installed on the machine where you are running Souper and the Redis server must
+be listening on port 6379.
+
 Disclaimer
 ----------
 
