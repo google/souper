@@ -89,6 +89,20 @@ add_library(kleeExpr STATIC
   ${KLEE_EXPR_FILES}
 )
 
+find_path(HIREDIS_INCLUDE_DIR
+  NAMES
+  hiredis/hiredis.h
+  PATHS
+  third_party/hiredis/install/include)
+
+include_directories(${HIREDIS_INCLUDE_DIR})
+
+find_library(HIREDIS_LIBRARY
+  NAMES
+  hiredis
+  PATHS
+  third_party/hiredis/install/lib)
+
 set(SOUPER_CLANG_TOOL_FILES
   lib/ClangTool/Actions.cpp
   include/souper/ClangTool/Actions.h
@@ -183,10 +197,10 @@ target_link_libraries(souperExtractor souperInst kleeExpr)
 target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
-target_link_libraries(souperPass ${PASS_LDFLAGS})
-target_link_libraries(souper souperExtractor souperSMTLIB2 souperTool kleeExpr)
+target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY})
+target_link_libraries(souper souperExtractor souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY})
 target_link_libraries(internal-solver-test souperSMTLIB2)
-target_link_libraries(clang-souper souperClangTool souperExtractor souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
+target_link_libraries(clang-souper souperClangTool souperExtractor souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY})
 target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
 

@@ -33,7 +33,9 @@ public:
 
 std::unique_ptr<Solver> createBaseSolver(
     std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout);
-std::unique_ptr<Solver> createCachingSolver(
+std::unique_ptr<Solver> createMemCachingSolver(
+    std::unique_ptr<Solver> UnderlyingSolver);
+std::unique_ptr<Solver> createRedisCachingSolver(
     std::unique_ptr<Solver> UnderlyingSolver);
 
 }
