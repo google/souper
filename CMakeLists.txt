@@ -224,7 +224,7 @@ target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS})
 
-set(TEST_SOLVER "" CACHE STRING "Solver command line argument to use in tests, e.g. -stp-path=/path/to/stp")
+set(TEST_SOLVER ${CMAKE_TEST_SOLVER} CACHE STRING "Solver command line argument to use in tests, e.g. -stp-path=/path/to/stp")
 
 configure_file(
   ${CMAKE_SOURCE_DIR}/test/lit.site.cfg.in

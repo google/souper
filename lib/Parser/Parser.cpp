@@ -385,15 +385,29 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     break;
 
   case Inst::AddNSW:
+  case Inst::AddNUW:
+  case Inst::AddNW:
   case Inst::Sub:
   case Inst::SubNSW:
+  case Inst::SubNUW:
+  case Inst::SubNW:
+  case Inst::MulNSW:
+  case Inst::MulNUW:
+  case Inst::MulNW:
   case Inst::UDiv:
   case Inst::SDiv:
+  case Inst::UDivExact:
+  case Inst::SDivExact:
   case Inst::URem:
   case Inst::SRem:
   case Inst::Shl:
+  case Inst::ShlNSW:
+  case Inst::ShlNUW:
+  case Inst::ShlNW:
   case Inst::LShr:
+  case Inst::LShrExact:
   case Inst::AShr:
+  case Inst::AShrExact:
   case Inst::Eq:
   case Inst::Ne:
   case Inst::Ult:
