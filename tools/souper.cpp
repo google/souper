@@ -45,6 +45,10 @@ static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"),
     cl::init(""), cl::value_desc("filename"));
 
+static cl::opt<bool>
+Check("check", cl::desc("Check input for expected results"),
+    cl::init(false));
+
 int main(int argc, char **argv) {
   sys::PrintStackTraceOnErrorSignal();
   llvm::PrettyStackTraceProgram X(argc, argv);
@@ -95,5 +99,9 @@ int main(int argc, char **argv) {
 
   AddModuleToCandidateMap(IC, EBC, CandMap, M.get());
 
-  return SolveCandidateMap(llvm::outs(), CandMap, S.get()) ? 0 : 1;
+  if (Check) {
+    return CheckCandidateMap(*M.get(), CandMap, S.get()) ? 0 : 1;
+  } else {
+    return SolveCandidateMap(llvm::outs(), CandMap, S.get()) ? 0 : 1;
+  }
 }

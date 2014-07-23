@@ -35,6 +35,8 @@ void AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
 bool SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
                        Solver *Solver);
 
+bool CheckCandidateMap(llvm::Module &Mod, const CandidateMap &M, Solver *S);
+
 }
 
 #endif  // SOUPER_TOOL_CANDIDATEMAPUTILS_H

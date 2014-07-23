@@ -134,9 +134,14 @@ INITIALIZE_PASS_DEPENDENCY(LoopInfo)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 
+static struct Register {
+  Register() {
+    initializeSouperPassPass(*llvm::PassRegistry::getPassRegistry());
+  }
+} X;
+
 static void registerSouperPass(
     const llvm::PassManagerBuilder &Builder, llvm::PassManagerBase &PM) {
-  initializeSouperPassPass(*llvm::PassRegistry::getPassRegistry());
   PM.add(new SouperPass);
 }
 

@@ -190,7 +190,11 @@ target_link_libraries(clang-souper souperClangTool souperExtractor souperSMTLIB2
 target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
 
-add_custom_target(run_extractor_tests COMMAND ./extractor_tests DEPENDS extractor_tests)
-add_custom_target(run_inst_tests COMMAND ./inst_tests DEPENDS inst_tests)
+set(TEST_SOLVER "" CACHE STRING "Solver command line argument to use in tests, e.g. -stp-path=/path/to/stp")
 
-add_custom_target(check DEPENDS run_extractor_tests run_inst_tests)
+configure_file(
+  ${CMAKE_SOURCE_DIR}/test/lit.site.cfg.in
+  ${CMAKE_BINARY_DIR}/test/lit.site.cfg
+)
+
+add_custom_target(check COMMAND ${LLVM_BINDIR}/llvm-lit -sv ${CMAKE_BINARY_DIR}/test DEPENDS souper souperPass extractor_tests inst_tests)
