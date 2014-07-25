@@ -15,8 +15,6 @@
 #ifndef SOUPER_EXTRACTOR_CANDIDATES_H
 #define SOUPER_EXTRACTOR_CANDIDATES_H
 
-#include "klee/Expr.h"
-#include "klee/util/Ref.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Inst/Inst.h"
