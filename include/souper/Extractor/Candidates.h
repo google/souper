@@ -34,18 +34,6 @@ class Value;
 
 namespace souper {
 
-/// A mapping from an Inst to a replacement. This may either represent a
-/// path condition or a candidate replacement.
-struct InstMapping {
-  InstMapping() : Source(0), Replacement(0) {}
-  InstMapping(Inst *Source, Inst *Replacement)
-      : Source(Source), Replacement(Replacement) {}
-
-  Inst *Source, *Replacement;
-};
-
-struct BlockCandidateSet;
-
 struct CandidateReplacement {
   CandidateReplacement(llvm::Instruction *Origin, InstMapping Mapping,
                        unsigned Priority)

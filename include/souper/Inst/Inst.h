@@ -116,6 +116,19 @@ public:
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops);
 };
 
+/// A mapping from an Inst to a replacement. This may either represent a
+/// path condition or a candidate replacement.
+struct InstMapping {
+  InstMapping() : Source(0), Replacement(0) {}
+  InstMapping(Inst *Source, Inst *Replacement)
+      : Source(Source), Replacement(Replacement) {}
+
+  Inst *Source, *Replacement;
+};
+
+void PrintReplacement(llvm::raw_ostream &Out,
+                      const std::vector<InstMapping> &PCs, InstMapping Mapping);
+
 }
 
 #endif  // SOUPER_INST_INST_H

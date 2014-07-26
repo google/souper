@@ -364,3 +364,18 @@ bool Inst::isCommutative(Inst::Kind K) {
     return false;
   }
 }
+
+void souper::PrintReplacement(llvm::raw_ostream &Out,
+                              const std::vector<InstMapping> &PCs,
+                              InstMapping Mapping) {
+  PrintContext Printer(Out);
+  for (const auto &PC : PCs) {
+    std::string SRef = Printer.printInst(PC.Source);
+    std::string RRef = Printer.printInst(PC.Replacement);
+    Out << "pc " << SRef << " " << RRef << '\n';
+  }
+
+  std::string SRef = Printer.printInst(Mapping.Source);
+  std::string RRef = Printer.printInst(Mapping.Replacement);
+  Out << "cand " << SRef << " " << RRef << '\n';
+}
