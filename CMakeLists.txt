@@ -136,6 +136,10 @@ add_library(souperInst STATIC
   ${SOUPER_INST_FILES}
 )
 
+add_library(souperParser STATIC
+  lib/Parser/Parser.cpp
+)
+
 set(SOUPER_SMTLIB2_FILES
   lib/SMTLIB2/Solver.cpp
   include/souper/SMTLIB2/Solver.h
@@ -176,6 +180,14 @@ add_executable(internal-solver-test
   tools/internal-solver-test.cpp
 )
 
+add_executable(lexer-test
+  tools/lexer-test.cpp
+)
+
+add_executable(parser-test
+  tools/parser-test.cpp
+)
+
 add_executable(extractor_tests
   unittests/Extractor/ExtractorTests.cpp
 )
@@ -184,25 +196,33 @@ add_executable(inst_tests
   unittests/Inst/InstTests.cpp
 )
 
-set_target_properties(souper internal-solver-test souperExtractor souperInst souperSMTLIB2 souperTool souperPass kleeExpr
+add_executable(parser_tests
+  unittests/Parser/ParserTests.cpp
+)
+
+set_target_properties(souper internal-solver-test lexer-test parser-test souperExtractor souperInst souperParser souperSMTLIB2 souperTool souperPass kleeExpr
   PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
 set_target_properties(souperClangTool clang-souper
   PROPERTIES COMPILE_FLAGS "${CLANG_CXXFLAGS} ${LLVM_CXXFLAGS}")
-set_target_properties(extractor_tests inst_tests
+set_target_properties(extractor_tests inst_tests parser_tests
   PROPERTIES COMPILE_FLAGS "${GTEST_CXXFLAGS} ${LLVM_CXXFLAGS}")
 
 target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperExtractor souperInst kleeExpr)
 target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
+target_link_libraries(souperParser souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
 target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY})
 target_link_libraries(souper souperExtractor souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY})
 target_link_libraries(internal-solver-test souperSMTLIB2)
+target_link_libraries(lexer-test souperParser)
+target_link_libraries(parser-test souperParser)
 target_link_libraries(clang-souper souperClangTool souperExtractor souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY})
 target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
+target_link_libraries(parser_tests souperParser ${GTEST_LIBS})
 
 set(TEST_SOLVER "" CACHE STRING "Solver command line argument to use in tests, e.g. -stp-path=/path/to/stp")
 
@@ -211,4 +231,4 @@ configure_file(
   ${CMAKE_BINARY_DIR}/test/lit.site.cfg
 )
 
-add_custom_target(check COMMAND ${LLVM_BINDIR}/llvm-lit -sv ${CMAKE_BINARY_DIR}/test DEPENDS souper souperPass extractor_tests inst_tests)
+add_custom_target(check COMMAND ${LLVM_BINDIR}/llvm-lit -sv ${CMAKE_BINARY_DIR}/test DEPENDS souper souperPass extractor_tests inst_tests parser_tests)
