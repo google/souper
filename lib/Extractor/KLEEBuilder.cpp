@@ -57,6 +57,21 @@ struct ExprBuilder {
 
   ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name);
   void addInstCondition(ref<Expr> E);
+  ref<Expr> addnswUB(Inst *I);
+  ref<Expr> addnuwUB(Inst *I);
+  ref<Expr> subnswUB(Inst *I);
+  ref<Expr> subnuwUB(Inst *I);
+  ref<Expr> mulnswUB(Inst *I);
+  ref<Expr> mulnuwUB(Inst *I);
+  ref<Expr> udivUB(Inst *I);
+  ref<Expr> udivExactUB(Inst *I);
+  ref<Expr> sdivUB(Inst *I);
+  ref<Expr> sdivExactUB(Inst *I);
+  ref<Expr> shiftUB(Inst *I);
+  ref<Expr> shlnswUB(Inst *I);
+  ref<Expr> shlnuwUB(Inst *I);
+  ref<Expr> lshrExactUB(Inst *I);
+  ref<Expr> ashrExactUB(Inst *I);
   ref<Expr> buildAssoc(std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
                        llvm::ArrayRef<Inst *> Ops);
   ref<Expr> build(Inst *I);
@@ -78,6 +93,150 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name) {
 
 void ExprBuilder::addInstCondition(ref<Expr> E) {
   InstCondition = AndExpr::create(InstCondition, E);
+}
+
+ref<Expr> ExprBuilder::addnswUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   ref<Expr> Add = AddExpr::create(L, R);
+   Expr::Width width = L->getWidth();
+   ref<Expr> LMSB = ExtractExpr::create(L, width-1, Expr::Bool);
+   ref<Expr> RMSB = ExtractExpr::create(R, width-1, Expr::Bool);
+   ref<Expr> AddMSB = ExtractExpr::create(Add, width-1, Expr::Bool);
+   return Expr::createImplies(EqExpr::create(LMSB, RMSB),
+                              EqExpr::create(LMSB, AddMSB));
+}
+
+ref<Expr> ExprBuilder::addnuwUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   Expr::Width width = L->getWidth();
+   ref<Expr> Lext = ZExtExpr::create(L, width+1);
+   ref<Expr> Rext = ZExtExpr::create(R, width+1);
+   ref<Expr> Add = AddExpr::create(Lext, Rext);
+   ref<Expr> AddMSB = ExtractExpr::create(Add, width, Expr::Bool);
+   return Expr::createIsZero(AddMSB);
+}
+
+ref<Expr> ExprBuilder::subnswUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   ref<Expr> Sub = SubExpr::create(L, R);
+   Expr::Width width = L->getWidth();
+   ref<Expr> LMSB = ExtractExpr::create(L, width-1, Expr::Bool);
+   ref<Expr> RMSB = ExtractExpr::create(R, width-1, Expr::Bool);
+   ref<Expr> SubMSB = ExtractExpr::create(Sub, width-1, Expr::Bool);
+   return Expr::createImplies(NeExpr::create(LMSB, RMSB),
+                              EqExpr::create(LMSB, SubMSB));
+}
+
+ref<Expr> ExprBuilder::subnuwUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   Expr::Width width = L->getWidth();
+   ref<Expr> Lext = ZExtExpr::create(L, width+1);
+   ref<Expr> Rext = ZExtExpr::create(R, width+1);
+   ref<Expr> Sub = SubExpr::create(Lext, Rext);
+   ref<Expr> SubMSB = ExtractExpr::create(Sub, width, Expr::Bool);
+   return Expr::createIsZero(SubMSB);
+}
+
+ref<Expr> ExprBuilder::mulnswUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   Expr::Width width = L->getWidth();
+   ref<Expr> LMSB = ExtractExpr::create(L, width-1, Expr::Bool);
+   ref<Expr> RMSB = ExtractExpr::create(R, width-1, Expr::Bool);
+   ref<Expr> Signbit = XorExpr::create(LMSB, RMSB);
+   ref<Expr> SignbitExt = SExtExpr::create(Signbit, width);
+   ref<Expr> Lext = SExtExpr::create(L, 2*width);
+   ref<Expr> Rext = SExtExpr::create(R, 2*width);
+   ref<Expr> Mul = MulExpr::create(Lext, Rext);
+   ref<Expr> Truncated = ExtractExpr::create(Mul, width, width);
+   return EqExpr::create(SignbitExt, Truncated);
+}
+
+ref<Expr> ExprBuilder::mulnuwUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   Expr::Width width = L->getWidth();
+   ref<Expr> Lext = ZExtExpr::create(L, 2*width);
+   ref<Expr> Rext = ZExtExpr::create(R, 2*width);
+   ref<Expr> Mul = MulExpr::create(Lext, Rext);
+   ref<Expr> Truncated = ExtractExpr::create(Mul, width, width);
+   return Expr::createIsZero(Truncated);
+}
+
+ref<Expr> ExprBuilder::udivUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   return NeExpr::create(R, klee::ConstantExpr::create(0, R->getWidth()));
+}
+
+ref<Expr> ExprBuilder::udivExactUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   ref<Expr> Udiv = UDivExpr::create(L, R);
+   return EqExpr::create(L, MulExpr::create(R, Udiv));
+}
+
+ref<Expr> ExprBuilder::sdivUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   ref<Expr> width = klee::ConstantExpr::create(L->getWidth()-1, L->getWidth());
+   ref<Expr> IntMin = ShlExpr::create(klee::ConstantExpr::create(
+                                      1, L->getWidth()), width);
+   ref<Expr> NegOne = AShrExpr::create(IntMin, width);
+   return AndExpr::create(NeExpr::create(R, klee::ConstantExpr::create(
+                          0, R->getWidth())), OrExpr::create(
+                          NeExpr::create(L, IntMin), NeExpr::create(R, NegOne)));
+}
+
+ref<Expr> ExprBuilder::sdivExactUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   ref<Expr> Sdiv = SDivExpr::create(L, R);
+   return EqExpr::create(L, MulExpr::create(R, Sdiv));
+}
+
+ref<Expr> ExprBuilder::shiftUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   unsigned width_value = L->getWidth();
+   ref<Expr> Lwidth = klee::ConstantExpr::create(width_value, L->getWidth());
+   return UltExpr::create(R, Lwidth);
+}
+
+ref<Expr> ExprBuilder::shlnswUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   ref<Expr> Lshift_Result = ShlExpr::create(L, R);
+   ref<Expr> Rshift_Result = AShrExpr::create(Lshift_Result, R);
+   return EqExpr::create(Rshift_Result, L);
+}
+
+ref<Expr> ExprBuilder::shlnuwUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   ref<Expr> Lshift_Result = ShlExpr::create(L, R);
+   ref<Expr> Rshift_Result = LShrExpr::create(Lshift_Result, R);
+   return EqExpr::create(Rshift_Result, L);
+}
+
+ref<Expr> ExprBuilder::lshrExactUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   ref<Expr> Rshift_Result = LShrExpr::create(L, R);
+   ref<Expr> Lshift_Result = ShlExpr::create(Rshift_Result, R);
+   return EqExpr::create(Lshift_Result, L);
+}
+
+ref<Expr> ExprBuilder::ashrExactUB(Inst *I) {
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+   ref<Expr> Rshift_Result = AShrExpr::create(L, R);
+   ref<Expr> Lshift_Result = ShlExpr::create(Rshift_Result, R);
+   return EqExpr::create(Lshift_Result, L);
 }
 
 ref<Expr> ExprBuilder::buildAssoc(
@@ -108,11 +267,20 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   case Inst::AddNSW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Add = AddExpr::create(L, R);
-    ref<Expr> LMSB = ExtractExpr::create(L, I->Width-1, Expr::Bool);
-    ref<Expr> RMSB = ExtractExpr::create(R, I->Width-1, Expr::Bool);
-    ref<Expr> AddMSB = ExtractExpr::create(Add, I->Width-1, Expr::Bool);
-    addInstCondition(Expr::createImplies(EqExpr::create(LMSB, RMSB),
-                                         EqExpr::create(LMSB, AddMSB)));
+    addInstCondition(addnswUB(I));
+    return Add;
+  }
+  case Inst::AddNUW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Add = AddExpr::create(L, R);
+    addInstCondition(addnuwUB(I));
+    return Add;
+  }
+  case Inst::AddNW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Add = AddExpr::create(L, R);
+    addInstCondition(addnswUB(I));
+    addInstCondition(addnuwUB(I));
     return Add;
   }
   case Inst::Sub:
@@ -120,35 +288,141 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   case Inst::SubNSW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Sub = SubExpr::create(L, R);
-    ref<Expr> LMSB = ExtractExpr::create(L, I->Width-1, Expr::Bool);
-    ref<Expr> RMSB = ExtractExpr::create(R, I->Width-1, Expr::Bool);
-    ref<Expr> SubMSB = ExtractExpr::create(Sub, I->Width-1, Expr::Bool);
-    addInstCondition(Expr::createImplies(NeExpr::create(LMSB, RMSB),
-                                         EqExpr::create(LMSB, SubMSB)));
+    addInstCondition(subnswUB(I));
+    return Sub;
+  }
+  case Inst::SubNUW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Sub = SubExpr::create(L, R);
+    addInstCondition(subnuwUB(I));
+    return Sub;
+  }
+  case Inst::SubNW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Sub = SubExpr::create(L, R);
+    addInstCondition(subnswUB(I));
+    addInstCondition(subnuwUB(I));
     return Sub;
   }
   case Inst::Mul:
     return buildAssoc(MulExpr::create, Ops);
-  case Inst::UDiv:
-    return UDivExpr::create(get(Ops[0]), get(Ops[1]));
-  case Inst::SDiv:
-    return SDivExpr::create(get(Ops[0]), get(Ops[1]));
-  case Inst::URem:
-    return URemExpr::create(get(Ops[0]), get(Ops[1]));
-  case Inst::SRem:
-    return SRemExpr::create(get(Ops[0]), get(Ops[1]));
+  case Inst::MulNSW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Mul = MulExpr::create(L, R);
+    addInstCondition(mulnswUB(I));
+    return Mul;
+  }
+  case Inst::MulNUW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Mul = MulExpr::create(L, R);
+    addInstCondition(mulnuwUB(I));
+    return Mul;
+  }
+  case Inst::MulNW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Mul = MulExpr::create(L, R);
+    addInstCondition(mulnswUB(I));
+    addInstCondition(mulnuwUB(I));
+    return Mul;
+  }
+  case Inst::UDiv: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Udiv = UDivExpr::create(L, R);
+    addInstCondition(udivUB(I));
+    return Udiv;
+  }
+  case Inst::SDiv: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Sdiv = SDivExpr::create(L, R);
+    addInstCondition(sdivUB(I));
+    return Sdiv;
+  }
+  case Inst::UDivExact: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Udiv = UDivExpr::create(L, R);
+    addInstCondition(udivUB(I));
+    addInstCondition(udivExactUB(I));
+    return Udiv;
+  }
+  case Inst::SDivExact: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Sdiv = SDivExpr::create(L, R);
+    addInstCondition(sdivUB(I));
+    addInstCondition(sdivExactUB(I));
+    return Sdiv;
+  }
+  case Inst::URem: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Urem = URemExpr::create(L, R);
+    addInstCondition(udivUB(I));
+    return Urem;
+  }
+  case Inst::SRem: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Srem = SRemExpr::create(L, R);
+    addInstCondition(sdivUB(I));
+    return Srem;
+  }
   case Inst::And:
     return buildAssoc(AndExpr::create, Ops);
   case Inst::Or:
     return buildAssoc(OrExpr::create, Ops);
   case Inst::Xor:
     return buildAssoc(XorExpr::create, Ops);
-  case Inst::Shl:
-    return ShlExpr::create(get(Ops[0]), get(Ops[1]));
-  case Inst::LShr:
-    return LShrExpr::create(get(Ops[0]), get(Ops[1]));
-  case Inst::AShr:
-    return AShrExpr::create(get(Ops[0]), get(Ops[1]));
+  case Inst::Shl: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Result = ShlExpr::create(L, R);
+    addInstCondition(shiftUB(I));
+    return Result;
+  }
+  case Inst::ShlNSW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Result = ShlExpr::create(L, R);
+    addInstCondition(shiftUB(I));
+    addInstCondition(shlnswUB(I));
+    return Result;
+  }
+  case Inst::ShlNUW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Result = ShlExpr::create(L, R);
+    addInstCondition(shiftUB(I));
+    addInstCondition(shlnuwUB(I));
+    return Result;
+  }
+  case Inst::ShlNW: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Result = ShlExpr::create(L, R);
+    addInstCondition(shiftUB(I));
+    addInstCondition(shlnswUB(I));
+    addInstCondition(shlnuwUB(I));
+    return Result;
+  }
+  case Inst::LShr: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Result = LShrExpr::create(L, R);
+    addInstCondition(shiftUB(I));
+    return Result;
+  }
+  case Inst::LShrExact: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Rshift_Result = LShrExpr::create(L, R);
+    addInstCondition(shiftUB(I));
+    addInstCondition(lshrExactUB(I));
+    return Rshift_Result;
+  }
+  case Inst::AShr: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Result = AShrExpr::create(L, R);
+    addInstCondition(shiftUB(I));
+    return Result;
+  }
+  case Inst::AShrExact: {
+    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
+    ref<Expr> Rshift_Result = AShrExpr::create(L, R);
+    addInstCondition(shiftUB(I));
+    addInstCondition(ashrExactUB(I));
+    return Rshift_Result;
+  }
   case Inst::Select:
     return SelectExpr::create(get(Ops[0]), get(Ops[1]), get(Ops[2]));
   case Inst::ZExt:
