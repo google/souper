@@ -141,9 +141,9 @@ define void @f(i32 %p, i32 %q) {
 )m"));
 
   EXPECT_TRUE(hasCandidateExpr(
-      "(Or (And (Eq N0:(Extract 31 N1:(Read w32 0 p)) (Extract 31 N2:(Read w32 "
-      "0 q))) (Eq false (Eq N0 (Extract 31 N3:(Add w32 N1 N2))))) (Ult N1 "
-      "N3))"));
+      "(And (Ult N0:(Read w32 0 p) N1:(Add w32 N0 N2:(Read w32 0 q))) "
+      "(Or (Eq false (Eq N3:(Extract 31 N0) (Extract 31 N2))) "
+      "(Eq N3 (Extract 31 N1))))"));
 }
 
 TEST_F(ExtractorTest, PhiCond) {
