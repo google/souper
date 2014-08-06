@@ -51,6 +51,8 @@ struct ExprBuilder {
         InstCondition(klee::ConstantExpr::create(1, Expr::Bool)) {}
 
   std::map<Inst *, ref<Expr> > ExprMap;
+  std::map<Inst *, ref<Expr> > UBExprMap;
+  std::map<Inst *, std::vector<ref<Expr> >> PhiPredMap;
   std::vector<std::unique_ptr<Array>> &Arrays;
   UniqueNameSet ArrayNames;
   ref<Expr> InstCondition;
@@ -77,6 +79,9 @@ struct ExprBuilder {
   ref<Expr> build(Inst *I);
   ref<Expr> get(Inst *I);
   ref<Expr> getInstMapping(const InstMapping &IM);
+  std::vector<ref<Expr >> getPhiPredicates(Inst *I);
+  ref<Expr> getUBInstCondition();
+  void getUBInstructions(Inst *I, std::vector<Inst *> &Insts);
 };
 
 }
@@ -256,31 +261,33 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     return klee::ConstantExpr::alloc(I->Val);
   case Inst::Var:
     return makeSizedArrayRead(I->Width, I->Name);
-  case Inst::Phi:
-    return buildAssoc([&](ref<Expr> L, ref<Expr> R) {
-                        return SelectExpr::create(
-                            makeSizedArrayRead(1, "blockpred"), L, R);
-                      },
-                      Ops);
+  case Inst::Phi: {
+    const auto &PredExpr = getPhiPredicates(I);
+    ref<Expr> E = get(Ops[0]);
+    // e.g. P2 ? (P1 ? Op1_Expr : Op2_Expr) : Op3_Expr
+    for (unsigned J = 1; J < Ops.size(); ++J) {
+      E = SelectExpr::create(PredExpr[J-1], E, get(Ops[J]));
+    }
+    return E;
+  }
   case Inst::Add:
     return buildAssoc(AddExpr::create, Ops);
   case Inst::AddNSW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Add = AddExpr::create(L, R);
-    addInstCondition(addnswUB(I));
+    UBExprMap[I] = addnswUB(I);
     return Add;
   }
   case Inst::AddNUW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Add = AddExpr::create(L, R);
-    addInstCondition(addnuwUB(I));
+    UBExprMap[I] = addnuwUB(I);
     return Add;
   }
   case Inst::AddNW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Add = AddExpr::create(L, R);
-    addInstCondition(addnswUB(I));
-    addInstCondition(addnuwUB(I));
+    UBExprMap[I] = AndExpr::create(addnswUB(I), addnuwUB(I));
     return Add;
   }
   case Inst::Sub:
@@ -288,20 +295,19 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   case Inst::SubNSW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Sub = SubExpr::create(L, R);
-    addInstCondition(subnswUB(I));
+    UBExprMap[I] = subnswUB(I);
     return Sub;
   }
   case Inst::SubNUW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Sub = SubExpr::create(L, R);
-    addInstCondition(subnuwUB(I));
+    UBExprMap[I] = subnuwUB(I);
     return Sub;
   }
   case Inst::SubNW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Sub = SubExpr::create(L, R);
-    addInstCondition(subnswUB(I));
-    addInstCondition(subnuwUB(I));
+    UBExprMap[I] = AndExpr::create(subnswUB(I), subnuwUB(I));
     return Sub;
   }
   case Inst::Mul:
@@ -309,58 +315,55 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   case Inst::MulNSW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Mul = MulExpr::create(L, R);
-    addInstCondition(mulnswUB(I));
+    UBExprMap[I] = mulnswUB(I);
     return Mul;
   }
   case Inst::MulNUW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Mul = MulExpr::create(L, R);
-    addInstCondition(mulnuwUB(I));
+    UBExprMap[I] = mulnuwUB(I);
     return Mul;
   }
   case Inst::MulNW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Mul = MulExpr::create(L, R);
-    addInstCondition(mulnswUB(I));
-    addInstCondition(mulnuwUB(I));
+    UBExprMap[I] = AndExpr::create(mulnswUB(I), mulnuwUB(I));
     return Mul;
   }
   case Inst::UDiv: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Udiv = UDivExpr::create(L, R);
-    addInstCondition(udivUB(I));
+    UBExprMap[I] = udivUB(I);
     return Udiv;
   }
   case Inst::SDiv: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Sdiv = SDivExpr::create(L, R);
-    addInstCondition(sdivUB(I));
+    UBExprMap[I] = sdivUB(I);
     return Sdiv;
   }
   case Inst::UDivExact: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Udiv = UDivExpr::create(L, R);
-    addInstCondition(udivUB(I));
-    addInstCondition(udivExactUB(I));
+    UBExprMap[I] = AndExpr::create(udivUB(I), udivExactUB(I));
     return Udiv;
   }
   case Inst::SDivExact: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Sdiv = SDivExpr::create(L, R);
-    addInstCondition(sdivUB(I));
-    addInstCondition(sdivExactUB(I));
+    UBExprMap[I] = AndExpr::create(sdivUB(I), sdivExactUB(I));
     return Sdiv;
   }
   case Inst::URem: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Urem = URemExpr::create(L, R);
-    addInstCondition(udivUB(I));
+    UBExprMap[I] = udivUB(I);
     return Urem;
   }
   case Inst::SRem: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Srem = SRemExpr::create(L, R);
-    addInstCondition(sdivUB(I));
+    UBExprMap[I] = sdivUB(I);
     return Srem;
   }
   case Inst::And:
@@ -372,55 +375,49 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   case Inst::Shl: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Result = ShlExpr::create(L, R);
-    addInstCondition(shiftUB(I));
+    UBExprMap[I] = shiftUB(I);
     return Result;
   }
   case Inst::ShlNSW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Result = ShlExpr::create(L, R);
-    addInstCondition(shiftUB(I));
-    addInstCondition(shlnswUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), shlnswUB(I));
     return Result;
   }
   case Inst::ShlNUW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Result = ShlExpr::create(L, R);
-    addInstCondition(shiftUB(I));
-    addInstCondition(shlnuwUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), shlnuwUB(I));
     return Result;
   }
   case Inst::ShlNW: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Result = ShlExpr::create(L, R);
-    addInstCondition(shiftUB(I));
-    addInstCondition(shlnswUB(I));
-    addInstCondition(shlnuwUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), AndExpr::create(shlnswUB(I), shlnuwUB(I)));
     return Result;
   }
   case Inst::LShr: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Result = LShrExpr::create(L, R);
-    addInstCondition(shiftUB(I));
+    UBExprMap[I] = shiftUB(I);
     return Result;
   }
   case Inst::LShrExact: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Rshift_Result = LShrExpr::create(L, R);
-    addInstCondition(shiftUB(I));
-    addInstCondition(lshrExactUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), lshrExactUB(I));
     return Rshift_Result;
   }
   case Inst::AShr: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Result = AShrExpr::create(L, R);
-    addInstCondition(shiftUB(I));
+    UBExprMap[I] = shiftUB(I);
     return Result;
   }
   case Inst::AShrExact: {
     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
     ref<Expr> Rshift_Result = AShrExpr::create(L, R);
-    addInstCondition(shiftUB(I));
-    addInstCondition(ashrExactUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), ashrExactUB(I));
     return Rshift_Result;
   }
   case Inst::Select:
@@ -459,6 +456,91 @@ ref<Expr> ExprBuilder::getInstMapping(const InstMapping &IM) {
   return EqExpr::create(get(IM.Source), get(IM.Replacement));
 }
 
+ref<Expr> ExprBuilder::getUBInstCondition() {
+  ref<Expr> Result = klee::ConstantExpr::create(1, Expr::Bool);
+  std::set<Inst *> UsedUBInst;
+  // For each Phi node
+  for (const auto &V : PhiPredMap) {
+    // For each Phi operand
+    for (unsigned A = 0; A < V.first->Ops.size(); ++A) {
+      std::vector<Inst *> UBInst;
+      // Scan for UB instructions
+      getUBInstructions(V.first->Ops[A], UBInst);
+      if (UBInst.size() > 0) {
+        ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
+        // Collect UB constraints
+        for (Inst *I : UBInst) {
+          assert(UBExprMap.count(I) && "UB instruction expression not found");
+          UsedUBInst.insert(I);
+          Ante = AndExpr::create(Ante, UBExprMap[I]);
+        }
+        // Get operand predicate
+        ref<Expr> Pred;
+        if (A == 0)
+          Pred = V.second[0];
+        else
+          Pred = Expr::createIsZero(V.second[A-1]);
+        // Add predicate->UB constraint
+        Result = Expr::createImplies(Pred, Ante);
+      }
+    }
+  }
+  // Add the remaining UB constraints
+  for (const auto &Entry: UBExprMap) {
+    if (!UsedUBInst.count(Entry.first)) {
+      Result = AndExpr::create(Result, Entry.second);
+    }
+  }
+  return Result;
+}
+
+std::vector<ref<Expr> > ExprBuilder::getPhiPredicates(Inst *I) {
+  assert(!PhiPredMap.count(I) && "phi predicates exist");
+  const std::vector<Inst *> &Ops = I->orderedOps();
+  std::vector<ref<Expr> > PredExpr;
+  for (unsigned J = 0; J < Ops.size()-1; ++J)
+    PredExpr.push_back(makeSizedArrayRead(1, "blockpred"));
+  PhiPredMap[I] = PredExpr;
+  return PredExpr;
+}
+
+void ExprBuilder::getUBInstructions(Inst *I, std::vector<Inst *> &Insts) {
+  switch (I->K) {
+    default:
+      break;
+
+    case Inst::Const:
+      break;
+
+    case Inst::Phi:
+      break;
+
+    case Inst::AddNSW:
+    case Inst::AddNUW:
+    case Inst::AddNW:
+    case Inst::SubNSW:
+    case Inst::SubNUW:
+    case Inst::SubNW:
+    case Inst::MulNSW:
+    case Inst::MulNUW:
+    case Inst::UDivExact:
+    case Inst::SDivExact:
+    case Inst::MulNW:
+    case Inst::ShlNSW:
+    case Inst::ShlNUW:
+    case Inst::ShlNW:
+    case Inst::LShrExact:
+    case Inst::AShrExact:
+      Insts.push_back(I);
+      break;
+  }
+
+  const std::vector<Inst *> &Ops = I->orderedOps();
+  for (unsigned J = 0; J != Ops.size(); ++J) {
+    getUBInstructions(Ops[J], Insts);
+  }
+}
+
 // Return an expression which must be proven valid for the candidate to apply.
 CandidateExpr souper::GetCandidateExprForReplacement(
     const std::vector<InstMapping> &PCs, InstMapping Mapping) {
@@ -473,6 +555,9 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   Ante = AndExpr::create(Ante, EB.InstCondition);
 
   CE.E = Expr::createImplies(Ante, Cons);
+
+  // Add top level UB constraints
+  CE.E = AndExpr::create(CE.E, EB.getUBInstCondition());
 
   return CE;
 }
