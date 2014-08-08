@@ -33,6 +33,7 @@ struct Block {
 struct Inst : llvm::FoldingSetNode {
   typedef enum {
     Const,
+    UntypedConst,
     Var,
     Phi,
 
@@ -107,6 +108,7 @@ class InstContext {
 
 public:
   Inst *getConst(const llvm::APInt &I);
+  Inst *getUntypedConst(const llvm::APInt &I);
 
   Inst *createVar(unsigned Width, llvm::StringRef Name);
   Block *createBlock(unsigned Preds);

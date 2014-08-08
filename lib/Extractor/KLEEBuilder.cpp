@@ -93,6 +93,8 @@ ref<Expr> ExprBuilder::buildAssoc(
 ref<Expr> ExprBuilder::build(Inst *I) {
   const std::vector<Inst *> &Ops = I->orderedOps();
   switch (I->K) {
+  case Inst::UntypedConst:
+    assert(0 && "unexpected kind");
   case Inst::Const:
     return klee::ConstantExpr::alloc(I->Val);
   case Inst::Var:

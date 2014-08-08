@@ -36,6 +36,14 @@ bool Inst::operator<(const Inst &Other) const {
   switch (K) {
   case Const:
     return Val.ult(Other.Val);
+  case UntypedConst: {
+    llvm::APInt Val1 = Val, Val2 = Other.Val;
+    if (Val1.getBitWidth() < Val2.getBitWidth())
+      Val1 = Val1.sext(Val2.getBitWidth());
+    else if (Val1.getBitWidth() > Val2.getBitWidth())
+      Val2 = Val2.sext(Val1.getBitWidth());
+    return Val1.slt(Val2);
+  }
   case Var:
     return Number < Other.Number;
   case Phi:
@@ -99,6 +107,10 @@ std::string PrintContext::printInst(Inst *I) {
     SS << ":i" << I->Val.getBitWidth();
     return SS.str();
 
+  case Inst::UntypedConst:
+    I->Val.print(SS, false);
+    return SS.str();
+
   case Inst::Phi:
     unsigned BlockNum = printBlock(I->B);
     OpsSS << " %" << BlockNum << ",";
@@ -150,6 +162,8 @@ const char *Inst::getKindName(Kind K) {
   switch (K) {
   case Const:
     return "const";
+  case UntypedConst:
+    return "untypedconst";
   case Var:
     return "var";
   case Phi:
@@ -215,6 +229,7 @@ void Inst::Profile(llvm::FoldingSetNodeID &ID) const {
 
   switch (K) {
   case Const:
+  case UntypedConst:
     Val.Profile(ID);
     return;
   case Var:
@@ -244,6 +259,25 @@ Inst *InstContext::getConst(const llvm::APInt &Val) {
   Insts.emplace_back(N);
   N->K = Inst::Const;
   N->Width = Val.getBitWidth();
+  N->Val = Val;
+  InstSet.InsertNode(N, IP);
+  return N;
+}
+
+Inst *InstContext::getUntypedConst(const llvm::APInt &Val) {
+  llvm::FoldingSetNodeID ID;
+  ID.AddInteger(Inst::UntypedConst);
+  ID.AddInteger(0);
+  Val.Profile(ID);
+
+  void *IP = 0;
+  if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
+    return I;
+
+  auto N = new Inst;
+  Insts.emplace_back(N);
+  N->K = Inst::UntypedConst;
+  N->Width = 0;
   N->Val = Val;
   InstSet.InsertNode(N, IP);
   return N;
