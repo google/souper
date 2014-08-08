@@ -25,14 +25,15 @@ namespace souper {
 
 struct CandidateExpr {
   std::vector<std::unique_ptr<klee::Array>> Arrays;
+  std::vector<Inst *> ArrayVars;
   klee::ref<klee::Expr> E;
 };
 
 CandidateExpr GetCandidateExprForReplacement(const std::vector<InstMapping> &PCs,
                                              InstMapping Mapping);
 bool IsTriviallyInvalid(klee::ref<klee::Expr> E);
-std::string BuildQuery(const std::vector<InstMapping> &PCs,
-                       InstMapping Mapping);
+std::string BuildQuery(const std::vector<InstMapping> &PCs, InstMapping Mapping,
+                       std::vector<Inst *> *ModelVars);
 
 }
 

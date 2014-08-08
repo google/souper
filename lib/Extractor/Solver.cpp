@@ -40,12 +40,32 @@ public:
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
-                          InstMapping Mapping, bool &IsValid) {
-    bool IsSat;
-    std::error_code EC =
-        SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping), IsSat, Timeout);
-    IsValid = !IsSat;
-    return EC;
+                          InstMapping Mapping, bool &IsValid,
+                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
+    std::string Query;
+    if (Model && SMTSolver->supportsModels()) {
+      std::vector<Inst *> ModelInsts;
+      std::string Query = BuildQuery(PCs, Mapping, &ModelInsts);
+      bool IsSat;
+      std::vector<llvm::APInt> ModelVals;
+      std::error_code EC = SMTSolver->isSatisfiable(
+          Query, IsSat, ModelInsts.size(), &ModelVals, Timeout);
+      if (!EC) {
+        if (IsSat) {
+          for (unsigned I = 0; I != ModelInsts.size(); ++I) {
+            Model->push_back(std::make_pair(ModelInsts[I], ModelVals[I]));
+          }
+        }
+        IsValid = !IsSat;
+      }
+      return EC;
+    } else {
+      bool IsSat;
+      std::error_code EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0),
+                                                    IsSat, 0, 0, Timeout);
+      IsValid = !IsSat;
+      return EC;
+    }
   }
 
   std::string getName() {
@@ -62,7 +82,12 @@ public:
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
-                          InstMapping Mapping, bool &IsValid) {
+                          InstMapping Mapping, bool &IsValid,
+                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
+    // TODO: add caching support for models.
+    if (Model)
+      return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
+
     std::string buf;
     llvm::raw_string_ostream OS(buf);
     souper::PrintReplacement(OS, PCs, Mapping);
@@ -70,7 +95,7 @@ public:
     const auto &ent = Cache.find(OS.str());
     if (ent == Cache.end()) {
       ++MemMisses;
-      std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
+      std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid, 0);
       Cache.emplace (OS.str(), std::make_pair (EC, IsValid));
       return EC;
     } else {
@@ -110,7 +135,12 @@ public:
   }
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
-                          InstMapping Mapping, bool &IsValid) {
+                          InstMapping Mapping, bool &IsValid,
+                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
+    // TODO: add caching support for models.
+    if (Model)
+      return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
+
     std::string buf;
     llvm::raw_string_ostream OS(buf);
     souper::PrintReplacement(OS, PCs, Mapping);
@@ -124,7 +154,7 @@ public:
     if (reply->type == REDIS_REPLY_NIL) {
       freeReplyObject(reply);
       ++RedisMisses;
-      std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid);
+      std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid, 0);
       if (!EC) {
         reply = (redisReply *)redisCommand(ctx, "SET %s %d", OS.str().c_str(),
             IsValid);

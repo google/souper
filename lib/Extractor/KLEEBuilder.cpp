@@ -46,16 +46,18 @@ using namespace souper;
 namespace {
 
 struct ExprBuilder {
-  ExprBuilder(std::vector<std::unique_ptr<Array>> &Arrays)
-      : Arrays(Arrays),
+  ExprBuilder(std::vector<std::unique_ptr<Array> > &Arrays,
+              std::vector<Inst *> &ArrayVars)
+      : Arrays(Arrays), ArrayVars(ArrayVars),
         InstCondition(klee::ConstantExpr::create(1, Expr::Bool)) {}
 
   std::map<Inst *, ref<Expr> > ExprMap;
   std::vector<std::unique_ptr<Array>> &Arrays;
+  std::vector<Inst *> &ArrayVars;
   UniqueNameSet ArrayNames;
   ref<Expr> InstCondition;
 
-  ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name);
+  ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin);
   void addInstCondition(ref<Expr> E);
   ref<Expr> buildAssoc(std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
                        llvm::ArrayRef<Inst *> Ops);
@@ -66,11 +68,18 @@ struct ExprBuilder {
 
 }
 
-ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name) {
+ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
+                                          Inst *Origin) {
+  std::string NameStr;
   if (Name.empty())
-    Name = "arr";
+    NameStr = "arr";
+  else if (Name[0] >= '0' && Name[0] <= '9')
+    NameStr = ("a" + Name).str();
+  else
+    NameStr = Name;
   Arrays.emplace_back(
-      new Array(ArrayNames.makeName(Name), 1, 0, 0, Expr::Int32, Width));
+      new Array(ArrayNames.makeName(NameStr), 1, 0, 0, Expr::Int32, Width));
+  ArrayVars.push_back(Origin);
 
   UpdateList UL(Arrays.back().get(), 0);
   return ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
@@ -98,11 +107,11 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   case Inst::Const:
     return klee::ConstantExpr::alloc(I->Val);
   case Inst::Var:
-    return makeSizedArrayRead(I->Width, I->Name);
+    return makeSizedArrayRead(I->Width, I->Name, I);
   case Inst::Phi:
     return buildAssoc([&](ref<Expr> L, ref<Expr> R) {
                         return SelectExpr::create(
-                            makeSizedArrayRead(1, "blockpred"), L, R);
+                            makeSizedArrayRead(1, "blockpred", 0), L, R);
                       },
                       Ops);
   case Inst::Add:
@@ -191,7 +200,7 @@ ref<Expr> ExprBuilder::getInstMapping(const InstMapping &IM) {
 CandidateExpr souper::GetCandidateExprForReplacement(
     const std::vector<InstMapping> &PCs, InstMapping Mapping) {
   CandidateExpr CE;
-  ExprBuilder EB(CE.Arrays);
+  ExprBuilder EB(CE.Arrays, CE.ArrayVars);
 
   ref<Expr> Cons = EB.getInstMapping(Mapping);
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
@@ -263,7 +272,8 @@ bool souper::IsTriviallyInvalid(ref<Expr> E) {
 }
 
 std::string souper::BuildQuery(const std::vector<InstMapping> &PCs,
-                               InstMapping Mapping) {
+                               InstMapping Mapping,
+                               std::vector<Inst *> *ModelVars) {
   std::ostringstream SMTSS;
   ConstraintManager Manager;
   CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
@@ -271,6 +281,16 @@ std::string souper::BuildQuery(const std::vector<InstMapping> &PCs,
   ExprSMTLIBLetPrinter Printer;
   Printer.setOutput(SMTSS);
   Printer.setQuery(KQuery);
+  std::vector<const klee::Array *> Arrays;
+  if (ModelVars) {
+    for (unsigned I = 0; I != CE.ArrayVars.size(); ++I) {
+      if (CE.ArrayVars[I]) {
+        Arrays.push_back(CE.Arrays[I].get());
+        ModelVars->push_back(CE.ArrayVars[I]);
+      }
+    }
+    Printer.setArrayValuesToGet(Arrays);
+  }
   Printer.generateOutput();
 
   if (DumpKLEEExprs) {

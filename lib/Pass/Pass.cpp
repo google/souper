@@ -84,7 +84,7 @@ public:
     for (const auto &Cand : CandMap) {
       bool Valid;
       if (std::error_code EC =
-              S->isValid(Cand.second.PCs, Cand.second.Mapping, Valid)) {
+              S->isValid(Cand.second.PCs, Cand.second.Mapping, Valid, 0)) {
         if (EC == std::errc::timed_out) {
           continue;
         } else {

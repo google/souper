@@ -15,6 +15,7 @@
 #ifndef SOUPER_SMTLIB2_SOLVER_H
 #define SOUPER_SMTLIB2_SOLVER_H
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/StringRef.h"
 #include <functional>
 #include <memory>
@@ -31,7 +32,10 @@ class SMTLIBSolver {
 public:
   virtual ~SMTLIBSolver();
   virtual std::string getName() const = 0;
+  virtual bool supportsModels() const = 0;
   virtual std::error_code isSatisfiable(llvm::StringRef Query, bool &Result,
+                                        unsigned NumModels,
+                                        std::vector<llvm::APInt> *Models,
                                         unsigned Timeout = 0) = 0;
 };
 

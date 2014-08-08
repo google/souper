@@ -14,6 +14,7 @@
 
 #define DEBUG_TYPE "souper"
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
@@ -43,17 +44,127 @@ SMTLIBSolver::~SMTLIBSolver() {}
 
 namespace {
 
+// Bare bones SMT-LIB parser; enough to parse a get-value response.
+struct SMTLIBParser {
+  const char *Begin, *End;
+
+  char next() {
+    while (Begin != End && (*Begin == ' ' || *Begin == '\n' || *Begin == '\r' ||
+                            *Begin == '\t'))
+      ++Begin;
+    if (Begin == End)
+      return 0;
+    return *Begin++;
+  }
+
+  bool consumeExpected(char C, std::string &ErrStr) {
+    char N = next();
+    if (N != C) {
+      ErrStr = std::string("expected '") + C + "'";
+      return false;
+    }
+    return true;
+  }
+
+  // Begin is before a '('. Consume until (and including) matching ')'.
+  bool consumeSExpr(std::string &ErrStr) {
+    if (!consumeExpected('(', ErrStr))
+      return false;
+
+    unsigned Level = 1;
+    while (Begin != End) {
+      if (*Begin == '(')
+        ++Level;
+      if (*Begin == ')') {
+        --Level;
+        if (Level == 0) {
+          ++Begin;
+          return true;
+        }
+      }
+      ++Begin;
+    }
+
+    ErrStr = "unexpected EOF";
+    return false;
+  }
+
+  APInt parseModel(std::string &ErrStr) {
+    if (!consumeExpected('(', ErrStr))
+      return APInt();
+    if (!consumeExpected('(', ErrStr))
+      return APInt();
+    if (!consumeSExpr(ErrStr))
+      return APInt();
+
+    if (!consumeExpected('(', ErrStr))
+      return APInt();
+    if (!consumeExpected('_', ErrStr))
+      return APInt();
+    if (!consumeExpected('b', ErrStr))
+      return APInt();
+    if (!consumeExpected('v', ErrStr))
+      return APInt();
+    if (Begin == End || *Begin < '0' || *Begin > '9') {
+      ErrStr = "expected integer";
+      return APInt();
+    }
+    const char *NumBegin = Begin;
+    while (Begin != End && *Begin >= '0' && *Begin <= '9')
+      ++Begin;
+    const char *NumEnd = Begin;
+
+    char WidthChar = next();
+    if (WidthChar < '0' || WidthChar > '9') {
+      ErrStr = "expected integer width";
+      return APInt();
+    }
+
+    unsigned Width = WidthChar - '0';
+    while (Begin != End && *Begin >= '0' && *Begin <= '9')
+      Width = Width*10 + (*Begin++ - '0');
+
+    if (!consumeExpected(')', ErrStr))
+      return APInt();
+    if (!consumeExpected(')', ErrStr))
+      return APInt();
+    if (!consumeExpected(')', ErrStr))
+      return APInt();
+
+    return APInt(Width, StringRef(NumBegin, NumEnd - NumBegin), 10);
+  }
+};
+
+std::vector<APInt> ParseModels(StringRef Models, unsigned NumModels,
+                               std::string &ErrStr) {
+  SMTLIBParser P{Models.data(), Models.data() + Models.size()};
+
+  std::vector<APInt> ModelVals;
+  for (unsigned I = 0; I != NumModels; ++I) {
+    ModelVals.push_back(P.parseModel(ErrStr));
+    if (!ErrStr.empty())
+      return ModelVals;
+  }
+
+  if (P.next() != 0)
+    ErrStr = "unexpected extra input";
+
+  return ModelVals;
+}
+
 class ProcessSMTLIBSolver : public SMTLIBSolver {
   std::string Name;
   bool Keep;
   SolverProgram Prog;
+  bool SupportsModels;
   std::vector<std::string> Args;
   std::vector<const char *> ArgPtrs;
 
 public:
   ProcessSMTLIBSolver(std::string Name, bool Keep, SolverProgram Prog,
-                      const std::vector<std::string> &Args)
-      : Name(Name), Keep(Keep), Prog(Prog), Args(Args) {
+                      bool SupportsModels, const std::vector<std::string> &Args)
+      : Name(Name), Keep(Keep), Prog(Prog), SupportsModels(SupportsModels),
+        Args(Args) {
     std::transform(Args.begin(), Args.end(), std::back_inserter(ArgPtrs),
                    [](const std::string &Arg) { return Arg.c_str(); });
     ArgPtrs.push_back(0);
@@ -63,7 +174,12 @@ public:
     return Name;
   }
 
+  bool supportsModels() const {
+    return SupportsModels;
+  }
+
   std::error_code isSatisfiable(StringRef Query, bool &Result,
+                                unsigned NumModels, std::vector<APInt> *Models,
                                 unsigned Timeout) override {
     int InputFD;
     SmallString<64> InputPath;
@@ -114,12 +230,19 @@ public:
         return EC;
       }
 
-      if ((*MB)->getBuffer() == "sat\n") {
+      if ((*MB)->getBuffer().startswith("sat\n")) {
         ::remove(OutputPath.c_str());
-        ++Sats;
         Result = true;
+        ++Sats;
+        std::string ErrStr;
+        if (Models) {
+          *Models = ParseModels((*MB)->getBuffer().slice(4, StringRef::npos),
+                                NumModels, ErrStr);
+        }
+        if (!ErrStr.empty())
+          return std::make_error_code(std::errc::protocol_error);
         return std::error_code();
-      } else if ((*MB)->getBuffer() == "unsat\n") {
+      } else if ((*MB)->getBuffer().startswith("unsat\n")) {
         ::remove(OutputPath.c_str());
         Result = false;
         ++Unsats;
@@ -199,23 +322,23 @@ SolverProgram souper::makeInternalSolverProgram(int MainPtr(int argc,
 std::unique_ptr<SMTLIBSolver> souper::createBoolectorSolver(SolverProgram Prog,
                                                             bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("Boolector", Keep, Prog, {"--smt2"}));
+      new ProcessSMTLIBSolver("Boolector", Keep, Prog, false, {"--smt2"}));
 }
 
 std::unique_ptr<SMTLIBSolver> souper::createCVC4Solver(SolverProgram Prog,
                                                        bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("CVC4", Keep, Prog, {"--lang=smt"}));
+      new ProcessSMTLIBSolver("CVC4", Keep, Prog, true, {"--lang=smt"}));
 }
 
 std::unique_ptr<SMTLIBSolver> souper::createSTPSolver(SolverProgram Prog,
                                                       bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("STP", Keep, Prog, {"--SMTLIB2"}));
+      new ProcessSMTLIBSolver("STP", Keep, Prog, false, {"--SMTLIB2"}));
 }
 
 std::unique_ptr<SMTLIBSolver> souper::createZ3Solver(SolverProgram Prog,
                                                      bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("Z3", Keep, Prog, {"-smt2", "-in"}));
+      new ProcessSMTLIBSolver("Z3", Keep, Prog, false, {"-smt2", "-in"}));
 }

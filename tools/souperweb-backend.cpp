@@ -52,15 +52,29 @@ void SolveInst(std::unique_ptr<MemoryBuffer> MB, Solver *S) {
       ParseReplacement(IC, "<input>", MB->getBuffer(), ErrStr);
   if (!ErrStr.empty()) {
     llvm::errs() << ErrStr << '\n';
+    return;
+  }
+
+  bool Valid;
+  std::vector<std::pair<Inst *, APInt>> Models;
+  if (std::error_code EC = S->isValid(Rep.PCs, Rep.Mapping, Valid, &Models)) {
+    llvm::errs() << EC.message() << '\n';
+    return;
+  }
+
+  if (Valid) {
+    llvm::outs() << "LGTM\n";
   } else {
-    bool Valid;
-    if (std::error_code EC = S->isValid(Rep.PCs, Rep.Mapping, Valid)) {
-      llvm::errs() << EC.message() << '\n';
-    } else {
-      if (Valid) {
-        llvm::outs() << "LGTM\n";
-      } else {
-        llvm::outs() << "Invalid\n";
+    llvm::outs() << "Invalid";
+    if (!Models.empty()) {
+      llvm::outs() << ", e.g.\n\n";
+      std::sort(Models.begin(), Models.end(),
+                [](const std::pair<Inst *, APInt> &A,
+                   const std::pair<Inst *, APInt> &B) {
+        return A.first->Name < B.first->Name;
+      });
+      for (const auto &M : Models) {
+        llvm::outs() << '%' << M.first->Name << " = " << M.second << '\n';
       }
     }
   }
