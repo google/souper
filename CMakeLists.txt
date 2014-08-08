@@ -233,17 +233,15 @@ configure_file(
 
 add_custom_target(check COMMAND ${LLVM_BINDIR}/llvm-lit -sv ${CMAKE_BINARY_DIR}/test DEPENDS souper souperPass extractor_tests inst_tests parser_tests)
 
-set(SOUPERWEB_SOLVER_LIBRARY "" CACHE STRING "Paths to libboolector.a and liblgl.a separated by semicolon")
-
 find_program(GO_EXECUTABLE NAMES go DOC "go executable")
-if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND" AND NOT SOUPERWEB_SOLVER_LIBRARY STREQUAL "")
+if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
   add_executable(souperweb-backend
     tools/souperweb-backend.cpp
   )
   set_target_properties(souperweb-backend
     PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
 
-  target_link_libraries(souperweb-backend souperTool souperExtractor souperSMTLIB2 souperParser souperInst ${SOUPERWEB_SOLVER_LIBRARY} ${HIREDIS_LIBRARY})
+  target_link_libraries(souperweb-backend souperTool souperExtractor souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
 
   add_custom_target(souperweb ALL COMMAND ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/souperweb ${CMAKE_SOURCE_DIR}/tools/souperweb.go
                                   COMMENT "Building souperweb")

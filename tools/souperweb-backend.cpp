@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "llvm/AsmParser/Parser.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -22,6 +23,7 @@
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/CandidateMapUtils.h"
+#include "souper/Tool/GetSolverFromArgs.h"
 
 using namespace llvm;
 using namespace souper;
@@ -80,14 +82,15 @@ void SolveInst(std::unique_ptr<MemoryBuffer> MB, Solver *S) {
   }
 }
 
+static llvm::cl::opt<std::string> Action("action", llvm::cl::init(""));
+
 int main(int argc, char **argv) {
-  std::unique_ptr<Solver> S = createBaseSolver(
-      createBoolectorSolver(makeInternalSolverProgram(boolector_main), false),
-      10);
+  cl::ParseCommandLineOptions(argc, argv);
+  std::unique_ptr<Solver> S = GetSolverFromArgs();
 
   auto MB = MemoryBuffer::getSTDIN();
   if (MB) {
-    if (StringRef(argv[1]) == "ir") {
+    if (Action == "ir") {
       SolveIR(std::move(*MB), S.get());
     } else {
       SolveInst(std::move(*MB), S.get());
