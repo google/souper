@@ -107,6 +107,7 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
       Index = IC.getInst(Inst::SExt, PSize, {Index});
       Inst *Addend = IC.getInst(
           Inst::Mul, PSize, {Index, IC.getConst(APInt(PSize, ElementSize))});
+      Ptr = IC.getInst(Inst::SExt, PSize, {Ptr});
       Ptr = IC.getInst(Inst::Add, PSize, {Ptr, Addend});
     }
   }
