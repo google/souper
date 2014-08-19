@@ -26,6 +26,9 @@ Building Souper
      $ cd /path/to/souper-build
      $ cmake -DCMAKE_BUILD_TYPE=$buildtype /path/to/souper
    Be sure to select the same build type used when compiling the dependencies.
+   If you want to run Souper's full test suite, add this option to CMake (with
+   the appropriate solver and path to the solver executable):
+   -DTEST_SOLVER="-stp-path=/usr/local/bin/stp"
 
 3. Run 'make' from the build directory.
 
