@@ -172,16 +172,34 @@ const char *Inst::getKindName(Kind K) {
     return "add";
   case AddNSW:
     return "addnsw";
+  case AddNUW:
+    return "addnuw";
+  case AddNW:
+    return "addnw";
   case Sub:
     return "sub";
   case SubNSW:
     return "subnsw";
+  case SubNUW:
+    return "subnuw";
+  case SubNW:
+    return "subnw";
   case Mul:
     return "mul";
+  case MulNSW:
+    return "mulnsw";
+  case MulNUW:
+    return "mulnuw";
+  case MulNW:
+    return "mulnw";
   case UDiv:
     return "udiv";
   case SDiv:
     return "sdiv";
+  case UDivExact:
+    return "udivexact";
+  case SDivExact:
+    return "sdivexact";
   case URem:
     return "urem";
   case SRem:
@@ -194,10 +212,20 @@ const char *Inst::getKindName(Kind K) {
     return "xor";
   case Shl:
     return "shl";
+  case ShlNSW:
+    return "shlnsw";
+  case ShlNUW:
+    return "shlnuw";
+  case ShlNW:
+    return "shlnw";
   case LShr:
     return "lshr";
+  case LShrExact:
+    return "lshrexact";
   case AShr:
     return "ashr";
+  case AShrExact:
+    return "ashrexact";
   case Select:
     return "select";
   case ZExt:
