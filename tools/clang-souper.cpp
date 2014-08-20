@@ -15,7 +15,7 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Lex/Lexer.h"
-#include "clang/Tooling/CompilationDatabase.h"
+#include "clang/Tooling/CommonOptionsParser.h"
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/IR/LLVMContext.h"
@@ -35,32 +35,13 @@ using namespace clang::tooling;
 using namespace llvm;
 using namespace souper;
 
-static cl::opt<std::string> BuildPath(cl::Positional, cl::desc("<build-path>"));
-
-static cl::list<std::string> SourcePaths(cl::Positional,
-                                         cl::desc("<source0> [... <sourceN>]"),
-                                         cl::OneOrMore);
+static cl::OptionCategory ClangSouperCategory("clang-souper options");
 
 int main(int argc, const char **argv) {
   llvm::sys::PrintStackTraceOnErrorSignal();
-  cl::ParseCommandLineOptions(argc, argv);
-
-  std::unique_ptr<CompilationDatabase> Compilations(
-      FixedCompilationDatabase::loadFromCommandLine(argc, argv));
-  if (!Compilations) {  // Couldn't find a compilation DB from the command line
-    std::string ErrorMessage;
-    Compilations.reset(
-      !BuildPath.empty() ?
-        CompilationDatabase::autoDetectFromDirectory(BuildPath, ErrorMessage) :
-        CompilationDatabase::autoDetectFromSource(SourcePaths[0], ErrorMessage)
-      );
-
-    // Still no compilation DB? - bail.
-    if (!Compilations)
-      llvm::report_fatal_error(ErrorMessage);
-  }
-
-  ClangTool Tool(*Compilations, SourcePaths);
+  CommonOptionsParser OptionsParser(argc, argv, ClangSouperCategory);
+  ClangTool Tool(OptionsParser.getCompilations(),
+                 OptionsParser.getSourcePathList());
   InstContext IC;
   ExprBuilderContext EBC;
   CandidateMap CandMap;

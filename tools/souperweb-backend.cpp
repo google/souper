@@ -31,18 +31,18 @@ using namespace souper;
 extern "C" int boolector_main(int argc, char **argv);
 
 void SolveIR(std::unique_ptr<MemoryBuffer> MB, Solver *S) {
-  Module M("", getGlobalContext());
   SMDiagnostic Err;
-  if (!ParseAssembly(MB.release(), &M, Err, getGlobalContext())) {
-    Err.print(0, llvm::errs(), false);
-  } else {
+  if (std::unique_ptr<Module> M =
+          parseAssembly(std::move(MB), Err, getGlobalContext())) {
     InstContext IC;
     ExprBuilderContext EBC;
     CandidateMap CandMap;
 
-    AddModuleToCandidateMap(IC, EBC, CandMap, &M);
+    AddModuleToCandidateMap(IC, EBC, CandMap, M.get());
 
     SolveCandidateMap(llvm::outs(), CandMap, S);
+  } else {
+    Err.print(0, llvm::errs(), false);
   }
 }
 

@@ -34,12 +34,12 @@ namespace {
 class ExtractorAction : public CodeGenAction {
   InstContext &IC;
   ExprBuilderContext &EBC;
-  std::vector<std::unique_ptr<Module>> &Mods;
+  std::vector<std::unique_ptr<llvm::Module>> &Mods;
   CandidateMap &CandMap;
 
 public:
   ExtractorAction(LLVMContext &VMC, InstContext &IC, ExprBuilderContext &EBC,
-                  std::vector<std::unique_ptr<Module>> &Mods,
+                  std::vector<std::unique_ptr<llvm::Module>> &Mods,
                   CandidateMap &CandMap)
       : CodeGenAction(Backend_EmitNothing, &VMC),
         IC(IC),
@@ -49,7 +49,7 @@ public:
 
   void EndSourceFileAction() {
     CodeGenAction::EndSourceFileAction();
-    std::unique_ptr<Module> Mod(takeModule());
+    std::unique_ptr<llvm::Module> Mod(takeModule());
 
     if (Mod) {
       AddModuleToCandidateMap(IC, EBC, CandMap, Mod.get());
@@ -62,13 +62,13 @@ class ExtractorActionFactory : public tooling::FrontendActionFactory {
   LLVMContext &VMC;
   InstContext &IC;
   ExprBuilderContext &EBC;
-  std::vector<std::unique_ptr<Module>> &Mods;
+  std::vector<std::unique_ptr<llvm::Module>> &Mods;
   CandidateMap &CandMap;
 
  public:
   ExtractorActionFactory(LLVMContext &VMC, InstContext &IC,
                          ExprBuilderContext &EBC,
-                         std::vector<std::unique_ptr<Module>> &Mods,
+                         std::vector<std::unique_ptr<llvm::Module>> &Mods,
                          CandidateMap &CandMap)
       : VMC(VMC), IC(IC), EBC(EBC), Mods(Mods), CandMap(CandMap) {}
 
@@ -81,6 +81,6 @@ class ExtractorActionFactory : public tooling::FrontendActionFactory {
 
 tooling::FrontendActionFactory *souper::CreateExtractorActionFactory(
     LLVMContext &VMC, InstContext &IC, ExprBuilderContext &EBC,
-    std::vector<std::unique_ptr<Module>> &Mods, CandidateMap &CandMap) {
+    std::vector<std::unique_ptr<llvm::Module>> &Mods, CandidateMap &CandMap) {
   return new ExtractorActionFactory(VMC, IC, EBC, Mods, CandMap);
 }

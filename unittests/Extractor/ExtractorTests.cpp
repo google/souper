@@ -39,7 +39,7 @@ struct ExtractorTest : testing::Test {
   bool extractFromIR(const char *IR) {
     LLVMContext &C = getGlobalContext();
     SMDiagnostic Err;
-    M.reset(ParseAssemblyString(IR, 0, Err, C));
+    M = parseAssemblyString(IR, Err, C);
     if (!M.get()) {
       Err.print("ExtractorTest", errs());
       return false;
