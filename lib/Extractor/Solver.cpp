@@ -18,7 +18,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
 
-#include "hiredis/hiredis.h"
+#include "hiredis.h"
 #include <sstream>
 #include <unordered_map>
 

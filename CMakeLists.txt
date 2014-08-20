@@ -95,7 +95,7 @@ find_path(HIREDIS_INCLUDE_DIR
   PATHS
   third_party/hiredis/install/include)
 
-include_directories(${HIREDIS_INCLUDE_DIR})
+include_directories(${HIREDIS_INCLUDE_DIR}/hiredis)
 
 find_library(HIREDIS_LIBRARY
   NAMES
