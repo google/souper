@@ -31,9 +31,17 @@ using namespace llvm;
 
 namespace {
 std::unique_ptr<Solver> S;
+unsigned ReplaceCount;
 
 static cl::opt<bool> DebugSouperPass("debug-souper", cl::Hidden,
                                      cl::init(false), cl::desc("Debug Souper"));
+
+static cl::opt<unsigned> FirstReplace("first-opt", cl::init(0),
+    cl::desc("First Souper optimization to perform (default=0)"));
+
+static cl::opt<unsigned> LastReplace("last-opt",
+    cl::init(std::numeric_limits<unsigned>::max()),
+    cl::desc("Last Souper optimization to perform (default=infinite)"));
 
 struct SouperPass : public FunctionPass {
   static char ID;
@@ -106,14 +114,24 @@ public:
           errs() << "; Priority: " << Cand.second.Priority << '\n';
           errs() << "; Replacing \"";
           O->print(errs());
-          errs() << "\" with \"";
+          errs() << "\"\n; from \"";
+          O->getDebugLoc().print(O->getContext(), errs());
+          errs() << "\"\n; with \"";
           CI->print(errs());
           errs() << "\" in:\n";
           PrintReplacement(errs(), Cand.second.PCs, Cand.second.Mapping);
         }
-        BasicBlock::iterator BI = O;
-        ReplaceInstWithValue(O->getParent()->getInstList(), BI, CI);
-        changed = true;
+        if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
+          BasicBlock::iterator BI = O;
+          ReplaceInstWithValue(O->getParent()->getInstList(), BI, CI);
+          changed = true;
+        } else {
+          if (DebugSouperPass)
+            errs() << "Skipping this replacement (number " << ReplaceCount <<
+              ")\n";
+        }
+        if (ReplaceCount < std::numeric_limits<unsigned>::max())
+          ++ReplaceCount;
       }
     }
 

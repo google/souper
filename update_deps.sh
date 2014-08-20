@@ -29,6 +29,7 @@ llvm_builddir=$llvmdir/$llvm_build_type
 
 svn co -r $llvm_revision https://llvm.org/svn/llvm-project/llvm/trunk $llvmdir
 svn co -r $llvm_revision https://llvm.org/svn/llvm-project/cfe/trunk $llvmdir/tools/clang
+svn co -r $llvm_revision https://llvm.org/svn/llvm-project/compiler-rt/trunk $llvmdir/projects/compiler-rt
 
 mkdir -p $llvm_builddir
 
