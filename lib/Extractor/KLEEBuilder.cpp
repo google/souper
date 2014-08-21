@@ -48,8 +48,7 @@ namespace {
 struct ExprBuilder {
   ExprBuilder(std::vector<std::unique_ptr<Array> > &Arrays,
               std::vector<Inst *> &ArrayVars)
-      : Arrays(Arrays), ArrayVars(ArrayVars),
-        InstCondition(klee::ConstantExpr::create(1, Expr::Bool)) {}
+      : Arrays(Arrays), ArrayVars(ArrayVars) {}
 
   std::map<Inst *, ref<Expr> > ExprMap;
   std::map<Inst *, std::vector<ref<Expr> >> PhiPredMap;
@@ -57,10 +56,8 @@ struct ExprBuilder {
   std::vector<std::unique_ptr<Array>> &Arrays;
   std::vector<Inst *> &ArrayVars;
   UniqueNameSet ArrayNames;
-  ref<Expr> InstCondition;
 
   ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin);
-  void addInstCondition(ref<Expr> E);
   ref<Expr> addnswUB(Inst *I);
   ref<Expr> addnuwUB(Inst *I);
   ref<Expr> subnswUB(Inst *I);
@@ -103,10 +100,6 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
 
   UpdateList UL(Arrays.back().get(), 0);
   return ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
-}
-
-void ExprBuilder::addInstCondition(ref<Expr> E) {
-  InstCondition = AndExpr::create(InstCondition, E);
 }
 
 ref<Expr> ExprBuilder::addnswUB(Inst *I) {
@@ -535,7 +528,6 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   for (const auto &PC : PCs) {
     Ante = AndExpr::create(Ante, EB.getInstMapping(PC));
   }
-  Ante = AndExpr::create(Ante, EB.InstCondition);
   Ante = AndExpr::create(Ante, EB.getUBInstCondition());
 
   CE.E = Expr::createImplies(Ante, Cons);
