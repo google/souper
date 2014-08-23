@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-llvm_revision=216042
+llvm_revision=216313
 klee_commit=5d8db05524f5216900e952c3e1fc2aac9c424391
 hiredis_commit=2602e1b6bc19dc191df0c50cd6502578fe492710
 
