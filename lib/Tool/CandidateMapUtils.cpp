@@ -91,11 +91,12 @@ bool CheckCandidateMap(llvm::Module &Mod, const CandidateMap &M, Solver *S) {
       }
       llvm::APInt ActualVal = Cand.second.Mapping.Replacement->Val;
 
-      for (llvm::Instruction *Origin : Cand.second.Origins) {
-        llvm::MDNode *ExpectedMD = Origin->getMetadata(ExpectedID);
+      for (const InstOrigin &Origin : Cand.second.Origins) {
+        llvm::Instruction *Inst = Origin.getInstruction();
+        llvm::MDNode *ExpectedMD = Inst->getMetadata(ExpectedID);
         if (!ExpectedMD) {
           llvm::errs() << "instruction:\n";
-          Origin->dump();
+          Inst->dump();
           llvm::errs() << "unexpected simplification:\n";
           Cand.second.print(llvm::errs());
           OK = false;
@@ -104,17 +105,17 @@ bool CheckCandidateMap(llvm::Module &Mod, const CandidateMap &M, Solver *S) {
         if (ExpectedMD->getNumOperands() != 1 ||
             !isa<llvm::ConstantInt>(ExpectedMD->getOperand(0))) {
           llvm::errs() << "instruction:\n";
-          Origin->dump();
+          Inst->dump();
           llvm::errs() << "invalid metadata\n";
           OK = false;
           continue;
         }
         llvm::APInt ExpectedVal =
             cast<llvm::ConstantInt>(ExpectedMD->getOperand(0))->getValue();
-        Origin->setMetadata(ExpectedID, 0);
+        Inst->setMetadata(ExpectedID, 0);
         if (ExpectedVal != ActualVal) {
           llvm::errs() << "instruction:\n";
-          Origin->dump();
+          Inst->dump();
           llvm::errs() << "unexpected simplification, wanted " << ExpectedVal
                        << ":\n";
           Cand.second.print(llvm::errs());
