@@ -415,7 +415,12 @@ bool Inst::isCommutative(Inst::Kind K) {
   switch (K) {
   case Add:
   case AddNSW:
+  case AddNUW:
+  case AddNW:
   case Mul:
+  case MulNSW:
+  case MulNUW:
+  case MulNW:
   case And:
   case Or:
   case Xor:
