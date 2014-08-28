@@ -251,7 +251,6 @@ struct Parser {
   }
 
   std::string makeErrStr(TokenPos TP, const std::string &ErrStr) {
-    unsigned Line, Col;
     return FileName + ":" + utostr(TP.Line) + ":" + utostr(TP.Col) + ": " +
            ErrStr;
   }
