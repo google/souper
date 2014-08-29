@@ -131,21 +131,27 @@ public:
           BasicBlock::iterator BI = O;
           ReplaceInstWithValue(O->getParent()->getInstList(), BI, CI);
           if (ProfileSouperOpts) {
-            Module &M = *F.getParent();
             LLVMContext &C = F.getContext();
             std::vector<Type*> FA;
             FA.push_back(PointerType::getInt8PtrTy(C));
-            FunctionType *FT = FunctionType::get(Type::getVoidTy(C),
-                                                 FA, false);
-            Function *Handler = Function::Create(FT, Function::ExternalLinkage,
-                                                 "_xxx_", &M);
-            Constant *S = ConstantDataArray::getString(C, "Hello");
-            Constant *SV = new GlobalVariable (M, S->getType(), true,
-                                            GlobalValue::PrivateLinkage, S, "");
-            Constant *Cast = ConstantExpr::getPointerCast(SV, PointerType::getInt8PtrTy(C));
+            FunctionType *FT = FunctionType::get(Type::getVoidTy(C), FA, false);
+            Function *PFunc = Function::Create(FT, Function::ExternalLinkage,
+                                               "_souper_profile",
+                                               F.getParent());
+            std::string Str;
+            llvm::raw_string_ostream SS(Str);
+            PrintReplacement(SS, Cand.second.PCs, Cand.second.Mapping);
+            Constant *S = ConstantDataArray::getString(C, "prof: " + SS.str(),
+                                                       false);
+            Constant *SVar = new GlobalVariable(*F.getParent(), S->getType(),
+                                                true,
+                                                GlobalValue::PrivateLinkage, S,
+                                                "");
+            Constant *Cast = ConstantExpr::getPointerCast(SVar,
+                PointerType::getInt8PtrTy(C));
             std::vector<Value*> Args;
-            Args.push_back (Cast);
-            CallInst::Create(Handler, Args, "", BI);
+            Args.push_back(Cast);
+            CallInst::Create(PFunc, Args, "", BI);
           }
           changed = true;
         } else {
