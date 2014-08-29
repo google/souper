@@ -543,6 +543,14 @@ bool Parser::parseLine(std::string &ErrStr) {
         BlockMap.clear();
 
         return true;
+      } else if (CurTok.str() == "infer") {
+        if (!consumeToken(ErrStr)) return false;
+        // FIXME
+
+      } else if (CurTok.str() == "result") {
+        if (!consumeToken(ErrStr)) return false;
+        // FIXME
+
       } else if (CurTok.str() == "pc") {
         if (!consumeToken(ErrStr)) return false;
         InstMapping PC = parseInstMapping(ErrStr);
@@ -749,7 +757,7 @@ ParsedReplacement souper::ParseReplacement(InstContext &IC,
     }
   }
 
-  ErrStr = P.makeErrStr("incomplete replacement, need a 'cand' statement");
+  ErrStr = P.makeErrStr("incomplete replacement, need a 'cand' or 'infer' statement");
   return ParsedReplacement();
 }
 

@@ -144,6 +144,10 @@ struct InstMapping {
 
 void PrintReplacement(llvm::raw_ostream &Out,
                       const std::vector<InstMapping> &PCs, InstMapping Mapping);
+void PrintRHS(llvm::raw_ostream &Out,
+              const std::vector<InstMapping> &PCs, InstMapping Mapping);
+void PrintLHS(llvm::raw_ostream &Out,
+              const std::vector<InstMapping> &PCs, InstMapping Mapping);
 
 }
 
