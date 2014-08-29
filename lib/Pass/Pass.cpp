@@ -15,6 +15,7 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/PassManager.h"
@@ -35,6 +36,10 @@ unsigned ReplaceCount;
 
 static cl::opt<bool> DebugSouperPass("debug-souper", cl::Hidden,
                                      cl::init(false), cl::desc("Debug Souper"));
+
+static cl::opt<bool> ProfileSouperOpts("profile-souper-opts", cl::Hidden,
+                                       cl::init(false),
+                                       cl::desc("Profile Souper optimizations"));
 
 static cl::opt<unsigned> FirstReplace("first-souper-opt", cl::Hidden,
     cl::init(0),
@@ -125,6 +130,23 @@ public:
         if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
           BasicBlock::iterator BI = O;
           ReplaceInstWithValue(O->getParent()->getInstList(), BI, CI);
+          if (ProfileSouperOpts) {
+            Module &M = *F.getParent();
+            LLVMContext &C = F.getContext();
+            std::vector<Type*> FA;
+            FA.push_back(PointerType::getInt8PtrTy(C));
+            FunctionType *FT = FunctionType::get(Type::getVoidTy(C),
+                                                 FA, false);
+            Function *Handler = Function::Create(FT, Function::ExternalLinkage,
+                                                 "_xxx_", &M);
+            Constant *S = ConstantDataArray::getString(C, "Hello");
+            Constant *SV = new GlobalVariable (M, S->getType(), true,
+                                            GlobalValue::PrivateLinkage, S, "");
+            Constant *Cast = ConstantExpr::getPointerCast(SV, PointerType::getInt8PtrTy(C));
+            std::vector<Value*> Args;
+            Args.push_back (Cast);
+            CallInst::Create(Handler, Args, "", BI);
+          }
           changed = true;
         } else {
           if (DebugSouperPass)
