@@ -60,11 +60,7 @@ void souper::AddToCandidateMap(CandidateMap &M,
   if (IsTriviallyInvalid(CE.E)) {
     ++TriviallyInvalid;
   } else {
-    std::string InstStr;
-    llvm::raw_string_ostream InstSS(InstStr);
-    PrintReplacement(InstSS, CR.PCs, CR.Mapping);
-
-    CandidateMapEntry &Entry = M[InstSS.str()];
+    CandidateMapEntry &Entry = M[GetReplacementString(CR.PCs, CR.Mapping)];
     if (Entry.CandExpr.E.isNull()) {
       Entry.CandExpr = std::move(CE);
 

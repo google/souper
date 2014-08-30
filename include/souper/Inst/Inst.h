@@ -144,6 +144,8 @@ struct InstMapping {
 
 void PrintReplacement(llvm::raw_ostream &Out,
                       const std::vector<InstMapping> &PCs, InstMapping Mapping);
+std::string GetReplacementString(const std::vector<InstMapping> &PCs,
+                                 InstMapping Mapping);
 
 }
 
