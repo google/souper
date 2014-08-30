@@ -1,0 +1,70 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+
+sub linkp() {
+    my $link = 1;
+    foreach my $arg (@ARGV) {
+        $link = 0 if ($arg eq "-S" || $arg eq "-c");
+    }
+    return $link;
+}
+
+my $debug = 0;
+$debug = 1 if ($ENV{"DEBUG_SCLANG"});
+
+if ($0 =~ /clang$/) {
+    unshift @ARGV, "@LLVM_BINDIR@/clang";
+} elsif ($0 =~ /clang\+\+$/) {
+    unshift @ARGV, "@LLVM_BINDIR@/clang++";
+} else {
+    die();
+}
+
+my $souper = 1;
+
+# this environment variable is a comma-separated list of source files that
+# souper should avoid processing, for example because they trigger known
+# bugs in our clang pass
+if ($ENV{"SOUPER_SKIP_FILES"}) {
+    my %skips;
+    foreach my $f (split(',', $ENV{"SOUPER_SKIP_FILES"})) {
+        $skips{$f} = 1;
+    }
+    foreach my $a (@ARGV) {
+        $souper = 0 if ($skips{$a});
+    }
+}
+
+if ($souper) {
+    push @ARGV, (
+        "-Xclang", "-load",
+        "-Xclang", "@SOUPER_PASS@",
+        "-mllvm", "@TEST_SOLVER@",
+        "-mllvm", "-solver-timeout=15",
+        "-mllvm", "-internal-cache-souper",
+        "-mllvm", "-external-cache-souper",
+    );
+    
+    if ($ENV{"DEBUG_SOUPER"}) {
+        push @ARGV, ("-mllvm", "-debug-souper");
+    }
+    
+    if ($ENV{"PROFILE_SOUPER"}) {
+        push @ARGV, ("-mllvm", "-profile-souper-opts");
+        if (linkp()) {
+            push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
+        }
+    }
+}
+
+if ($debug) {
+    print "\n< ";
+    foreach my $a (@ARGV) {
+        print "$a ";
+    }
+    print ">\n\n";
+}
+
+exec @ARGV;
