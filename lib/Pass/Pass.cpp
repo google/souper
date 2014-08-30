@@ -15,6 +15,7 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/PassManager.h"
@@ -22,6 +23,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/GetSolverFromArgs.h"
 #include "souper/Tool/CandidateMapUtils.h"
@@ -35,6 +37,9 @@ unsigned ReplaceCount;
 
 static cl::opt<bool> DebugSouperPass("debug-souper", cl::Hidden,
                                      cl::init(false), cl::desc("Debug Souper"));
+
+static cl::opt<bool> ProfileSouperOpts("profile-souper-opts", cl::init(false),
+                                       cl::desc("Profile Souper optimizations"));
 
 static cl::opt<unsigned> FirstReplace("first-souper-opt", cl::Hidden,
     cl::init(0),
@@ -58,6 +63,49 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfo>();
+  }
+
+  void addProfileCode(LLVMContext &C, Module *M, std::string Repl,
+                      std::string SrcLoc, BasicBlock::iterator BI) {
+    Function *RegisterFunc = M->getFunction("_souper_profile_register");
+    if (!RegisterFunc) {
+      Type *RegisterArgs[] = {
+        PointerType::getInt8PtrTy(C),
+        PointerType::getInt64PtrTy(C),
+      };
+      FunctionType *RegisterType = FunctionType::get(Type::getVoidTy(C),
+                                                     RegisterArgs, false);
+      RegisterFunc = Function::Create(RegisterType, Function::ExternalLinkage,
+                                      "_souper_profile_register", M);
+    }
+
+    Constant *S = ConstantDataArray::getString(C, "profile\n" + SrcLoc + "\n" +
+                                               Repl, true);
+    Constant *ReplVar = new GlobalVariable(*M, S->getType(), true,
+                                           GlobalValue::PrivateLinkage, S, "");
+    Constant *ReplPtr = ConstantExpr::getPointerCast(ReplVar,
+        PointerType::getInt8PtrTy(C));
+
+    Constant *CntVar = new GlobalVariable(*M, Type::getInt64Ty(C), false,
+                                          GlobalValue::PrivateLinkage,
+                                          ConstantInt::get(C, APInt(64, 0)),
+                                          "_souper_profile_cnt");
+
+    FunctionType *CtorType = FunctionType::get(Type::getVoidTy(C), false);
+    Function *Ctor = Function::Create(CtorType, GlobalValue::InternalLinkage,
+                                      "_souper_profile_ctor", M);
+
+    BasicBlock *BB = BasicBlock::Create(C, "entry", Ctor);
+    IRBuilder<> Builder(BB);
+
+    Builder.CreateCall2(RegisterFunc, ReplPtr, CntVar);
+    Builder.CreateRetVoid();
+
+    appendToGlobalCtors(*M, Ctor, 0);
+
+    new AtomicRMWInst::AtomicRMWInst(AtomicRMWInst::Add, CntVar,
+                                     ConstantInt::get(C, APInt(64, 1)),
+                                     Monotonic, CrossThread, BI);
   }
 
   bool runOnFunction(Function &F) {
@@ -104,27 +152,36 @@ public:
       if (!Valid)
         continue;
 
-      for (auto *O : Cand.second.Origins) {
-        if (!ReplacedInsts.insert(O).second)
+      for (const auto &O : Cand.second.Origins) {
+        Instruction *I = O.getInstruction();
+        if (!ReplacedInsts.insert(I).second)
           continue;
 
         Constant *CI = ConstantInt::get(
-            O->getType(), Cand.second.Mapping.Replacement->Val);
+            I->getType(), Cand.second.Mapping.Replacement->Val);
         if (DebugSouperPass) {
           errs() << "\n";
           errs() << "; Priority: " << Cand.second.Priority << '\n';
           errs() << "; Replacing \"";
-          O->print(errs());
+          I->print(errs());
           errs() << "\"\n; from \"";
-          O->getDebugLoc().print(O->getContext(), errs());
+          I->getDebugLoc().print(I->getContext(), errs());
           errs() << "\"\n; with \"";
           CI->print(errs());
           errs() << "\" in:\n";
           PrintReplacement(errs(), Cand.second.PCs, Cand.second.Mapping);
         }
         if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
-          BasicBlock::iterator BI = O;
-          ReplaceInstWithValue(O->getParent()->getInstList(), BI, CI);
+          BasicBlock::iterator BI = I;
+          ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
+          if (ProfileSouperOpts) {
+            std::string Str;
+            llvm::raw_string_ostream Loc(Str);
+            I->getDebugLoc().print(I->getContext(), Loc);
+            addProfileCode (F.getContext(), F.getParent(),
+                GetReplacementString(Cand.second.PCs, Cand.second.Mapping),
+                Loc.str(), BI);
+          }
           changed = true;
         } else {
           if (DebugSouperPass)

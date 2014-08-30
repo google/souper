@@ -246,3 +246,13 @@ if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
   add_custom_target(souperweb ALL COMMAND ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/souperweb ${CMAKE_SOURCE_DIR}/tools/souperweb.go
                                   COMMENT "Building souperweb")
 endif()
+
+add_library(profileRuntime STATIC
+  runtime/souperPassProfile.c)
+
+set(SOUPER_PASS ${CMAKE_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}souperPass${CMAKE_SHARED_LIBRARY_SUFFIX})
+set(PROFILE_LIBRARY ${CMAKE_BINARY_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}profileRuntime${CMAKE_STATIC_LIBRARY_SUFFIX})
+# this can be prettier once find_library() has a way to prefer static libraries
+set(HIREDIS_STATIC_LIBRARY ${CMAKE_SOURCE_DIR}/third_party/hiredis/install/lib/${CMAKE_STATIC_LIBRARY_PREFIX}hiredis${CMAKE_STATIC_LIBRARY_SUFFIX})
+configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang @ONLY)
+configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang++ @ONLY)

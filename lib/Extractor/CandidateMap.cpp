@@ -43,16 +43,8 @@ void CandidateMapEntry::print(llvm::raw_ostream &OS) const {
 
   OS << "; Priority: " << Priority << '\n';
 
-  for (Instruction *O : Origins) {
-    std::string FunctionName;
-    const Function *F = O->getParent()->getParent();
-    if (F->hasLocalLinkage()) {
-      FunctionName =
-          (F->getParent()->getModuleIdentifier() + ":" + F->getName()).str();
-    } else {
-      FunctionName = F->getName();
-    }
-    Functions.insert(FunctionName);
+  for (const InstOrigin &O : Origins) {
+    Functions.insert(O.getFunctionName());
   }
 
   for (auto F : Functions) {
@@ -68,11 +60,7 @@ void souper::AddToCandidateMap(CandidateMap &M,
   if (IsTriviallyInvalid(CE.E)) {
     ++TriviallyInvalid;
   } else {
-    std::string InstStr;
-    llvm::raw_string_ostream InstSS(InstStr);
-    PrintReplacement(InstSS, CR.PCs, CR.Mapping);
-
-    CandidateMapEntry &Entry = M[InstSS.str()];
+    CandidateMapEntry &Entry = M[GetReplacementString(CR.PCs, CR.Mapping)];
     if (Entry.CandExpr.E.isNull()) {
       Entry.CandExpr = std::move(CE);
 

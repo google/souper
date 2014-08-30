@@ -30,6 +30,7 @@ class Instruction;
 namespace souper {
 
 struct CandidateReplacement;
+struct InstOrigin;
 
 struct CandidateMapEntry {
   /// The KLEE expr for this candidate.
@@ -38,7 +39,7 @@ struct CandidateMapEntry {
   std::vector<InstMapping> PCs;
   InstMapping Mapping;
 
-  std::vector<llvm::Instruction *> Origins;
+  std::vector<InstOrigin> Origins;
 
   /// Cumulative priority of each instruction for which this candidate applies.
   unsigned Priority;
