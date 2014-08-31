@@ -136,9 +136,10 @@ public:
             if (!PFunc) {
               std::vector<Type*> FA;
               FA.push_back(PointerType::getInt8PtrTy(C));
+              FA.push_back(Type::getInt32Ty(C));
               FunctionType *FT = FunctionType::get(Type::getVoidTy(C), FA, false);
               PFunc = Function::Create(FT, Function::ExternalLinkage,
-                                       "_souper_profile", F.getParent());
+                                       "_souper_profile_lazy", F.getParent());
             }
             std::string Str;
             llvm::raw_string_ostream SS(Str);
@@ -153,6 +154,7 @@ public:
                 PointerType::getInt8PtrTy(C));
             std::vector<Value*> Args;
             Args.push_back(Cast);
+            Args.push_back(ConstantInt::get(Type::getInt32Ty(C), ReplaceCount));
             CallInst::Create(PFunc, Args, "", BI);
           }
           changed = true;
