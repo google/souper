@@ -4,29 +4,29 @@ use warnings;
 use strict;
 
 sub linkp() {
-    my $link = 1;
     foreach my $arg (@ARGV) {
-        $link = 0 if ($arg eq "-S" || $arg eq "-c");
+        return 0 if ($arg eq "-S" || $arg eq "-c" || $arg eq "-shared");
     }
-    return $link;
+    return 1;
 }
-
-my $debug = 0;
-$debug = 1 if ($ENV{"DEBUG_SCLANG"});
 
 if ($0 =~ /clang$/) {
     unshift @ARGV, "@LLVM_BINDIR@/clang";
 } elsif ($0 =~ /clang\+\+$/) {
     unshift @ARGV, "@LLVM_BINDIR@/clang++";
 } else {
-    die();
+    die "Didn't expect sclang to be invoked as '$0'";
 }
 
-my $souper = 1;
+my $solver = $ENV{"SCLANG_SOLVER"};
+die "$0 requires the SCLANG_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp" unless $solver;
 
+my $debug = 0;
+$debug = 1 if ($ENV{"DEBUG_SCLANG"});
+
+my $souper = 1;
 # this environment variable is a comma-separated list of source files that
-# souper should avoid processing, for example because they trigger known
-# bugs in our clang pass
+# souper should avoid processing, for example because they trigger known bugs
 if ($ENV{"SOUPER_SKIP_FILES"}) {
     my %skips;
     foreach my $f (split(',', $ENV{"SOUPER_SKIP_FILES"})) {
@@ -41,7 +41,7 @@ if ($souper) {
     push @ARGV, (
         "-Xclang", "-load",
         "-Xclang", "@SOUPER_PASS@",
-        "-mllvm", "@TEST_SOLVER@",
+        "-mllvm", $solver,
         "-mllvm", "-solver-timeout=15",
         "-mllvm", "-internal-cache-souper",
         "-mllvm", "-external-cache-souper",
@@ -54,7 +54,7 @@ if ($souper) {
     if ($ENV{"PROFILE_SOUPER"}) {
         push @ARGV, ("-mllvm", "-profile-souper-opts");
         if (linkp()) {
-            push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
+            push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_STATIC_LIBRARY@");
         }
     }
 }

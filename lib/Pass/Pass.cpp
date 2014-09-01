@@ -23,6 +23,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/GetSolverFromArgs.h"
 #include "souper/Tool/CandidateMapUtils.h"
@@ -33,7 +34,6 @@ using namespace llvm;
 namespace {
 std::unique_ptr<Solver> S;
 unsigned ReplaceCount;
-Function *PFunc;
 
 static cl::opt<bool> DebugSouperPass("debug-souper", cl::Hidden,
                                      cl::init(false), cl::desc("Debug Souper"));
@@ -64,6 +64,48 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfo>();
+  }
+
+  void addProfileCode(LLVMContext &C, Module *M, std::string Repl,
+                      BasicBlock::iterator BI) {
+    Function *RegisterFunc = M->getFunction("_souper_profile_register");
+    if (!RegisterFunc) {
+      Type *RegisterArgs[] = {
+        PointerType::getInt8PtrTy(C),
+        PointerType::getInt64PtrTy(C),
+      };
+      FunctionType *RegisterType = FunctionType::get(Type::getVoidTy(C),
+                                                     RegisterArgs, false);
+      RegisterFunc = Function::Create(RegisterType, Function::ExternalLinkage,
+                                      "_souper_profile_register", M);
+    }
+
+    Constant *S = ConstantDataArray::getString(C, "profile " + Repl, false);
+    Constant *ReplVar = new GlobalVariable(*M, S->getType(), true,
+                                           GlobalValue::PrivateLinkage, S, "");
+    Constant *ReplPtr = ConstantExpr::getPointerCast(ReplVar,
+        PointerType::getInt8PtrTy(C));
+
+    Constant *CntVar = new GlobalVariable(*M, Type::getInt64Ty(C), false,
+                                          GlobalValue::PrivateLinkage,
+                                          ConstantInt::get(C, APInt(64, 0)),
+                                          "_souper_profile_cnt");
+
+    FunctionType *CtorType = FunctionType::get(Type::getVoidTy(C), false);
+    Function *Ctor = Function::Create(CtorType, GlobalValue::InternalLinkage,
+                                      "_souper_profile_ctor", M);
+
+    BasicBlock *BB = BasicBlock::Create(C, "entry", Ctor);
+    IRBuilder<> Builder(BB);
+
+    Builder.CreateCall2(RegisterFunc, ReplPtr, CntVar);
+    Builder.CreateRetVoid();
+
+    appendToGlobalCtors(*M, Ctor, 0);
+
+    new AtomicRMWInst::AtomicRMWInst(AtomicRMWInst::Add, CntVar,
+                                     ConstantInt::get(C, APInt(64, 1)),
+                                     Monotonic, CrossThread, BI);
   }
 
   bool runOnFunction(Function &F) {
@@ -131,32 +173,9 @@ public:
         if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
           BasicBlock::iterator BI = O;
           ReplaceInstWithValue(O->getParent()->getInstList(), BI, CI);
-          if (ProfileSouperOpts) {
-            LLVMContext &C = F.getContext();
-            if (!PFunc) {
-              std::vector<Type*> FA;
-              FA.push_back(PointerType::getInt8PtrTy(C));
-              FA.push_back(Type::getInt32Ty(C));
-              FunctionType *FT = FunctionType::get(Type::getVoidTy(C), FA, false);
-              PFunc = Function::Create(FT, Function::ExternalLinkage,
-                                       "_souper_profile_lazy", F.getParent());
-            }
-            std::string Str;
-            llvm::raw_string_ostream SS(Str);
-            PrintReplacement(SS, Cand.second.PCs, Cand.second.Mapping);
-            Constant *S = ConstantDataArray::getString(C, "prof: " + SS.str(),
-                                                       false);
-            Constant *SVar = new GlobalVariable(*F.getParent(), S->getType(),
-                                                true,
-                                                GlobalValue::PrivateLinkage, S,
-                                                "");
-            Constant *Cast = ConstantExpr::getPointerCast(SVar,
-                PointerType::getInt8PtrTy(C));
-            std::vector<Value*> Args;
-            Args.push_back(Cast);
-            Args.push_back(ConstantInt::get(Type::getInt32Ty(C), ReplaceCount));
-            CallInst::Create(PFunc, Args, "", BI);
-          }
+          if (ProfileSouperOpts)
+            addProfileCode (F.getContext(), F.getParent(),
+                PrintReplacement(Cand.second.PCs, Cand.second.Mapping), BI);
           changed = true;
         } else {
           if (DebugSouperPass)

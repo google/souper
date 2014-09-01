@@ -88,15 +88,12 @@ public:
     if (Model)
       return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
 
-    std::string buf;
-    llvm::raw_string_ostream OS(buf);
-    souper::PrintReplacement(OS, PCs, Mapping);
-
-    const auto &ent = Cache.find(OS.str());
+    std::string Repl = PrintReplacement(PCs, Mapping);
+    const auto &ent = Cache.find(Repl);
     if (ent == Cache.end()) {
       ++MemMisses;
       std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid, 0);
-      Cache.emplace (OS.str(), std::make_pair (EC, IsValid));
+      Cache.emplace (Repl, std::make_pair (EC, IsValid));
       return EC;
     } else {
       ++MemHits;
@@ -141,12 +138,8 @@ public:
     if (Model)
       return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
 
-    std::string buf;
-    llvm::raw_string_ostream OS(buf);
-    souper::PrintReplacement(OS, PCs, Mapping);
-
-    redisReply *reply = (redisReply *)redisCommand(ctx, "GET %s",
-        OS.str().c_str());
+    std::string Repl = PrintReplacement(PCs, Mapping);
+    redisReply *reply = (redisReply *)redisCommand(ctx, "GET %s", Repl.c_str());
     if (!reply) {
       llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
     }
@@ -156,7 +149,7 @@ public:
       ++RedisMisses;
       std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid, 0);
       if (!EC) {
-        reply = (redisReply *)redisCommand(ctx, "SET %s %d", OS.str().c_str(),
+        reply = (redisReply *)redisCommand(ctx, "SET %s %d", Repl.c_str(),
             IsValid);
         if (!reply) {
           llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);

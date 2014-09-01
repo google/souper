@@ -5,14 +5,13 @@
 
 #include "hiredis.h"
 
-static redisContext *ctx;
 static const char *hostname = "127.0.0.1";
 static const int port = 6379;
 
-static void connect(void)
+static redisContext *connect(void)
 {
   struct timeval timeout = { 1, 500000 }; // 1.5 seconds
-  ctx = redisConnectWithTimeout(hostname, port, timeout);
+  redisContext *ctx = redisConnectWithTimeout(hostname, port, timeout);
   if (!ctx) {
     fprintf(stderr, "FATAL: Can't allocate redis context\n");
     _exit(-1);
@@ -21,9 +20,10 @@ static void connect(void)
     fprintf(stderr, "FATAL: Redis connection error: %s\n", ctx->errstr);
     _exit(-1);
   }
+  return ctx;
 }
 
-static void check_integer_reply(redisReply *reply)
+static void ensure_integer_reply(redisReply *reply, redisContext *ctx)
 {
   if (!reply) {
     fprintf(stderr, "FATAL: Redis error: %s\n", ctx->errstr);
@@ -36,40 +36,28 @@ static void check_integer_reply(redisReply *reply)
   freeReplyObject(reply);
 }
 
-void _souper_profile(const char *repl)
-{
-  // FIXME this should be made thread safe
-  if (!ctx)
-    connect();
-
-  redisReply *reply = (redisReply *)redisCommand(ctx, "INCR %s", repl);
-  check_integer_reply(reply);
-}
-
-static int nrecs;
-static int init;
-
-static struct rec {
+static struct rec_t {
   const char *repl;
-  int64_t cnt;
+  int64_t *cntp;
+  struct rec_t *next;
 } *recs;
 
 static void _souper_atexit_handler(void)
 {
-  connect();
-  int i;
-  for (i=0; i<nrecs; ++i) {
-    if (!recs[i].repl)
-      continue;
-    redisReply *reply = (redisReply *)redisCommand(ctx, "INCRBY %s %" PRId64 "", recs[i].repl, recs[i].cnt);
-    check_integer_reply(reply);
+  redisContext *ctx = connect();
+  struct rec_t *recp;
+  for (recp = recs; recp; recp = recp->next) {
+    redisReply *reply = (redisReply *)redisCommand(ctx, "INCRBY %s %" PRId64 "", recp->repl, *recp->cntp);
+    ensure_integer_reply(reply, ctx);
   }
-  redisFree(ctx);
 }
 
-void _souper_profile_lazy(const char *repl, uint32_t index)
+static int init;
+
+void _souper_profile_register(const char *repl, int64_t *cntp)
 {
   // FIXME this should be made thread safe
+
   if (!init) {
     init = 1;
     if (atexit(_souper_atexit_handler) != 0) {
@@ -78,19 +66,14 @@ void _souper_profile_lazy(const char *repl, uint32_t index)
     }
   }
 
-  if (index >= nrecs) {
-    recs = (struct rec *)realloc(recs, sizeof(struct rec) * (1 + index));
-    if (!recs) {
-      fprintf(stderr, "FATAL: realloc() failed\n");
-      exit(-1);
-    }
-    while (nrecs <= index) {
-      recs[nrecs].repl = 0;
-      recs[nrecs].cnt = 0;
-      ++nrecs;
-    }
+  struct rec_t *rec = malloc(sizeof(struct rec_t));
+  if (!rec) {
+    fprintf(stderr, "FATAL: Allocation failure\n");
+    exit(-1);
   }
 
-  recs[index].repl = repl;
-  ++recs[index].cnt;
+  rec->repl = repl;
+  rec->cntp = cntp;
+  rec->next = recs;
+  recs = rec;
 }
