@@ -45,10 +45,13 @@ static struct rec_t {
 static void _souper_atexit_handler(void)
 {
   redisContext *ctx = connect();
-  struct rec_t *recp;
-  for (recp = recs; recp; recp = recp->next) {
-    redisReply *reply = (redisReply *)redisCommand(ctx, "INCRBY %s %" PRId64 "", recp->repl, *recp->cntp);
-    ensure_integer_reply(reply, ctx);
+  struct rec_t *rec;
+  for (rec = recs; rec; rec = rec->next) {
+    int64_t inc = *rec->cntp;
+    if (inc > 0) {
+      redisReply *reply = (redisReply *)redisCommand(ctx, "INCRBY %s %" PRId64 "", rec->repl, inc);
+      ensure_integer_reply(reply, ctx);
+    }
   }
 }
 
