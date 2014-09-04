@@ -37,7 +37,8 @@ static void ensure_integer_reply(redisReply *reply, redisContext *ctx)
   freeReplyObject(reply);
 }
 
-static int mock;
+static int to_stdout;
+static int to_stderr;
 
 static struct rec_t {
   const char *repl;
@@ -48,13 +49,14 @@ static struct rec_t {
 static void _souper_atexit_handler(void)
 {
   redisContext *ctx;
-  if (!mock)
+  if (!to_stdout && !to_stderr)
     ctx = connect();
   struct rec_t *rec;
   for (rec = recs; rec; rec = rec->next) {
     int64_t inc = *rec->cntp;
-    if (mock) {
-      printf("profile key = '%s'\n count = %" PRId64 "\n", rec->repl, inc);
+    if (to_stdout || to_stderr) {
+      FILE *f = to_stdout ? stdout : stderr;
+      fprintf(f, "profile key = '%s'\n count = %" PRId64 "\n", rec->repl, inc);
     } else if (inc > 0) {
       redisReply *reply = (redisReply *)redisCommand(ctx,
           "INCRBY %s %" PRId64 "", rec->repl, inc);
@@ -76,8 +78,10 @@ void _souper_profile_register(const char *repl, int64_t *cntp)
       fprintf(stderr, "FATAL: Can't install atexit handler\n");
       exit(-1);
     }
-    if (getenv("SOUPER_PROFILE_MOCK"))
-      mock = 1;
+    if (getenv("SOUPER_PROFILE_TO_STDOUT"))
+      to_stdout = 1;
+    if (getenv("SOUPER_PROFILE_TO_STDERR"))
+      to_stderr = 1;
   }
 
   struct rec_t *rec = malloc(sizeof(struct rec_t));
