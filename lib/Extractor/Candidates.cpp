@@ -35,6 +35,19 @@ using namespace llvm;
 using namespace klee;
 using namespace souper;
 
+std::string InstOrigin::getFunctionName() const {
+  if (Inst) {
+    const Function *F = Inst->getParent()->getParent();
+    if (F->hasLocalLinkage()) {
+      return (F->getParent()->getModuleIdentifier() + ":" + F->getName()).str();
+    } else {
+      return F->getName();
+    }
+  }
+
+  return FunctionName;
+}
+
 void CandidateReplacement::print(llvm::raw_ostream &Out) const {
   Out << "; Priority: " << Priority << '\n';
   PrintReplacement(Out, PCs, Mapping);

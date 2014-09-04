@@ -34,13 +34,28 @@ class Value;
 
 namespace souper {
 
+struct InstOrigin {
+  InstOrigin(llvm::Instruction *Inst) : Inst(Inst) {}
+  InstOrigin(llvm::StringRef FunctionName)
+      : Inst(0), FunctionName(FunctionName) {}
+
+  llvm::Instruction *getInstruction() const {
+    return Inst;
+  }
+  std::string getFunctionName() const;
+
+private:
+  llvm::Instruction *Inst;
+  std::string FunctionName;
+};
+
 struct CandidateReplacement {
-  CandidateReplacement(llvm::Instruction *Origin, InstMapping Mapping,
+  CandidateReplacement(InstOrigin Origin, InstMapping Mapping,
                        unsigned Priority)
       : Origin(Origin), Mapping(Mapping), Priority(Priority) {}
 
   /// The instruction from which the candidate was derived.
-  llvm::Instruction *Origin;
+  InstOrigin Origin;
 
   /// The replacement mapping.
   InstMapping Mapping;

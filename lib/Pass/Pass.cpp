@@ -152,31 +152,32 @@ public:
       if (!Valid)
         continue;
 
-      for (auto *O : Cand.second.Origins) {
-        if (!ReplacedInsts.insert(O).second)
+      for (const auto &O : Cand.second.Origins) {
+        Instruction *I = O.getInstruction();
+        if (!ReplacedInsts.insert(I).second)
           continue;
 
         Constant *CI = ConstantInt::get(
-            O->getType(), Cand.second.Mapping.Replacement->Val);
+            I->getType(), Cand.second.Mapping.Replacement->Val);
         if (DebugSouperPass) {
           errs() << "\n";
           errs() << "; Priority: " << Cand.second.Priority << '\n';
           errs() << "; Replacing \"";
-          O->print(errs());
+          I->print(errs());
           errs() << "\"\n; from \"";
-          O->getDebugLoc().print(O->getContext(), errs());
+          I->getDebugLoc().print(I->getContext(), errs());
           errs() << "\"\n; with \"";
           CI->print(errs());
           errs() << "\" in:\n";
           PrintReplacement(errs(), Cand.second.PCs, Cand.second.Mapping);
         }
         if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
-          BasicBlock::iterator BI = O;
-          ReplaceInstWithValue(O->getParent()->getInstList(), BI, CI);
+          BasicBlock::iterator BI = I;
+          ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
           if (ProfileSouperOpts) {
             std::string Str;
             llvm::raw_string_ostream Loc(Str);
-            O->getDebugLoc().print(O->getContext(), Loc);
+            I->getDebugLoc().print(I->getContext(), Loc);
             addProfileCode (F.getContext(), F.getParent(),
                 GetReplacementString(Cand.second.PCs, Cand.second.Mapping),
                 Loc.str(), BI);

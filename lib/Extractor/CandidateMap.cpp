@@ -43,16 +43,8 @@ void CandidateMapEntry::print(llvm::raw_ostream &OS) const {
 
   OS << "; Priority: " << Priority << '\n';
 
-  for (Instruction *O : Origins) {
-    std::string FunctionName;
-    const Function *F = O->getParent()->getParent();
-    if (F->hasLocalLinkage()) {
-      FunctionName =
-          (F->getParent()->getModuleIdentifier() + ":" + F->getName()).str();
-    } else {
-      FunctionName = F->getName();
-    }
-    Functions.insert(FunctionName);
+  for (const InstOrigin &O : Origins) {
+    Functions.insert(O.getFunctionName());
   }
 
   for (auto F : Functions) {
