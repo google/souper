@@ -30,7 +30,8 @@ static void ensure_integer_reply(redisReply *reply, redisContext *ctx)
     _exit(-1);
   }
   if (reply->type != REDIS_REPLY_INTEGER) {
-    fprintf(stderr, "FATAL: Redis protocol error, didn't expect reply type %d\n", reply->type);
+    fprintf(stderr, "FATAL: Redis protocol error, didn't expect reply type %d\n",
+            reply->type);
     _exit(-1);
   }
   freeReplyObject(reply);
@@ -53,9 +54,10 @@ static void _souper_atexit_handler(void)
   for (rec = recs; rec; rec = rec->next) {
     int64_t inc = *rec->cntp;
     if (mock) {
-      printf("INCRBY '%s' %" PRId64 "", rec->repl, inc);
+      printf("profile key = '%s'\n count = %" PRId64 "\n", rec->repl, inc);
     } else if (inc > 0) {
-      redisReply *reply = (redisReply *)redisCommand(ctx, "INCRBY %s %" PRId64 "", rec->repl, inc);
+      redisReply *reply = (redisReply *)redisCommand(ctx,
+          "INCRBY %s %" PRId64 "", rec->repl, inc);
       ensure_integer_reply(reply, ctx);
     }
   }

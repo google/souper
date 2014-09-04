@@ -80,7 +80,7 @@ public:
     }
 
     Constant *S = ConstantDataArray::getString(C, "profile\n" + SrcLoc + "\n" +
-                                               Repl, false);
+                                               Repl, true);
     Constant *ReplVar = new GlobalVariable(*M, S->getType(), true,
                                            GlobalValue::PrivateLinkage, S, "");
     Constant *ReplPtr = ConstantExpr::getPointerCast(ReplVar,
