@@ -38,8 +38,7 @@ unsigned ReplaceCount;
 static cl::opt<bool> DebugSouperPass("debug-souper", cl::Hidden,
                                      cl::init(false), cl::desc("Debug Souper"));
 
-static cl::opt<bool> ProfileSouperOpts("profile-souper-opts", cl::Hidden,
-                                       cl::init(false),
+static cl::opt<bool> ProfileSouperOpts("profile-souper-opts", cl::init(false),
                                        cl::desc("Profile Souper optimizations"));
 
 static cl::opt<unsigned> FirstReplace("first-souper-opt", cl::Hidden,
@@ -67,7 +66,7 @@ public:
   }
 
   void addProfileCode(LLVMContext &C, Module *M, std::string Repl,
-                      BasicBlock::iterator BI) {
+                      std::string SrcLoc, BasicBlock::iterator BI) {
     Function *RegisterFunc = M->getFunction("_souper_profile_register");
     if (!RegisterFunc) {
       Type *RegisterArgs[] = {
@@ -80,7 +79,8 @@ public:
                                       "_souper_profile_register", M);
     }
 
-    Constant *S = ConstantDataArray::getString(C, "profile " + Repl, false);
+    Constant *S = ConstantDataArray::getString(C, "profile\n" + SrcLoc + "\n" +
+                                               Repl, false);
     Constant *ReplVar = new GlobalVariable(*M, S->getType(), true,
                                            GlobalValue::PrivateLinkage, S, "");
     Constant *ReplPtr = ConstantExpr::getPointerCast(ReplVar,
@@ -173,9 +173,14 @@ public:
         if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
           BasicBlock::iterator BI = O;
           ReplaceInstWithValue(O->getParent()->getInstList(), BI, CI);
-          if (ProfileSouperOpts)
+          if (ProfileSouperOpts) {
+            std::string Str;
+            llvm::raw_string_ostream Loc(Str);
+            O->getDebugLoc().print(O->getContext(), Loc);
             addProfileCode (F.getContext(), F.getParent(),
-                PrintReplacement(Cand.second.PCs, Cand.second.Mapping), BI);
+                GetReplacementString(Cand.second.PCs, Cand.second.Mapping),
+                Loc.str(), BI);
+          }
           changed = true;
         } else {
           if (DebugSouperPass)

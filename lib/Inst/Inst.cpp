@@ -447,8 +447,8 @@ void souper::PrintReplacement(llvm::raw_ostream &Out,
   Out << "cand " << SRef << " " << RRef << '\n';
 }
 
-std::string souper::PrintReplacement(const std::vector<InstMapping> &PCs,
-                                     InstMapping Mapping) {
+std::string souper::GetReplacementString(const std::vector<InstMapping> &PCs,
+                                         InstMapping Mapping) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
   PrintReplacement(SS, PCs, Mapping);

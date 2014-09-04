@@ -21,15 +21,12 @@ if ($0 =~ /clang$/) {
 my $solver = $ENV{"SCLANG_SOLVER"};
 die "$0 requires the SCLANG_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp" unless $solver;
 
-my $debug = 0;
-$debug = 1 if ($ENV{"DEBUG_SCLANG"});
-
 my $souper = 1;
 # this environment variable is a comma-separated list of source files that
 # souper should avoid processing, for example because they trigger known bugs
-if ($ENV{"SOUPER_SKIP_FILES"}) {
+if ($ENV{"SCLANG_SKIP_FILES"}) {
     my %skips;
-    foreach my $f (split(',', $ENV{"SOUPER_SKIP_FILES"})) {
+    foreach my $f (split(',', $ENV{"SCLANG_SKIP_FILES"})) {
         $skips{$f} = 1;
     }
     foreach my $a (@ARGV) {
@@ -44,27 +41,22 @@ if ($souper) {
         "-mllvm", $solver,
         "-mllvm", "-solver-timeout=15",
         "-mllvm", "-internal-cache-souper",
-        "-mllvm", "-external-cache-souper",
     );
-    
-    if ($ENV{"DEBUG_SOUPER"}) {
+
+    if (!$ENV{"SCLANG_NO_EXTERNAL_CACHE"}) {
+        push @ARGV, ("-mllvm", "-external-cache-souper");
+    }
+
+    if ($ENV{"SOUPER_DEBUG"}) {
         push @ARGV, ("-mllvm", "-debug-souper");
     }
     
-    if ($ENV{"PROFILE_SOUPER"}) {
-        push @ARGV, ("-mllvm", "-profile-souper-opts");
+    if ($ENV{"SOUPER_PROFILE"}) {
+        push @ARGV, ("-g", "-mllvm", "-profile-souper-opts");
         if (linkp()) {
             push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_STATIC_LIBRARY@");
         }
     }
-}
-
-if ($debug) {
-    print "\n< ";
-    foreach my $a (@ARGV) {
-        print "$a ";
-    }
-    print ">\n\n";
 }
 
 exec @ARGV;

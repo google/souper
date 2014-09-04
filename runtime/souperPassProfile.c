@@ -36,6 +36,8 @@ static void ensure_integer_reply(redisReply *reply, redisContext *ctx)
   freeReplyObject(reply);
 }
 
+static int mock;
+
 static struct rec_t {
   const char *repl;
   int64_t *cntp;
@@ -44,22 +46,27 @@ static struct rec_t {
 
 static void _souper_atexit_handler(void)
 {
-  redisContext *ctx = connect();
+  redisContext *ctx;
+  if (!mock)
+    ctx = connect();
   struct rec_t *rec;
   for (rec = recs; rec; rec = rec->next) {
     int64_t inc = *rec->cntp;
-    if (inc > 0) {
+    if (mock) {
+      printf("INCRBY '%s' %" PRId64 "", rec->repl, inc);
+    } else if (inc > 0) {
       redisReply *reply = (redisReply *)redisCommand(ctx, "INCRBY %s %" PRId64 "", rec->repl, inc);
       ensure_integer_reply(reply, ctx);
     }
   }
 }
 
+static volatile int lock;
 static int init;
 
 void _souper_profile_register(const char *repl, int64_t *cntp)
 {
-  // FIXME this should be made thread safe
+  while (__atomic_exchange_n(&lock, 1, __ATOMIC_ACQUIRE));
 
   if (!init) {
     init = 1;
@@ -67,6 +74,8 @@ void _souper_profile_register(const char *repl, int64_t *cntp)
       fprintf(stderr, "FATAL: Can't install atexit handler\n");
       exit(-1);
     }
+    if (getenv("SOUPER_PROFILE_MOCK"))
+      mock = 1;
   }
 
   struct rec_t *rec = malloc(sizeof(struct rec_t));
@@ -79,4 +88,6 @@ void _souper_profile_register(const char *repl, int64_t *cntp)
   rec->cntp = cntp;
   rec->next = recs;
   recs = rec;
+
+  __atomic_exchange_n(&lock, 0, __ATOMIC_RELEASE);
 }
