@@ -279,7 +279,12 @@ Inst *ExprBuilder::build(Value *V) {
     case Instruction::SExt:
       if (!isa<IntegerType>(Cast->getType()))
         break; // could be a vector operation
-      return IC.getInst(Inst::SExt, DestSize, {Op});
+      if (Op->Width > DestSize)
+        return IC.getInst(Inst::Trunc, DestSize, {Op});
+      else if (Op->Width < DestSize)
+        return IC.getInst(Inst::SExt, DestSize, {Op});
+      else
+        return Op;
 
     case Instruction::Trunc:
       if (!isa<IntegerType>(Cast->getType()))
