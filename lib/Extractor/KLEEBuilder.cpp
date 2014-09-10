@@ -45,20 +45,26 @@ using namespace souper;
 
 namespace {
 
+struct PhiPath {
+  std::map<Block *, unsigned> BlockConstraints;
+  std::vector<Inst *> Phis;
+  std::vector<Inst *> UBInsts;
+};
+
 struct ExprBuilder {
   ExprBuilder(std::vector<std::unique_ptr<Array> > &Arrays,
               std::vector<Inst *> &ArrayVars)
-      : Arrays(Arrays), ArrayVars(ArrayVars),
-        InstCondition(klee::ConstantExpr::create(1, Expr::Bool)) {}
+      : Arrays(Arrays), ArrayVars(ArrayVars) {}
 
+  std::map<Block *, std::vector<ref<Expr> >> BlockPredMap;
   std::map<Inst *, ref<Expr> > ExprMap;
+  std::map<Inst *, ref<Expr> > UBExprMap;
   std::vector<std::unique_ptr<Array>> &Arrays;
   std::vector<Inst *> &ArrayVars;
+  std::vector<Inst *> PhiInsts;
   UniqueNameSet ArrayNames;
-  ref<Expr> InstCondition;
 
   ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin);
-  void addInstCondition(ref<Expr> E);
   ref<Expr> addnswUB(Inst *I);
   ref<Expr> addnuwUB(Inst *I);
   ref<Expr> subnswUB(Inst *I);
@@ -79,6 +85,9 @@ struct ExprBuilder {
   ref<Expr> build(Inst *I);
   ref<Expr> get(Inst *I);
   ref<Expr> getInstMapping(const InstMapping &IM);
+  std::vector<ref<Expr >> getBlockPredicates(Inst *I);
+  ref<Expr> getUBInstCondition();
+  void getUBPhiPaths(Inst *I, PhiPath *Current, std::vector<PhiPath *> &Paths);
 };
 
 }
@@ -98,10 +107,6 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
 
   UpdateList UL(Arrays.back().get(), 0);
   return ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
-}
-
-void ExprBuilder::addInstCondition(ref<Expr> E) {
-  InstCondition = AndExpr::create(InstCondition, E);
 }
 
 ref<Expr> ExprBuilder::addnswUB(Inst *I) {
@@ -261,96 +266,95 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     return klee::ConstantExpr::alloc(I->Val);
   case Inst::Var:
     return makeSizedArrayRead(I->Width, I->Name, I);
-  case Inst::Phi:
-    return buildAssoc([&](ref<Expr> L, ref<Expr> R) {
-                        return SelectExpr::create(
-                            makeSizedArrayRead(1, "blockpred", 0), L, R);
-                      },
-                      Ops);
+  case Inst::Phi: {
+    const auto &PredExpr = getBlockPredicates(I);
+    ref<Expr> E = get(Ops[0]);
+    // e.g. P2 ? (P1 ? Op1_Expr : Op2_Expr) : Op3_Expr
+    for (unsigned J = 1; J < Ops.size(); ++J) {
+      E = SelectExpr::create(PredExpr[J-1], E, get(Ops[J]));
+    }
+    PhiInsts.push_back(I);
+    return E;
+  }
   case Inst::Add:
     return buildAssoc(AddExpr::create, Ops);
   case Inst::AddNSW: {
     ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(addnswUB(I));
+    UBExprMap[I] = addnswUB(I);
     return Add;
   }
   case Inst::AddNUW: {
     ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(addnuwUB(I));
+    UBExprMap[I] = addnuwUB(I);
     return Add;
   }
   case Inst::AddNW: {
     ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(addnswUB(I));
-    addInstCondition(addnuwUB(I));
+    UBExprMap[I] = AndExpr::create(addnswUB(I), addnuwUB(I));
     return Add;
   }
   case Inst::Sub:
     return SubExpr::create(get(Ops[0]), get(Ops[1]));
   case Inst::SubNSW: {
     ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(subnswUB(I));
+    UBExprMap[I] = subnswUB(I);
     return Sub;
   }
   case Inst::SubNUW: {
     ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(subnuwUB(I));
+    UBExprMap[I] = subnuwUB(I);
     return Sub;
   }
   case Inst::SubNW: {
     ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(subnswUB(I));
-    addInstCondition(subnuwUB(I));
+    UBExprMap[I] = AndExpr::create(subnswUB(I), subnuwUB(I));
     return Sub;
   }
   case Inst::Mul:
     return buildAssoc(MulExpr::create, Ops);
   case Inst::MulNSW: {
     ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(mulnswUB(I));
+    UBExprMap[I] = mulnswUB(I);
     return Mul;
   }
   case Inst::MulNUW: {
     ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(mulnuwUB(I));
+    UBExprMap[I] = mulnuwUB(I);
     return Mul;
   }
   case Inst::MulNW: {
     ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(mulnswUB(I));
-    addInstCondition(mulnuwUB(I));
+    UBExprMap[I] = AndExpr::create(mulnswUB(I), mulnuwUB(I));
     return Mul;
   }
   case Inst::UDiv: {
     ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(udivUB(I));
+    UBExprMap[I] = udivUB(I);
     return Udiv;
   }
   case Inst::SDiv: {
     ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(sdivUB(I));
+    UBExprMap[I] = sdivUB(I);
     return Sdiv;
   }
   case Inst::UDivExact: {
     ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(udivUB(I));
-    addInstCondition(udivExactUB(I));
+    UBExprMap[I] = AndExpr::create(udivUB(I), udivExactUB(I));
     return Udiv;
   }
   case Inst::SDivExact: {
     ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(sdivUB(I));
-    addInstCondition(sdivExactUB(I));
+    UBExprMap[I] = AndExpr::create(sdivUB(I), sdivExactUB(I));
     return Sdiv;
   }
   case Inst::URem: {
     ref<Expr> Urem = URemExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(udivUB(I));
+    UBExprMap[I] = udivUB(I);
     return Urem;
   }
   case Inst::SRem: {
     ref<Expr> Srem = SRemExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(sdivUB(I));
+    UBExprMap[I] = sdivUB(I);
     return Srem;
   }
   case Inst::And:
@@ -361,48 +365,42 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     return buildAssoc(XorExpr::create, Ops);
   case Inst::Shl: {
     ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(shiftUB(I));
+    UBExprMap[I] = shiftUB(I);
     return Result;
   }
   case Inst::ShlNSW: {
     ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(shiftUB(I));
-    addInstCondition(shlnswUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), shlnswUB(I));
     return Result;
   }
   case Inst::ShlNUW: {
     ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(shiftUB(I));
-    addInstCondition(shlnuwUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), shlnuwUB(I));
     return Result;
   }
   case Inst::ShlNW: {
     ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(shiftUB(I));
-    addInstCondition(shlnswUB(I));
-    addInstCondition(shlnuwUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), AndExpr::create(shlnswUB(I), shlnuwUB(I)));
     return Result;
   }
   case Inst::LShr: {
     ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(shiftUB(I));
+    UBExprMap[I] = shiftUB(I);
     return Result;
   }
   case Inst::LShrExact: {
     ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(shiftUB(I));
-    addInstCondition(lshrExactUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), lshrExactUB(I));
     return Result;
   }
   case Inst::AShr: {
     ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(shiftUB(I));
+    UBExprMap[I] = shiftUB(I);
     return Result;
   }
   case Inst::AShrExact: {
     ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-    addInstCondition(shiftUB(I));
-    addInstCondition(ashrExactUB(I));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), ashrExactUB(I));
     return Result;
   }
   case Inst::Select:
@@ -441,6 +439,133 @@ ref<Expr> ExprBuilder::getInstMapping(const InstMapping &IM) {
   return EqExpr::create(get(IM.Source), get(IM.Replacement));
 }
 
+std::vector<ref<Expr> > ExprBuilder::getBlockPredicates(Inst *I) {
+  assert(I->K == Inst::Phi && "not a phi inst");
+  if (BlockPredMap.count(I->B))
+    return BlockPredMap[I->B];
+  std::vector<ref<Expr> > PredExpr;
+  const std::vector<Inst *> &Ops = I->orderedOps();
+  for (unsigned J = 0; J < Ops.size(); ++J)
+    PredExpr.push_back(makeSizedArrayRead(1, "blockpred", 0));
+  BlockPredMap[I->B] = PredExpr;
+  return PredExpr;
+}
+
+ref<Expr> ExprBuilder::getUBInstCondition() {
+  std::set<Inst *> UsedPhis;
+  std::set<Inst *> UsedUBInsts;
+  ref<Expr> Result = klee::ConstantExpr::create(1, Expr::Bool);
+  // For each Phi instruction
+  for (const auto &I : PhiInsts) {
+    // Skip already processed Phi nodes
+    if (UsedPhis.count(I))
+      continue;
+    // Recursively collect UB instructions
+    // on the block constrained Phi branches
+    std::vector<PhiPath *> PhiPaths = { new PhiPath };
+    getUBPhiPaths(I, PhiPaths[0], PhiPaths);
+    // For each found path
+    for (const auto &Path : PhiPaths) {
+      if (!Path->UBInsts.size())
+        continue;
+      // Aggregate collected UB constraints
+      ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
+      for (const auto &I : Path->UBInsts) {
+        Ante = AndExpr::create(Ante, UBExprMap[I]);
+        UsedUBInsts.insert(I);
+      }
+      // Create path predicate
+      ref<Expr> Pred = klee::ConstantExpr::alloc(1, 1);
+      for (const auto &Phi : Path->Phis) {
+        unsigned Num = Path->BlockConstraints[Phi->B];
+        const auto &PredExpr = BlockPredMap[Phi->B];
+        // Sanity checks
+        assert(PredExpr.size() && "there must be path predicates for the UBs");
+        assert(PredExpr.size() == Phi->Ops.size() && "phi predicate size mismatch");
+        // Add the predicate(s)
+        if (Num == 0)
+          Pred = AndExpr::create(Pred, PredExpr[0]);
+        else
+          Pred = AndExpr::create(Pred, Expr::createIsZero(PredExpr[Num-1]));
+        for (unsigned B = Num+1; B < PredExpr.size(); ++B)
+          Pred = AndExpr::create(Pred, PredExpr[B]);
+        // Save to processed Phis
+        UsedPhis.insert(Phi);
+      }
+      // Add predicate->UB constraint
+      Result = AndExpr::create(Result, Expr::createImplies(Pred, Ante));
+    }
+    for (const auto &Path : PhiPaths)
+      delete Path;
+  }
+  // Add the unconditional UB constraints at the top level
+  for (const auto &Entry: UBExprMap) {
+    if (!UsedUBInsts.count(Entry.first)) {
+      Result = AndExpr::create(Result, Entry.second);
+    }
+  }
+  return Result;
+}
+
+void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current, std::vector<PhiPath *> &Paths) {
+  switch (I->K) {
+    default:
+      break;
+
+    case Inst::AddNSW:
+    case Inst::AddNUW:
+    case Inst::AddNW:
+    case Inst::SubNSW:
+    case Inst::SubNUW:
+    case Inst::SubNW:
+    case Inst::MulNSW:
+    case Inst::MulNUW:
+    case Inst::MulNW:
+    case Inst::UDiv:
+    case Inst::SDiv:
+    case Inst::UDivExact:
+    case Inst::SDivExact:
+    case Inst::URem:
+    case Inst::SRem:
+    case Inst::Shl:
+    case Inst::ShlNSW:
+    case Inst::ShlNUW:
+    case Inst::ShlNW:
+    case Inst::LShr:
+    case Inst::LShrExact:
+    case Inst::AShr:
+    case Inst::AShrExact:
+      Current->UBInsts.push_back(I);
+      break;
+  }
+
+  const std::vector<Inst *> &Ops = I->orderedOps();
+  if (I->K == Inst::Phi) {
+    Current->Phis.push_back(I);
+    if (Current->BlockConstraints.count(I->B)) {
+      getUBPhiPaths(Ops[Current->BlockConstraints[I->B]], Current, Paths);
+    } else { // Split the context
+      std::vector<PhiPath *> Tmp = { Current };
+      // Create copies of the current path
+      for (unsigned J = 1; J < Ops.size(); ++J) {
+        PhiPath *New = new PhiPath;
+        *New = *Current;
+        New->BlockConstraints[I->B] = J;
+        Paths.push_back(New);
+        Tmp.push_back(New);
+      }
+      // Original path takes the first branch
+      Current->BlockConstraints[I->B] = 0;
+      // Continue recursively
+      for (unsigned J = 0; J < Ops.size(); ++J)
+        getUBPhiPaths(Ops[J], Tmp[J], Paths);
+    }
+  } else {
+    for (unsigned J = 0; J < Ops.size(); ++J)
+      getUBPhiPaths(Ops[J], Current, Paths);
+  }
+}
+
 // Return an expression which must be proven valid for the candidate to apply.
 CandidateExpr souper::GetCandidateExprForReplacement(
     const std::vector<InstMapping> &PCs, InstMapping Mapping) {
@@ -452,7 +577,7 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   for (const auto &PC : PCs) {
     Ante = AndExpr::create(Ante, EB.getInstMapping(PC));
   }
-  Ante = AndExpr::create(Ante, EB.InstCondition);
+  Ante = AndExpr::create(Ante, EB.getUBInstCondition());
 
   CE.E = Expr::createImplies(Ante, Cons);
 
