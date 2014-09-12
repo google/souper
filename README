@@ -77,7 +77,7 @@ Or to run the pass on its own:
                    /path/to/file.bc
 
 Or use the drop-in compiler replacements sclang and sclang++:
-    $ export SCLANG_SOLVER=-stp-path=/path/to/stp-build/stp
+    $ export SOUPER_SOLVER=-stp-path=/path/to/stp-build/stp
     $ /path/to/configure CC=/path/to/sclang CXX=/path/to/sclang++
     $ make
 
@@ -89,7 +89,7 @@ machine where you are running Souper and a Redis server must be listening on the
 default port (6379).
 
 sclang uses external caching by default; this behavior may be disabled by
-setting the SCLANG_NO_EXTERNAL_CACHE environment variable.
+setting the SOUPER_NO_EXTERNAL_CACHE environment variable.
 
 Disclaimer
 ----------

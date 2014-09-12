@@ -18,15 +18,15 @@ if ($0 =~ /clang$/) {
     die "Didn't expect sclang to be invoked as '$0'";
 }
 
-my $solver = $ENV{"SCLANG_SOLVER"};
-die "$0 requires the SCLANG_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp" unless $solver;
+my $solver = $ENV{"SOUPER_SOLVER"};
+die "$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp" unless $solver;
 
 my $souper = 1;
 # this environment variable is a comma-separated list of source files that
 # souper should avoid processing, for example because they trigger known bugs
-if ($ENV{"SCLANG_SKIP_FILES"}) {
+if ($ENV{"SOUPER_SKIP_FILES"}) {
     my %skips;
-    foreach my $f (split(',', $ENV{"SCLANG_SKIP_FILES"})) {
+    foreach my $f (split(',', $ENV{"SOUPER_SKIP_FILES"})) {
         $skips{$f} = 1;
     }
     foreach my $a (@ARGV) {
@@ -43,7 +43,7 @@ if ($souper) {
         "-mllvm", "-internal-cache-souper",
     );
 
-    if (!$ENV{"SCLANG_NO_EXTERNAL_CACHE"}) {
+    if (!$ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
         push @ARGV, ("-mllvm", "-external-cache-souper");
     }
 
