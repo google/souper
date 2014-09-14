@@ -103,9 +103,9 @@ public:
 
     appendToGlobalCtors(*M, Ctor, 0);
 
-    new AtomicRMWInst::AtomicRMWInst(AtomicRMWInst::Add, CntVar,
-                                     ConstantInt::get(C, APInt(64, 1)),
-                                     Monotonic, CrossThread, BI);
+    new AtomicRMWInst(AtomicRMWInst::Add, CntVar,
+                      ConstantInt::get(C, APInt(64, 1)), Monotonic, CrossThread,
+                      BI);
   }
 
   bool runOnFunction(Function &F) {
