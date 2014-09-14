@@ -231,7 +231,9 @@ configure_file(
   ${CMAKE_BINARY_DIR}/test/lit.site.cfg
 )
 
-add_custom_target(check COMMAND ${LLVM_BINDIR}/llvm-lit -sv ${CMAKE_BINARY_DIR}/test DEPENDS souper souperPass extractor_tests inst_tests parser_tests)
+add_custom_target(check
+  COMMAND ${LLVM_BINDIR}/llvm-lit -sv ${CMAKE_BINARY_DIR}/test
+  DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souperPass)
 
 find_program(GO_EXECUTABLE NAMES go DOC "go executable")
 if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
