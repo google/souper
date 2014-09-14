@@ -487,7 +487,7 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
           Pred = AndExpr::create(Pred, PredExpr[0]);
         else
           Pred = AndExpr::create(Pred, Expr::createIsZero(PredExpr[Num-1]));
-        for (unsigned B = Num+1; B < PredExpr.size(); ++B)
+        for (unsigned B = Num; B < PredExpr.size(); ++B)
           Pred = AndExpr::create(Pred, PredExpr[B]);
         // Save to processed Phis
         UsedPhis.insert(Phi);
