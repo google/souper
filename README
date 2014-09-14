@@ -76,9 +76,20 @@ Or to run the pass on its own:
                    -z3-path=/path/to/z3-build/z3 -o /path/to/file.opt.bc \
                    /path/to/file.bc
 
-When you ask Souper to use an external Redis cache, Redis >= 1.2.0 must be
-installed on the machine where you are running Souper and the Redis server must
-be listening on port 6379.
+Or use the drop-in compiler replacements sclang and sclang++:
+    $ export SOUPER_SOLVER=-stp-path=/path/to/stp-build/stp
+    $ /path/to/configure CC=/path/to/sclang CXX=/path/to/sclang++
+    $ make
+
+Compilation using Souper can be sped up by caching queries. The
+-internal-cache-souper flag causes a non-persistent RAM-based cache to be used
+and the -external-cache-souper flag causes Souper to cache its queries in a
+Redis database. For this to work, Redis >= 1.2.0 must be installed on the
+machine where you are running Souper and a Redis server must be listening on the
+default port (6379).
+
+sclang uses external caching by default; this behavior may be disabled by
+setting the SOUPER_NO_EXTERNAL_CACHE environment variable.
 
 Disclaimer
 ----------
