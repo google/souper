@@ -81,15 +81,17 @@ Or use the drop-in compiler replacements sclang and sclang++:
     $ /path/to/configure CC=/path/to/sclang CXX=/path/to/sclang++
     $ make
 
-Compilation using Souper can be sped up by caching queries. The
--internal-cache-souper flag causes a non-persistent RAM-based cache to be used
-and the -external-cache-souper flag causes Souper to cache its queries in a
-Redis database. For this to work, Redis >= 1.2.0 must be installed on the
-machine where you are running Souper and a Redis server must be listening on the
-default port (6379).
+Compilation using Souper can be sped up by caching queries. By default, Souper
+uses a non-persistent RAM-based cache. The -external-cache-souper flag causes
+Souper to cache its queries in a Redis database. For this to work, Redis >=
+1.2.0 must be installed on the machine where you are running Souper and a Redis
+server must be listening on the default port (6379).
 
-sclang uses external caching by default; this behavior may be disabled by
-setting the SOUPER_NO_EXTERNAL_CACHE environment variable.
+sclang uses external caching by default since this often gives a substantial
+speedup for large compilations. This behavior may be disabled by setting the
+SOUPER_NO_EXTERNAL_CACHE environment variable. Souper's Redis cache does not yet
+have any support for versioning; you should stop Redis and delete its dump file
+any time Souper is upgraded.
 
 Disclaimer
 ----------

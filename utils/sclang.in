@@ -54,7 +54,6 @@ if ($souper) {
         "-Xclang", "@SOUPER_PASS@",
         "-mllvm", $solver,
         "-mllvm", "-solver-timeout=15",
-        "-mllvm", "-internal-cache-souper",
     );
 
     if (!$ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
