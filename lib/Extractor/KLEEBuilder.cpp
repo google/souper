@@ -87,7 +87,8 @@ struct ExprBuilder {
   ref<Expr> getInstMapping(const InstMapping &IM);
   std::vector<ref<Expr >> getBlockPredicates(Inst *I);
   ref<Expr> getUBInstCondition();
-  void getUBPhiPaths(Inst *I, PhiPath *Current, std::vector<PhiPath *> &Paths);
+  void getUBPhiPaths(Inst *I, PhiPath *Current,
+                     std::vector<std::unique_ptr<PhiPath>> &Paths);
 };
 
 }
@@ -462,8 +463,10 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
       continue;
     // Recursively collect UB instructions
     // on the block constrained Phi branches
-    std::vector<PhiPath *> PhiPaths = { new PhiPath };
-    getUBPhiPaths(I, PhiPaths[0], PhiPaths);
+    std::vector<std::unique_ptr<PhiPath>> PhiPaths;
+    PhiPath *Current = new PhiPath;
+    PhiPaths.push_back(std::move(std::unique_ptr<PhiPath>(Current)));
+    getUBPhiPaths(I, Current, PhiPaths);
     // For each found path
     for (const auto &Path : PhiPaths) {
       if (!Path->UBInsts.size())
@@ -495,8 +498,6 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
       // Add predicate->UB constraint
       Result = AndExpr::create(Result, Expr::createImplies(Pred, Ante));
     }
-    for (const auto &Path : PhiPaths)
-      delete Path;
   }
   // Add the unconditional UB constraints at the top level
   for (const auto &Entry: UBExprMap) {
@@ -507,7 +508,8 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
   return Result;
 }
 
-void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current, std::vector<PhiPath *> &Paths) {
+void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current,
+                                std::vector<std::unique_ptr<PhiPath>> &Paths) {
   switch (I->K) {
     default:
       break;
@@ -551,7 +553,7 @@ void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current, std::vector<PhiPath *
         PhiPath *New = new PhiPath;
         *New = *Current;
         New->BlockConstraints[I->B] = J;
-        Paths.push_back(New);
+        Paths.push_back(std::move(std::unique_ptr<PhiPath>(New)));
         Tmp.push_back(New);
       }
       // Original path takes the first branch
