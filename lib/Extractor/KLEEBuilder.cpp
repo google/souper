@@ -446,7 +446,7 @@ std::vector<ref<Expr> > ExprBuilder::getBlockPredicates(Inst *I) {
     return BlockPredMap[I->B];
   std::vector<ref<Expr> > PredExpr;
   const std::vector<Inst *> &Ops = I->orderedOps();
-  for (unsigned J = 0; J < Ops.size(); ++J)
+  for (unsigned J = 0; J < Ops.size()-1; ++J)
     PredExpr.push_back(makeSizedArrayRead(1, "blockpred", 0));
   BlockPredMap[I->B] = PredExpr;
   return PredExpr;
