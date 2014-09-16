@@ -135,17 +135,24 @@ public:
 /// A mapping from an Inst to a replacement. This may either represent a
 /// path condition or a candidate replacement.
 struct InstMapping {
-  InstMapping() : Source(0), Replacement(0) {}
-  InstMapping(Inst *Source, Inst *Replacement)
-      : Source(Source), Replacement(Replacement) {}
+  InstMapping() : LHS(0), RHS(0) {}
+  InstMapping(Inst *LHS, Inst *RHS)
+      : LHS(LHS), RHS(RHS) {}
 
-  Inst *Source, *Replacement;
+  Inst *LHS, *RHS;
 };
 
 void PrintReplacement(llvm::raw_ostream &Out,
                       const std::vector<InstMapping> &PCs, InstMapping Mapping);
 std::string GetReplacementString(const std::vector<InstMapping> &PCs,
                                  InstMapping Mapping);
+void PrintReplacementLHS(llvm::raw_ostream &Out,
+                         const std::vector<InstMapping> &PCs,
+                         Inst *LHS);
+std::string GetReplacementLHSString(const std::vector<InstMapping> &PCs,
+                                    Inst *LHS);
+void PrintReplacementRHS(llvm::raw_ostream &Out, llvm::APInt Const);
+std::string GetReplacementRHSString(llvm::APInt Const);
 
 }
 

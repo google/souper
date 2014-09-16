@@ -435,15 +435,18 @@ bool Inst::isCommutative(Inst::Kind K) {
 void souper::PrintReplacement(llvm::raw_ostream &Out,
                               const std::vector<InstMapping> &PCs,
                               InstMapping Mapping) {
+  assert(Mapping.LHS);
+  assert(Mapping.RHS);
+
   PrintContext Printer(Out);
   for (const auto &PC : PCs) {
-    std::string SRef = Printer.printInst(PC.Source);
-    std::string RRef = Printer.printInst(PC.Replacement);
+    std::string SRef = Printer.printInst(PC.LHS);
+    std::string RRef = Printer.printInst(PC.RHS);
     Out << "pc " << SRef << " " << RRef << '\n';
   }
 
-  std::string SRef = Printer.printInst(Mapping.Source);
-  std::string RRef = Printer.printInst(Mapping.Replacement);
+  std::string SRef = Printer.printInst(Mapping.LHS);
+  std::string RRef = Printer.printInst(Mapping.RHS);
   Out << "cand " << SRef << " " << RRef << '\n';
 }
 
@@ -452,5 +455,40 @@ std::string souper::GetReplacementString(const std::vector<InstMapping> &PCs,
   std::string Str;
   llvm::raw_string_ostream SS(Str);
   PrintReplacement(SS, PCs, Mapping);
+  return SS.str();
+}
+
+void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
+                                 const std::vector<InstMapping> &PCs,
+                                 Inst *LHS) {
+  assert(LHS);
+
+  PrintContext Printer(Out);
+  for (const auto &PC : PCs) {
+    std::string SRef = Printer.printInst(PC.LHS);
+    std::string RRef = Printer.printInst(PC.RHS);
+    Out << "pc " << SRef << " " << RRef << '\n';
+  }
+
+  std::string SRef = Printer.printInst(LHS);
+  Out << "infer " << SRef << '\n';
+}
+
+std::string souper::GetReplacementLHSString(const std::vector<InstMapping> &PCs,
+                                            Inst *LHS) {
+  std::string Str;
+  llvm::raw_string_ostream SS(Str);
+  PrintReplacementLHS(SS, PCs, LHS);
+  return SS.str();
+}
+
+void souper::PrintReplacementRHS(llvm::raw_ostream &Out, llvm::APInt Const) {
+  Out << "result " << Const << ":i" << Const.getBitWidth() << '\n';
+}
+
+std::string souper::GetReplacementRHSString(llvm::APInt Const) {
+  std::string Str;
+  llvm::raw_string_ostream SS(Str);
+  PrintReplacementRHS(SS, Const);
   return SS.str();
 }

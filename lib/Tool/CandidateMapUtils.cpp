@@ -82,14 +82,14 @@ bool CheckCandidateMap(llvm::Module &Mod, const CandidateMap &M, Solver *S) {
       return false;
     }
     if (Valid) {
-      if (Cand.second.Mapping.Replacement->K != Inst::Const) {
+      if (Cand.second.Mapping.RHS->K != Inst::Const) {
         llvm::errs() << "found replacement:\n";
         Cand.second.print(llvm::errs());
         llvm::errs() << "but cannot yet analyze non-constant replacements\n";
         OK = false;
         continue;
       }
-      llvm::APInt ActualVal = Cand.second.Mapping.Replacement->Val;
+      llvm::APInt ActualVal = Cand.second.Mapping.RHS->Val;
 
       for (const InstOrigin &Origin : Cand.second.Origins) {
         llvm::Instruction *Inst = Origin.getInstruction();
