@@ -3,7 +3,7 @@
 ; RUN: llvm-as -o %t %s
 ; RUN: %souper %solver -check %t
 
-define i1 @foo(i32 %a) #0 {
+define i1 @foo(i32 %a) {
 entry:
   %0 = sub nsw i32 2147483647, %a
   %1 = icmp slt i32 %0, 1
@@ -18,5 +18,3 @@ phi:
   %res = icmp eq i32 0, %5
   ret i1 %res
 }
-
-!0 = metadata !{ i1 0 }
