@@ -88,7 +88,7 @@ public:
     if (Model)
       return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
 
-    std::string Repl = GetReplacementString(PCs, Mapping);
+    std::string Repl = GetReplacementString(PCs, Mapping, false);
     const auto &ent = Cache.find(Repl);
     if (ent == Cache.end()) {
       ++MemMisses;
@@ -138,7 +138,7 @@ public:
     if (Model)
       return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
 
-    std::string Repl = GetReplacementString(PCs, Mapping);
+    std::string Repl = GetReplacementString(PCs, Mapping, false);
     redisReply *reply = (redisReply *)redisCommand(ctx, "GET %s", Repl.c_str());
     if (!reply) {
       llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);

@@ -230,21 +230,24 @@ namespace {
 
 struct Parser {
   Parser(StringRef FileName, StringRef Str, InstContext &IC,
-         std::vector<ParsedReplacement> &Reps)
+         std::vector<ParsedReplacement> &Reps, bool Partial)
       : FileName(FileName),
         L(Str.data(), Str.data() + Str.size()),
         IC(IC),
-        Reps(Reps) {}
+        Reps(Reps),
+        Partial(Partial) {}
 
   std::string FileName;
   Lexer L;
   Token CurTok;
   InstContext &IC;
   std::vector<ParsedReplacement> &Reps;
+  bool Partial;
 
   std::vector<InstMapping> PCs;
   std::map<StringRef, Inst *> InstMap;
   std::map<StringRef, Block *> BlockMap;
+  Inst *LHS = 0;
 
   std::string makeErrStr(const std::string &ErrStr) {
     return makeErrStr(L.getTokenPos(CurTok), ErrStr);
@@ -533,6 +536,10 @@ bool Parser::parseLine(std::string &ErrStr) {
   switch (CurTok.K) {
     case Token::Ident:
       if (CurTok.str() == "cand") {
+        if (Partial) {
+          ErrStr = makeErrStr(std::string("Not expecting 'cand' in a partial replacement"));
+          return false;
+        }
         if (!consumeToken(ErrStr)) return false;
         InstMapping Cand = parseInstMapping(ErrStr);
         if (!ErrStr.empty()) return false;
@@ -541,6 +548,48 @@ bool Parser::parseLine(std::string &ErrStr) {
         PCs.clear();
         InstMap.clear();
         BlockMap.clear();
+        LHS = 0;
+
+        return true;
+      } else if (CurTok.str() == "infer") {
+        if (!consumeToken(ErrStr)) return false;
+        if (LHS) {
+          ErrStr = makeErrStr(std::string("Not expecting a second 'infer'"));
+          return false;
+        }
+        LHS = parseInst(ErrStr);
+        if (!LHS)
+          return false;
+
+        if (Partial) {
+          Reps.push_back(ParsedReplacement{InstMapping(LHS, 0), std::move(PCs)});
+          PCs.clear();
+          InstMap.clear();
+          BlockMap.clear();
+          LHS = 0;
+        }
+
+        return true;
+      } else if (CurTok.str() == "result") {
+        if (Partial) {
+          ErrStr = makeErrStr(std::string("Not expecting 'result' in a partial replacement"));
+          return false;
+        }
+        if (!LHS) {
+          ErrStr = makeErrStr(std::string("Not expecting 'result' before 'infer'"));
+          return false;
+        }
+        if (!consumeToken(ErrStr)) return false;
+        Inst *RHS = parseInst(ErrStr);
+        if (!RHS)
+          return false;
+        InstMapping Cand = InstMapping(LHS, RHS);
+
+        Reps.push_back(ParsedReplacement{Cand, std::move(PCs)});
+        PCs.clear();
+        InstMap.clear();
+        BlockMap.clear();
+        LHS = 0;
 
         return true;
       } else if (CurTok.str() == "pc") {
@@ -721,7 +770,7 @@ bool Parser::parseLine(std::string &ErrStr) {
     }
 
     default:
-      ErrStr = makeErrStr("expected inst, block, cand or pc");
+      ErrStr = makeErrStr("expected inst, block, cand, infer, result, or pc");
       return false;
   }
 }
@@ -729,10 +778,10 @@ bool Parser::parseLine(std::string &ErrStr) {
 ParsedReplacement souper::ParseReplacement(InstContext &IC,
                                            llvm::StringRef Filename,
                                            llvm::StringRef Str,
-                                           std::string &ErrStr) {
+                                           std::string &ErrStr, bool Partial) {
   std::vector<ParsedReplacement> Reps;
 
-  Parser P(Filename, Str, IC, Reps);
+  Parser P(Filename, Str, IC, Reps, Partial);
   if (!P.consumeToken(ErrStr))
     return ParsedReplacement();
 
@@ -749,16 +798,20 @@ ParsedReplacement souper::ParseReplacement(InstContext &IC,
     }
   }
 
-  ErrStr = P.makeErrStr("incomplete replacement, need a 'cand' statement");
+  if (Partial)
+    ErrStr = P.makeErrStr("incomplete replacement, need an 'infer' statement");
+  else
+    ErrStr = P.makeErrStr(
+        "incomplete replacement, need a 'cand' statement or 'infer'/'result' pair");
   return ParsedReplacement();
 }
 
 std::vector<ParsedReplacement> souper::ParseReplacements(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
-    std::string &ErrStr) {
+    std::string &ErrStr, bool Partial) {
   std::vector<ParsedReplacement> Reps;
 
-  Parser P(Filename, Str, IC, Reps);
+  Parser P(Filename, Str, IC, Reps, Partial);
   if (!P.consumeToken(ErrStr))
     return Reps;
 

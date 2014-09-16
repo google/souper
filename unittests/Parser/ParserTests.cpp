@@ -31,7 +31,6 @@ TEST(ParserTest, Errors) {
       { "0:ix", "<input>:1:4: expected integer" },
       { "0:i0", "<input>:1:4: width must be at least 1" },
       { "?", "<input>:1:1: unexpected '?'" },
-      { "cand 0:i1 0:i1 ; this is a comment\n", "" },
 
       // parsing
       { "%0:i32 = var\n%1:i1 = eq %0:i32, %0:i32\n",
@@ -51,11 +50,7 @@ TEST(ParserTest, Errors) {
       { "%0:i1 = block\n", "<input>:1:1: blocks may not have a width" },
       { "%0:i1 = phi %0\n", "<input>:1:13: %0 is not a block" },
       { "%0 = block\n%1:i1 = phi %0 foo\n", "<input>:2:16: expected ','" },
-      { ",\n", "<input>:1:1: expected inst, block, cand or pc" },
-      { "cand 0:i1 0:i1\ncand 0:i1 0:i1\n",
-        "<input>:2:1: expected a single replacement" },
-      { "%0:i1 = var\n",
-        "<input>:2:1: incomplete replacement, need a 'cand' statement" },
+      { ",\n", "<input>:1:1: expected inst, block, cand, infer, result, or pc" },
 
       // type checking
       { "%0 = add 1:i32\n",
@@ -119,8 +114,85 @@ TEST(ParserTest, Errors) {
   InstContext IC;
   for (const auto &T : Tests) {
     std::string ErrStr;
-    ParseReplacement(IC, "<input>", T.Test, ErrStr);
+    ParseReplacement(IC, "<input>", T.Test, ErrStr, false);
     EXPECT_EQ(T.WantError, ErrStr);
+  }
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    ParseReplacement(IC, "<input>", T.Test, ErrStr, true);
+    EXPECT_EQ(T.WantError, ErrStr);
+  }
+}
+
+TEST(ParserTest, FullReplacementErrors) {
+  struct {
+    std::string Test, WantError;
+  } Tests[] = {
+      // lexing
+      { "cand 0:i1 0:i1 ; this is a comment\n", "" },
+      { "infer 0:i1\nresult 0:i1 ; this is a comment\n", "" },
+
+      // parsing
+      { "infer 0:i1\ninfer 0:i1", "<input>:2:7: Not expecting a second 'infer'" },
+      { "cand 0:i1 ; this is a comment\n", "<input>:2:1: unexpected token" },
+      { "%0:i1 = var\n",
+        "<input>:2:1: incomplete replacement, need a 'cand' statement or 'infer'/'result' pair" },
+      { "cand 0:i1 0:i1\ncand 0:i1 0:i1\n",
+        "<input>:2:1: expected a single replacement" },
+
+      // type checking
+    };
+
+  InstContext IC;
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    ParseReplacement(IC, "<input>", T.Test, ErrStr, false);
+    EXPECT_EQ(T.WantError, ErrStr);
+  }
+}
+
+TEST(ParserTest, PartialReplacementErrors) {
+  struct {
+    std::string Test, WantError;
+  } Tests[] = {
+      // lexing
+      { "infer 0:i1 ; this is a comment\n", "" },
+
+      // parsing
+      { "%0:i1 = var\n",
+        "<input>:2:1: incomplete replacement, need an 'infer' statement" },
+      { "infer 0:i1 0:i1 ; this is a comment\n", "<input>:1:12: expected a single replacement" },
+      { "cand 0:i1 0:i1", "<input>:1:1: Not expecting 'cand' in a partial replacement" },
+      { "infer 0:i1\ninfer 0:i1", "<input>:2:1: expected a single replacement" },
+
+      // type checking
+    };
+
+  InstContext IC;
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    ParseReplacement(IC, "<input>", T.Test, ErrStr, true);
+    EXPECT_EQ(T.WantError, ErrStr);
+  }
+}
+
+TEST(ParserTest, MultipleReplacements) {
+  struct {
+    std::string Test;
+    int N;
+    bool Partial;
+  } Tests[] = {
+      { "infer 0:i1\nresult 0:i1\ninfer 0:i1\nresult 0:i1\ninfer 0:i1\nresult 0:i1", 3, false },
+      { "cand 0:i1 0:i1\ncand 0:i1 0:i1\ncand 0:i1 0:i1\ncand 0:i1 0:i1", 4, false },
+      { "infer 0:i1\ninfer 0:i1\ninfer 0:i1\ninfer 0:i1\ninfer 0:i1\n", 5, true },
+    };
+
+  InstContext IC;
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    auto R = ParseReplacements(IC, "<input>", T.Test, ErrStr, T.Partial);
+    EXPECT_EQ("", ErrStr);
+    EXPECT_EQ(T.N, R.size());
   }
 }
 
@@ -167,23 +239,38 @@ cand %0 3:i32
   InstContext IC;
   for (const auto &T : Tests) {
     std::string ErrStr;
-    auto R = ParseReplacement(IC, "<input>", T, ErrStr);
+    auto R = ParseReplacement(IC, "<input>", T, ErrStr, false);
     ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(R.getString(false), T);
 
-    std::string NewStr;
-    llvm::raw_string_ostream OS(NewStr);
-    R.print(OS);
-    EXPECT_EQ(OS.str(), T);
+    auto TPartial = R.getString(true);
+    auto R2 = ParseReplacement(IC, "<input>", TPartial, ErrStr, true);
+    ASSERT_EQ("", ErrStr);
+    auto TPartial2 = R2.getString(true);
+    EXPECT_EQ(TPartial, TPartial2);
+
+    auto TSplit = TPartial + R.getResultString();
+    auto R3 = ParseReplacement(IC, "<input>", TSplit, ErrStr, false);
+    ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(R3.getString(false), T);
   }
 
   for (const auto &T : NonEqualTests) {
     std::string ErrStr;
-    auto R = ParseReplacement(IC, "<input>", T.Test, ErrStr);
+    auto R = ParseReplacement(IC, "<input>", T.Test, ErrStr, false);
     ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(R.getString(false), T.Want);
 
-    std::string NewStr;
-    llvm::raw_string_ostream OS(NewStr);
-    R.print(OS);
-    EXPECT_EQ(OS.str(), T.Want);
+    auto TPartial = R.getString(true);
+    auto R2 = ParseReplacement(IC, "<input>", TPartial, ErrStr, true);
+    ASSERT_EQ("", ErrStr);
+    auto TPartial2 = R2.getString(true);
+    EXPECT_EQ(TPartial, TPartial2);
+
+    auto TSplit = TPartial + R.getResultString();
+    auto R3 = ParseReplacement(IC, "<input>", TSplit, ErrStr, false);
+    ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(R3.getString(false), T.Want);
   }
+
 }

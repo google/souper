@@ -434,7 +434,7 @@ bool Inst::isCommutative(Inst::Kind K) {
 
 void souper::PrintReplacement(llvm::raw_ostream &Out,
                               const std::vector<InstMapping> &PCs,
-                              InstMapping Mapping) {
+                              InstMapping Mapping, bool Partial) {
   PrintContext Printer(Out);
   for (const auto &PC : PCs) {
     std::string SRef = Printer.printInst(PC.Source);
@@ -443,14 +443,35 @@ void souper::PrintReplacement(llvm::raw_ostream &Out,
   }
 
   std::string SRef = Printer.printInst(Mapping.Source);
-  std::string RRef = Printer.printInst(Mapping.Replacement);
-  Out << "cand " << SRef << " " << RRef << '\n';
+  if (Partial) {
+    Out << "infer " << SRef << '\n';
+  } else {
+    assert(Mapping.Replacement);
+    std::string RRef = Printer.printInst(Mapping.Replacement);
+    Out << "cand " << SRef << " " << RRef << '\n';
+  }
 }
 
 std::string souper::GetReplacementString(const std::vector<InstMapping> &PCs,
-                                         InstMapping Mapping) {
+                                         InstMapping Mapping, bool Partial) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
-  PrintReplacement(SS, PCs, Mapping);
+  PrintReplacement(SS, PCs, Mapping, Partial);
+  return SS.str();
+}
+
+void souper::PrintReplacementResult(llvm::raw_ostream &Out,
+				    const std::vector<InstMapping> &PCs,
+				    InstMapping Mapping) {
+  PrintContext Printer(Out);
+  assert(Mapping.Replacement);
+  Out << "result " << Printer.printInst(Mapping.Replacement) << '\n';
+}
+
+std::string souper::GetReplacementResultString(
+    const std::vector<InstMapping> &PCs, InstMapping Mapping) {
+  std::string Str;
+  llvm::raw_string_ostream SS(Str);
+  PrintReplacementResult(SS, PCs, Mapping);
   return SS.str();
 }
