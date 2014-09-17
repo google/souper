@@ -484,7 +484,7 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
         const auto &PredExpr = BlockPredMap[Phi->B];
         // Sanity checks
         assert(PredExpr.size() && "there must be path predicates for the UBs");
-        assert(PredExpr.size() == Phi->Ops.size() && "phi predicate size mismatch");
+        assert(PredExpr.size() == Phi->Ops.size()-1 && "phi predicate size mismatch");
         // Add the predicate(s)
         if (Num == 0)
           Pred = AndExpr::create(Pred, PredExpr[0]);
