@@ -11,11 +11,11 @@ define i1 @foo(i32 %a, i32 %b, i32 %c) {
   ]
 
 ; <label>:1                                       ; preds = %0
-  %2 = shl i32 %b, %c
+  %2 = shl i32 0, %c
   br label %11
 
 ; <label>:3                                       ; preds = %0
-  %4 = shl i32 %c, %b
+  %4 = shl i32 0, %b
   br label %11
 
 ; <label>:5                                       ; preds = %0
