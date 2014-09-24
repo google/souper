@@ -188,6 +188,10 @@ add_executable(parser-test
   tools/parser-test.cpp
 )
 
+add_executable(souper-check
+  tools/souper-check.cpp
+)
+
 add_executable(extractor_tests
   unittests/Extractor/ExtractorTests.cpp
 )
@@ -200,7 +204,7 @@ add_executable(parser_tests
   unittests/Parser/ParserTests.cpp
 )
 
-set_target_properties(souper internal-solver-test lexer-test parser-test souperExtractor souperInst souperParser souperSMTLIB2 souperTool souperPass kleeExpr
+set_target_properties(souper internal-solver-test lexer-test parser-test souper-check souperExtractor souperInst souperParser souperSMTLIB2 souperTool souperPass kleeExpr
   PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
 set_target_properties(souperClangTool clang-souper
   PROPERTIES COMPILE_FLAGS "${CLANG_CXXFLAGS} ${LLVM_CXXFLAGS}")
@@ -219,6 +223,7 @@ target_link_libraries(souper souperExtractor souperSMTLIB2 souperTool kleeExpr $
 target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
+target_link_libraries(souper-check souperTool souperExtractor souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
 target_link_libraries(clang-souper souperClangTool souperExtractor souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY})
 target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
