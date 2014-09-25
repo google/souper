@@ -73,9 +73,11 @@ int main(int argc, char **argv) {
   }
 
   auto MB = MemoryBuffer::getFileOrSTDIN(InputFilename);
-  if (MB)
+  if (MB) {
     SolveInst((*MB)->getMemBufferRef(), S.get());
-  else
+    return 0;
+  } else {
     llvm::errs() << MB.getError().message() << '\n';
-  return 0;
+    return 1;
+  }
 }
