@@ -19,6 +19,9 @@
 using namespace llvm;
 using namespace souper;
 
+static cl::opt<std::string>
+InputFilename(cl::Positional, cl::desc("<input souper optimization>"), cl::init("-"));
+
 static llvm::cl::opt<bool> PrintCounterExample("print-counterexample",
     llvm::cl::desc("Print counterexample (default=true)"),
     llvm::cl::init(true));
@@ -28,7 +31,7 @@ void SolveInst(const MemoryBufferRef &MB, Solver *S) {
   std::string ErrStr;
 
   ParsedReplacement Rep =
-      ParseReplacement(IC, "<input>", MB.getBuffer(), ErrStr);
+      ParseReplacement(IC, MB.getBufferIdentifier(), MB.getBuffer(), ErrStr);
   if (!ErrStr.empty()) {
     llvm::errs() << ErrStr << '\n';
     return;
@@ -69,9 +72,10 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  auto MB = MemoryBuffer::getSTDIN();
+  auto MB = MemoryBuffer::getFileOrSTDIN(InputFilename);
   if (MB)
     SolveInst((*MB)->getMemBufferRef(), S.get());
   else
     llvm::errs() << MB.getError().message() << '\n';
+  return 0;
 }
