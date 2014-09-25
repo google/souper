@@ -26,7 +26,7 @@ static llvm::cl::opt<bool> PrintCounterExample("print-counterexample",
     llvm::cl::desc("Print counterexample (default=true)"),
     llvm::cl::init(true));
 
-void SolveInst(const MemoryBufferRef &MB, Solver *S) {
+int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
   std::string ErrStr;
 
@@ -34,14 +34,14 @@ void SolveInst(const MemoryBufferRef &MB, Solver *S) {
       ParseReplacement(IC, MB.getBufferIdentifier(), MB.getBuffer(), ErrStr);
   if (!ErrStr.empty()) {
     llvm::errs() << ErrStr << '\n';
-    return;
+    return 1;
   }
 
   bool Valid;
   std::vector<std::pair<Inst *, APInt>> Models;
   if (std::error_code EC = S->isValid(Rep.PCs, Rep.Mapping, Valid, &Models)) {
     llvm::errs() << EC.message() << '\n';
-    return;
+    return 1;
   }
 
   if (Valid) {
@@ -62,6 +62,7 @@ void SolveInst(const MemoryBufferRef &MB, Solver *S) {
       llvm::outs() << "\n";
     }
   }
+  return 0;
 }
 
 int main(int argc, char **argv) {
@@ -73,11 +74,9 @@ int main(int argc, char **argv) {
   }
 
   auto MB = MemoryBuffer::getFileOrSTDIN(InputFilename);
-  if (MB) {
-    SolveInst((*MB)->getMemBufferRef(), S.get());
-    return 0;
-  } else {
+  if (!MB) {
     llvm::errs() << MB.getError().message() << '\n';
     return 1;
   }
+  return SolveInst((*MB)->getMemBufferRef(), S.get());
 }
