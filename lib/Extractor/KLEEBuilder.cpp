@@ -45,9 +45,10 @@ using namespace souper;
 
 namespace {
 
-struct PhiPath {
+struct UBPath {
   std::map<Block *, unsigned> BlockConstraints;
-  std::vector<Inst *> Phis;
+  std::map<Inst *, bool> SelectBranches;
+  std::vector<Inst *> Insts;
   std::vector<Inst *> UBInsts;
 };
 
@@ -61,7 +62,7 @@ struct ExprBuilder {
   std::map<Inst *, ref<Expr> > UBExprMap;
   std::vector<std::unique_ptr<Array>> &Arrays;
   std::vector<Inst *> &ArrayVars;
-  std::vector<Inst *> PhiInsts;
+  std::vector<Inst *> UBPathInsts;
   UniqueNameSet ArrayNames;
 
   ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin);
@@ -87,8 +88,8 @@ struct ExprBuilder {
   ref<Expr> getInstMapping(const InstMapping &IM);
   std::vector<ref<Expr >> getBlockPredicates(Inst *I);
   ref<Expr> getUBInstCondition();
-  void getUBPhiPaths(Inst *I, PhiPath *Current,
-                     std::vector<std::unique_ptr<PhiPath>> &Paths);
+  void getUBPaths(Inst *I, UBPath *Current,
+                  std::vector<std::unique_ptr<UBPath>> &UBPaths);
 };
 
 }
@@ -274,7 +275,7 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     for (unsigned J = 1; J < Ops.size(); ++J) {
       E = SelectExpr::create(PredExpr[J-1], E, get(Ops[J]));
     }
-    PhiInsts.push_back(I);
+    UBPathInsts.push_back(I);
     return E;
   }
   case Inst::Add:
@@ -405,6 +406,7 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     return Result;
   }
   case Inst::Select:
+    UBPathInsts.push_back(I);
     return SelectExpr::create(get(Ops[0]), get(Ops[1]), get(Ops[2]));
   case Inst::ZExt:
     return ZExtExpr::create(get(Ops[0]), I->Width);
@@ -453,22 +455,22 @@ std::vector<ref<Expr> > ExprBuilder::getBlockPredicates(Inst *I) {
 }
 
 ref<Expr> ExprBuilder::getUBInstCondition() {
-  std::set<Inst *> UsedPhis;
+  std::set<Inst *> UsedUBPathInsts;
   std::set<Inst *> UsedUBInsts;
   ref<Expr> Result = klee::ConstantExpr::create(1, Expr::Bool);
-  // For each Phi instruction
-  for (const auto &I : PhiInsts) {
-    // Skip already processed Phi nodes
-    if (UsedPhis.count(I))
+  // For each Phi/Select instruction
+  for (const auto &I : UBPathInsts) {
+    // Skip already processed Phi/Select insts
+    if (UsedUBPathInsts.count(I))
       continue;
     // Recursively collect UB instructions
-    // on the block constrained Phi branches
-    std::vector<std::unique_ptr<PhiPath>> PhiPaths;
-    PhiPath *Current = new PhiPath;
-    PhiPaths.push_back(std::move(std::unique_ptr<PhiPath>(Current)));
-    getUBPhiPaths(I, Current, PhiPaths);
+    // on the block constrained Phi and Select branches
+    std::vector<std::unique_ptr<UBPath>> UBPaths;
+    UBPath *Current = new UBPath;
+    UBPaths.push_back(std::move(std::unique_ptr<UBPath>(Current)));
+    getUBPaths(I, Current, UBPaths);
     // For each found path
-    for (const auto &Path : PhiPaths) {
+    for (const auto &Path : UBPaths) {
       if (!Path->UBInsts.size())
         continue;
       // Aggregate collected UB constraints
@@ -479,21 +481,31 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
       }
       // Create path predicate
       ref<Expr> Pred = klee::ConstantExpr::alloc(1, 1);
-      for (const auto &Phi : Path->Phis) {
-        unsigned Num = Path->BlockConstraints[Phi->B];
-        const auto &PredExpr = BlockPredMap[Phi->B];
-        // Sanity checks
-        assert(PredExpr.size() && "there must be path predicates for the UBs");
-        assert(PredExpr.size() == Phi->Ops.size()-1 && "phi predicate size mismatch");
-        // Add the predicate(s)
-        if (Num == 0)
-          Pred = AndExpr::create(Pred, PredExpr[0]);
-        else
-          Pred = AndExpr::create(Pred, Expr::createIsZero(PredExpr[Num-1]));
-        for (unsigned B = Num; B < PredExpr.size(); ++B)
-          Pred = AndExpr::create(Pred, PredExpr[B]);
+      for (const auto &PathInst : Path->Insts) {
+        if (PathInst->K == Inst::Phi) {
+          unsigned Num = Path->BlockConstraints[PathInst->B];
+          const auto &PredExpr = BlockPredMap[PathInst->B];
+          // Sanity checks
+          assert(PredExpr.size() && "there must be path predicates for the UBs");
+          assert(PredExpr.size() == PathInst->Ops.size()-1 && "phi predicate size mismatch");
+          // Add the predicate(s)
+          if (Num == 0)
+            Pred = AndExpr::create(Pred, PredExpr[0]);
+          else
+            Pred = AndExpr::create(Pred, Expr::createIsZero(PredExpr[Num-1]));
+          for (unsigned B = Num; B < PredExpr.size(); ++B)
+            Pred = AndExpr::create(Pred, PredExpr[B]);
+        } else if (PathInst->K == Inst::Select) {
+          ref<Expr> SelectPred = get(PathInst->orderedOps()[0]);
+          if (Path->SelectBranches[PathInst])
+            Pred = AndExpr::create(Pred, SelectPred);
+          else
+            Pred = AndExpr::create(Pred, Expr::createIsZero(SelectPred));
+        } else {
+          assert(0 && "cannot reach here");
+        }
         // Save to processed Phis
-        UsedPhis.insert(Phi);
+        UsedUBPathInsts.insert(PathInst);
       }
       // Add predicate->UB constraint
       Result = AndExpr::create(Result, Expr::createImplies(Pred, Ante));
@@ -506,8 +518,8 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
   return Result;
 }
 
-void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current,
-                                std::vector<std::unique_ptr<PhiPath>> &Paths) {
+void ExprBuilder::getUBPaths(Inst *I, UBPath *Current,
+                             std::vector<std::unique_ptr<UBPath>> &UBPaths) {
   switch (I->K) {
     default:
       break;
@@ -541,28 +553,47 @@ void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current,
 
   const std::vector<Inst *> &Ops = I->orderedOps();
   if (I->K == Inst::Phi) {
-    Current->Phis.push_back(I);
+    Current->Insts.push_back(I);
     if (Current->BlockConstraints.count(I->B)) {
-      getUBPhiPaths(Ops[Current->BlockConstraints[I->B]], Current, Paths);
+      getUBPaths(Ops[Current->BlockConstraints[I->B]], Current, UBPaths);
     } else { // Split the context
-      std::vector<PhiPath *> Tmp = { Current };
+      std::vector<UBPath *> Tmp = { Current };
       // Create copies of the current path
       for (unsigned J = 1; J < Ops.size(); ++J) {
-        PhiPath *New = new PhiPath;
+        UBPath *New = new UBPath;
         *New = *Current;
         New->BlockConstraints[I->B] = J;
-        Paths.push_back(std::move(std::unique_ptr<PhiPath>(New)));
+        UBPaths.push_back(std::move(std::unique_ptr<UBPath>(New)));
         Tmp.push_back(New);
       }
       // Original path takes the first branch
       Current->BlockConstraints[I->B] = 0;
       // Continue recursively
       for (unsigned J = 0; J < Ops.size(); ++J)
-        getUBPhiPaths(Ops[J], Tmp[J], Paths);
+        getUBPaths(Ops[J], Tmp[J], UBPaths);
     }
+  } else if (I->K == Inst::Select) {
+    Current->Insts.push_back(I);
+    // Current is the predicate operand branch
+    std::vector<UBPath *> Tmp = { Current };
+    // True branch
+    UBPath *True = new UBPath;
+    *True = *Current;
+    True->SelectBranches[I] = true;
+    UBPaths.push_back(std::move(std::unique_ptr<UBPath>(True)));
+    Tmp.push_back(True);
+    // False branch
+    UBPath *False = new UBPath;
+    *False = *Current;
+    False->SelectBranches[I] = false;
+    UBPaths.push_back(std::move(std::unique_ptr<UBPath>(False)));
+    Tmp.push_back(False);
+    // Continue recursively
+    for (unsigned J = 0; J < Ops.size(); ++J)
+      getUBPaths(Ops[J], Tmp[J], UBPaths);
   } else {
     for (unsigned J = 0; J < Ops.size(); ++J)
-      getUBPhiPaths(Ops[J], Current, Paths);
+      getUBPaths(Ops[J], Current, UBPaths);
   }
 }
 
