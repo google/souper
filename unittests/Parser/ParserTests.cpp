@@ -259,10 +259,50 @@ TEST(ParserTest, RoundTripMultiple) {
     std::string Test;
     int N;
     bool Partial;
-    bool InitiallySplit;
   } Tests[] = {
-      { "infer 0:i1\n\ninfer 0:i1\n\ninfer 0:i1\n\ninfer 0:i1\n\ninfer 0:i1\n\n", 5, true,
-        false },
+      { R"i(%0:i8 = var ; 0
+%1:i32 = sext %0
+%2:i1 = slt %0, 0:i8
+%3:i32 = select %2, 0:i32, 6:i32
+%4:i32 = ashr %1, %3
+%5:i1 = ult 31:i32, %4
+%6:i32 = lshr 32767:i32, %4
+%7:i1 = slt %6, 4:i32
+%8:i1 = or %5, %7
+%9:i32 = shl 4:i32, %4
+%10:i8 = trunc %9
+%11:i8 = select %8, 4:i8, %10
+%12:i32 = var ; 12
+%13:i1 = ult 31:i32, %12
+%14:i32 = lshr 1:i32, %12
+%15:i8 = trunc %14
+%16:i8 = xor 40:i8, %15
+%17:i8 = select %13, 41:i8, %16
+%18:i8 = sub %11, %17
+%19:i1 = slt %18, 0:i8
+infer %19
+
+%0:i8 = var ; 0
+%1:i32 = sext %0
+%2:i1 = slt %0, 0:i8
+%3:i32 = select %2, 0:i32, 6:i32
+%4:i32 = ashr %1, %3
+%5:i1 = ult 31:i32, %4
+%6:i32 = lshr 32767:i32, %4
+%7:i1 = slt %6, 4:i32
+%8:i1 = or %5, %7
+infer %8
+
+%0:i8 = var ; 0
+%1:i32 = sext %0
+%2:i1 = slt %0, 0:i8
+%3:i32 = select %2, 0:i32, 6:i32
+%4:i32 = ashr %1, %3
+%5:i32 = lshr 32767:i32, %4
+%6:i1 = slt %5, 4:i32
+infer %6
+
+)i", 3, true },
       { R"i(%0:i32 = var ; 0
 %1:i64 = zext %0
 %2:i64 = and 1:i64, %1
@@ -349,7 +389,7 @@ pc %18 1:i1
 %27:i1 = slt %24, %26
 cand %27 0:i1
 
-)i", 4, false, false },
+)i", 4, false },
   };
 
   InstContext IC;
@@ -379,7 +419,7 @@ cand %27 0:i1
       for (auto i = R.begin(); i != R.end(); ++i) {
         TSplit += i->getString(true) + i->getResultString() + '\n';        
       }
-      // one more RT required to get the cands back
+      // one more RT to get the "cand" instructions back
       auto R3 = ParseReplacements(IC, "<input>", TSplit, ErrStr, false);
       ASSERT_EQ("", ErrStr);
       EXPECT_EQ(T.N, R3.size());
