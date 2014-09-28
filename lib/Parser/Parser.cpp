@@ -230,19 +230,20 @@ namespace {
 
 struct Parser {
   Parser(StringRef FileName, StringRef Str, InstContext &IC,
-         std::vector<ParsedReplacement> &Reps, bool Partial)
+         std::vector<ParsedReplacement> &Reps, bool OnlyLHS, bool OnlyRHS)
       : FileName(FileName),
         L(Str.data(), Str.data() + Str.size()),
         IC(IC),
         Reps(Reps),
-        Partial(Partial) {}
+        OnlyLHS(OnlyLHS),
+        OnlyRHS(OnlyRHS) {}
 
   std::string FileName;
   Lexer L;
   Token CurTok;
   InstContext &IC;
   std::vector<ParsedReplacement> &Reps;
-  bool Partial;
+  bool OnlyLHS, OnlyRHS;
 
   std::vector<InstMapping> PCs;
   std::map<StringRef, Inst *> InstMap;
@@ -280,8 +281,8 @@ struct Parser {
 
   bool parseLine(std::string &ErrStr);
 
-  ParsedReplacement parseOne(std::string &ErrStr);
-  std::vector<ParsedReplacement> parseMany(std::string &ErrStr);
+  ParsedReplacement parseReplacement(std::string &ErrStr);
+  std::vector<ParsedReplacement> parseReplacements(std::string &ErrStr);
 };
 
 }
@@ -539,8 +540,12 @@ bool Parser::parseLine(std::string &ErrStr) {
   switch (CurTok.K) {
     case Token::Ident:
       if (CurTok.str() == "cand") {
-        if (Partial) {
-          ErrStr = makeErrStr(std::string("Not expecting 'cand' in a partial replacement"));
+        if (OnlyLHS) {
+          ErrStr = makeErrStr(std::string("Not expecting 'cand' when parsing LHS"));
+          return false;
+        }
+        if (OnlyRHS) {
+          ErrStr = makeErrStr(std::string("Not expecting 'cand' when parsing RHS"));
           return false;
         }
         if (!consumeToken(ErrStr)) return false;
@@ -555,6 +560,10 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         return true;
       } else if (CurTok.str() == "infer") {
+        if (OnlyRHS) {
+          ErrStr = makeErrStr(std::string("Not expecting 'infer' when parsing RHS"));
+          return false;
+        }
         if (!consumeToken(ErrStr)) return false;
         if (LHS) {
           ErrStr = makeErrStr(std::string("Not expecting a second 'infer'"));
@@ -564,7 +573,7 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!LHS)
           return false;
 
-        if (Partial) {
+        if (OnlyLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0), std::move(PCs)});
           PCs.clear();
           InstMap.clear();
@@ -574,11 +583,11 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         return true;
       } else if (CurTok.str() == "result") {
-        if (Partial) {
-          ErrStr = makeErrStr(std::string("Not expecting 'result' in a partial replacement"));
+        if (OnlyLHS) {
+          ErrStr = makeErrStr(std::string("Not expecting 'result' when parsing LHS"));
           return false;
         }
-        if (!LHS) {
+        if (!OnlyRHS && !LHS) {
           ErrStr = makeErrStr(std::string("Not expecting 'result' before 'infer'"));
           return false;
         }
@@ -778,7 +787,7 @@ bool Parser::parseLine(std::string &ErrStr) {
   }
 }
 
-ParsedReplacement Parser::parseOne (std::string &ErrStr) {
+ParsedReplacement Parser::parseReplacement (std::string &ErrStr) {
   if (!consumeToken(ErrStr))
     return ParsedReplacement();
 
@@ -795,7 +804,7 @@ ParsedReplacement Parser::parseOne (std::string &ErrStr) {
     }
   }
 
-  if (Partial)
+  if (OnlyLHS)
     ErrStr = makeErrStr("incomplete replacement, need an 'infer' statement");
   else
     ErrStr = makeErrStr(
@@ -808,8 +817,13 @@ ParsedReplacement souper::ParseReplacement(InstContext &IC,
                                            llvm::StringRef Str,
                                            std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, false);
-  return P.parseOne(ErrStr);
+  Parser P(Filename, Str, IC, Reps, false, false);
+  ParsedReplacement R = P.parseReplacement(ErrStr);
+  if (ErrStr == "") {
+    assert (R.Mapping.Source);
+    assert (R.Mapping.Replacement);
+  }
+  return R;
 }
 
 ParsedReplacement souper::ParseReplacementLHS(InstContext &IC,
@@ -817,21 +831,30 @@ ParsedReplacement souper::ParseReplacementLHS(InstContext &IC,
                                               llvm::StringRef Str,
                                               std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, true);
-  return P.parseOne(ErrStr);
+  Parser P(Filename, Str, IC, Reps, true, false);
+  ParsedReplacement R = P.parseReplacement(ErrStr);
+  if (ErrStr == "") {
+    assert (R.Mapping.Source);
+    assert (!R.Mapping.Replacement);
+  }
+  return R;
 }
 
 ParsedReplacement souper::ParseReplacementRHS(InstContext &IC,
                                               llvm::StringRef Filename,
                                               llvm::StringRef Str,
                                               std::string &ErrStr) {
-  // FIXME
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, false);
-  return P.parseOne(ErrStr);
+  Parser P(Filename, Str, IC, Reps, false, true);
+  ParsedReplacement R = P.parseReplacement(ErrStr);
+  if (ErrStr == "") {
+    assert (!R.Mapping.Source);
+    assert (R.Mapping.Replacement);
+  }
+  return R;
 }
 
-std::vector<ParsedReplacement> Parser::parseMany(std::string &ErrStr) {
+std::vector<ParsedReplacement> Parser::parseReplacements(std::string &ErrStr) {
   if (!consumeToken(ErrStr))
     return Reps;
 
@@ -852,24 +875,44 @@ std::vector<ParsedReplacement> souper::ParseReplacements(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
     std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, false);
-  return P.parseMany(ErrStr);
+  Parser P(Filename, Str, IC, Reps, false, false);
+  std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
+  if (ErrStr == "") {
+    for (auto i = R.begin(); i != R.end(); ++i) {
+      assert (i->Mapping.Source);
+      assert (i->Mapping.Replacement);
+    }
+  }
+  return R;
 }
 
 std::vector<ParsedReplacement> souper::ParseReplacementLHSs(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
     std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, true);
-  return P.parseMany(ErrStr);
+  Parser P(Filename, Str, IC, Reps, true, false);
+  std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
+  if (ErrStr == "") {
+    for (auto i = R.begin(); i != R.end(); ++i) {
+      assert (i->Mapping.Source);
+      assert (!i->Mapping.Replacement);
+    }
+  }
+  return R;
 }
 
 std::vector<ParsedReplacement> souper::ParseReplacementRHSs(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
     std::string &ErrStr) {
-  // FIXME
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, false);
-  return P.parseMany(ErrStr);
+  Parser P(Filename, Str, IC, Reps, false, true);
+  std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
+  if (ErrStr == "") {
+    for (auto i = R.begin(); i != R.end(); ++i) {
+      assert (!i->Mapping.Source);
+      assert (i->Mapping.Replacement);
+    }
+  }
+  return R;
 }
 

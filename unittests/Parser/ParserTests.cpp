@@ -162,7 +162,7 @@ TEST(ParserTest, PartialReplacementErrors) {
       { "%0:i1 = var\n",
         "<input>:2:1: incomplete replacement, need an 'infer' statement" },
       { "infer 0:i1 0:i1 ; this is a comment\n", "<input>:1:12: expected a single replacement" },
-      { "cand 0:i1 0:i1", "<input>:1:1: Not expecting 'cand' in a partial replacement" },
+      { "cand 0:i1 0:i1", "<input>:1:1: Not expecting 'cand' when parsing LHS" },
       { "infer 0:i1\ninfer 0:i1", "<input>:2:1: expected a single replacement" },
 
       // type checking
