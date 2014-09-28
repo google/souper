@@ -176,26 +176,6 @@ TEST(ParserTest, PartialReplacementErrors) {
   }
 }
 
-TEST(ParserTest, MultipleReplacements) {
-  struct {
-    std::string Test;
-    int N;
-    bool Partial;
-  } Tests[] = {
-      { "infer 0:i1\nresult 0:i1\ninfer 0:i1\nresult 0:i1\ninfer 0:i1\nresult 0:i1", 3, false },
-      { "cand 0:i1 0:i1\ncand 0:i1 0:i1\ncand 0:i1 0:i1\ncand 0:i1 0:i1", 4, false },
-      { "infer 0:i1\ninfer 0:i1\ninfer 0:i1\ninfer 0:i1\ninfer 0:i1\n", 5, true },
-    };
-
-  InstContext IC;
-  for (const auto &T : Tests) {
-    std::string ErrStr;
-    auto R = ParseReplacements(IC, "<input>", T.Test, ErrStr, T.Partial);
-    EXPECT_EQ("", ErrStr);
-    EXPECT_EQ(T.N, R.size());
-  }
-}
-
 TEST(ParserTest, RoundTrip) {
   std::string Tests[] = {
       "cand 0:i1 0:i1\n",
@@ -272,5 +252,59 @@ cand %0 3:i32
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(R3.getString(false), T.Want);
   }
+}
 
+TEST(ParserTest, RoundTripMultiple) {
+  struct {
+    std::string Test;
+    int N;
+    bool Partial;
+    bool InitiallySplit;
+  } Tests[] = {
+      { "infer 0:i1\nresult 0:i1\ninfer 0:i1\nresult 0:i1\ninfer 0:i1\nresult 0:i1\n", 3, false, true },
+      { "cand 0:i1 0:i1\ncand 0:i1 0:i1\ncand 0:i1 0:i1\ncand 0:i1 0:i1\n", 4, false, false },
+      { "infer 0:i1\ninfer 0:i1\ninfer 0:i1\ninfer 0:i1\ninfer 0:i1\n", 5, true, false },
+    };
+
+  InstContext IC;
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    auto R = ParseReplacements(IC, "<input>", T.Test, ErrStr, T.Partial);
+    EXPECT_EQ("", ErrStr);
+    EXPECT_EQ(T.N, R.size());
+
+    std::string TPartial;
+    for (auto i = R.begin(); i != R.end(); ++i) {
+      TPartial += i->getString(true);
+    }
+    auto R2 = ParseReplacements(IC, "<input>", TPartial, ErrStr, true);
+    ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(T.N, R2.size());
+    std::string TPartial2;
+    for (auto i = R2.begin(); i != R2.end(); ++i) {
+      TPartial2 += i->getString(true);
+    }
+    EXPECT_EQ(TPartial, TPartial2);
+
+    if (!T.Partial) {
+      std::string TSplit;
+      for (auto i = R.begin(); i != R.end(); ++i) {
+        TSplit += i->getString(true);
+        TSplit += i->getResultString();
+      }
+      if (T.InitiallySplit) {
+        EXPECT_EQ(T.Test, TSplit);
+      } else {
+        // one more RT required to reassemble the partial replacements
+        auto R3 = ParseReplacements(IC, "<input>", TSplit, ErrStr, false);
+        ASSERT_EQ("", ErrStr);
+        EXPECT_EQ(T.N, R3.size());
+        std::string UnSplit;
+        for (auto i = R3.begin(); i != R3.end(); ++i) {
+          UnSplit += i->getString(false);
+        }
+        EXPECT_EQ(T.Test, UnSplit);
+      }
+    }
+  }
 }
