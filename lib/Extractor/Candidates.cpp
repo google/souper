@@ -50,7 +50,7 @@ std::string InstOrigin::getFunctionName() const {
 
 void CandidateReplacement::print(llvm::raw_ostream &Out) const {
   Out << "; Priority: " << Priority << '\n';
-  PrintReplacement(Out, PCs, Mapping, false);
+  PrintReplacement(Out, PCs, Mapping);
 }
 
 namespace {

@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
     }
 
     for (const auto &R : Reps) {
-      R.print(llvm::outs(), false);
+      R.print(llvm::outs());
     }
   } else {
     llvm::errs() << MB.getError().message() << '\n';

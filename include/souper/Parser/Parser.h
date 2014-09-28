@@ -27,17 +27,23 @@ struct ParsedReplacement {
   /// The path conditions relevant to this replacement.
   std::vector<InstMapping> PCs;
 
-  void print(llvm::raw_ostream &OS, bool Partial) const {
-    PrintReplacement(OS, PCs, Mapping, Partial);
+  void print(llvm::raw_ostream &OS) const {
+    PrintReplacement(OS, PCs, Mapping);
   }
-  std::string getString(bool Partial) const {
-    return GetReplacementString(PCs, Mapping, Partial);
+  std::string getString() const {
+    return GetReplacementString(PCs, Mapping);
   }
-  void printResult(llvm::raw_ostream &OS) const {
-    PrintReplacementResult(OS, PCs, Mapping);
+  void printReplacementLHS(llvm::raw_ostream &OS) const {
+    PrintReplacementLHS(OS, PCs, Mapping);
   }
-  std::string getResultString() const {
-    return GetReplacementResultString(PCs, Mapping);
+  std::string getLHSString() const {
+    return GetReplacementLHSString(PCs, Mapping);
+  }
+  void printReplacementRHS(llvm::raw_ostream &OS) const {
+    PrintReplacementRHS(OS, PCs, Mapping);
+  }
+  std::string getRHSString() const {
+    return GetReplacementRHSString(PCs, Mapping);
   }
 };
 

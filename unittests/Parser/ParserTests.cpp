@@ -221,36 +221,36 @@ cand %0 3:i32
     std::string ErrStr;
     auto R = ParseReplacement(IC, "<input>", T, ErrStr, false);
     ASSERT_EQ("", ErrStr);
-    EXPECT_EQ(R.getString(false), T);
+    EXPECT_EQ(R.getString(), T);
 
-    auto TPartial = R.getString(true);
+    auto TPartial = R.getLHSString();
     auto R2 = ParseReplacement(IC, "<input>", TPartial, ErrStr, true);
     ASSERT_EQ("", ErrStr);
-    auto TPartial2 = R2.getString(true);
+    auto TPartial2 = R2.getLHSString();
     EXPECT_EQ(TPartial, TPartial2);
 
-    auto TSplit = TPartial + R.getResultString();
+    auto TSplit = TPartial + R.getRHSString();
     auto R3 = ParseReplacement(IC, "<input>", TSplit, ErrStr, false);
     ASSERT_EQ("", ErrStr);
-    EXPECT_EQ(R3.getString(false), T);
+    EXPECT_EQ(R3.getString(), T);
   }
 
   for (const auto &T : NonEqualTests) {
     std::string ErrStr;
     auto R = ParseReplacement(IC, "<input>", T.Test, ErrStr, false);
     ASSERT_EQ("", ErrStr);
-    EXPECT_EQ(R.getString(false), T.Want);
+    EXPECT_EQ(R.getString(), T.Want);
 
-    auto TPartial = R.getString(true);
+    auto TPartial = R.getLHSString();
     auto R2 = ParseReplacement(IC, "<input>", TPartial, ErrStr, true);
     ASSERT_EQ("", ErrStr);
-    auto TPartial2 = R2.getString(true);
+    auto TPartial2 = R2.getLHSString();
     EXPECT_EQ(TPartial, TPartial2);
 
-    auto TSplit = TPartial + R.getResultString();
+    auto TSplit = TPartial + R.getRHSString();
     auto R3 = ParseReplacement(IC, "<input>", TSplit, ErrStr, false);
     ASSERT_EQ("", ErrStr);
-    EXPECT_EQ(R3.getString(false), T.Want);
+    EXPECT_EQ(R3.getString(), T.Want);
   }
 }
 
@@ -401,23 +401,23 @@ cand %27 0:i1
 
     std::string TPartial;
     for (auto i = R.begin(); i != R.end(); ++i) {
-      TPartial += i->getString(true) + '\n';
+      TPartial += i->getLHSString() + '\n';
     }
     auto R2 = ParseReplacements(IC, "<input>", TPartial, ErrStr, true);
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(T.N, R2.size());
     std::string TPartial2;
     for (auto i = R2.begin(); i != R2.end(); ++i) {
-      TPartial2 += i->getString(true) + '\n';
+      TPartial2 += i->getLHSString() + '\n';
     }
     EXPECT_EQ(TPartial, TPartial2);
 
     if (T.Partial) {
-      EXPECT_EQ(T.Test, TPartial);
+      EXPECT_EQ(T.Test, TPartial2);
     } else {
       std::string TSplit;
       for (auto i = R.begin(); i != R.end(); ++i) {
-        TSplit += i->getString(true) + i->getResultString() + '\n';        
+        TSplit += i->getLHSString() + i->getRHSString() + '\n';        
       }
       // one more RT to get the "cand" instructions back
       auto R3 = ParseReplacements(IC, "<input>", TSplit, ErrStr, false);
@@ -425,7 +425,7 @@ cand %27 0:i1
       EXPECT_EQ(T.N, R3.size());
       std::string UnSplit;
       for (auto i = R3.begin(); i != R3.end(); ++i) {
-        UnSplit += i->getString(false) + '\n';
+        UnSplit += i->getString() + '\n';
       }
       EXPECT_EQ(T.Test, UnSplit);
     }

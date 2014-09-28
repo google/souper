@@ -51,7 +51,7 @@ void CandidateMapEntry::print(llvm::raw_ostream &OS) const {
     OS << "; Function: " << F << '\n';
   }
 
-  PrintReplacement(OS, PCs, Mapping, false);
+  PrintReplacement(OS, PCs, Mapping);
 }
 
 void souper::AddToCandidateMap(CandidateMap &M,
@@ -60,7 +60,7 @@ void souper::AddToCandidateMap(CandidateMap &M,
   if (IsTriviallyInvalid(CE.E)) {
     ++TriviallyInvalid;
   } else {
-    CandidateMapEntry &Entry = M[GetReplacementString(CR.PCs, CR.Mapping, false)];
+    CandidateMapEntry &Entry = M[GetReplacementString(CR.PCs, CR.Mapping)];
     if (Entry.CandExpr.E.isNull()) {
       Entry.CandExpr = std::move(CE);
 

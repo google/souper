@@ -143,15 +143,19 @@ struct InstMapping {
 };
 
 void PrintReplacement(llvm::raw_ostream &Out,
-                      const std::vector<InstMapping> &PCs, InstMapping Mapping,
-                      bool Partial);
+                      const std::vector<InstMapping> &PCs, InstMapping Mapping);
 std::string GetReplacementString(const std::vector<InstMapping> &PCs,
-                                 InstMapping Mapping, bool Partial);
-void PrintReplacementResult(llvm::raw_ostream &Out,
-                            const std::vector<InstMapping> &PCs,
-                            InstMapping Mapping);
-std::string GetReplacementResultString(const std::vector<InstMapping> &PCs,
-                                       InstMapping Mapping);
+                                 InstMapping Mapping);
+void PrintReplacementLHS(llvm::raw_ostream &Out,
+                         const std::vector<InstMapping> &PCs,
+                         InstMapping Mapping);
+std::string GetReplacementLHSString(const std::vector<InstMapping> &PCs,
+                                    InstMapping Mapping);
+void PrintReplacementRHS(llvm::raw_ostream &Out,
+                         const std::vector<InstMapping> &PCs,
+                         InstMapping Mapping);
+std::string GetReplacementRHSString(const std::vector<InstMapping> &PCs,
+                                    InstMapping Mapping);
 
 }
 

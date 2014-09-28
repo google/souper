@@ -179,8 +179,7 @@ public:
             llvm::raw_string_ostream Loc(Str);
             I->getDebugLoc().print(I->getContext(), Loc);
             addProfileCode (F.getContext(), F.getParent(),
-                GetReplacementString(Cand.second.PCs, Cand.second.Mapping, 
-                                     false),
+                GetReplacementString(Cand.second.PCs, Cand.second.Mapping),
                 Loc.str(), BI);
           }
           changed = true;
