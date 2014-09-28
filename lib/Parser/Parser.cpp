@@ -279,6 +279,9 @@ struct Parser {
                                   std::string &ErrStr);
 
   bool parseLine(std::string &ErrStr);
+
+  ParsedReplacement parseOne(std::string &ErrStr);
+  std::vector<ParsedReplacement> parseMany(std::string &ErrStr);
 };
 
 }
@@ -775,23 +778,17 @@ bool Parser::parseLine(std::string &ErrStr) {
   }
 }
 
-ParsedReplacement souper::ParseReplacement(InstContext &IC,
-                                           llvm::StringRef Filename,
-                                           llvm::StringRef Str,
-                                           std::string &ErrStr, bool Partial) {
-  std::vector<ParsedReplacement> Reps;
-
-  Parser P(Filename, Str, IC, Reps, Partial);
-  if (!P.consumeToken(ErrStr))
+ParsedReplacement Parser::parseOne (std::string &ErrStr) {
+  if (!consumeToken(ErrStr))
     return ParsedReplacement();
 
-  while (P.CurTok.K != Token::Eof) {
-    if (!P.parseLine(ErrStr))
+  while (CurTok.K != Token::Eof) {
+    if (!parseLine(ErrStr))
       return ParsedReplacement();
 
     if (!Reps.empty()) {
-      if (P.CurTok.K != Token::Eof) {
-        ErrStr = P.makeErrStr("expected a single replacement");
+      if (CurTok.K != Token::Eof) {
+        ErrStr = makeErrStr("expected a single replacement");
         return ParsedReplacement();
       }
       return std::move(Reps[0]);
@@ -799,31 +796,80 @@ ParsedReplacement souper::ParseReplacement(InstContext &IC,
   }
 
   if (Partial)
-    ErrStr = P.makeErrStr("incomplete replacement, need an 'infer' statement");
+    ErrStr = makeErrStr("incomplete replacement, need an 'infer' statement");
   else
-    ErrStr = P.makeErrStr(
+    ErrStr = makeErrStr(
         "incomplete replacement, need a 'cand' statement or 'infer'/'result' pair");
   return ParsedReplacement();
 }
 
-std::vector<ParsedReplacement> souper::ParseReplacements(
-    InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
-    std::string &ErrStr, bool Partial) {
+ParsedReplacement souper::ParseReplacement(InstContext &IC,
+                                           llvm::StringRef Filename,
+                                           llvm::StringRef Str,
+                                           std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
+  Parser P(Filename, Str, IC, Reps, false);
+  return P.parseOne(ErrStr);
+}
 
-  Parser P(Filename, Str, IC, Reps, Partial);
-  if (!P.consumeToken(ErrStr))
+ParsedReplacement souper::ParseReplacementLHS(InstContext &IC,
+                                              llvm::StringRef Filename,
+                                              llvm::StringRef Str,
+                                              std::string &ErrStr) {
+  std::vector<ParsedReplacement> Reps;
+  Parser P(Filename, Str, IC, Reps, true);
+  return P.parseOne(ErrStr);
+}
+
+ParsedReplacement souper::ParseReplacementRHS(InstContext &IC,
+                                              llvm::StringRef Filename,
+                                              llvm::StringRef Str,
+                                              std::string &ErrStr) {
+  // FIXME
+  std::vector<ParsedReplacement> Reps;
+  Parser P(Filename, Str, IC, Reps, false);
+  return P.parseOne(ErrStr);
+}
+
+std::vector<ParsedReplacement> Parser::parseMany(std::string &ErrStr) {
+  if (!consumeToken(ErrStr))
     return Reps;
 
-  while (P.CurTok.K != Token::Eof) {
-    if (!P.parseLine(ErrStr))
+  while (CurTok.K != Token::Eof) {
+    if (!parseLine(ErrStr))
       return Reps;
   }
 
-  if (!P.PCs.empty() || !P.InstMap.empty() || !P.BlockMap.empty()) {
-    ErrStr = P.makeErrStr("incomplete replacement");
+  if (!PCs.empty() || !InstMap.empty() || !BlockMap.empty()) {
+    ErrStr = makeErrStr("incomplete replacement");
     return Reps;
   }
 
   return Reps;
 }
+
+std::vector<ParsedReplacement> souper::ParseReplacements(
+    InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
+    std::string &ErrStr) {
+  std::vector<ParsedReplacement> Reps;
+  Parser P(Filename, Str, IC, Reps, false);
+  return P.parseMany(ErrStr);
+}
+
+std::vector<ParsedReplacement> souper::ParseReplacementLHSs(
+    InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
+    std::string &ErrStr) {
+  std::vector<ParsedReplacement> Reps;
+  Parser P(Filename, Str, IC, Reps, true);
+  return P.parseMany(ErrStr);
+}
+
+std::vector<ParsedReplacement> souper::ParseReplacementRHSs(
+    InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
+    std::string &ErrStr) {
+  // FIXME
+  std::vector<ParsedReplacement> Reps;
+  Parser P(Filename, Str, IC, Reps, false);
+  return P.parseMany(ErrStr);
+}
+

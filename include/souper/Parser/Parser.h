@@ -50,14 +50,24 @@ struct ParsedReplacement {
 void TestLexer(llvm::StringRef Str);
 
 ParsedReplacement ParseReplacement(InstContext &IC, llvm::StringRef Filename,
-                                   llvm::StringRef Str, std::string &ErrStr,
-                                   bool Partial);
+                                   llvm::StringRef Str, std::string &ErrStr);
+ParsedReplacement ParseReplacementLHS(InstContext &IC, llvm::StringRef Filename,
+                                      llvm::StringRef Str, std::string &ErrStr);
+ParsedReplacement ParseReplacementRHS(InstContext &IC, llvm::StringRef Filename,
+                                      llvm::StringRef Str, std::string &ErrStr);
 
 std::vector<ParsedReplacement> ParseReplacements(InstContext &IC,
                                                  llvm::StringRef Filename,
                                                  llvm::StringRef Str,
-                                                 std::string &ErrStr,
-                                                 bool Partial);
+                                                 std::string &ErrStr);
+std::vector<ParsedReplacement> ParseReplacementLHSs(InstContext &IC,
+                                                    llvm::StringRef Filename,
+                                                    llvm::StringRef Str,
+                                                    std::string &ErrStr);
+std::vector<ParsedReplacement> ParseReplacementRHSs(InstContext &IC,
+                                                    llvm::StringRef Filename,
+                                                    llvm::StringRef Str,
+                                                    std::string &ErrStr);
 
 }
 

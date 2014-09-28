@@ -114,12 +114,12 @@ TEST(ParserTest, Errors) {
   InstContext IC;
   for (const auto &T : Tests) {
     std::string ErrStr;
-    ParseReplacement(IC, "<input>", T.Test, ErrStr, false);
+    ParseReplacement(IC, "<input>", T.Test, ErrStr);
     EXPECT_EQ(T.WantError, ErrStr);
   }
   for (const auto &T : Tests) {
     std::string ErrStr;
-    ParseReplacement(IC, "<input>", T.Test, ErrStr, true);
+    ParseReplacementLHS(IC, "<input>", T.Test, ErrStr);
     EXPECT_EQ(T.WantError, ErrStr);
   }
 }
@@ -146,7 +146,7 @@ TEST(ParserTest, FullReplacementErrors) {
   InstContext IC;
   for (const auto &T : Tests) {
     std::string ErrStr;
-    ParseReplacement(IC, "<input>", T.Test, ErrStr, false);
+    ParseReplacement(IC, "<input>", T.Test, ErrStr);
     EXPECT_EQ(T.WantError, ErrStr);
   }
 }
@@ -171,7 +171,7 @@ TEST(ParserTest, PartialReplacementErrors) {
   InstContext IC;
   for (const auto &T : Tests) {
     std::string ErrStr;
-    ParseReplacement(IC, "<input>", T.Test, ErrStr, true);
+    ParseReplacementLHS(IC, "<input>", T.Test, ErrStr);
     EXPECT_EQ(T.WantError, ErrStr);
   }
 }
@@ -219,36 +219,36 @@ cand %0 3:i32
   InstContext IC;
   for (const auto &T : Tests) {
     std::string ErrStr;
-    auto R = ParseReplacement(IC, "<input>", T, ErrStr, false);
+    auto R = ParseReplacement(IC, "<input>", T, ErrStr);
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(R.getString(), T);
 
     auto TPartial = R.getLHSString();
-    auto R2 = ParseReplacement(IC, "<input>", TPartial, ErrStr, true);
+    auto R2 = ParseReplacementLHS(IC, "<input>", TPartial, ErrStr);
     ASSERT_EQ("", ErrStr);
     auto TPartial2 = R2.getLHSString();
     EXPECT_EQ(TPartial, TPartial2);
 
     auto TSplit = TPartial + R.getRHSString();
-    auto R3 = ParseReplacement(IC, "<input>", TSplit, ErrStr, false);
+    auto R3 = ParseReplacement(IC, "<input>", TSplit, ErrStr);
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(R3.getString(), T);
   }
 
   for (const auto &T : NonEqualTests) {
     std::string ErrStr;
-    auto R = ParseReplacement(IC, "<input>", T.Test, ErrStr, false);
+    auto R = ParseReplacement(IC, "<input>", T.Test, ErrStr);
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(R.getString(), T.Want);
 
     auto TPartial = R.getLHSString();
-    auto R2 = ParseReplacement(IC, "<input>", TPartial, ErrStr, true);
+    auto R2 = ParseReplacementLHS(IC, "<input>", TPartial, ErrStr);
     ASSERT_EQ("", ErrStr);
     auto TPartial2 = R2.getLHSString();
     EXPECT_EQ(TPartial, TPartial2);
 
     auto TSplit = TPartial + R.getRHSString();
-    auto R3 = ParseReplacement(IC, "<input>", TSplit, ErrStr, false);
+    auto R3 = ParseReplacement(IC, "<input>", TSplit, ErrStr);
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(R3.getString(), T.Want);
   }
@@ -395,7 +395,12 @@ cand %27 0:i1
   InstContext IC;
   for (const auto &T : Tests) {
     std::string ErrStr;
-    auto R = ParseReplacements(IC, "<input>", T.Test, ErrStr, T.Partial);
+    std::vector<ParsedReplacement> R;
+    if (T.Partial) {
+      R = ParseReplacementLHSs(IC, "<input>", T.Test, ErrStr);
+    } else {
+      R = ParseReplacements(IC, "<input>", T.Test, ErrStr);
+    }
     EXPECT_EQ("", ErrStr);
     EXPECT_EQ(T.N, R.size());
 
@@ -403,7 +408,7 @@ cand %27 0:i1
     for (auto i = R.begin(); i != R.end(); ++i) {
       TPartial += i->getLHSString() + '\n';
     }
-    auto R2 = ParseReplacements(IC, "<input>", TPartial, ErrStr, true);
+    auto R2 = ParseReplacementLHSs(IC, "<input>", TPartial, ErrStr);
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(T.N, R2.size());
     std::string TPartial2;
@@ -420,7 +425,7 @@ cand %27 0:i1
         TSplit += i->getLHSString() + i->getRHSString() + '\n';        
       }
       // one more RT to get the "cand" instructions back
-      auto R3 = ParseReplacements(IC, "<input>", TSplit, ErrStr, false);
+      auto R3 = ParseReplacements(IC, "<input>", TSplit, ErrStr);
       ASSERT_EQ("", ErrStr);
       EXPECT_EQ(T.N, R3.size());
       std::string UnSplit;
