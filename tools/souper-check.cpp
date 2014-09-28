@@ -31,7 +31,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   std::string ErrStr;
 
   ParsedReplacement Rep =
-      ParseReplacement(IC, MB.getBufferIdentifier(), MB.getBuffer(), ErrStr);
+      ParseReplacement(IC, MB.getBufferIdentifier(), MB.getBuffer(), ErrStr, false);
   if (!ErrStr.empty()) {
     llvm::errs() << ErrStr << '\n';
     return 1;
