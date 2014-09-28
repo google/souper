@@ -437,7 +437,7 @@ ref<Expr> ExprBuilder::get(Inst *I) {
 }
 
 ref<Expr> ExprBuilder::getInstMapping(const InstMapping &IM) {
-  return EqExpr::create(get(IM.Source), get(IM.Replacement));
+  return EqExpr::create(get(IM.LHS), get(IM.RHS));
 }
 
 std::vector<ref<Expr> > ExprBuilder::getBlockPredicates(Inst *I) {

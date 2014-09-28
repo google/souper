@@ -435,16 +435,18 @@ bool Inst::isCommutative(Inst::Kind K) {
 void souper::PrintReplacement(llvm::raw_ostream &Out,
                               const std::vector<InstMapping> &PCs,
                               InstMapping Mapping) {
+  assert(Mapping.LHS);
+  assert(Mapping.RHS);
+
   PrintContext Printer(Out);
   for (const auto &PC : PCs) {
-    std::string SRef = Printer.printInst(PC.Source);
-    std::string RRef = Printer.printInst(PC.Replacement);
+    std::string SRef = Printer.printInst(PC.LHS);
+    std::string RRef = Printer.printInst(PC.RHS);
     Out << "pc " << SRef << " " << RRef << '\n';
   }
 
-  std::string SRef = Printer.printInst(Mapping.Source);
-  assert(Mapping.Replacement);
-  std::string RRef = Printer.printInst(Mapping.Replacement);
+  std::string SRef = Printer.printInst(Mapping.LHS);
+  std::string RRef = Printer.printInst(Mapping.RHS);
   Out << "cand " << SRef << " " << RRef << '\n';
 }
 
@@ -459,14 +461,16 @@ std::string souper::GetReplacementString(const std::vector<InstMapping> &PCs,
 void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
                                  const std::vector<InstMapping> &PCs,
                                  InstMapping Mapping) {
+  assert(Mapping.LHS);
+
   PrintContext Printer(Out);
   for (const auto &PC : PCs) {
-    std::string SRef = Printer.printInst(PC.Source);
-    std::string RRef = Printer.printInst(PC.Replacement);
+    std::string SRef = Printer.printInst(PC.LHS);
+    std::string RRef = Printer.printInst(PC.RHS);
     Out << "pc " << SRef << " " << RRef << '\n';
   }
 
-  std::string SRef = Printer.printInst(Mapping.Source);
+  std::string SRef = Printer.printInst(Mapping.LHS);
   Out << "infer " << SRef << '\n';
 }
 
@@ -481,9 +485,10 @@ std::string souper::GetReplacementLHSString(const std::vector<InstMapping> &PCs,
 void souper::PrintReplacementRHS(llvm::raw_ostream &Out,
                                  const std::vector<InstMapping> &PCs,
                                  InstMapping Mapping) {
+  assert(Mapping.RHS);
+
   PrintContext Printer(Out);
-  assert(Mapping.Replacement);
-  std::string RRef = Printer.printInst(Mapping.Replacement);
+  std::string RRef = Printer.printInst(Mapping.RHS);
   Out << "result " << RRef << '\n';
 }
 

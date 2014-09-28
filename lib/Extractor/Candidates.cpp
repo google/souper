@@ -392,7 +392,7 @@ std::vector<Inst *> AddPCSets(const std::vector<InstMapping> &PCs,
   for (unsigned i = 0; i != PCs.size(); ++i) {
     llvm::DenseSet<Inst *> SeenInsts;
     auto PCLeader =
-        AddVarSet(Vars.member_end(), Vars, SeenInsts, PCs[i].Source);
+        AddVarSet(Vars.member_end(), Vars, SeenInsts, PCs[i].LHS);
     if (PCLeader != Vars.member_end())
       PCSets[i] = *PCLeader;
   }
@@ -406,7 +406,7 @@ std::vector<InstMapping> GetRelevantPCs(const std::vector<InstMapping> &PCs,
                                         InstClasses Vars,
                                         InstMapping Cand) {
   llvm::DenseSet<Inst *> SeenInsts;
-  auto Leader = AddVarSet(Vars.member_end(), Vars, SeenInsts, Cand.Source);
+  auto Leader = AddVarSet(Vars.member_end(), Vars, SeenInsts, Cand.LHS);
 
   std::vector<InstMapping> RelevantPCs;
   for (unsigned i = 0; i != PCs.size(); ++i) {
