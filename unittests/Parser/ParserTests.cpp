@@ -261,10 +261,100 @@ TEST(ParserTest, RoundTripMultiple) {
     bool Partial;
     bool InitiallySplit;
   } Tests[] = {
-      { "infer 0:i1\nresult 0:i1\ninfer 0:i1\nresult 0:i1\ninfer 0:i1\nresult 0:i1\n", 3, false, true },
-      { "cand 0:i1 0:i1\ncand 0:i1 0:i1\ncand 0:i1 0:i1\ncand 0:i1 0:i1\n", 4, false, false },
-      { "infer 0:i1\ninfer 0:i1\ninfer 0:i1\ninfer 0:i1\ninfer 0:i1\n", 5, true, false },
-    };
+      { "infer 0:i1\nresult 0:i1\n\ninfer 0:i1\nresult 0:i1\n\ninfer 0:i1\nresult 0:i1\n\n",
+        3, false, true },
+      { "cand 0:i1 0:i1\n\ncand 0:i1 0:i1\n\ncand 0:i1 0:i1\n\ncand 0:i1 0:i1\n\n", 4,
+        false, false },
+      { "infer 0:i1\n\ninfer 0:i1\n\ninfer 0:i1\n\ninfer 0:i1\n\ninfer 0:i1\n\n", 5, true,
+        false },
+      { R"i(%0:i32 = var ; 0
+%1:i64 = zext %0
+%2:i64 = and 1:i64, %1
+%3:i64 = subnsw 0:i64, %2
+%4:i8 = trunc %3
+%5:i8 = sub 0:i8, %4
+%6:i1 = ult %5, 4:i8
+cand %6 1:i1
+
+%0:i32 = var ; 0
+%1:i8 = var ; 1
+%2:i1 = eq 1:i8, %1
+%3:i32 = zext %2
+%4:i32 = and %0, %3
+%5:i32 = zext %1
+%6:i32 = shlnw %5, 16:i32
+%7:i32 = addnw 65536:i32, %6
+%8:i32 = lshrexact %7, 16:i32
+%9:i1 = ult %4, %8
+cand %9 1:i1
+
+%0:i8 = var ; 0
+%1 = block
+%2:i32 = var ; 2
+%3:i32 = var ; 3
+%4 = block
+%5:i32 = var ; 5
+%6:i1 = ult %5, 2:i32
+%7:i64 = zext %6
+%8:i64 = var ; 8
+%9:i64 = add 1:i64, %8
+%10:i1 = ule %7, %9
+%11:i1 = phi %4, 1:i1, %10
+%12:i32 = zext %11
+%13:i1 = eq %3, %12
+%14:i32 = zext %13
+%15:i32 = xor %2, %14
+%16:i32 = phi %1, %15
+%17:i8 = trunc %16
+%18:i1 = eq %0, %17
+pc %18 1:i1
+%19:i16 = var ; 19
+%20:i32 = var ; 20
+%21:i16 = trunc %20
+%22:i16 = mul %19, %21
+%23:i1 = ne 0:i16, %22
+%24:i8 = add 246:i8, %0
+%25:i1 = slt 0:i8, %24
+%26:i64 = zext %22
+%27:i64 = xor 9223372036854775807:i64, %26
+%28:i64 = sext %24
+%29:i1 = slt %27, %28
+%30:i1 = and %23, %25, %29
+cand %30 0:i1
+
+%0:i8 = var ; 0
+%1 = block
+%2:i32 = var ; 2
+%3:i32 = var ; 3
+%4 = block
+%5:i32 = var ; 5
+%6:i1 = ult %5, 2:i32
+%7:i64 = zext %6
+%8:i64 = var ; 8
+%9:i64 = add 1:i64, %8
+%10:i1 = ule %7, %9
+%11:i1 = phi %4, 1:i1, %10
+%12:i32 = zext %11
+%13:i1 = eq %3, %12
+%14:i32 = zext %13
+%15:i32 = xor %2, %14
+%16:i32 = phi %1, %15
+%17:i8 = trunc %16
+%18:i1 = eq %0, %17
+pc %18 1:i1
+%19:i16 = var ; 19
+%20:i32 = var ; 20
+%21:i16 = trunc %20
+%22:i16 = mul %19, %21
+%23:i64 = zext %22
+%24:i64 = xor 9223372036854775807:i64, %23
+%25:i8 = add 246:i8, %0
+%26:i64 = sext %25
+%27:i1 = slt %24, %26
+cand %27 0:i1
+
+)i", 4, false, false },
+  };
 
   InstContext IC;
   for (const auto &T : Tests) {
@@ -289,19 +379,18 @@ TEST(ParserTest, RoundTripMultiple) {
     if (!T.Partial) {
       std::string TSplit;
       for (auto i = R.begin(); i != R.end(); ++i) {
-        TSplit += i->getString(true);
-        TSplit += i->getResultString();
+        TSplit += i->getString(true) + i->getResultString() + '\n';        
       }
       if (T.InitiallySplit) {
         EXPECT_EQ(T.Test, TSplit);
       } else {
-        // one more RT required to reassemble the partial replacements
+        // one more RT required to get the cands back
         auto R3 = ParseReplacements(IC, "<input>", TSplit, ErrStr, false);
         ASSERT_EQ("", ErrStr);
         EXPECT_EQ(T.N, R3.size());
         std::string UnSplit;
         for (auto i = R3.begin(); i != R3.end(); ++i) {
-          UnSplit += i->getString(false);
+          UnSplit += i->getString(false) + '\n';
         }
         EXPECT_EQ(T.Test, UnSplit);
       }
