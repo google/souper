@@ -27,20 +27,31 @@ struct ParsedReplacement {
   /// The path conditions relevant to this replacement.
   std::vector<InstMapping> PCs;
 
-  void print(llvm::raw_ostream &OS) const {
-    PrintReplacement(OS, PCs, Mapping);
+  void print(llvm::raw_ostream &OS, bool Partial) const {
+    PrintReplacement(OS, PCs, Mapping, Partial);
+  }
+  std::string getString(bool Partial) const {
+    return GetReplacementString(PCs, Mapping, Partial);
+  }
+  void printResult(llvm::raw_ostream &OS) const {
+    PrintReplacementResult(OS, PCs, Mapping);
+  }
+  std::string getResultString() const {
+    return GetReplacementResultString(PCs, Mapping);
   }
 };
 
 void TestLexer(llvm::StringRef Str);
 
 ParsedReplacement ParseReplacement(InstContext &IC, llvm::StringRef Filename,
-                                   llvm::StringRef Str, std::string &ErrStr);
+                                   llvm::StringRef Str, std::string &ErrStr,
+                                   bool Partial);
 
 std::vector<ParsedReplacement> ParseReplacements(InstContext &IC,
                                                  llvm::StringRef Filename,
                                                  llvm::StringRef Str,
-                                                 std::string &ErrStr);
+                                                 std::string &ErrStr,
+                                                 bool Partial);
 
 }
 

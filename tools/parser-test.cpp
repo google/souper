@@ -26,14 +26,15 @@ int main(int argc, char **argv) {
     InstContext IC;
     std::string ErrStr;
     std::vector<ParsedReplacement> Reps = ParseReplacements(
-        IC, MB.get()->getBufferIdentifier(), MB.get()->getBuffer(), ErrStr);
+        IC, MB.get()->getBufferIdentifier(), MB.get()->getBuffer(), ErrStr,
+        false);
     if (!ErrStr.empty()) {
       llvm::errs() << ErrStr << '\n';
       return 1;
     }
 
     for (const auto &R : Reps) {
-      R.print(llvm::outs());
+      R.print(llvm::outs(), false);
     }
   } else {
     llvm::errs() << MB.getError().message() << '\n';
