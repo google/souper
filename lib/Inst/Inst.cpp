@@ -465,7 +465,8 @@ void souper::PrintReplacementResult(llvm::raw_ostream &Out,
 				    InstMapping Mapping) {
   PrintContext Printer(Out);
   assert(Mapping.Replacement);
-  Out << "result " << Printer.printInst(Mapping.Replacement) << '\n';
+  std::string RRef = Printer.printInst(Mapping.Replacement);
+  Out << "result " << RRef << '\n';
 }
 
 std::string souper::GetReplacementResultString(

@@ -261,10 +261,6 @@ TEST(ParserTest, RoundTripMultiple) {
     bool Partial;
     bool InitiallySplit;
   } Tests[] = {
-      { "infer 0:i1\nresult 0:i1\n\ninfer 0:i1\nresult 0:i1\n\ninfer 0:i1\nresult 0:i1\n\n",
-        3, false, true },
-      { "cand 0:i1 0:i1\n\ncand 0:i1 0:i1\n\ncand 0:i1 0:i1\n\ncand 0:i1 0:i1\n\n", 4,
-        false, false },
       { "infer 0:i1\n\ninfer 0:i1\n\ninfer 0:i1\n\ninfer 0:i1\n\ninfer 0:i1\n\n", 5, true,
         false },
       { R"i(%0:i32 = var ; 0
@@ -365,35 +361,33 @@ cand %27 0:i1
 
     std::string TPartial;
     for (auto i = R.begin(); i != R.end(); ++i) {
-      TPartial += i->getString(true);
+      TPartial += i->getString(true) + '\n';
     }
     auto R2 = ParseReplacements(IC, "<input>", TPartial, ErrStr, true);
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(T.N, R2.size());
     std::string TPartial2;
     for (auto i = R2.begin(); i != R2.end(); ++i) {
-      TPartial2 += i->getString(true);
+      TPartial2 += i->getString(true) + '\n';
     }
     EXPECT_EQ(TPartial, TPartial2);
 
-    if (!T.Partial) {
+    if (T.Partial) {
+      EXPECT_EQ(T.Test, TPartial);
+    } else {
       std::string TSplit;
       for (auto i = R.begin(); i != R.end(); ++i) {
         TSplit += i->getString(true) + i->getResultString() + '\n';        
       }
-      if (T.InitiallySplit) {
-        EXPECT_EQ(T.Test, TSplit);
-      } else {
-        // one more RT required to get the cands back
-        auto R3 = ParseReplacements(IC, "<input>", TSplit, ErrStr, false);
-        ASSERT_EQ("", ErrStr);
-        EXPECT_EQ(T.N, R3.size());
-        std::string UnSplit;
-        for (auto i = R3.begin(); i != R3.end(); ++i) {
-          UnSplit += i->getString(false) + '\n';
-        }
-        EXPECT_EQ(T.Test, UnSplit);
+      // one more RT required to get the cands back
+      auto R3 = ParseReplacements(IC, "<input>", TSplit, ErrStr, false);
+      ASSERT_EQ("", ErrStr);
+      EXPECT_EQ(T.N, R3.size());
+      std::string UnSplit;
+      for (auto i = R3.begin(); i != R3.end(); ++i) {
+        UnSplit += i->getString(false) + '\n';
       }
+      EXPECT_EQ(T.Test, UnSplit);
     }
   }
 }
