@@ -806,6 +806,8 @@ ParsedReplacement Parser::parseReplacement (std::string &ErrStr) {
 
   if (OnlyLHS)
     ErrStr = makeErrStr("incomplete replacement, need an 'infer' statement");
+  else if (OnlyRHS)
+    ErrStr = makeErrStr("incomplete replacement, need a 'result' statement");
   else
     ErrStr = makeErrStr(
         "incomplete replacement, need a 'cand' statement or 'infer'/'result' pair");
