@@ -541,11 +541,11 @@ bool Parser::parseLine(std::string &ErrStr) {
     case Token::Ident:
       if (CurTok.str() == "cand") {
         if (OnlyLHS) {
-          ErrStr = makeErrStr(std::string("Not expecting 'cand' when parsing LHS"));
+          ErrStr = makeErrStr("Not expecting 'cand' when parsing LHS");
           return false;
         }
         if (OnlyRHS) {
-          ErrStr = makeErrStr(std::string("Not expecting 'cand' when parsing RHS"));
+          ErrStr = makeErrStr("Not expecting 'cand' when parsing RHS");
           return false;
         }
         if (!consumeToken(ErrStr)) return false;
@@ -561,12 +561,12 @@ bool Parser::parseLine(std::string &ErrStr) {
         return true;
       } else if (CurTok.str() == "infer") {
         if (OnlyRHS) {
-          ErrStr = makeErrStr(std::string("Not expecting 'infer' when parsing RHS"));
+          ErrStr = makeErrStr("Not expecting 'infer' when parsing RHS");
           return false;
         }
         if (!consumeToken(ErrStr)) return false;
         if (LHS) {
-          ErrStr = makeErrStr(std::string("Not expecting a second 'infer'"));
+          ErrStr = makeErrStr("Not expecting a second 'infer'");
           return false;
         }
         LHS = parseInst(ErrStr);
@@ -584,11 +584,11 @@ bool Parser::parseLine(std::string &ErrStr) {
         return true;
       } else if (CurTok.str() == "result") {
         if (OnlyLHS) {
-          ErrStr = makeErrStr(std::string("Not expecting 'result' when parsing LHS"));
+          ErrStr = makeErrStr("Not expecting 'result' when parsing LHS");
           return false;
         }
         if (!OnlyRHS && !LHS) {
-          ErrStr = makeErrStr(std::string("Not expecting 'result' before 'infer'"));
+          ErrStr = makeErrStr("Not expecting 'result' before 'infer'");
           return false;
         }
         if (!consumeToken(ErrStr)) return false;
