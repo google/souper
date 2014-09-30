@@ -449,6 +449,14 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
       return false;
     }
     break;
+
+  case Inst::CtPop:
+  case Inst::BSwap:
+  case Inst::Cttz:
+  case Inst::Ctlz:
+    MaxOps = 1;
+    MinOps = 1;
+    break;
   }
 
   if (MinOps == MaxOps && Ops.size() != MinOps) {
@@ -628,6 +636,10 @@ bool Parser::parseLine(std::string &ErrStr) {
                           .Case("slt", Inst::Slt)
                           .Case("ule", Inst::Ule)
                           .Case("sle", Inst::Sle)
+                          .Case("ctpop", Inst::CtPop)
+                          .Case("bswap", Inst::BSwap)
+                          .Case("cttz", Inst::Cttz)
+                          .Case("ctlz", Inst::Ctlz)
                           .Default(Inst::Kind(~0));
 
       if (IK == Inst::Kind(~0)) {

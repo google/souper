@@ -139,6 +139,26 @@ TEST(ParserTest, RoundTrip) {
 %9:i1 = eq 0:i32, %8
 cand %9 1:i1
 )i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = ctpop %0
+%2:i1 = eq 1:i32, %1
+cand %2 1:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = cttz %0
+%2:i1 = eq 1:i32, %1
+cand %2 1:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = ctlz %0
+%2:i1 = eq 1:i32, %1
+cand %2 1:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = bswap %0
+%2:i1 = eq 1:i32, %1
+cand %2 1:i1
+)i",
   };
 
   struct {
