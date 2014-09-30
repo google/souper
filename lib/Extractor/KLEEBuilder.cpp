@@ -480,6 +480,8 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
       // Create path predicate
       ref<Expr> Pred = klee::ConstantExpr::alloc(1, 1);
       for (const auto &Phi : Path->Phis) {
+        if (Phi->Ops.size() == 1)
+          continue;
         unsigned Num = Path->BlockConstraints[Phi->B];
         const auto &PredExpr = BlockPredMap[Phi->B];
         // Sanity checks
