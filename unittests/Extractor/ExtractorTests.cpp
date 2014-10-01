@@ -83,7 +83,8 @@ struct ExtractorTest : testing::Test {
 
   bool hasCandidateExpr(std::string Expected) {
     for (const auto &Cand : CandExprs) {
-      std::ostringstream SS;
+      std::string SStr;
+      llvm::raw_string_ostream SS(SStr);
 
       std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SS));
       PP->setForceNoLineBreaks(true);
