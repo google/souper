@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-llvm_revision=217983
-klee_commit=5d8db05524f5216900e952c3e1fc2aac9c424391
-hiredis_commit=2602e1b6bc19dc191df0c50cd6502578fe492710
+llvm_revision=218733
+klee_commit=0c8c812db1d331f1e49e27ccd35f1288e58d97e6
+hiredis_commit=8f60ee65327445ed8384290b4040685329eb03c5
 
 llvm_build_type=Debug
 if [ -n "$1" ] ; then
@@ -61,4 +61,9 @@ else
   git clone https://github.com/redis/hiredis.git $hiredisdir
 fi
 
-(cd $hiredisdir && git checkout $hiredis_commit && PREFIX=install make install)
+mkdir -p $hiredisdir/install/include/hiredis
+mkdir -p $hiredisdir/install/lib
+
+(cd $hiredisdir && git checkout $hiredis_commit && make libhiredis.a &&
+ cp -r hiredis.h async.h adapters install/include/hiredis &&
+ cp libhiredis.a install/lib)
