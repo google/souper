@@ -148,14 +148,11 @@ std::string GetReplacementString(const std::vector<InstMapping> &PCs,
                                  InstMapping Mapping);
 void PrintReplacementLHS(llvm::raw_ostream &Out,
                          const std::vector<InstMapping> &PCs,
-                         InstMapping Mapping);
+                         Inst *LHS);
 std::string GetReplacementLHSString(const std::vector<InstMapping> &PCs,
-                                    InstMapping Mapping);
-void PrintReplacementRHS(llvm::raw_ostream &Out,
-                         const std::vector<InstMapping> &PCs,
-                         InstMapping Mapping);
-std::string GetReplacementRHSString(const std::vector<InstMapping> &PCs,
-                                    InstMapping Mapping);
+                                    Inst *LHS);
+void PrintReplacementRHS(llvm::raw_ostream &Out, llvm::APInt Const);
+std::string GetReplacementRHSString(llvm::APInt Const);
 
 }
 

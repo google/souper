@@ -34,16 +34,16 @@ struct ParsedReplacement {
     return GetReplacementString(PCs, Mapping);
   }
   void printReplacementLHS(llvm::raw_ostream &OS) const {
-    PrintReplacementLHS(OS, PCs, Mapping);
+    PrintReplacementLHS(OS, PCs, Mapping.LHS);
   }
   std::string getLHSString() const {
-    return GetReplacementLHSString(PCs, Mapping);
+    return GetReplacementLHSString(PCs, Mapping.LHS);
   }
   void printReplacementRHS(llvm::raw_ostream &OS) const {
-    PrintReplacementRHS(OS, PCs, Mapping);
+    PrintReplacementRHS(OS, Mapping.RHS->Val);
   }
   std::string getRHSString() const {
-    return GetReplacementRHSString(PCs, Mapping);
+    return GetReplacementRHSString(Mapping.RHS->Val);
   }
 };
 
