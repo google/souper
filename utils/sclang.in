@@ -67,7 +67,7 @@ if ($souper) {
     if ($ENV{"SOUPER_PROFILE"}) {
         push @ARGV, ("-g", "-mllvm", "-profile-souper-opts");
         if (linkp()) {
-            push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_STATIC_LIBRARY@");
+            push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
         }
     }
 }
