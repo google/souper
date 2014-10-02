@@ -158,7 +158,7 @@ public:
           continue;
 
         Constant *CI = ConstantInt::get(
-            I->getType(), Cand.second.Mapping.Replacement->Val);
+            I->getType(), Cand.second.Mapping.RHS->Val);
         if (DebugSouperPass) {
           errs() << "\n";
           errs() << "; Priority: " << Cand.second.Priority << '\n';

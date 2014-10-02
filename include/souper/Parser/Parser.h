@@ -30,17 +30,46 @@ struct ParsedReplacement {
   void print(llvm::raw_ostream &OS) const {
     PrintReplacement(OS, PCs, Mapping);
   }
+  std::string getString() const {
+    return GetReplacementString(PCs, Mapping);
+  }
+  void printReplacementLHS(llvm::raw_ostream &OS) const {
+    PrintReplacementLHS(OS, PCs, Mapping.LHS);
+  }
+  std::string getLHSString() const {
+    return GetReplacementLHSString(PCs, Mapping.LHS);
+  }
+  void printReplacementRHS(llvm::raw_ostream &OS) const {
+    assert(Mapping.RHS->K == Inst::Const);
+    PrintReplacementRHS(OS, Mapping.RHS->Val);
+  }
+  std::string getRHSString() const {
+    assert(Mapping.RHS->K == Inst::Const);
+    return GetReplacementRHSString(Mapping.RHS->Val);
+  }
 };
 
 void TestLexer(llvm::StringRef Str);
 
 ParsedReplacement ParseReplacement(InstContext &IC, llvm::StringRef Filename,
                                    llvm::StringRef Str, std::string &ErrStr);
+ParsedReplacement ParseReplacementLHS(InstContext &IC, llvm::StringRef Filename,
+                                      llvm::StringRef Str, std::string &ErrStr);
+ParsedReplacement ParseReplacementRHS(InstContext &IC, llvm::StringRef Filename,
+                                      llvm::StringRef Str, std::string &ErrStr);
 
 std::vector<ParsedReplacement> ParseReplacements(InstContext &IC,
                                                  llvm::StringRef Filename,
                                                  llvm::StringRef Str,
                                                  std::string &ErrStr);
+std::vector<ParsedReplacement> ParseReplacementLHSs(InstContext &IC,
+                                                    llvm::StringRef Filename,
+                                                    llvm::StringRef Str,
+                                                    std::string &ErrStr);
+std::vector<ParsedReplacement> ParseReplacementRHSs(InstContext &IC,
+                                                    llvm::StringRef Filename,
+                                                    llvm::StringRef Str,
+                                                    std::string &ErrStr);
 
 }
 
