@@ -646,7 +646,8 @@ bool souper::IsTriviallyInvalid(ref<Expr> E) {
 std::string souper::BuildQuery(const std::vector<InstMapping> &PCs,
                                InstMapping Mapping,
                                std::vector<Inst *> *ModelVars) {
-  std::ostringstream SMTSS;
+  std::string SMTStr;
+  llvm::raw_string_ostream SMTSS(SMTStr);
   ConstraintManager Manager;
   CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
   Query KQuery(Manager, CE.E);
@@ -671,7 +672,7 @@ std::string souper::BuildQuery(const std::vector<InstMapping> &PCs,
     PP->setForceNoLineBreaks(true);
     PP->scan(CE.E);
     PP->print(CE.E);
-    SMTSS << std::endl;
+    SMTSS << '\n';
   }
 
   return SMTSS.str();
