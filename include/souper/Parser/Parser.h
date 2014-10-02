@@ -40,9 +40,11 @@ struct ParsedReplacement {
     return GetReplacementLHSString(PCs, Mapping.LHS);
   }
   void printReplacementRHS(llvm::raw_ostream &OS) const {
+    assert(Mapping.RHS->K == Inst::Const);
     PrintReplacementRHS(OS, Mapping.RHS->Val);
   }
   std::string getRHSString() const {
+    assert(Mapping.RHS->K == Inst::Const);
     return GetReplacementRHSString(Mapping.RHS->Val);
   }
 };

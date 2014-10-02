@@ -228,8 +228,8 @@ void souper::TestLexer(StringRef Str) {
 
 namespace {
 
-enum ReplacementKind {
-  ParseLHS = 1000,
+enum class ReplacementKind {
+  ParseLHS,
   ParseRHS,
   ParseBoth,
 };
@@ -545,11 +545,11 @@ bool Parser::parseLine(std::string &ErrStr) {
   switch (CurTok.K) {
     case Token::Ident:
       if (CurTok.str() == "cand") {
-        if (RK == ParseLHS) {
+        if (RK == ReplacementKind::ParseLHS) {
           ErrStr = makeErrStr("Not expecting 'cand' when parsing LHS");
           return false;
         }
-        if (RK == ParseRHS) {
+        if (RK == ReplacementKind::ParseRHS) {
           ErrStr = makeErrStr("Not expecting 'cand' when parsing RHS");
           return false;
         }
@@ -565,7 +565,7 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         return true;
       } else if (CurTok.str() == "infer") {
-        if (RK == ParseRHS) {
+        if (RK == ReplacementKind::ParseRHS) {
           ErrStr = makeErrStr("Not expecting 'infer' when parsing RHS");
           return false;
         }
@@ -578,7 +578,7 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!LHS)
           return false;
 
-        if (RK == ParseLHS) {
+        if (RK == ReplacementKind::ParseLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0), std::move(PCs)});
           PCs.clear();
           InstMap.clear();
@@ -588,11 +588,11 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         return true;
       } else if (CurTok.str() == "result") {
-        if (RK == ParseLHS) {
+        if (RK == ReplacementKind::ParseLHS) {
           ErrStr = makeErrStr("Not expecting 'result' when parsing LHS");
           return false;
         }
-        if (RK != ParseRHS && !LHS) {
+        if (RK != ReplacementKind::ParseRHS && !LHS) {
           ErrStr = makeErrStr("Not expecting 'result' before 'infer'");
           return false;
         }
@@ -809,9 +809,9 @@ ParsedReplacement Parser::parseReplacement (std::string &ErrStr) {
     }
   }
 
-  if (RK == ParseLHS)
+  if (RK == ReplacementKind::ParseLHS)
     ErrStr = makeErrStr("incomplete replacement, need an 'infer' statement");
-  else if (RK == ParseRHS)
+  else if (RK == ReplacementKind::ParseRHS)
     ErrStr = makeErrStr("incomplete replacement, need a 'result' statement");
   else
     ErrStr = makeErrStr(
@@ -824,7 +824,7 @@ ParsedReplacement souper::ParseReplacement(InstContext &IC,
                                            llvm::StringRef Str,
                                            std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ParseBoth);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseBoth);
   ParsedReplacement R = P.parseReplacement(ErrStr);
   if (ErrStr == "") {
     assert (R.Mapping.LHS);
@@ -838,7 +838,7 @@ ParsedReplacement souper::ParseReplacementLHS(InstContext &IC,
                                               llvm::StringRef Str,
                                               std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ParseLHS);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseLHS);
   ParsedReplacement R = P.parseReplacement(ErrStr);
   if (ErrStr == "") {
     assert (R.Mapping.LHS);
@@ -852,7 +852,7 @@ ParsedReplacement souper::ParseReplacementRHS(InstContext &IC,
                                               llvm::StringRef Str,
                                               std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ParseRHS);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseRHS);
   ParsedReplacement R = P.parseReplacement(ErrStr);
   if (ErrStr == "") {
     assert (!R.Mapping.LHS);
@@ -882,7 +882,7 @@ std::vector<ParsedReplacement> souper::ParseReplacements(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
     std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ParseBoth);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseBoth);
   std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
   if (ErrStr == "") {
     for (auto i = R.begin(); i != R.end(); ++i) {
@@ -897,7 +897,7 @@ std::vector<ParsedReplacement> souper::ParseReplacementLHSs(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
     std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ParseLHS);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseLHS);
   std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
   if (ErrStr == "") {
     for (auto i = R.begin(); i != R.end(); ++i) {
@@ -912,7 +912,7 @@ std::vector<ParsedReplacement> souper::ParseReplacementRHSs(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
     std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ParseRHS);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseRHS);
   std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
   if (ErrStr == "") {
     for (auto i = R.begin(); i != R.end(); ++i) {
