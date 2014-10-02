@@ -246,6 +246,14 @@ const char *Inst::getKindName(Kind K) {
     return "ule";
   case Sle:
     return "sle";
+  case CtPop:
+    return "ctpop";
+  case BSwap:
+    return "bswap";
+  case Cttz:
+    return "cttz";
+  case Ctlz:
+    return "ctlz";
   }
 
   llvm_unreachable("all cases covered");
