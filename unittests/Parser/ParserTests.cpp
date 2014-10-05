@@ -31,7 +31,6 @@ TEST(ParserTest, Errors) {
       { "0:ix", "<input>:1:4: expected integer" },
       { "0:i0", "<input>:1:4: width must be at least 1" },
       { "?", "<input>:1:1: unexpected '?'" },
-      { "cand 0:i1 0:i1 ; this is a comment\n", "" },
 
       // parsing
       { "%0:i32 = var\n%1:i1 = eq %0:i32, %0:i32\n",
@@ -51,11 +50,7 @@ TEST(ParserTest, Errors) {
       { "%0:i1 = block\n", "<input>:1:1: blocks may not have a width" },
       { "%0:i1 = phi %0\n", "<input>:1:13: %0 is not a block" },
       { "%0 = block\n%1:i1 = phi %0 foo\n", "<input>:2:16: expected ','" },
-      { ",\n", "<input>:1:1: expected inst, block, cand or pc" },
-      { "cand 0:i1 0:i1\ncand 0:i1 0:i1\n",
-        "<input>:2:1: expected a single replacement" },
-      { "%0:i1 = var\n",
-        "<input>:2:1: incomplete replacement, need a 'cand' statement" },
+      { ",\n", "<input>:1:1: expected inst, block, cand, infer, result, or pc" },
 
       // type checking
       { "%0 = add 1:i32\n",
@@ -122,6 +117,94 @@ TEST(ParserTest, Errors) {
     ParseReplacement(IC, "<input>", T.Test, ErrStr);
     EXPECT_EQ(T.WantError, ErrStr);
   }
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    ParseReplacementLHS(IC, "<input>", T.Test, ErrStr);
+    EXPECT_EQ(T.WantError, ErrStr);
+  }
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    ParseReplacementRHS(IC, "<input>", T.Test, ErrStr);
+    EXPECT_EQ(T.WantError, ErrStr);
+  }
+}
+
+TEST(ParserTest, FullReplacementErrors) {
+  struct {
+    std::string Test, WantError;
+  } Tests[] = {
+      // lexing
+      { "cand 0:i1 0:i1 ; this is a comment\n", "" },
+      { "infer 0:i1\nresult 0:i1 ; this is a comment\n", "" },
+
+      // parsing
+      { "infer 0:i1\ninfer 0:i1", "<input>:2:7: Not expecting a second 'infer'" },
+      { "cand 0:i1 ; this is a comment\n", "<input>:2:1: unexpected token" },
+      { "%0:i1 = var\n",
+        "<input>:2:1: incomplete replacement, need a 'cand' statement or 'infer'/'result' pair" },
+      { "cand 0:i1 0:i1\ncand 0:i1 0:i1\n",
+        "<input>:2:1: expected a single replacement" },
+
+      // type checking
+    };
+
+  InstContext IC;
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    ParseReplacement(IC, "<input>", T.Test, ErrStr);
+    EXPECT_EQ(T.WantError, ErrStr);
+  }
+}
+
+TEST(ParserTest, ReplacementLHSErrors) {
+  struct {
+    std::string Test, WantError;
+  } Tests[] = {
+      // lexing
+      { "infer 0:i1 ; this is a comment\n", "" },
+
+      // parsing
+      { "%0:i1 = var\n",
+        "<input>:2:1: incomplete replacement, need an 'infer' statement" },
+      { "infer 0:i1 0:i1 ; this is a comment\n", "<input>:1:12: expected a single replacement" },
+      { "cand 0:i1 0:i1", "<input>:1:1: Not expecting 'cand' when parsing LHS" },
+      { "infer 0:i1\ninfer 0:i1", "<input>:2:1: expected a single replacement" },
+
+      // type checking
+    };
+
+  InstContext IC;
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    ParseReplacementLHS(IC, "<input>", T.Test, ErrStr);
+    EXPECT_EQ(T.WantError, ErrStr);
+  }
+}
+
+TEST(ParserTest, ReplacementRHSErrors) {
+  struct {
+    std::string Test, WantError;
+  } Tests[] = {
+      // lexing
+      { "result 0:i1 ; this is a comment\n", "" },
+
+      // parsing
+      { "%0:i1 = var\n",
+        "<input>:2:1: incomplete replacement, need a 'result' statement" },
+      { "infer 0:i1 0:i1 ; this is a comment\n", 
+        "<input>:1:1: Not expecting 'infer' when parsing RHS" },
+      { "cand 0:i1 0:i1", "<input>:1:1: Not expecting 'cand' when parsing RHS" },
+      { "result 0:i1\nresult 0:i1", "<input>:2:1: expected a single replacement" },
+
+      // type checking
+    };
+
+  InstContext IC;
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    ParseReplacementRHS(IC, "<input>", T.Test, ErrStr);
+    EXPECT_EQ(T.WantError, ErrStr);
+  }
 }
 
 TEST(ParserTest, RoundTrip) {
@@ -169,21 +252,202 @@ cand %0 3:i32
     std::string ErrStr;
     auto R = ParseReplacement(IC, "<input>", T, ErrStr);
     ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(R.getString(), T);
 
-    std::string NewStr;
-    llvm::raw_string_ostream OS(NewStr);
-    R.print(OS);
-    EXPECT_EQ(OS.str(), T);
+    auto LHS = R.getLHSString();
+    auto R2 = ParseReplacementLHS(IC, "<input>", LHS, ErrStr);
+    ASSERT_EQ("", ErrStr);
+    auto LHS2 = R2.getLHSString();
+    EXPECT_EQ(LHS, LHS2);
+
+    auto RHS = R.getRHSString();
+    auto R3 = ParseReplacementRHS(IC, "<input>", RHS, ErrStr);
+    ASSERT_EQ("", ErrStr);
+    auto RHS2 = R3.getRHSString();
+    EXPECT_EQ(RHS, RHS2);
+
+    auto Split = LHS + RHS;
+    auto R4 = ParseReplacement(IC, "<input>", Split, ErrStr);
+    ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(R4.getString(), T);
   }
 
   for (const auto &T : NonEqualTests) {
     std::string ErrStr;
     auto R = ParseReplacement(IC, "<input>", T.Test, ErrStr);
     ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(R.getString(), T.Want);
 
-    std::string NewStr;
-    llvm::raw_string_ostream OS(NewStr);
-    R.print(OS);
-    EXPECT_EQ(OS.str(), T.Want);
+    auto LHS = R.getLHSString();
+    auto R2 = ParseReplacementLHS(IC, "<input>", LHS, ErrStr);
+    ASSERT_EQ("", ErrStr);
+    auto LHS2 = R2.getLHSString();
+    EXPECT_EQ(LHS, LHS2);
+
+    auto RHS = R.getRHSString();
+    auto R3 = ParseReplacementRHS(IC, "<input>", RHS, ErrStr);
+    ASSERT_EQ("", ErrStr);
+    auto RHS2 = R3.getRHSString();
+    EXPECT_EQ(RHS, RHS2);
+
+    auto Split = LHS + RHS;
+    auto R4 = ParseReplacement(IC, "<input>", Split, ErrStr);
+    ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(R4.getString(), T.Want);
+  }
+}
+
+int countSubstring(const std::string& str, const std::string& sub)
+{
+  if (sub.length() == 0) 
+    return 0;
+  int count = 0;
+  for (size_t offset = str.find(sub); offset != std::string::npos;
+       offset = str.find(sub, offset + sub.length()))
+    ++count;
+  return count;
+}
+
+TEST(ParserTest, RoundTripMultiple) {
+  struct {
+    std::string Test;
+    int N;
+  } Tests[] = {
+      { R"i(%0 = block
+%1 = block
+%2:i56 = var ; 2
+%3:i56 = and 8998403161718784:i56, %2
+%4:i1 = ne 0:i56, %3
+%5:i32 = zext %4
+%6:i32 = var ; 6
+%7:i32 = shl %6, 24:i32
+%8:i32 = ashrexact %7, 24:i32
+%9:i32 = sdiv %5, %8
+%10:i32 = phi %1, %9, %5
+%11:i16 = trunc %10
+%12:i16 = shl %11, 8:i16
+%13:i16 = ashrexact %12, 8:i16
+%14 = block
+%15:i32 = var ; 15
+%16:i32 = var ; 16
+%17:i32 = phi %14, 1:i32, %15, %16
+%18:i16 = trunc %17
+%19:i16 = add %13, %18
+%20:i1 = ne 65535:i16, %19
+%21:i32 = zext %20
+%22:i16 = var ; 22
+%23:i32 = sext %22
+%24:i32 = sdiv %21, %23
+%25:i32 = phi %0, %24, %21
+%26:i32 = add 250:i32, %25
+%27:i32 = and 255:i32, %26
+%28:i1 = ne 0:i32, %27
+cand %28 1:i1
+
+%0:i32 = var ; 0
+%1:i56 = var ; 1
+%2:i56 = shl %1, 7:i56
+%3:i56 = ashr %2, 41:i56
+%4:i32 = trunc %3
+%5:i32 = xor %0, %4
+%6:i32 = var ; 6
+%7:i1 = eq 4294938068:i32, %6
+%8:i32 = zext %7
+%9:i1 = sle %5, %8
+%10:i16 = zext %9
+%11:i16 = or 142:i16, %10
+%12:i16 = mul 65492:i16, %11
+%13:i1 = eq 0:i16, %12
+cand %13 0:i1
+
+%0:i64 = var ; 0
+%1:i1 = eq 0:i64, %0
+%2:i32 = zext %1
+%3:i32 = lshr 5:i32, %2
+%4:i8 = trunc %3
+%5:i1 = eq 0:i8, %4
+cand %5 0:i1
+
+%0:i8 = var ; 0
+%1:i32 = sext %0
+%2:i1 = slt %0, 0:i8
+%3:i32 = select %2, 0:i32, 6:i32
+%4:i32 = ashr %1, %3
+%5:i1 = ult 31:i32, %4
+%6:i32 = lshr 32767:i32, %4
+%7:i1 = slt %6, 4:i32
+%8:i1 = or %5, %7
+%9:i32 = shl 4:i32, %4
+%10:i8 = trunc %9
+%11:i8 = select %8, 4:i8, %10
+%12:i32 = var ; 12
+%13:i1 = ult 31:i32, %12
+%14:i32 = lshr 1:i32, %12
+%15:i8 = trunc %14
+%16:i8 = xor 40:i8, %15
+%17:i8 = select %13, 41:i8, %16
+%18:i8 = sub %11, %17
+%19:i1 = slt %18, 0:i8
+cand %19 1:i1
+
+%0:i8 = var ; 0
+%1:i32 = sext %0
+%2:i1 = slt %0, 0:i8
+%3:i32 = select %2, 0:i32, 6:i32
+%4:i32 = ashr %1, %3
+%5:i1 = ult 31:i32, %4
+%6:i32 = lshr 32767:i32, %4
+%7:i1 = slt %6, 4:i32
+%8:i1 = or %5, %7
+cand %8 0:i1
+
+%0:i8 = var ; 0
+%1:i32 = sext %0
+%2:i1 = slt %0, 0:i8
+%3:i32 = select %2, 0:i32, 6:i32
+%4:i32 = ashr %1, %3
+%5:i32 = lshr 32767:i32, %4
+%6:i1 = slt %5, 4:i32
+cand %6 0:i1
+
+)i", 6 },
+  };
+
+  InstContext IC;
+  for (const auto &T : Tests) {
+    std::string ErrStr;
+    auto R = ParseReplacements(IC, "<input>", T.Test, ErrStr);
+    EXPECT_EQ("", ErrStr);
+    EXPECT_EQ(T.N, R.size());
+
+    std::string LHSStr, RHSStr;
+    for (auto i = R.begin(); i != R.end(); ++i) {
+      LHSStr += i->getLHSString() + '\n';
+      RHSStr += i->getRHSString() + '\n';
+    }
+    EXPECT_EQ(T.N, countSubstring(LHSStr, "infer"));
+    EXPECT_EQ(T.N, countSubstring(RHSStr, "result"));
+    EXPECT_EQ(0, countSubstring(LHSStr, "result"));
+    EXPECT_EQ(0, countSubstring(RHSStr, "infer"));
+    auto LHSs = ParseReplacementLHSs(IC, "<input>", LHSStr, ErrStr);
+    ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(T.N, LHSs.size());
+    auto RHSs = ParseReplacementRHSs(IC, "<input>", RHSStr, ErrStr);
+    ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(T.N, RHSs.size());
+
+    std::string Split;
+    for (auto i = LHSs.begin(), j = RHSs.begin(); i != LHSs.end(); ++i, ++j) {
+      Split += i->getLHSString() + j->getRHSString() + '\n';        
+    }
+    // one more RT to get the "cand" instructions back
+    auto R2 = ParseReplacements(IC, "<input>", Split, ErrStr);
+    ASSERT_EQ("", ErrStr);
+    EXPECT_EQ(T.N, R2.size());
+    std::string UnSplit;
+    for (auto i = R2.begin(); i != R2.end(); ++i) {
+      UnSplit += i->getString() + '\n';
+    }
+    EXPECT_EQ(T.Test, UnSplit);
   }
 }
