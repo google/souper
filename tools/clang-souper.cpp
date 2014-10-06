@@ -51,5 +51,5 @@ int main(int argc, const char **argv) {
   Tool.run(Factory.get());
 
   std::unique_ptr<Solver> S = GetSolverFromArgs();
-  return SolveCandidateMap(llvm::outs(), CandMap, S.get()) ? 0 : 1;
+  return SolveCandidateMap(llvm::outs(), CandMap, S.get(), IC) ? 0 : 1;
 }

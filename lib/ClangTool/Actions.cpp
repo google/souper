@@ -19,7 +19,6 @@
 #include "clang/Tooling/Tooling.h"
 #include "llvm/IR/Module.h"
 #include "souper/Extractor/Candidates.h"
-#include "souper/Extractor/CandidateMap.h"
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/CandidateMapUtils.h"
 #include <functional>

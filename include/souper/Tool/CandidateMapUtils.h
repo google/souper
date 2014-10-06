@@ -16,7 +16,8 @@
 #define SOUPER_TOOL_CANDIDATEMAPUTILS_H
 
 #include "llvm/Support/raw_ostream.h"
-#include "souper/Extractor/CandidateMap.h"
+#include "souper/Extractor/Candidates.h"
+#include "souper/Extractor/KLEEBuilder.h"
 #include "souper/Extractor/Solver.h"
 
 namespace llvm {
@@ -27,15 +28,20 @@ class Module;
 
 namespace souper {
 
-class SMTLIBSolver;
+class Solver;
+
+typedef std::vector<CandidateReplacement> CandidateMap;
+
+void AddToCandidateMap(CandidateMap &M, const CandidateReplacement &CR);
 
 void AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
                              CandidateMap &CandMap, llvm::Module *M);
 
-bool SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
-                       Solver *Solver);
+bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
+                       Solver *Solver, InstContext &IC);
 
-bool CheckCandidateMap(llvm::Module &Mod, const CandidateMap &M, Solver *S);
+bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
+                       InstContext &IC);
 
 }
 

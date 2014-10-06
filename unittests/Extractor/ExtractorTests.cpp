@@ -56,10 +56,17 @@ struct ExtractorTest : testing::Test {
     CS = ExtractCandidates(&*M->begin(), IC, EBC, Opts);
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
-        std::unique_ptr<CandidateExpr> CE(
-            new CandidateExpr(GetCandidateExprForReplacement(R.PCs, R.Mapping)));
-        if (!IsTriviallyInvalid(CE->E)) {
-          CandExprs.emplace_back(std::move(CE));
+        assert(R.Mapping.LHS->Width == 1);
+        std::vector<Inst *>Guesses { IC.getConst(APInt(1, false)),
+                                     IC.getConst(APInt(1, true)) };
+        for (auto I : Guesses) {
+          R.Mapping.RHS = I;
+          std::unique_ptr<CandidateExpr> CE(
+              new CandidateExpr(GetCandidateExprForReplacement(R.PCs,
+                                                               R.Mapping)));
+          if (!IsTriviallyInvalid(CE->E)) {
+            CandExprs.emplace_back(std::move(CE));
+          }
         }
       }
     }
@@ -221,8 +228,7 @@ u:
 }
 )m"));
 
-  EXPECT_TRUE(hasCandidate(R"c(; Priority: 1
-%0:i1 = var ; p
+  EXPECT_TRUE(hasCandidate(R"c(%0:i1 = var ; p
 %1:i1 = var ; q
 %2:i1 = and %0, %1
 pc %2 1:i1
@@ -234,8 +240,7 @@ pc %3 1:i1
 cand %5 1:i1
 )c"));
 
-  EXPECT_TRUE(hasCandidate(R"c(; Priority: 1
-%0:i1 = var ; s
+  EXPECT_TRUE(hasCandidate(R"c(%0:i1 = var ; s
 pc %0 1:i1
 %1:i1 = eq 1:i1, %0
 cand %1 1:i1
