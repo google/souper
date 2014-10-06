@@ -14,22 +14,33 @@
 
 #define DEBUG_TYPE "souper"
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
+#include "souper/Parser/Parser.h"
 
 #include "hiredis.h"
 #include <sstream>
 #include <unordered_map>
 
-STATISTIC(MemHits, "Number of internal cache hits");
-STATISTIC(MemMisses, "Number of internal cache misses");
+STATISTIC(MemHitsInfer, "Number of internal cache hits for infer()");
+STATISTIC(MemMissesInfer, "Number of internal cache misses for infer()");
+STATISTIC(MemHitsIsValid, "Number of internal cache hits for isValid()");
+STATISTIC(MemMissesIsValid, "Number of internal cache misses for isValid()");
 STATISTIC(RedisHits, "Number of external cache hits");
 STATISTIC(RedisMisses, "Number of external cache misses");
+STATISTIC(TriviallyInvalid, "Number of trivially invalid expressions");
 
 using namespace souper;
+using namespace llvm;
 
 namespace {
+
+static cl::opt<bool> StaticProfile("souper-static-profile", cl::init(true),
+    cl::desc("Static profiling of Souper optimizations (default=true)"));
 
 class BaseSolver : public Solver {
   std::unique_ptr<SMTLIBSolver> SMTSolver;
@@ -38,6 +49,36 @@ class BaseSolver : public Solver {
 public:
   BaseSolver(std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout)
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
+
+  std::error_code infer(const std::vector<InstMapping> &PCs,
+                        Inst *LHS, Inst *&RHS, const InstOrigin *O,
+                        InstContext &IC) {
+    assert(LHS->Width == 1);
+    std::error_code EC;
+    std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
+                                 IC.getConst(APInt(1, false)) };
+    for (auto I : Guesses) {
+      // TODO: we can trivially synthesize an i1 undef by checking for validity
+      // of both guesses
+      InstMapping Mapping(LHS, I);
+      CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
+      if (IsTriviallyInvalid(CE.E)) {
+        ++TriviallyInvalid;
+      } else {
+        bool IsSat;
+        EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0), IsSat, 0, 0,
+                                      Timeout);
+        if (EC)
+          return EC;
+        if (!IsSat) {
+          RHS = I;
+          return EC;
+        }
+      }
+    }
+    RHS = 0;
+    return EC;
+  }
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
                           InstMapping Mapping, bool &IsValid,
@@ -75,11 +116,44 @@ public:
 
 class MemCachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
-  std::unordered_map<std::string, std::pair<std::error_code, bool>> Cache;
+  std::unordered_map<std::string, std::pair<std::error_code, bool>> IsValidCache;
+  std::unordered_map<std::string, std::pair<std::error_code, std::string>>
+    InferCache;
 
 public:
   MemCachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
+
+  std::error_code infer(const std::vector<InstMapping> &PCs,
+                        Inst *LHS, Inst *&RHS, const InstOrigin *O,
+                        InstContext &IC) {
+    std::string Repl = GetReplacementLHSString(PCs, LHS);
+    const auto &ent = InferCache.find(Repl);
+    if (ent == InferCache.end()) {
+      ++MemMissesInfer;
+      std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, O, IC);
+      std::string RHSStr;
+      if (!EC && RHS) {
+        assert(RHS->K == Inst::Const);
+        RHSStr = GetReplacementRHSString(RHS->Val);
+      }
+      InferCache.emplace(Repl, std::make_pair(EC, RHSStr));
+      return EC;
+    } else {
+      ++MemHitsInfer;
+      std::string ES;
+      StringRef S = ent->second.second;
+      if (S == "") {
+        RHS = 0;
+      } else {
+        ParsedReplacement R = ParseReplacementRHS(IC, "<cache>", S, ES);
+        if (ES != "")
+          return std::make_error_code(std::errc::protocol_error);
+        RHS = R.Mapping.RHS;
+      }
+      return ent->second.first;
+    }
+  }
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
                           InstMapping Mapping, bool &IsValid,
@@ -89,14 +163,14 @@ public:
       return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
 
     std::string Repl = GetReplacementString(PCs, Mapping);
-    const auto &ent = Cache.find(Repl);
-    if (ent == Cache.end()) {
-      ++MemMisses;
+    const auto &ent = IsValidCache.find(Repl);
+    if (ent == IsValidCache.end()) {
+      ++MemMissesIsValid;
       std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid, 0);
-      Cache.emplace (Repl, std::make_pair (EC, IsValid));
+      IsValidCache.emplace(Repl, std::make_pair(EC, IsValid));
       return EC;
     } else {
-      ++MemHits;
+      ++MemHitsIsValid;
       IsValid = ent->second.second;
       return ent->second.first;
     }
@@ -131,47 +205,85 @@ public:
     }
   }
 
-  std::error_code isValid(const std::vector<InstMapping> &PCs,
-                          InstMapping Mapping, bool &IsValid,
-                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
-    // TODO: add caching support for models.
-    if (Model)
-      return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
+  std::error_code infer(const std::vector<InstMapping> &PCs,
+                        Inst *LHS, Inst *&RHS, const InstOrigin *O,
+                        InstContext &IC) {
+    std::string LHSStr = GetReplacementLHSString(PCs, LHS);
 
-    std::string Repl = GetReplacementString(PCs, Mapping);
-    redisReply *reply = (redisReply *)redisCommand(ctx, "GET %s", Repl.c_str());
-    if (!reply) {
-      llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
+    if (StaticProfile) {
+      std::string Str;
+      llvm::raw_string_ostream Loc(Str);
+      if (O) {
+        Instruction *I = O->getInstruction();
+        I->getDebugLoc().print(I->getContext(), Loc);
+      }
+      std::string HField = "sprofile " + Loc.str();
+      redisReply *reply = (redisReply *)redisCommand(ctx, "HINCRBY %s %s 1",
+          LHSStr.c_str(), HField.c_str());
+      if (!reply || ctx->err) {
+        llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
+      }
+      if (reply->type != REDIS_REPLY_INTEGER) {
+        llvm::report_fatal_error(
+            "Redis protocol error for static profile, didn't expect reply type "
+            + std::to_string(reply->type));
+      }
+      freeReplyObject(reply);
     }
 
+    redisReply *reply = (redisReply *)redisCommand(ctx, "HGET %s result",
+                                                   LHSStr.c_str());
+    if (!reply || ctx->err) {
+      llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
+    }
     if (reply->type == REDIS_REPLY_NIL) {
       freeReplyObject(reply);
       ++RedisMisses;
-      std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid, 0);
-      if (!EC) {
-        reply = (redisReply *)redisCommand(ctx, "SET %s %d", Repl.c_str(),
-            IsValid);
-        if (!reply) {
-          llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
-        }
-        if (reply->type != REDIS_REPLY_STATUS) {
-          llvm::report_fatal_error(
-              "Redis protocol error, didn't expect reply type " +
-              std::to_string(reply->type));
-        }
-        freeReplyObject(reply);
+      std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, O, IC);
+      std::string RHSStr;
+      if (!EC && RHS) {
+        assert(RHS->K == Inst::Const);
+        RHSStr = GetReplacementRHSString(RHS->Val);
       }
+      reply = (redisReply *)redisCommand(ctx, "HSET %s result %s",
+                                         LHSStr.c_str(), RHSStr.c_str());
+      if (!reply || ctx->err) {
+        llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
+      }
+      if (reply->type != REDIS_REPLY_INTEGER) {
+        llvm::report_fatal_error(
+            "Redis protocol error for cache fill, didn't expect reply type " +
+            std::to_string(reply->type));
+      }
+      freeReplyObject(reply);
       return EC;
     } else if (reply->type == REDIS_REPLY_STRING) {
-      std::istringstream(reply->str) >> IsValid;
-      freeReplyObject(reply);
       ++RedisHits;
+      std::string ES;
+      StringRef S = reply->str;
+      if (S == "") {
+        RHS = 0;
+      } else {
+        ParsedReplacement R = ParseReplacementRHS(IC, "<cache>", S, ES);
+        if (ES != "")
+          return std::make_error_code(std::errc::protocol_error);
+        RHS = R.Mapping.RHS;
+      }
+      freeReplyObject(reply);
       return std::error_code();
     } else {
       llvm::report_fatal_error(
-          "Redis protocol error, didn't expect reply type " +
+          "Redis protocol error for cache lookup, didn't expect reply type " +
           std::to_string(reply->type));
     }
+  }
+
+  std::error_code isValid(const std::vector<InstMapping> &PCs,
+                          InstMapping Mapping, bool &IsValid,
+                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
+    // N.B. we decided that since the important clients have moved to infer(),
+    // we'll no longer support Redis-based caching for isValid()
+    return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
   }
 
   std::string getName() {

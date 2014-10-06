@@ -15,7 +15,7 @@
 #ifndef SOUPER_CLANGTOOL_ACTIONS_H
 #define SOUPER_CLANGTOOL_ACTIONS_H
 
-#include "souper/Extractor/CandidateMap.h"
+#include "souper/Tool/CandidateMapUtils.h"
 #include <functional>
 
 namespace llvm {

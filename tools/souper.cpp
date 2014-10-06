@@ -28,7 +28,6 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "souper/Extractor/Candidates.h"
-#include "souper/Extractor/CandidateMap.h"
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/CandidateMapUtils.h"
 #include "souper/Tool/GetSolverFromArgs.h"
@@ -100,8 +99,8 @@ int main(int argc, char **argv) {
   AddModuleToCandidateMap(IC, EBC, CandMap, M.get());
 
   if (Check) {
-    return CheckCandidateMap(*M.get(), CandMap, S.get()) ? 0 : 1;
+    return CheckCandidateMap(*M.get(), CandMap, S.get(), IC) ? 0 : 1;
   } else {
-    return SolveCandidateMap(llvm::outs(), CandMap, S.get()) ? 0 : 1;
+    return SolveCandidateMap(llvm::outs(), CandMap, S.get(), IC) ? 0 : 1;
   }
 }
