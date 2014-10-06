@@ -329,7 +329,7 @@ Inst *ExprBuilder::get(Value *V) {
 
 void emplace_back_dedup(std::vector<InstMapping> &PCs, Inst *LHS, Inst *RHS) {
   for (auto &i : PCs)
-    if (i.Source == LHS && i.Replacement == RHS)
+    if (i.LHS == LHS && i.RHS == RHS)
       return;
   PCs.emplace_back(LHS, RHS);
 }
