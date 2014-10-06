@@ -327,21 +327,28 @@ Inst *ExprBuilder::get(Value *V) {
   return E;
 }
 
+void emplace_back_dedup(std::vector<InstMapping> &PCs, Inst *LHS, Inst *RHS) {
+  for (auto &i : PCs)
+    if (i.Source == LHS && i.Replacement == RHS)
+      return;
+  PCs.emplace_back(LHS, RHS);
+}
+
 void ExprBuilder::addPathConditions(std::vector<InstMapping> &PCs,
                                     BasicBlock *BB) {
   if (auto Pred = BB->getSinglePredecessor()) {
     addPathConditions(PCs, Pred);
     if (auto Branch = dyn_cast<BranchInst>(Pred->getTerminator())) {
       if (Branch->isConditional()) {
-        PCs.emplace_back(
-            get(Branch->getCondition()),
+        emplace_back_dedup(
+            PCs, get(Branch->getCondition()),
             IC.getConst(APInt(1, Branch->getSuccessor(0) == BB)));
       }
     } else if (auto Switch = dyn_cast<SwitchInst>(Pred->getTerminator())) {
       Inst *Cond = get(Switch->getCondition());
       ConstantInt *Case = Switch->findCaseDest(BB);
       if (Case) {
-        PCs.emplace_back(Cond, get(Case));
+        emplace_back_dedup(PCs, Cond, get(Case));
       } else {
         // default
         std::vector<Inst *> Cases;
@@ -350,8 +357,8 @@ void ExprBuilder::addPathConditions(std::vector<InstMapping> &PCs,
           Cases.push_back(
               IC.getInst(Inst::Ne, 1, {Cond, get(I.getCaseValue())}));
         }
-        PCs.emplace_back(IC.getInst(Inst::And, 1, Cases),
-                         IC.getConst(APInt(1, true)));
+        emplace_back_dedup(PCs, IC.getInst(Inst::And, 1, Cases),
+                           IC.getConst(APInt(1, true)));
       }
     }
   }
