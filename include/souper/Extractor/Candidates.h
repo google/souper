@@ -50,9 +50,8 @@ private:
 };
 
 struct CandidateReplacement {
-  CandidateReplacement(InstOrigin Origin, InstMapping Mapping,
-                       unsigned Priority)
-      : Origin(Origin), Mapping(Mapping), Priority(Priority) {}
+  CandidateReplacement(InstOrigin Origin, InstMapping Mapping)
+      : Origin(Origin), Mapping(Mapping) {}
 
   /// The instruction from which the candidate was derived.
   InstOrigin Origin;
@@ -63,10 +62,8 @@ struct CandidateReplacement {
   /// The path conditions relevant to this replacement.
   std::vector<InstMapping> PCs;
 
-  /// The priority of this replacement, i.e. the number of instructions saved by
-  /// performing the replacement.
-  unsigned Priority;
-
+  void printFunction(llvm::raw_ostream &Out) const;
+  void printLHS(llvm::raw_ostream &Out) const;
   void print(llvm::raw_ostream &Out) const;
 };
 

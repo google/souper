@@ -16,7 +16,7 @@
 #define SOUPER_EXTRACTOR_SOLVER_H
 
 #include "llvm/ADT/APInt.h"
-#include "souper/Extractor/CandidateMap.h"
+#include "souper/Tool/CandidateMapUtils.h"
 #include "souper/Extractor/Candidates.h"
 #include "souper/SMTLIB2/Solver.h"
 #include <map>
@@ -28,6 +28,9 @@ namespace souper {
 class Solver {
 public:
   virtual ~Solver();
+  virtual std::error_code
+  infer(const std::vector<InstMapping> &PCs, Inst *LHS, Inst *&RHS,
+        InstContext &IC) = 0;
   virtual std::error_code
   isValid(const std::vector<InstMapping> &PCs, InstMapping Mapping,
           bool &IsValid,

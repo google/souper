@@ -14,6 +14,7 @@
 
 #define DEBUG_TYPE "souper"
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
@@ -26,8 +27,10 @@ STATISTIC(MemHits, "Number of internal cache hits");
 STATISTIC(MemMisses, "Number of internal cache misses");
 STATISTIC(RedisHits, "Number of external cache hits");
 STATISTIC(RedisMisses, "Number of external cache misses");
+STATISTIC(TriviallyInvalid, "Number of trivially invalid expressions");
 
 using namespace souper;
+using namespace llvm;
 
 namespace {
 
@@ -38,6 +41,35 @@ class BaseSolver : public Solver {
 public:
   BaseSolver(std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout)
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
+
+  std::error_code infer(const std::vector<InstMapping> &PCs,
+                        Inst *LHS, Inst *&RHS, InstContext &IC) {
+    assert(LHS->Width == 1);
+    std::error_code EC;
+    std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
+                                 IC.getConst(APInt(1, false)) };
+    for (auto I : Guesses) {
+      // TODO: we can trivially synthesize an i1 undef by checking for validity
+      // of both guesses
+      InstMapping Mapping(LHS, I);
+      CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
+      if (IsTriviallyInvalid(CE.E)) {
+        ++TriviallyInvalid;
+      } else {
+        bool IsSat;
+        EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0), IsSat, 0, 0,
+                                      Timeout);
+        if (EC)
+          return EC;
+        if (!IsSat) {
+          RHS = I;
+          return EC;
+        }
+      }
+    }
+    RHS = 0;
+    return EC;
+  }
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
                           InstMapping Mapping, bool &IsValid,
@@ -80,6 +112,11 @@ class MemCachingSolver : public Solver {
 public:
   MemCachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
+
+  std::error_code infer(const std::vector<InstMapping> &PCs,
+                        Inst *LHS, Inst *&RHS, InstContext &IC) {
+    return UnderlyingSolver->infer(PCs, LHS, RHS, IC);
+  }
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
                           InstMapping Mapping, bool &IsValid,
@@ -129,6 +166,11 @@ public:
       llvm::report_fatal_error((std::string)"Redis connection error: " +
                                ctx->errstr + "\n");
     }
+  }
+
+  std::error_code infer(const std::vector<InstMapping> &PCs,
+                        Inst *LHS, Inst *&RHS, InstContext &IC) {
+    return UnderlyingSolver->infer(PCs, LHS, RHS, IC);
   }
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,

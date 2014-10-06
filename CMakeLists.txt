@@ -113,11 +113,9 @@ add_library(souperClangTool STATIC
 )
 
 set(SOUPER_EXTRACTOR_FILES
-  lib/Extractor/CandidateMap.cpp
   lib/Extractor/Candidates.cpp
   lib/Extractor/KLEEBuilder.cpp
   lib/Extractor/Solver.cpp
-  include/souper/Extractor/CandidateMap.h
   include/souper/Extractor/Candidates.h
   include/souper/Extractor/KLEEBuilder.h
   include/souper/Extractor/Solver.h

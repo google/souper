@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
   if (MB) {
     InstContext IC;
     std::string ErrStr;
-    std::vector<ParsedReplacement> Reps = ParseReplacements(
+    std::vector<ParsedReplacement> Reps = ParseReplacementLHSs(
         IC, MB.get()->getBufferIdentifier(), MB.get()->getBuffer(), ErrStr);
     if (!ErrStr.empty()) {
       llvm::errs() << ErrStr << '\n';
@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
     }
 
     for (const auto &R : Reps) {
-      R.print(llvm::outs());
+      R.printLHS(llvm::outs());
     }
   } else {
     llvm::errs() << MB.getError().message() << '\n';

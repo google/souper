@@ -136,61 +136,50 @@ public:
       errs() << "; Using solver: " << S->getName() << '\n';
     }
 
-    DenseSet<Instruction *> ReplacedInsts;
-
-    for (const auto &Cand : CandMap) {
-      bool Valid;
+    for (auto &Cand : CandMap) {
       if (std::error_code EC =
-              S->isValid(Cand.second.PCs, Cand.second.Mapping, Valid, 0)) {
+              S->infer(Cand.PCs, Cand.Mapping.LHS, Cand.Mapping.RHS, IC)) {
         if (EC == std::errc::timed_out) {
           continue;
         } else {
           report_fatal_error("Unable to query solver: " + EC.message() + "\n");
         }
       }
-
-      if (!Valid)
+      if (!Cand.Mapping.RHS)
         continue;
+      Instruction *I = Cand.Origin.getInstruction();
 
-      for (const auto &O : Cand.second.Origins) {
-        Instruction *I = O.getInstruction();
-        if (!ReplacedInsts.insert(I).second)
-          continue;
-
-        Constant *CI = ConstantInt::get(
-            I->getType(), Cand.second.Mapping.RHS->Val);
-        if (DebugSouperPass) {
-          errs() << "\n";
-          errs() << "; Priority: " << Cand.second.Priority << '\n';
-          errs() << "; Replacing \"";
-          I->print(errs());
-          errs() << "\"\n; from \"";
-          I->getDebugLoc().print(I->getContext(), errs());
-          errs() << "\"\n; with \"";
-          CI->print(errs());
-          errs() << "\" in:\n";
-          PrintReplacement(errs(), Cand.second.PCs, Cand.second.Mapping);
-        }
-        if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
-          BasicBlock::iterator BI = I;
-          ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
-          if (ProfileSouperOpts) {
-            std::string Str;
-            llvm::raw_string_ostream Loc(Str);
-            I->getDebugLoc().print(I->getContext(), Loc);
-            addProfileCode (F.getContext(), F.getParent(),
-                GetReplacementString(Cand.second.PCs, Cand.second.Mapping),
-                Loc.str(), BI);
-          }
-          changed = true;
-        } else {
-          if (DebugSouperPass)
-            errs() << "Skipping this replacement (number " << ReplaceCount <<
-              ")\n";
-        }
-        if (ReplaceCount < std::numeric_limits<unsigned>::max())
-          ++ReplaceCount;
+      Constant *CI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
+      if (DebugSouperPass) {
+        errs() << "\n";
+        errs() << "; Replacing \"";
+        I->print(errs());
+        errs() << "\"\n; from \"";
+        I->getDebugLoc().print(I->getContext(), errs());
+        errs() << "\"\n; with \"";
+        CI->print(errs());
+        errs() << "\" in:\n";
+        PrintReplacement(errs(), Cand.PCs, Cand.Mapping);
       }
+      if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
+        BasicBlock::iterator BI = I;
+        ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
+        if (ProfileSouperOpts) {
+          std::string Str;
+          llvm::raw_string_ostream Loc(Str);
+          I->getDebugLoc().print(I->getContext(), Loc);
+          addProfileCode (F.getContext(), F.getParent(),
+                          GetReplacementString(Cand.PCs, Cand.Mapping),
+                          Loc.str(), BI);
+        }
+        changed = true;
+      } else {
+        if (DebugSouperPass)
+          errs() << "Skipping this replacement (number " << ReplaceCount <<
+            ")\n";
+      }
+      if (ReplaceCount < std::numeric_limits<unsigned>::max())
+        ++ReplaceCount;
     }
 
     return changed;

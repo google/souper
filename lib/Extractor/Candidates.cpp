@@ -48,8 +48,15 @@ std::string InstOrigin::getFunctionName() const {
   return FunctionName;
 }
 
+void CandidateReplacement::printFunction(llvm::raw_ostream &Out) const {
+  Out << "; Function: " << Origin.getFunctionName() << '\n';
+}
+
+void CandidateReplacement::printLHS(llvm::raw_ostream &Out) const {
+  PrintReplacementLHS(Out, PCs, Mapping.LHS);
+}
+
 void CandidateReplacement::print(llvm::raw_ostream &Out) const {
-  Out << "; Priority: " << Priority << '\n';
   PrintReplacement(Out, PCs, Mapping);
 }
 
@@ -422,17 +429,11 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI,
                            FunctionCandidateSet &Result) {
   ExprBuilder EB(Opts, F.getParent(), LI, IC, EBC);
 
-  Inst *False = IC.getConst(APInt(1, false));
-  Inst *True = IC.getConst(APInt(1, true));
-
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
     for (auto &I : BB) {
-      if (I.getType()->isIntegerTy(1)) {
-        Inst *SI = EB.get(&I);
-        BCS->Replacements.emplace_back(&I, InstMapping(SI, False), 1);
-        BCS->Replacements.emplace_back(&I, InstMapping(SI, True), 1);
-      }
+      if (I.getType()->isIntegerTy(1))
+        BCS->Replacements.emplace_back(&I, InstMapping(EB.get(&I), 0));
     }
     if (!BCS->Replacements.empty()) {
       EB.addPathConditions(BCS->PCs, &BB);
