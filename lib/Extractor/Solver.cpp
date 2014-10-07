@@ -16,6 +16,8 @@
 
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
 #include "souper/Parser/Parser.h"
@@ -37,6 +39,9 @@ using namespace llvm;
 
 namespace {
 
+static cl::opt<bool> StaticProfile("souper-static-profile", cl::init(true),
+    cl::desc("Static profiling of Souper optimizations (default=true)"));
+
 class BaseSolver : public Solver {
   std::unique_ptr<SMTLIBSolver> SMTSolver;
   unsigned Timeout;
@@ -46,7 +51,8 @@ public:
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, InstContext &IC) {
+                        Inst *LHS, Inst *&RHS, const InstOrigin &O,
+                        InstContext &IC) {
     assert(LHS->Width == 1);
     std::error_code EC;
     std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
@@ -119,12 +125,13 @@ public:
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, InstContext &IC) {
+                        Inst *LHS, Inst *&RHS, const InstOrigin &O,
+                        InstContext &IC) {
     std::string Repl = GetReplacementLHSString(PCs, LHS);
     const auto &ent = InferCache.find(Repl);
     if (ent == InferCache.end()) {
       ++MemMissesInfer;
-      std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, IC);
+      std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, O, IC);
       std::string RHSStr;
       if (!EC && RHS) {
         assert(RHS->K == Inst::Const);
@@ -199,18 +206,38 @@ public:
   }
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, InstContext &IC) {
+                        Inst *LHS, Inst *&RHS, const InstOrigin &O,
+                        InstContext &IC) {
     std::string LHSStr = GetReplacementLHSString(PCs, LHS);
+
+    if (StaticProfile) {
+      Instruction *I = O.getInstruction();
+      std::string Str;
+      llvm::raw_string_ostream Loc(Str);
+      I->getDebugLoc().print(I->getContext(), Loc);
+      std::string HField = "sprofile " + Loc.str();
+      redisReply *reply = (redisReply *)redisCommand(ctx, "HINCRBY %s %s 1",
+          LHSStr.c_str(), HField.c_str());
+      if (!reply) {
+        llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
+      }
+      if (reply->type != REDIS_REPLY_INTEGER) {
+        llvm::report_fatal_error(
+            "Redis protocol error for static profile, didn't expect reply type "
+            + std::to_string(reply->type));
+      }
+      freeReplyObject(reply);
+    }
+
     redisReply *reply = (redisReply *)redisCommand(ctx, "HGET %s result",
                                                    LHSStr.c_str());
     if (!reply) {
       llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
     }
-
     if (reply->type == REDIS_REPLY_NIL) {
       freeReplyObject(reply);
       ++RedisMisses;
-      std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, IC);
+      std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, O, IC);
       std::string RHSStr;
       if (!EC && RHS) {
         assert(RHS->K == Inst::Const);
