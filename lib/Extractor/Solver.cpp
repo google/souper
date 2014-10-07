@@ -136,10 +136,13 @@ public:
       ++MemHitsInfer;
       std::string ES;
       StringRef S = ent->second.second;
-      if (S != "") {
+      if (S == "") {
+        RHS = 0;
+      } else {
         ParsedReplacement R = ParseReplacementRHS(IC, "<cache>", S, ES);
         if (ES != "")
           return std::make_error_code(std::errc::protocol_error);
+        RHS = R.Mapping.RHS;
       }
       return ent->second.first;
     }
@@ -197,18 +200,9 @@ public:
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
                         Inst *LHS, Inst *&RHS, InstContext &IC) {
-    return UnderlyingSolver->infer(PCs, LHS, RHS, IC);
-  }
-
-  std::error_code isValid(const std::vector<InstMapping> &PCs,
-                          InstMapping Mapping, bool &IsValid,
-                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
-    // TODO: add caching support for models.
-    if (Model)
-      return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
-
-    std::string Repl = GetReplacementString(PCs, Mapping);
-    redisReply *reply = (redisReply *)redisCommand(ctx, "GET %s", Repl.c_str());
+    std::string LHSStr = GetReplacementLHSString(PCs, LHS);
+    redisReply *reply = (redisReply *)redisCommand(ctx, "HGET %s result",
+                                                   LHSStr.c_str());
     if (!reply) {
       llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
     }
@@ -216,31 +210,51 @@ public:
     if (reply->type == REDIS_REPLY_NIL) {
       freeReplyObject(reply);
       ++RedisMisses;
-      std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid, 0);
-      if (!EC) {
-        reply = (redisReply *)redisCommand(ctx, "SET %s %d", Repl.c_str(),
-            IsValid);
-        if (!reply) {
-          llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
-        }
-        if (reply->type != REDIS_REPLY_STATUS) {
-          llvm::report_fatal_error(
-              "Redis protocol error, didn't expect reply type " +
-              std::to_string(reply->type));
-        }
-        freeReplyObject(reply);
+      std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, IC);
+      std::string RHSStr;
+      if (!EC && RHS) {
+        assert(RHS->K == Inst::Const);
+        RHSStr = GetReplacementRHSString(RHS->Val);
       }
+      reply = (redisReply *)redisCommand(ctx, "HSET %s result %s",
+                                         LHSStr.c_str(), RHSStr.c_str());
+      if (!reply) {
+        llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
+      }
+      if (reply->type != REDIS_REPLY_INTEGER) {
+        llvm::report_fatal_error(
+            "Redis protocol error for cache fill, didn't expect reply type " +
+            std::to_string(reply->type));
+      }
+      freeReplyObject(reply);
       return EC;
     } else if (reply->type == REDIS_REPLY_STRING) {
-      std::istringstream(reply->str) >> IsValid;
-      freeReplyObject(reply);
       ++RedisHits;
+      std::string ES;
+      StringRef S = reply->str;
+      if (S == "") {
+        RHS = 0;
+      } else {
+        ParsedReplacement R = ParseReplacementRHS(IC, "<cache>", S, ES);
+        if (ES != "")
+          return std::make_error_code(std::errc::protocol_error);
+        RHS = R.Mapping.RHS;
+      }
+      freeReplyObject(reply);
       return std::error_code();
     } else {
       llvm::report_fatal_error(
-          "Redis protocol error, didn't expect reply type " +
+          "Redis protocol error for cache lookup, didn't expect reply type " +
           std::to_string(reply->type));
     }
+  }
+
+  std::error_code isValid(const std::vector<InstMapping> &PCs,
+                          InstMapping Mapping, bool &IsValid,
+                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
+    // N.B. we decided that since the important clients have moved to infer(),
+    // we'll no longer support Redis-based caching for isValid()
+    return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
   }
 
   std::string getName() {
