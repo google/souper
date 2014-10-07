@@ -80,6 +80,7 @@ struct ExprBuilder {
   ref<Expr> shlnuwUB(Inst *I);
   ref<Expr> lshrExactUB(Inst *I);
   ref<Expr> ashrExactUB(Inst *I);
+  ref<Expr> countOnes(ref<Expr> E);
   ref<Expr> buildAssoc(std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
                        llvm::ArrayRef<Inst *> Ops);
   ref<Expr> build(Inst *I);
@@ -258,6 +259,17 @@ ref<Expr> ExprBuilder::buildAssoc(
   return E;
 }
 
+ref<Expr> ExprBuilder::countOnes(ref<Expr> L) {
+   Expr::Width Width = L->getWidth();
+   ref<Expr> Count =  klee::ConstantExpr::create(0, Width);
+   for (unsigned i=0; i<Width; i++) {
+     ref<Expr> Bit = ExtractExpr::create(L, i, Expr::Bool);
+     ref<Expr> BitExt = ZExtExpr::create(Bit, Width);
+     Count = AddExpr::create(Count, BitExt);
+   }
+   return Count;
+}
+
 ref<Expr> ExprBuilder::build(Inst *I) {
   const std::vector<Inst *> &Ops = I->orderedOps();
   switch (I->K) {
@@ -424,6 +436,57 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     return UleExpr::create(get(Ops[0]), get(Ops[1]));
   case Inst::Sle:
     return SleExpr::create(get(Ops[0]), get(Ops[1]));
+  case Inst::CtPop:
+    return countOnes(get(Ops[0]));
+  case Inst::BSwap: {
+    ref<Expr> L = get(Ops[0]);
+    unsigned Width = L->getWidth();
+    if (Width == 16) {
+      return ConcatExpr::create(ExtractExpr::create(L, 0, 8),
+                                ExtractExpr::create(L, 8, 8));
+    }
+    else if (Width == 32) {
+      return ConcatExpr::create4(ExtractExpr::create(L, 0, 8),
+                                 ExtractExpr::create(L, 8, 8),
+                                 ExtractExpr::create(L, 16, 8),
+                                 ExtractExpr::create(L, 24, 8));
+    }
+    else if (Width == 64) {
+      return ConcatExpr::create8(ExtractExpr::create(L, 0, 8),
+                                 ExtractExpr::create(L, 8, 8),
+                                 ExtractExpr::create(L, 16, 8),
+                                 ExtractExpr::create(L, 24, 8),
+                                 ExtractExpr::create(L, 32, 8),
+                                 ExtractExpr::create(L, 40, 8),
+                                 ExtractExpr::create(L, 48, 8),
+                                 ExtractExpr::create(L, 56, 8));
+    }
+    break;
+  }
+  case Inst::Cttz: {
+    ref<Expr> L = get(Ops[0]);
+    unsigned Width = L->getWidth();
+    ref<Expr> Val = L;
+    for (unsigned i=0, j=0; j<Width/2; i++) {
+      j = 1<<i;
+      Val = OrExpr::create(Val, ShlExpr::create(Val,
+                           klee::ConstantExpr::create(j, Width)));
+    }
+    return SubExpr::create(klee::ConstantExpr::create(Width, Width),
+                           countOnes(Val));
+  }
+  case Inst::Ctlz: {
+    ref<Expr> L = get(Ops[0]);
+    unsigned Width = L->getWidth();
+    ref<Expr> Val = L;
+    for (unsigned i=0, j=0; j<Width/2; i++) {
+      j = 1<<i;
+      Val = OrExpr::create(Val, LShrExpr::create(Val,
+                           klee::ConstantExpr::create(j, Width)));
+    }
+    return SubExpr::create(klee::ConstantExpr::create(Width, Width),
+                           countOnes(Val));
+  }
   }
   llvm_unreachable("unknown kind");
 }
