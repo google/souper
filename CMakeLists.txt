@@ -134,8 +134,13 @@ add_library(souperInst STATIC
   ${SOUPER_INST_FILES}
 )
 
-add_library(souperParser STATIC
+set(SOUPER_PARSER_FILES
   lib/Parser/Parser.cpp
+  include/souper/Parser/Parser.h
+)
+
+add_library(souperParser STATIC
+  ${SOUPER_PARSER_FILES}
 )
 
 set(SOUPER_SMTLIB2_FILES
@@ -161,6 +166,7 @@ add_library(souperPass SHARED
   ${KLEE_EXPR_FILES}
   ${SOUPER_EXTRACTOR_FILES}
   ${SOUPER_INST_FILES}
+  ${SOUPER_PARSER_FILES}
   ${SOUPER_SMTLIB2_FILES}
   ${SOUPER_TOOL_FILES}
   lib/Pass/Pass.cpp
@@ -217,12 +223,12 @@ target_link_libraries(souperParser souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
 target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY})
-target_link_libraries(souper souperExtractor souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY})
+target_link_libraries(souper souperExtractor souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY})
 target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
 target_link_libraries(souper-check souperTool souperExtractor souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
-target_link_libraries(clang-souper souperClangTool souperExtractor souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY})
+target_link_libraries(clang-souper souperClangTool souperExtractor souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY})
 target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS})

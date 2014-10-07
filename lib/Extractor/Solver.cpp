@@ -18,13 +18,16 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
+#include "souper/Parser/Parser.h"
 
 #include "hiredis.h"
 #include <sstream>
 #include <unordered_map>
 
-STATISTIC(MemHits, "Number of internal cache hits");
-STATISTIC(MemMisses, "Number of internal cache misses");
+STATISTIC(MemHitsInfer, "Number of internal cache hits for infer()");
+STATISTIC(MemMissesInfer, "Number of internal cache misses for infer()");
+STATISTIC(MemHitsIsValid, "Number of internal cache hits for isValid()");
+STATISTIC(MemMissesIsValid, "Number of internal cache misses for isValid()");
 STATISTIC(RedisHits, "Number of external cache hits");
 STATISTIC(RedisMisses, "Number of external cache misses");
 STATISTIC(TriviallyInvalid, "Number of trivially invalid expressions");
@@ -107,7 +110,9 @@ public:
 
 class MemCachingSolver : public Solver {
   std::unique_ptr<Solver> UnderlyingSolver;
-  std::unordered_map<std::string, std::pair<std::error_code, bool>> Cache;
+  std::unordered_map<std::string, std::pair<std::error_code, bool>> IsValidCache;
+  std::unordered_map<std::string, std::pair<std::error_code, std::string>>
+    InferCache;
 
 public:
   MemCachingSolver(std::unique_ptr<Solver> UnderlyingSolver)
@@ -115,7 +120,29 @@ public:
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
                         Inst *LHS, Inst *&RHS, InstContext &IC) {
-    return UnderlyingSolver->infer(PCs, LHS, RHS, IC);
+    std::string Repl = GetReplacementLHSString(PCs, LHS);
+    const auto &ent = InferCache.find(Repl);
+    if (ent == InferCache.end()) {
+      ++MemMissesInfer;
+      std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, IC);
+      std::string RHSStr;
+      if (!EC && RHS) {
+        assert(RHS->K == Inst::Const);
+        RHSStr = GetReplacementRHSString(RHS->Val);
+      }
+      InferCache.emplace(Repl, std::make_pair(EC, RHSStr));
+      return EC;
+    } else {
+      ++MemHitsInfer;
+      std::string ES;
+      StringRef S = ent->second.second;
+      if (S != "") {
+        ParsedReplacement R = ParseReplacementRHS(IC, "<cache>", S, ES);
+        if (ES != "")
+          return std::make_error_code(std::errc::protocol_error);
+      }
+      return ent->second.first;
+    }
   }
 
   std::error_code isValid(const std::vector<InstMapping> &PCs,
@@ -126,14 +153,14 @@ public:
       return UnderlyingSolver->isValid(PCs, Mapping, IsValid, Model);
 
     std::string Repl = GetReplacementString(PCs, Mapping);
-    const auto &ent = Cache.find(Repl);
-    if (ent == Cache.end()) {
-      ++MemMisses;
+    const auto &ent = IsValidCache.find(Repl);
+    if (ent == IsValidCache.end()) {
+      ++MemMissesIsValid;
       std::error_code EC = UnderlyingSolver->isValid(PCs, Mapping, IsValid, 0);
-      Cache.emplace (Repl, std::make_pair (EC, IsValid));
+      IsValidCache.emplace(Repl, std::make_pair(EC, IsValid));
       return EC;
     } else {
-      ++MemHits;
+      ++MemHitsIsValid;
       IsValid = ent->second.second;
       return ent->second.first;
     }
