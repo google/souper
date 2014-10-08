@@ -22,9 +22,13 @@ using namespace souper;
 static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input souper optimization>"), cl::init("-"));
 
-static llvm::cl::opt<bool> PrintCounterExample("print-counterexample",
-    llvm::cl::desc("Print counterexample (default=true)"),
-    llvm::cl::init(true));
+static cl::opt<bool> PrintCounterExample("print-counterexample",
+    cl::desc("Print counterexample (default=true)"),
+    cl::init(true));
+
+static cl::opt<bool> PrintRepl("print-replacement",
+    cl::desc("Print the replacement, if valid (default=false)"),
+    cl::init(false));
 
 int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
@@ -46,6 +50,8 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 
   if (Valid) {
     llvm::outs() << "LGTM\n";
+    if (PrintRepl)
+      PrintReplacement(llvm::outs(), Rep.PCs, Rep.Mapping);
   } else {
     llvm::outs() << "Invalid";
     if (PrintCounterExample && !Models.empty()) {
