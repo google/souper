@@ -48,31 +48,31 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
 
     std::vector<int> Profile;
     std::map<std::string,int> Index;
-    for (int i=0; i<M.size(); i++) {
-      auto &Cand = M[i];
-      auto s = GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS);
-      if (Index.find(s) == Index.end()) {
-        Index[s] = i;
+    for (int I=0; I < M.size(); ++I) {
+      auto &Cand = M[I];
+      auto S = GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS);
+      if (Index.find(S) == Index.end()) {
+        Index[S] = I;
         Profile.push_back(1);
       } else {
-        Profile[Index[s]]++;
+        ++Profile[Index[S]];
         Profile.push_back(0);
       }
     }
 
-    for (int i=0; i<M.size(); i++) {
-      if (Profile[i] == 0)
+    for (int I=0; I < M.size(); ++I) {
+      if (Profile[I] == 0)
         continue;
-      auto &Cand = M[i];
+      auto &Cand = M[I];
       Inst *RHS;
       if (std::error_code EC =
-          S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, &Cand.Origin, IC)) {
+              S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, &Cand.Origin, IC)) {
         llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
         return false;
       }
       if (RHS) {
         OS << '\n';
-        OS << "; Static profile " << Profile[i] << '\n';
+        OS << "; Static profile " << Profile[I] << '\n';
         Cand.Mapping.RHS = RHS;
         Cand.printFunction(OS);
         Cand.print(OS);
@@ -103,7 +103,7 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
   for (auto &Cand : M) {
     Inst *RHS;
     if (std::error_code EC =
-        S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, &Cand.Origin, IC)) {
+            S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, &Cand.Origin, IC)) {
       llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
       return false;
     }
