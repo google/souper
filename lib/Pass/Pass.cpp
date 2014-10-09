@@ -65,11 +65,12 @@ public:
     Info.addRequired<LoopInfo>();
   }
 
-  void addProfileCode(LLVMContext &C, Module *M, std::string Repl,
+  void addProfileCode(LLVMContext &C, Module *M, std::string LHS,
                       std::string SrcLoc, BasicBlock::iterator BI) {
     Function *RegisterFunc = M->getFunction("_souper_profile_register");
     if (!RegisterFunc) {
       Type *RegisterArgs[] = {
+        PointerType::getInt8PtrTy(C),
         PointerType::getInt8PtrTy(C),
         PointerType::getInt64PtrTy(C),
       };
@@ -79,11 +80,18 @@ public:
                                       "_souper_profile_register", M);
     }
 
-    Constant *S = ConstantDataArray::getString(C, "profile\n" + SrcLoc + "\n" +
-                                               Repl, true);
-    Constant *ReplVar = new GlobalVariable(*M, S->getType(), true,
-                                           GlobalValue::PrivateLinkage, S, "");
+    Constant *Repl = ConstantDataArray::getString(C, LHS, true);
+    Constant *ReplVar = new GlobalVariable(*M, Repl->getType(), true,
+        GlobalValue::PrivateLinkage, Repl, "");
     Constant *ReplPtr = ConstantExpr::getPointerCast(ReplVar,
+        PointerType::getInt8PtrTy(C));
+
+    Constant *Field = ConstantDataArray::getString(C, "dprofile " + SrcLoc,
+                                                   true);
+    Constant *FieldVar = new GlobalVariable(*M, Field->getType(), true,
+                                            GlobalValue::PrivateLinkage, Field,
+                                            "");
+    Constant *FieldPtr = ConstantExpr::getPointerCast(FieldVar,
         PointerType::getInt8PtrTy(C));
 
     Constant *CntVar = new GlobalVariable(*M, Type::getInt64Ty(C), false,
@@ -98,7 +106,7 @@ public:
     BasicBlock *BB = BasicBlock::Create(C, "entry", Ctor);
     IRBuilder<> Builder(BB);
 
-    Builder.CreateCall2(RegisterFunc, ReplPtr, CntVar);
+    Builder.CreateCall3(RegisterFunc, ReplPtr, FieldPtr, CntVar);
     Builder.CreateRetVoid();
 
     appendToGlobalCtors(*M, Ctor, 0);
@@ -170,7 +178,7 @@ public:
           llvm::raw_string_ostream Loc(Str);
           I->getDebugLoc().print(I->getContext(), Loc);
           addProfileCode (F.getContext(), F.getParent(),
-                          GetReplacementString(Cand.PCs, Cand.Mapping),
+                          GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS),
                           Loc.str(), BI);
         }
         changed = true;

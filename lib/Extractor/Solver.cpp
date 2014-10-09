@@ -218,7 +218,7 @@ public:
       std::string HField = "sprofile " + Loc.str();
       redisReply *reply = (redisReply *)redisCommand(ctx, "HINCRBY %s %s 1",
           LHSStr.c_str(), HField.c_str());
-      if (!reply) {
+      if (!reply || ctx->err) {
         llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
       }
       if (reply->type != REDIS_REPLY_INTEGER) {
@@ -231,7 +231,7 @@ public:
 
     redisReply *reply = (redisReply *)redisCommand(ctx, "HGET %s result",
                                                    LHSStr.c_str());
-    if (!reply) {
+    if (!reply || ctx->err) {
       llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
     }
     if (reply->type == REDIS_REPLY_NIL) {
@@ -245,7 +245,7 @@ public:
       }
       reply = (redisReply *)redisCommand(ctx, "HSET %s result %s",
                                          LHSStr.c_str(), RHSStr.c_str());
-      if (!reply) {
+      if (!reply || ctx->err) {
         llvm::report_fatal_error((std::string)"Redis error: " + ctx->errstr);
       }
       if (reply->type != REDIS_REPLY_INTEGER) {
