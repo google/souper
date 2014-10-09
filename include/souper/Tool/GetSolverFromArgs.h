@@ -63,12 +63,12 @@ static std::unique_ptr<SMTLIBSolver> GetUnderlyingSolverFromArgs() {
 
 static llvm::cl::opt<bool> MemCache(
   "internal-cache-souper",
-  llvm::cl::desc("Cache solver results in memory (default=on)"),
+  llvm::cl::desc("Cache solver results in memory (default=true)"),
   llvm::cl::init(true));
 
 static llvm::cl::opt<bool> RedisCache(
   "external-cache-souper",
-  llvm::cl::desc("Use external Redis-based cache (default=off)"),
+  llvm::cl::desc("Use external Redis-based cache (default=false)"),
   llvm::cl::init(false));
 
 static llvm::cl::opt<int> SolverTimeout(
