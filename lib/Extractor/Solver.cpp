@@ -51,7 +51,7 @@ public:
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, const InstOrigin &O,
+                        Inst *LHS, Inst *&RHS, const InstOrigin *O,
                         InstContext &IC) {
     assert(LHS->Width == 1);
     std::error_code EC;
@@ -125,7 +125,7 @@ public:
       : UnderlyingSolver(std::move(UnderlyingSolver)) {}
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, const InstOrigin &O,
+                        Inst *LHS, Inst *&RHS, const InstOrigin *O,
                         InstContext &IC) {
     std::string Repl = GetReplacementLHSString(PCs, LHS);
     const auto &ent = InferCache.find(Repl);
@@ -206,15 +206,17 @@ public:
   }
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, const InstOrigin &O,
+                        Inst *LHS, Inst *&RHS, const InstOrigin *O,
                         InstContext &IC) {
     std::string LHSStr = GetReplacementLHSString(PCs, LHS);
 
     if (StaticProfile) {
-      Instruction *I = O.getInstruction();
       std::string Str;
       llvm::raw_string_ostream Loc(Str);
-      I->getDebugLoc().print(I->getContext(), Loc);
+      if (O) {
+        Instruction *I = O->getInstruction();
+        I->getDebugLoc().print(I->getContext(), Loc);
+      }
       std::string HField = "sprofile " + Loc.str();
       redisReply *reply = (redisReply *)redisCommand(ctx, "HINCRBY %s %s 1",
           LHSStr.c_str(), HField.c_str());

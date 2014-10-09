@@ -147,7 +147,7 @@ public:
     for (auto &Cand : CandMap) {
       if (std::error_code EC =
               S->infer(Cand.PCs, Cand.Mapping.LHS, Cand.Mapping.RHS,
-                       Cand.Origin, IC)) {
+                       &Cand.Origin, IC)) {
         if (EC == std::errc::timed_out) {
           continue;
         } else {

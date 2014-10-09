@@ -1,0 +1,18 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t
+; RUN: FileCheck %s -check-prefix=TEST1 < %t
+; TEST1: RHS inferred successfully
+; RUN: sed -i '1d' %t
+; RUN: %parser-test < %t
+; RUN: %souper-check %solver < %t | FileCheck -check-prefix=TEST2 %s
+; TEST2: LGTM
+
+%0:i1 = var
+%1:i64 = var
+%2:i1 = ult 135637824071393761:i64, %1
+%3:i1 = or %0, %2
+%4:i64 = select %3, 135637824071393761:i64, %1
+%5:i1 = ult 135637824071393761:i64, %4
+infer %5
+

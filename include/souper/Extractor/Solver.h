@@ -30,7 +30,7 @@ public:
   virtual ~Solver();
   virtual std::error_code
   infer(const std::vector<InstMapping> &PCs, Inst *LHS, Inst *&RHS,
-        const InstOrigin &O, InstContext &IC) = 0;
+        const InstOrigin *O, InstContext &IC) = 0;
   virtual std::error_code
   isValid(const std::vector<InstMapping> &PCs, InstMapping Mapping,
           bool &IsValid,
