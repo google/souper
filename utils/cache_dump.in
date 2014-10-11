@@ -1,0 +1,205 @@
+#!/usr/bin/env perl
+
+# Copyright 2014 The Souper Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+use warnings;
+use strict;
+use Redis;
+use Getopt::Long;
+use File::Temp;
+use Time::HiRes;
+
+sub runit ($) {
+    my $cmd = shift;
+    my $res = (system "$cmd");
+    return $? >> 8;
+}
+
+my $cur_key = 0;
+my $last_time = 0;
+my $backsp = "\b";
+sub spinner() {
+    my $now = Time::HiRes::time();
+    return if (time() <= ($last_time + 0.1));
+    $last_time = time();
+    my @chars = ("-", "\\", "|", "/");
+    $cur_key = 0 if ($cur_key == @chars);
+    print $backsp . $chars[$cur_key];
+    $cur_key++;
+}
+
+# TODO: add a -verify option
+
+sub usage() {
+    print <<'END';
+Options:
+  -raw         Dump all keys and values and exit, ignoring all other options
+  -noopts      Dump not-optimizations instead of optimizations
+  -sort=size|sprofile|dprofile
+               Sort optimizations by increasing size (default), decreasing
+               static profile count, or descreasing dynamic profile count
+  -reduce      Attempt to reduce the size of each optimization
+  -merge       Merge optimizations that differ only in bitwidths and constants
+END
+    exit -1;
+}
+
+my $RAW = 0;
+my $NOOPTS = 0;
+my $SORT = "size";
+my $REDUCE = 0;
+my $MERGE = 0;
+GetOptions(
+    "raw"  => \$RAW,
+    "noopts" => \$NOOPTS,
+    "sort=s" => \$SORT,
+    "reduce" => \$REDUCE,
+    "merge" => \$MERGE,
+    ) or usage();
+usage() unless ($SORT eq "size" || $SORT eq "sprofile" || $SORT eq "dprofile");
+die "-reduce and -noopts cannot be used together" if ($REDUCE && $NOOPTS);
+die "-merge and -noopts cannot be used together" if ($MERGE && $NOOPTS);
+
+my $reducer = "@CMAKE_BINARY_DIR@/reduce";
+
+my $opt_count=0;
+my $noopt_count=0;
+my %values;
+my %sprofiles;
+my %dprofiles;
+my %toprint;
+
+print "\nGrabbing Redis keys...";
+
+my $r = Redis->new();
+$r->ping || die "no server?";
+my @keys = $r->keys('*');
+
+if ($RAW) {
+    foreach my $k (@keys) {
+        my %h = $r->hgetall($k);
+        print "<$k>\n";
+        foreach my $kk (sort keys %h) {
+            print "  <$kk> <$h{$kk}>\n";
+        }
+        my $result = $h{"result"};
+        print "------------------------------------------------------\n\n";
+    }
+    exit 0;
+}
+
+print "\nGrabbing Redis values...";
+
+foreach my $k (@keys) {
+    spinner();
+    my %h = $r->hgetall($k);
+    my $result = $h{"result"};
+    if (!defined($result)) {
+        print STDERR "WARNING: no result for key\n";
+        next;
+    }
+    my $sprofile = 0;
+    my $dprofile = 0;
+    foreach my $kk (keys %h) {
+        if ($kk =~ /^sprofile /) {
+            $sprofile += $h{$kk};
+        }
+        if ($kk =~ /^dprofile /) {
+            $dprofile += $h{$kk};
+        }
+    }
+    $k .= $result;
+    if ($result eq "") {
+        $noopt_count++;
+        $toprint{$k} = 1 if $NOOPTS;
+    } else {
+        $opt_count++;
+        $toprint{$k} = 1 if !$NOOPTS;
+    }
+    $sprofiles{$k} = $sprofile;
+    $dprofiles{$k} = $dprofile;
+}
+
+sub replace($$) {
+    (my $old, my $new) = @_;
+    die if $new eq "";
+    $sprofiles{$new} += $sprofiles{$old};
+    $dprofiles{$new} += $dprofiles{$old};
+    $toprint{$new} = 1;
+    delete $toprint{$old};
+}
+
+if ($REDUCE) {
+    print "\nReducing...";
+
+    my @keys = keys %toprint;
+    foreach my $k (@keys) {
+        spinner();
+        (my $fh1, my $fn1) = File::Temp::tempfile();
+        (my $fh2, my $fn2) = File::Temp::tempfile();
+        print $fh1 $k;
+        close $fh1;
+        close $fh2;
+        runit ("$reducer < $fn1 > $fn2") == 0 or die;
+        open INF, "<$fn2" or die;
+        my $new = "";
+        while (my $line = <INF>) {
+            $new .= $line;
+        }
+        close INF;
+        unlink $fn1;
+        unlink $fn2;
+        if ($new eq "") {
+            print "can't reduce $k\n";
+            die;
+        } else {
+            replace($k, $new);
+        }
+    }
+}
+
+if ($MERGE) {
+    print "\nMerging...";
+
+    my @keys = keys %toprint;
+    foreach my $k (@keys) {
+        spinner();
+        my $new = $k;
+        $new =~ s/:i[0-9]+//g;
+        $new =~ s/ [0-9]+/ C/g;
+        replace($k, $new);
+    }
+}
+
+print "\n\n";
+print "; $opt_count optimizations\n";
+print "; $noopt_count not-optimizations\n";
+print "\n";
+
+sub bylen { length $a <=> length $b }
+sub bysprofile { $sprofiles{$b} <=> $sprofiles{$a} }
+sub bydprofile { $dprofiles{$b} <=> $dprofiles{$a} }
+
+my $byx = \&bylen;
+$byx = \&bysprofile if ($SORT eq "sprofile");
+$byx = \&bydprofile if ($SORT eq "dprofile");
+
+foreach my $k (sort $byx keys %toprint) {
+    print "$k";
+    print "\n";
+    print "; sprofile = $sprofiles{$k}\n";
+    print "; dprofile = $dprofiles{$k}\n";
+    print "------------------------------------------------------\n\n";
+}
