@@ -76,7 +76,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
     }
 
     if (Valid) {
-      llvm::outs() << "LGTM\n";
+      llvm::outs() << "; LGTM\n";
       if (PrintRepl)
         PrintReplacement(llvm::outs(), Rep.PCs, Rep.Mapping);
     } else {
