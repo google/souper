@@ -63,7 +63,11 @@ if ($souper) {
     if ($ENV{"SOUPER_DEBUG"}) {
         push @ARGV, ("-mllvm", "-souper-debug");
     }
-    
+
+    if ($ENV{"SOUPER_STATS"}) {
+        push @ARGV, ("-mllvm", "-stats");
+    }
+
     if ($ENV{"SOUPER_PROFILE"}) {
         push @ARGV, ("-g", "-mllvm", "-souper-profile-opts");
         if (linkp()) {
