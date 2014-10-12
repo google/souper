@@ -57,11 +57,13 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
       return 1;
     }
     if (Rep.Mapping.RHS) {
-      llvm::outs() << "RHS inferred successfully\n";
+      llvm::outs() << "; RHS inferred successfully\n";
       if (PrintRepl)
         PrintReplacement(llvm::outs(), Rep.PCs, Rep.Mapping);
+      else
+        PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS->Val);
     } else {
-      llvm::outs() << "No RHS inferred\n";
+      llvm::outs() << "; Failed to infer RHS\n";
       if (PrintRepl)
         PrintReplacementLHS(llvm::outs(), Rep.PCs, Rep.Mapping.LHS);
     }
