@@ -32,6 +32,7 @@
 #include <map>
 #include <memory>
 #include <sstream>
+#include <unordered_set>
 
 using namespace llvm;
 using namespace klee;
@@ -68,6 +69,11 @@ struct ExprBuilder {
   InstContext &IC;
   ExprBuilderContext &EBC;
 
+  void checkIrreducibleCFG(BasicBlock *BB, 
+                           BasicBlock *FirstBB,
+                           std::unordered_set<const BasicBlock *> &VisitedBBs,
+                           bool &Loop);
+  bool isLoopEntryPoint(PHINode *Phi);
   Inst *makeArrayRead(Value *V);
   Inst *buildConstant(Constant *c);
   Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
@@ -77,6 +83,49 @@ struct ExprBuilder {
   Inst *get(Value *V);
 };
 
+}
+
+// Use DFS to detect a possible loop, most likely an loop in an irreducible
+// CFG. One of the headers of the loop is the FirstBB.
+// Loop is set to true upon successfully detecting such a loop.
+void ExprBuilder::checkIrreducibleCFG(BasicBlock *BB, 
+                    BasicBlock *FirstBB,
+                    std::unordered_set<const BasicBlock *> &VisitedBBs,
+                    bool &Loop) {
+  VisitedBBs.insert(BB);
+  for (succ_iterator PI = succ_begin(BB), E = succ_end(BB); 
+       PI != E; ++PI) {
+    BasicBlock *Succ = *PI;
+    if (Succ == FirstBB) {
+      Loop = true;
+    }
+    else if (VisitedBBs.count(Succ)) {
+      continue;
+    }
+    else {
+      checkIrreducibleCFG(Succ, FirstBB, VisitedBBs, Loop);
+    }
+    if (Loop)
+      return;
+  }
+}
+
+// Return true if the Basic Block containing the passed Phi node is
+// a loop entry point, either the loop header for a natural loop or
+// a entry point for an irreducible CFG.
+bool ExprBuilder::isLoopEntryPoint(PHINode *Phi) {
+  BasicBlock *BB = Phi->getParent();
+  // If LLVM can determine if BB is a loop header, simply return true. 
+  // Presumably, this should handle structured loops.
+  if (LI->isLoopHeader(BB))
+    return true;
+  if (Phi->getNumIncomingValues() <= 1)
+    return false;
+
+  bool Loop = false;
+  std::unordered_set<const llvm::BasicBlock *> VisitedBBs;
+  checkIrreducibleCFG(BB, BB, VisitedBBs, Loop);
+  return Loop;
 }
 
 Inst *ExprBuilder::makeArrayRead(Value *V) {
@@ -303,8 +352,8 @@ Inst *ExprBuilder::build(Value *V) {
     // TODO: In principle we could track loop iterations and maybe even maintain
     // a separate set of values for each iteration (as in bounded model
     // checking).
-    BasicBlock *BB = Phi->getParent();
-    if (!LI->isLoopHeader(BB)) {
+    if (!isLoopEntryPoint(Phi)) {
+      BasicBlock *BB = Phi->getParent();
       BlockInfo &BI = EBC.BlockMap[BB];
       if (!BI.B) {
         std::copy(Phi->block_begin(), Phi->block_end(), std::back_inserter(BI.Preds));
