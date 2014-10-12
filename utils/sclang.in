@@ -57,15 +57,15 @@ if ($souper) {
     );
 
     if (!$ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
-        push @ARGV, ("-mllvm", "-external-cache-souper");
+        push @ARGV, ("-mllvm", "-souper-external-cache");
     }
 
     if ($ENV{"SOUPER_DEBUG"}) {
-        push @ARGV, ("-mllvm", "-debug-souper");
+        push @ARGV, ("-mllvm", "-souper-debug");
     }
     
     if ($ENV{"SOUPER_PROFILE"}) {
-        push @ARGV, ("-g", "-mllvm", "-profile-souper-opts");
+        push @ARGV, ("-g", "-mllvm", "-souper-profile-opts");
         if (linkp()) {
             push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
         }
