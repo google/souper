@@ -38,6 +38,12 @@ unsigned ReplaceCount;
 static cl::opt<bool> DebugSouperPass("souper-debug", cl::Hidden,
                                      cl::init(false), cl::desc("Debug Souper"));
 
+static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
+     cl::init(1),
+     cl::desc("Control the verbose level of debug output (default=1). "
+     "The larger the number is, the more fine-grained debug "
+     "information will be printed."));
+
 static cl::opt<bool> ProfileSouperOpts("souper-profile-opts", cl::init(false),
                                        cl::desc("Profile Souper optimizations"));
 
@@ -48,6 +54,10 @@ static cl::opt<unsigned> FirstReplace("souper-first-opt", cl::Hidden,
 static cl::opt<unsigned> LastReplace("souper-last-opt", cl::Hidden,
     cl::init(std::numeric_limits<unsigned>::max()),
     cl::desc("Last Souper optimization to perform (default=infinite)"));
+
+static bool dumpAllReplacements() {
+  return DebugSouperPass && (DebugLevel > 1);
+}
 
 struct SouperPass : public FunctionPass {
   static char ID;
@@ -117,20 +127,35 @@ public:
     LoopInfo *LI = &getAnalysis<LoopInfo>();
 
     FunctionCandidateSet CS = ExtractCandidatesFromPass(&F, LI, IC, EBC);
+
+    std::string FunctionName;
+    if (F.hasLocalLinkage()) {
+      FunctionName =
+        (F.getParent()->getModuleIdentifier() + ":" + F.getName()).str();
+    } else {
+      FunctionName = F.getName();
+    }
+
+    if (dumpAllReplacements()) {
+      errs() << "\n";
+      errs() << "; Listing all replacements for " << FunctionName << "\n";
+    }
+
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
+        if (dumpAllReplacements()) {
+          Instruction *I = R.Origin.getInstruction();
+          errs() << "\n; *****";
+          errs() << "\n; For LLVM instruction:\n;";
+          I->print(errs());
+          errs() << "\n; Generating replacement:\n";
+          PrintReplacement(errs(), R.PCs, R.Mapping);
+        }
         AddToCandidateMap(CandMap, R);
       }
     }
 
     if (DebugSouperPass) {
-      std::string FunctionName;
-      if (F.hasLocalLinkage()) {
-        FunctionName =
-            (F.getParent()->getModuleIdentifier() + ":" + F.getName()).str();
-      } else {
-        FunctionName = F.getName();
-      }
       errs() << "\n";
       errs() << "; Listing applied replacements for " << FunctionName << "\n";
       errs() << "; Using solver: " << S->getName() << '\n';
