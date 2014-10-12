@@ -82,7 +82,7 @@ Or use the drop-in compiler replacements sclang and sclang++:
     $ make
 
 Compilation using Souper can be sped up by caching queries. By default, Souper
-uses a non-persistent RAM-based cache. The -external-cache-souper flag causes
+uses a non-persistent RAM-based cache. The -souper-external-cache flag causes
 Souper to cache its queries in a Redis database. For this to work, Redis >=
 1.2.0 must be installed on the machine where you are running Souper and a Redis
 server must be listening on the default port (6379).

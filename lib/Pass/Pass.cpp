@@ -35,17 +35,17 @@ namespace {
 std::unique_ptr<Solver> S;
 unsigned ReplaceCount;
 
-static cl::opt<bool> DebugSouperPass("debug-souper", cl::Hidden,
+static cl::opt<bool> DebugSouperPass("souper-debug", cl::Hidden,
                                      cl::init(false), cl::desc("Debug Souper"));
 
-static cl::opt<bool> ProfileSouperOpts("profile-souper-opts", cl::init(false),
+static cl::opt<bool> ProfileSouperOpts("souper-profile-opts", cl::init(false),
                                        cl::desc("Profile Souper optimizations"));
 
-static cl::opt<unsigned> FirstReplace("first-souper-opt", cl::Hidden,
+static cl::opt<unsigned> FirstReplace("souper-first-opt", cl::Hidden,
     cl::init(0),
     cl::desc("First Souper optimization to perform (default=0)"));
 
-static cl::opt<unsigned> LastReplace("last-souper-opt", cl::Hidden,
+static cl::opt<unsigned> LastReplace("souper-last-opt", cl::Hidden,
     cl::init(std::numeric_limits<unsigned>::max()),
     cl::desc("Last Souper optimization to perform (default=infinite)"));
 

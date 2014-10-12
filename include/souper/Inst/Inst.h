@@ -76,6 +76,10 @@ struct Inst : llvm::FoldingSetNode {
     Slt,
     Ule,
     Sle,
+    CtPop,
+    BSwap,
+    Cttz,
+    Ctlz,
   } Kind;
 
   Kind K;
