@@ -22,6 +22,8 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/PassManager.h"
@@ -313,6 +315,22 @@ Inst *ExprBuilder::build(Value *V) {
         Incomings.push_back(get(Phi->getIncomingValueForBlock(Pred)));
       }
       return IC.getPhi(BI.B, Incomings);
+    }
+  } else if (auto Call = dyn_cast<CallInst>(V)) {
+    if (auto II = dyn_cast<IntrinsicInst>(Call)) {
+      Inst *L = get(II->getOperand(0));
+      switch (II->getIntrinsicID()) {
+        default:
+          break;
+        case Intrinsic::ctpop:
+          return IC.getInst(Inst::CtPop, 1, {L});
+        case Intrinsic::bswap:
+          return IC.getInst(Inst::BSwap, 1, {L});
+        case Intrinsic::cttz:
+          return IC.getInst(Inst::Cttz, 1, {L});
+        case Intrinsic::ctlz:
+          return IC.getInst(Inst::Ctlz, 1, {L});
+      }
     }
   }
 

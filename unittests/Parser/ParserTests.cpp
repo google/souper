@@ -51,6 +51,14 @@ TEST(ParserTest, Errors) {
       { "%0:i1 = phi %0\n", "<input>:1:13: %0 is not a block" },
       { "%0 = block\n%1:i1 = phi %0 foo\n", "<input>:2:16: expected ','" },
       { ",\n", "<input>:1:1: expected inst, block, cand, infer, result, or pc" },
+      { "%0:i128 = var ; 0\n%1:i128 = bswap %0\n",
+        "<input>:2:1: bswap doesn't support 128 bits" },
+      { "%0:i33 = var ; 0\n%1:i33 = ctpop %0\n",
+        "<input>:2:1: ctpop doesn't support 33 bits" },
+      { "%0:i70 = var ; 0\n%1:i70 = cttz %0\n",
+        "<input>:2:1: cttz doesn't support 70 bits" },
+      { "%0:i128 = var ; 0\n%1:i128 = ctlz %0\n",
+        "<input>:2:1: ctlz doesn't support 128 bits" },
 
       // type checking
       { "%0 = add 1:i32\n",
@@ -221,6 +229,26 @@ TEST(ParserTest, RoundTrip) {
 %8:i32 = ashr %7, 1:i32
 %9:i1 = eq 0:i32, %8
 cand %9 1:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = ctpop %0
+%2:i1 = eq 1:i32, %1
+cand %2 1:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = cttz %0
+%2:i1 = eq 1:i32, %1
+cand %2 1:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = ctlz %0
+%2:i1 = eq 1:i32, %1
+cand %2 1:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = bswap %0
+%2:i1 = eq 1:i32, %1
+cand %2 1:i1
 )i",
   };
 

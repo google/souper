@@ -461,6 +461,13 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
       return false;
     }
     break;
+
+  case Inst::CtPop:
+  case Inst::BSwap:
+  case Inst::Cttz:
+  case Inst::Ctlz:
+    MaxOps = MinOps = 1;
+    break;
   }
 
   if (MinOps == MaxOps && Ops.size() != MinOps) {
@@ -694,8 +701,27 @@ bool Parser::parseLine(std::string &ErrStr) {
                           .Case("slt", Inst::Slt)
                           .Case("ule", Inst::Ule)
                           .Case("sle", Inst::Sle)
+                          .Case("ctpop", Inst::CtPop)
+                          .Case("bswap", Inst::BSwap)
+                          .Case("cttz", Inst::Cttz)
+                          .Case("ctlz", Inst::Ctlz)
                           .Default(Inst::Kind(~0));
 
+      if (IK == Inst::BSwap) {
+        if (InstWidth != 16 && InstWidth != 32 && InstWidth != 64) {
+          ErrStr = makeErrStr(TP, CurTok.str().str() + " doesn't support " +
+                              std::to_string(InstWidth) + " bits");
+          return false;
+        }
+      }
+      if ((IK == Inst::CtPop) || (IK == Inst::Ctlz) || (IK == Inst::Cttz)) {
+        if (InstWidth !=8 && InstWidth != 16 && InstWidth != 32 &&
+            InstWidth != 64 && InstWidth != 256) {
+          ErrStr = makeErrStr(TP, CurTok.str().str() + " doesn't support " +
+                              std::to_string(InstWidth) + " bits");
+          return false;
+        }
+      }
       if (IK == Inst::Kind(~0)) {
         if (CurTok.str() == "block") {
           if (InstWidth != 0) {
