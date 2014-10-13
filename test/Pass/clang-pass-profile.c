@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
   if (argc != 2)
     abort();
   long arg = strtol(argv[1], 0, 10);
-  if (arg<0 || arg>7) 
+  if (arg<0 || arg>7)
     abort();
 
   if (arg&1)

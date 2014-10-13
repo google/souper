@@ -19,8 +19,12 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
-#include "souper/Extractor/CandidateMap.h"
 #include "souper/SMTLIB2/Solver.h"
+
+void souper::AddToCandidateMap(CandidateMap &M,
+                               const CandidateReplacement &CR) {
+  M.emplace_back(CR);
+}
 
 void souper::AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
                                      CandidateMap &CandMap, llvm::Module *M) {
@@ -36,35 +40,58 @@ void souper::AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
 
 namespace souper {
 
-bool SolveCandidateMap(llvm::raw_ostream &OS, const CandidateMap &M,
-                       Solver *S) {
+bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
+                       Solver *S, InstContext &IC) {
   if (S) {
     OS << "; Listing valid replacements.\n";
     OS << "; Using solver: " << S->getName() << '\n';
-    for (const auto &Cand : M) {
-      bool Valid;
+
+    std::vector<int> Profile;
+    std::map<std::string,int> Index;
+    for (int I=0; I < M.size(); ++I) {
+      auto &Cand = M[I];
+      auto S = GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS);
+      if (Index.find(S) == Index.end()) {
+        Index[S] = I;
+        Profile.push_back(1);
+      } else {
+        ++Profile[Index[S]];
+        Profile.push_back(0);
+      }
+    }
+
+    for (int I=0; I < M.size(); ++I) {
+      if (Profile[I] == 0)
+        continue;
+      auto &Cand = M[I];
+      Inst *RHS;
       if (std::error_code EC =
-              S->isValid(Cand.second.PCs, Cand.second.Mapping, Valid, 0)) {
+              S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, &Cand.Origin, IC)) {
         llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
         return false;
       }
-      if (Valid) {
+      if (RHS) {
         OS << '\n';
-        Cand.second.print(OS);
+        OS << "; Static profile " << Profile[I] << '\n';
+        Cand.Mapping.RHS = RHS;
+        Cand.printFunction(OS);
+        Cand.print(OS);
       }
     }
   } else {
     OS << "; No solver specified; listing all candidate replacements.\n";
-    for (const auto &Cand : M) {
+    for (auto &Cand : M) {
       OS << '\n';
-      Cand.second.print(OS);
+      Cand.printFunction(OS);
+      Cand.printLHS(OS);
     }
   }
 
   return true;
 }
 
-bool CheckCandidateMap(llvm::Module &Mod, const CandidateMap &M, Solver *S) {
+bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
+                       InstContext &IC) {
   if (!S) {
     llvm::errs() << "Solver required in -check mode\n";
     return false;
@@ -73,55 +100,56 @@ bool CheckCandidateMap(llvm::Module &Mod, const CandidateMap &M, Solver *S) {
   unsigned ExpectedID = Mod.getContext().getMDKindID("expected");
 
   bool OK = true;
-
-  for (const auto &Cand : M) {
-    bool Valid;
+  for (auto &Cand : M) {
+    Inst *RHS;
     if (std::error_code EC =
-            S->isValid(Cand.second.PCs, Cand.second.Mapping, Valid, 0)) {
+            S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, &Cand.Origin, IC)) {
       llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
       return false;
     }
-    if (Valid) {
-      if (Cand.second.Mapping.RHS->K != Inst::Const) {
+    if (RHS) {
+      Cand.Mapping.RHS = RHS;
+      if (Cand.Mapping.RHS->K != Inst::Const) {
         llvm::errs() << "found replacement:\n";
-        Cand.second.print(llvm::errs());
+        Cand.printFunction(llvm::errs());
+        Cand.print(llvm::errs());
         llvm::errs() << "but cannot yet analyze non-constant replacements\n";
         OK = false;
         continue;
       }
-      llvm::APInt ActualVal = Cand.second.Mapping.RHS->Val;
+      llvm::APInt ActualVal = Cand.Mapping.RHS->Val;
 
-      for (const InstOrigin &Origin : Cand.second.Origins) {
-        llvm::Instruction *Inst = Origin.getInstruction();
-        llvm::MDNode *ExpectedMD = Inst->getMetadata(ExpectedID);
-        if (!ExpectedMD) {
-          llvm::errs() << "instruction:\n";
-          Inst->dump();
-          llvm::errs() << "unexpected simplification:\n";
-          Cand.second.print(llvm::errs());
-          OK = false;
-          continue;
-        }
-        if (ExpectedMD->getNumOperands() != 1 ||
-            !isa<llvm::ConstantInt>(ExpectedMD->getOperand(0))) {
-          llvm::errs() << "instruction:\n";
-          Inst->dump();
-          llvm::errs() << "invalid metadata\n";
-          OK = false;
-          continue;
-        }
-        llvm::APInt ExpectedVal =
-            cast<llvm::ConstantInt>(ExpectedMD->getOperand(0))->getValue();
-        Inst->setMetadata(ExpectedID, 0);
-        if (ExpectedVal != ActualVal) {
-          llvm::errs() << "instruction:\n";
-          Inst->dump();
-          llvm::errs() << "unexpected simplification, wanted " << ExpectedVal
-                       << ":\n";
-          Cand.second.print(llvm::errs());
-          OK = false;
-          continue;
-        }
+      llvm::Instruction *Inst = Cand.Origin.getInstruction();
+      llvm::MDNode *ExpectedMD = Inst->getMetadata(ExpectedID);
+      if (!ExpectedMD) {
+        llvm::errs() << "instruction:\n";
+        Inst->dump();
+        llvm::errs() << "unexpected simplification:\n";
+        Cand.printFunction(llvm::errs());
+        Cand.print(llvm::errs());
+        OK = false;
+        continue;
+      }
+      if (ExpectedMD->getNumOperands() != 1 ||
+          !isa<llvm::ConstantInt>(ExpectedMD->getOperand(0))) {
+        llvm::errs() << "instruction:\n";
+        Inst->dump();
+        llvm::errs() << "invalid metadata\n";
+        OK = false;
+        continue;
+      }
+      llvm::APInt ExpectedVal =
+        cast<llvm::ConstantInt>(ExpectedMD->getOperand(0))->getValue();
+      Inst->setMetadata(ExpectedID, 0);
+      if (ExpectedVal != ActualVal) {
+        llvm::errs() << "instruction:\n";
+        Inst->dump();
+        llvm::errs() << "unexpected simplification, wanted " << ExpectedVal
+                     << ":\n";
+        Cand.printFunction(llvm::errs());
+        Cand.print(llvm::errs());
+        OK = false;
+        continue;
       }
     }
   }

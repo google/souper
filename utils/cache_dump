@@ -1,0 +1,39 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Redis;
+
+# docs:
+# http://search.cpan.org/dist/Redis/lib/Redis.pm
+
+my $r = Redis->new;
+$r->ping || die "no server?";
+
+my @keys = $r->keys('*');
+my $n=0;
+my $opt=0;
+my $noopt=0;
+my %values;
+foreach my $k (sort @keys) {
+    $n++;
+    my %h = $r->hgetall($k);
+    if (0) {
+        foreach my $kk (sort keys %h) {
+            print "  <$kk> <$h{$kk}>\n";
+        }
+    }
+    my $result = $h{"result"};
+    if ($result eq "") {
+        $noopt++;
+    } else {
+        $opt++;
+        print "$k";
+        print "$result";
+        print "\n";
+        print "------------------------------------------------------\n\n";
+    }
+}
+
+print "; $opt optimizations\n";
+print "; $noopt not-optimziations\n";

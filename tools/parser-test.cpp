@@ -21,19 +21,32 @@ using namespace souper;
 using namespace llvm;
 
 int main(int argc, char **argv) {
-  auto MB = MemoryBuffer::getFileOrSTDIN(argc >= 2 ? argv[1] : "-");
+  int Arg = 1, LHSOnly = 0;
+  if (Arg < argc && strcmp(argv[Arg], "-LHS") == 0) {
+    LHSOnly = 1;
+    ++Arg;
+  }
+  auto MB = MemoryBuffer::getFileOrSTDIN(argc >= (Arg+1) ? argv[Arg] : "-");
   if (MB) {
     InstContext IC;
     std::string ErrStr;
-    std::vector<ParsedReplacement> Reps = ParseReplacements(
-        IC, MB.get()->getBufferIdentifier(), MB.get()->getBuffer(), ErrStr);
+    std::vector<ParsedReplacement> Reps;
+    if (LHSOnly)
+      Reps = ParseReplacementLHSs(IC, MB.get()->getBufferIdentifier(),
+                                  MB.get()->getBuffer(), ErrStr);
+    else
+      Reps = ParseReplacements(IC, MB.get()->getBufferIdentifier(),
+                               MB.get()->getBuffer(), ErrStr);
     if (!ErrStr.empty()) {
       llvm::errs() << ErrStr << '\n';
       return 1;
     }
 
     for (const auto &R : Reps) {
-      R.print(llvm::outs());
+      if (LHSOnly)
+        R.printLHS(llvm::outs());
+      else
+        R.print(llvm::outs());
     }
   } else {
     llvm::errs() << MB.getError().message() << '\n';

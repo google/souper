@@ -39,7 +39,7 @@ static redisContext *connect(void)
 
 static void ensure_integer_reply(redisReply *reply, redisContext *ctx)
 {
-  if (!reply) {
+  if (!reply || ctx->err) {
     fprintf(stderr, "FATAL: Redis error: %s\n", ctx->errstr);
     _exit(-1);
   }
@@ -56,6 +56,7 @@ static int to_stderr;
 
 static struct rec_t {
   const char *repl;
+  const char *field;
   int64_t *cntp;
   struct rec_t *next;
 } *recs;
@@ -70,10 +71,12 @@ static void _souper_atexit_handler(void)
     int64_t inc = *rec->cntp;
     if (to_stdout || to_stderr) {
       FILE *f = to_stdout ? stdout : stderr;
-      fprintf(f, "profile key = '%s'\n count = %" PRId64 "\n", rec->repl, inc);
+      fprintf(f, "Souper profile key = '%s'\n", rec->repl);
+      fprintf(f, "  field = '%s'\n", rec->field);
+      fprintf(f, "  count = %" PRId64 "\n\n", inc);
     } else if (inc > 0) {
       redisReply *reply = (redisReply *)redisCommand(ctx,
-          "INCRBY %s %" PRId64 "", rec->repl, inc);
+          "HINCRBY %s %s %" PRId64 "", rec->repl, rec->field, inc);
       ensure_integer_reply(reply, ctx);
     }
   }
@@ -82,7 +85,7 @@ static void _souper_atexit_handler(void)
 static volatile int lock;
 static int init;
 
-void _souper_profile_register(const char *repl, int64_t *cntp)
+void _souper_profile_register(const char *repl, const char *field, int64_t *cntp)
 {
   while (__atomic_exchange_n(&lock, 1, __ATOMIC_ACQUIRE));
 
@@ -105,6 +108,7 @@ void _souper_profile_register(const char *repl, int64_t *cntp)
   }
 
   rec->repl = repl;
+  rec->field = field;
   rec->cntp = cntp;
   rec->next = recs;
   recs = rec;
