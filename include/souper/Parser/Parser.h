@@ -33,13 +33,13 @@ struct ParsedReplacement {
   std::string getString() const {
     return GetReplacementString(PCs, Mapping);
   }
-  void printReplacementLHS(llvm::raw_ostream &OS) const {
+  void printLHS(llvm::raw_ostream &OS) const {
     PrintReplacementLHS(OS, PCs, Mapping.LHS);
   }
   std::string getLHSString() const {
     return GetReplacementLHSString(PCs, Mapping.LHS);
   }
-  void printReplacementRHS(llvm::raw_ostream &OS) const {
+  void printRHS(llvm::raw_ostream &OS) const {
     assert(Mapping.RHS->K == Inst::Const);
     PrintReplacementRHS(OS, Mapping.RHS->Val);
   }

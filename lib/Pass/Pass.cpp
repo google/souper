@@ -75,11 +75,12 @@ public:
     Info.addRequired<LoopInfo>();
   }
 
-  void addProfileCode(LLVMContext &C, Module *M, std::string Repl,
+  void addProfileCode(LLVMContext &C, Module *M, std::string LHS,
                       std::string SrcLoc, BasicBlock::iterator BI) {
     Function *RegisterFunc = M->getFunction("_souper_profile_register");
     if (!RegisterFunc) {
       Type *RegisterArgs[] = {
+        PointerType::getInt8PtrTy(C),
         PointerType::getInt8PtrTy(C),
         PointerType::getInt64PtrTy(C),
       };
@@ -89,11 +90,18 @@ public:
                                       "_souper_profile_register", M);
     }
 
-    Constant *S = ConstantDataArray::getString(C, "profile\n" + SrcLoc + "\n" +
-                                               Repl, true);
-    Constant *ReplVar = new GlobalVariable(*M, S->getType(), true,
-                                           GlobalValue::PrivateLinkage, S, "");
+    Constant *Repl = ConstantDataArray::getString(C, LHS, true);
+    Constant *ReplVar = new GlobalVariable(*M, Repl->getType(), true,
+        GlobalValue::PrivateLinkage, Repl, "");
     Constant *ReplPtr = ConstantExpr::getPointerCast(ReplVar,
+        PointerType::getInt8PtrTy(C));
+
+    Constant *Field = ConstantDataArray::getString(C, "dprofile " + SrcLoc,
+                                                   true);
+    Constant *FieldVar = new GlobalVariable(*M, Field->getType(), true,
+                                            GlobalValue::PrivateLinkage, Field,
+                                            "");
+    Constant *FieldPtr = ConstantExpr::getPointerCast(FieldVar,
         PointerType::getInt8PtrTy(C));
 
     Constant *CntVar = new GlobalVariable(*M, Type::getInt64Ty(C), false,
@@ -108,7 +116,7 @@ public:
     BasicBlock *BB = BasicBlock::Create(C, "entry", Ctor);
     IRBuilder<> Builder(BB);
 
-    Builder.CreateCall2(RegisterFunc, ReplPtr, CntVar);
+    Builder.CreateCall3(RegisterFunc, ReplPtr, FieldPtr, CntVar);
     Builder.CreateRetVoid();
 
     appendToGlobalCtors(*M, Ctor, 0);
@@ -161,61 +169,51 @@ public:
       errs() << "; Using solver: " << S->getName() << '\n';
     }
 
-    DenseSet<Instruction *> ReplacedInsts;
-
-    for (const auto &Cand : CandMap) {
-      bool Valid;
+    for (auto &Cand : CandMap) {
       if (std::error_code EC =
-              S->isValid(Cand.second.PCs, Cand.second.Mapping, Valid, 0)) {
+              S->infer(Cand.PCs, Cand.Mapping.LHS, Cand.Mapping.RHS,
+                       &Cand.Origin, IC)) {
         if (EC == std::errc::timed_out) {
           continue;
         } else {
           report_fatal_error("Unable to query solver: " + EC.message() + "\n");
         }
       }
-
-      if (!Valid)
+      if (!Cand.Mapping.RHS)
         continue;
+      Instruction *I = Cand.Origin.getInstruction();
 
-      for (const auto &O : Cand.second.Origins) {
-        Instruction *I = O.getInstruction();
-        if (!ReplacedInsts.insert(I).second)
-          continue;
-
-        Constant *CI = ConstantInt::get(
-            I->getType(), Cand.second.Mapping.RHS->Val);
-        if (DebugSouperPass) {
-          errs() << "\n";
-          errs() << "; Priority: " << Cand.second.Priority << '\n';
-          errs() << "; Replacing \"";
-          I->print(errs());
-          errs() << "\"\n; from \"";
-          I->getDebugLoc().print(I->getContext(), errs());
-          errs() << "\"\n; with \"";
-          CI->print(errs());
-          errs() << "\" in:\n";
-          PrintReplacement(errs(), Cand.second.PCs, Cand.second.Mapping);
-        }
-        if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
-          BasicBlock::iterator BI = I;
-          ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
-          if (ProfileSouperOpts) {
-            std::string Str;
-            llvm::raw_string_ostream Loc(Str);
-            I->getDebugLoc().print(I->getContext(), Loc);
-            addProfileCode (F.getContext(), F.getParent(),
-                GetReplacementString(Cand.second.PCs, Cand.second.Mapping),
-                Loc.str(), BI);
-          }
-          changed = true;
-        } else {
-          if (DebugSouperPass)
-            errs() << "Skipping this replacement (number " << ReplaceCount <<
-              ")\n";
-        }
-        if (ReplaceCount < std::numeric_limits<unsigned>::max())
-          ++ReplaceCount;
+      Constant *CI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
+      if (DebugSouperPass) {
+        errs() << "\n";
+        errs() << "; Replacing \"";
+        I->print(errs());
+        errs() << "\"\n; from \"";
+        I->getDebugLoc().print(I->getContext(), errs());
+        errs() << "\"\n; with \"";
+        CI->print(errs());
+        errs() << "\" in:\n";
+        PrintReplacement(errs(), Cand.PCs, Cand.Mapping);
       }
+      if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
+        BasicBlock::iterator BI = I;
+        ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
+        if (ProfileSouperOpts) {
+          std::string Str;
+          llvm::raw_string_ostream Loc(Str);
+          I->getDebugLoc().print(I->getContext(), Loc);
+          addProfileCode (F.getContext(), F.getParent(),
+                          GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS),
+                          Loc.str(), BI);
+        }
+        changed = true;
+      } else {
+        if (DebugSouperPass)
+          errs() << "Skipping this replacement (number " << ReplaceCount <<
+            ")\n";
+      }
+      if (ReplaceCount < std::numeric_limits<unsigned>::max())
+        ++ReplaceCount;
     }
 
     return changed;

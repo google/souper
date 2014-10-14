@@ -1,0 +1,20 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t1
+; RUN: FileCheck %s -check-prefix=SUCCESS < %t1
+; RUN: %parser-test < %t1
+; RUN: %souper-check %solver < %t1 | FileCheck -check-prefix=LGTM %s
+; RUN: %souper-check %solver -infer-rhs %s > %t2
+; RUN: cat %s %t2 | %souper-check %solver | FileCheck -check-prefix=LGTM %s
+
+; SUCCESS: RHS inferred successfully
+; LGTM: LGTM
+
+%0:i1 = var
+%1:i64 = var
+%2:i1 = ult 135637824071393761:i64, %1
+%3:i1 = or %0, %2
+%4:i64 = select %3, 135637824071393761:i64, %1
+%5:i1 = ult 135637824071393761:i64, %4
+infer %5
+
