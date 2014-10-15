@@ -501,6 +501,7 @@ ref<Expr> ExprBuilder::get(Inst *I) {
   ref<Expr> &E = ExprMap[I];
   if (E.isNull()) {
     E = build(I);
+    assert(E->getWidth() == I->Width);
   }
   return E;
 }
