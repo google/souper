@@ -379,13 +379,13 @@ Inst *ExprBuilder::build(Value *V) {
         default:
           break;
         case Intrinsic::ctpop:
-          return IC.getInst(Inst::CtPop, 1, {L});
+          return IC.getInst(Inst::CtPop, L->Width, {L});
         case Intrinsic::bswap:
-          return IC.getInst(Inst::BSwap, 1, {L});
+          return IC.getInst(Inst::BSwap, L->Width, {L});
         case Intrinsic::cttz:
-          return IC.getInst(Inst::Cttz, 1, {L});
+          return IC.getInst(Inst::Cttz, L->Width, {L});
         case Intrinsic::ctlz:
-          return IC.getInst(Inst::Ctlz, 1, {L});
+          return IC.getInst(Inst::Ctlz, L->Width, {L});
       }
     }
   }
