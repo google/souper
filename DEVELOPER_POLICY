@@ -1,0 +1,34 @@
+This document describes the developer policy for Souper.
+
+Coding Style
+------------
+
+Code must comply with the coding style given in the CODING_STYLE file in
+this directory.
+
+Each commit must consist of a logically separate change.
+
+Code Review
+-----------
+
+All changes are subject to code review by a person with write access other
+than the person proposing the change. To propose a change for review, create
+a fork of the project on GitHub under your own account, upload your changes
+to a branch of your fork and create a pull request using GitHub's web-based
+interface at:
+
+https://github.com/google/souper/pulls
+
+AUTHORS and CONTRIBUTORS
+------------------------
+
+If your name is not already in the AUTHORS or CONTRIBUTORS files, please
+ensure you have signed a Google CLA by following the link below, ideally
+before creating a pull request.
+
+https://cla.developers.google.com/clas
+
+Changes from a new contributor may not be accepted unless their name appears
+in the AUTHORS and CONTRIBUTORS files. Peter Collingbourne is responsible
+for checking that new contributors have properly signed a CLA and adding
+their names to the AUTHORS and CONTRIBUTORS files.
