@@ -40,7 +40,7 @@ void SolveIR(std::unique_ptr<MemoryBuffer> MB, Solver *S) {
 
     AddModuleToCandidateMap(IC, EBC, CandMap, M.get());
 
-    SolveCandidateMap(llvm::outs(), CandMap, S);
+    SolveCandidateMap(llvm::outs(), CandMap, S, IC);
   } else {
     Err.print(0, llvm::errs(), false);
   }
