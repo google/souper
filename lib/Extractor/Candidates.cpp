@@ -85,7 +85,6 @@ struct ExprBuilder {
   Inst *buildConstant(Constant *c);
   Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
   Inst *build(Value *V);
-  Inst *getPathCondition(BasicBlock *BB);
   void addPathConditions(std::vector<InstMapping> &PCs, BasicBlock *BB);
   Inst *get(Value *V);
 };
