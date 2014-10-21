@@ -18,8 +18,13 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include "souper/KVStore/KVStore.h"
 #include "souper/SMTLIB2/Solver.h"
+
+using namespace llvm;
 
 void souper::AddToCandidateMap(CandidateMap &M,
                                const CandidateReplacement &CR) {
@@ -41,7 +46,10 @@ void souper::AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
 namespace souper {
 
 bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
-                       Solver *S, InstContext &IC) {
+                       Solver *S, InstContext &IC, bool StaticProfile) {
+  if (StaticProfile && !KV)
+    KV = new KVStore;
+
   if (S) {
     OS << "; Listing valid replacements.\n";
     OS << "; Using solver: " << S->getName() << '\n';
@@ -64,9 +72,20 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
       if (Profile[I] == 0)
         continue;
       auto &Cand = M[I];
+
+      if (StaticProfile) {
+        std::string Str;
+        llvm::raw_string_ostream Loc(Str);
+        Instruction *I = Cand.Origin.getInstruction();
+        I->getDebugLoc().print(I->getContext(), Loc);
+        std::string HField = "sprofile " + Loc.str();
+        KV->hIncrBy(GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS), HField,
+                    1);
+      }
+
       Inst *RHS;
       if (std::error_code EC =
-              S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, &Cand.Origin, IC)) {
+              S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
         llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
         return false;
       }
@@ -103,7 +122,7 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
   for (auto &Cand : M) {
     Inst *RHS;
     if (std::error_code EC =
-            S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, &Cand.Origin, IC)) {
+            S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
       llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
       return false;
     }
