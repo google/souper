@@ -24,6 +24,7 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include "souper/KVStore/KVStore.h"
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/GetSolverFromArgs.h"
 #include "souper/Tool/CandidateMapUtils.h"
@@ -44,8 +45,11 @@ static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
      "The larger the number is, the more fine-grained debug "
      "information will be printed."));
 
-static cl::opt<bool> ProfileSouperOpts("souper-profile-opts", cl::init(false),
-                                       cl::desc("Profile Souper optimizations"));
+static cl::opt<bool> DynamicProfile("souper-dynamic-profile", cl::init(false),
+    cl::desc("Dynamic profiling of Souper optimizations (default=false)"));
+
+static cl::opt<bool> StaticProfile("souper-static-profile", cl::init(false),
+    cl::desc("Static profiling of Souper optimizations (default=false)"));
 
 static cl::opt<unsigned> FirstReplace("souper-first-opt", cl::Hidden,
     cl::init(0),
@@ -75,7 +79,7 @@ public:
     Info.addRequired<LoopInfo>();
   }
 
-  void addProfileCode(LLVMContext &C, Module *M, std::string LHS,
+  void dynamicProfile(LLVMContext &C, Module *M, std::string LHS,
                       std::string SrcLoc, BasicBlock::iterator BI) {
     Function *RegisterFunc = M->getFunction("_souper_profile_register");
     if (!RegisterFunc) {
@@ -132,6 +136,9 @@ public:
     ExprBuilderContext EBC;
     CandidateMap CandMap;
 
+    if (StaticProfile && !KV)
+      KV = new KVStore;
+
     LoopInfo *LI = &getAnalysis<LoopInfo>();
 
     FunctionCandidateSet CS = ExtractCandidatesFromPass(&F, LI, IC, EBC);
@@ -170,9 +177,17 @@ public:
     }
 
     for (auto &Cand : CandMap) {
+      if (StaticProfile) {
+        std::string Str;
+        llvm::raw_string_ostream Loc(Str);
+        Instruction *I = Cand.Origin.getInstruction();
+        I->getDebugLoc().print(I->getContext(), Loc);
+        std::string HField = "sprofile " + Loc.str();
+        KV->hIncrBy(GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS), HField,
+                    1);
+      }
       if (std::error_code EC =
-              S->infer(Cand.PCs, Cand.Mapping.LHS, Cand.Mapping.RHS,
-                       &Cand.Origin, IC)) {
+              S->infer(Cand.PCs, Cand.Mapping.LHS, Cand.Mapping.RHS, IC)) {
         if (EC == std::errc::timed_out) {
           continue;
         } else {
@@ -198,11 +213,11 @@ public:
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
         BasicBlock::iterator BI = I;
         ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
-        if (ProfileSouperOpts) {
+        if (DynamicProfile) {
           std::string Str;
           llvm::raw_string_ostream Loc(Str);
           I->getDebugLoc().print(I->getContext(), Loc);
-          addProfileCode (F.getContext(), F.getParent(),
+          dynamicProfile (F.getContext(), F.getParent(),
                           GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS),
                           Loc.str(), BI);
         }

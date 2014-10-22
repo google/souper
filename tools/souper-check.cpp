@@ -52,7 +52,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 
   if (InferRHS) {
     if (std::error_code EC = S->infer(Rep.PCs, Rep.Mapping.LHS, Rep.Mapping.RHS,
-                                      0, IC)) {
+                                      IC)) {
       llvm::errs() << EC.message() << '\n';
       return 1;
     }

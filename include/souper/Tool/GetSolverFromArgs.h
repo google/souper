@@ -66,7 +66,7 @@ static llvm::cl::opt<bool> MemCache(
   llvm::cl::desc("Cache solver results in memory (default=true)"),
   llvm::cl::init(true));
 
-static llvm::cl::opt<bool> RedisCache(
+static llvm::cl::opt<bool> ExternalCache(
   "souper-external-cache",
   llvm::cl::desc("Use external Redis-based cache (default=false)"),
   llvm::cl::init(false));
@@ -80,8 +80,8 @@ static std::unique_ptr<Solver> GetSolverFromArgs() {
   std::unique_ptr<SMTLIBSolver> US = GetUnderlyingSolverFromArgs();
   if (!US) return NULL;
   std::unique_ptr<Solver> S = createBaseSolver (std::move(US), SolverTimeout);
-  if (RedisCache) {
-    S = createRedisCachingSolver (std::move(S));
+  if (ExternalCache) {
+    S = createExternalCachingSolver (std::move(S));
   }
   if (MemCache) {
     S = createMemCachingSolver (std::move(S));

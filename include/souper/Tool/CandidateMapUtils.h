@@ -38,7 +38,7 @@ void AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
                              CandidateMap &CandMap, llvm::Module *M);
 
 bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
-                       Solver *Solver, InstContext &IC);
+                       Solver *Solver, InstContext &IC, bool StaticProfile);
 
 bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
                        InstContext &IC);
