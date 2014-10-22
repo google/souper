@@ -1,0 +1,259 @@
+#!/usr/bin/env perl
+
+# Copyright 2014 The Souper Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+use warnings;
+use strict;
+use File::Temp;
+
+my $solver = $ENV{"SOUPER_SOLVER"};
+die "$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp" unless $solver;
+my $SOUPER_CHECK = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15 ${solver}";
+
+sub check ($) {
+    (my $s) = @_;
+    (my $fh, my $tmpfn) = File::Temp::tempfile();
+    print $fh $s;
+    $fh->flush();
+    open INF, "${SOUPER_CHECK} --print-replacement < $tmpfn 2>/dev/null |";
+    my $s2 = "";
+    while (my $line = <INF>) {
+        chomp $line;
+        $s2 .= $line;
+    }
+    close INF;
+    close $fh;
+    unlink $tmpfn;
+    return 0 if ($s2 eq "LGTM");
+    return 1;
+}
+
+sub makevar ($$) {
+    (my $s, my $cnt) = @_;
+    my @lines = split /\n/, $s;
+    my $out = "";
+    my $n = 0;
+    my $good = 0;
+    foreach my $line (@lines) {
+        chomp $line;
+        if ($line =~ / = var/) {
+        } else {
+            if ($line =~ / = /) {
+                if ($cnt == $n) {
+                    $line =~ s/ =(.*)$/ = var/g;
+                    $good = 1;
+                }
+                $n++;
+            }
+        }
+        $out .= "$line\n";
+    }
+    if ($good) {
+        return (0, $out);
+    } else {
+        return (-1, "");
+    }
+}
+
+sub rmline ($$) {
+    (my $s, my $cnt) = @_;
+    my @lines = split /\n/, $s;
+    my $out = "";
+    my $n = 0;
+    my $good = 0;
+    foreach my $line (@lines) {
+        chomp $line;
+        if ($cnt == $n) {
+            $good = 1;
+        } else {
+            $out .= "$line\n";
+        }
+        $n++;
+    }
+    if ($good) {
+        return (0, $out);
+    } else {
+        return (-1, "");
+    }
+}
+
+sub strength_reduce1 ($$) {
+    (my $s, my $cnt) = @_;
+    my @lines = split /\n/, $s;
+    my $out = "";
+    my $n = 0;
+    my $good = 0;
+    foreach my $line (@lines) {
+        chomp $line;
+        my $line2 = $line;
+        if (
+            $line2 =~ s/mulnw/mulnsw/ ||
+            $line2 =~ s/addnw/addnsw/ ||
+            $line2 =~ s/shlnw/shlnsw/ ||
+            $line2 =~ s/subnw/subnsw/
+            ) {
+            if ($cnt == $n) {
+                $line = $line2;
+                $good = 1;
+            }
+            $n++;
+        }
+        $out .= "$line\n";
+    }
+    if ($good) {
+        return (0, $out);
+    } else {
+        return (-1, "");
+    }
+}
+
+sub strength_reduce2 ($$) {
+    (my $s, my $cnt) = @_;
+    my @lines = split /\n/, $s;
+    my $out = "";
+    my $n = 0;
+    my $good = 0;
+    foreach my $line (@lines) {
+        chomp $line;
+        my $line2 = $line;
+        if (
+            $line2 =~ s/mulnw/mulnuw/ ||
+            $line2 =~ s/addnw/addnuw/ ||
+            $line2 =~ s/shlnw/shlnuw/ ||
+            $line2 =~ s/subnw/subnuw/
+            ) {
+            if ($cnt == $n) {
+                $line = $line2;
+                $good = 1;
+            }
+            $n++;
+        }
+        $out .= "$line\n";
+    }
+    if ($good) {
+        return (0, $out);
+    } else {
+        return (-1, "");
+    }
+}
+
+sub strength_reduce3 ($$) {
+    (my $s, my $cnt) = @_;
+    my @lines = split /\n/, $s;
+    my $out = "";
+    my $n = 0;
+    my $good = 0;
+    foreach my $line (@lines) {
+        chomp $line;
+        my $line2 = $line;
+        if (
+            $line2 =~ s/mulnw/mul/ ||
+            $line2 =~ s/addnw/add/ ||
+            $line2 =~ s/shlnw/shl/ ||
+            $line2 =~ s/subnw/sub/ ||
+            $line2 =~ s/mulnuw/mul/ ||
+            $line2 =~ s/addnuw/add/ ||
+            $line2 =~ s/shlnuw/shl/ ||
+            $line2 =~ s/subnuw/sub/ ||
+            $line2 =~ s/mulnsw/mul/ ||
+            $line2 =~ s/addnsw/add/ ||
+            $line2 =~ s/shlnsw/shl/ ||
+            $line2 =~ s/subnsw/sub/ ||
+            $line2 =~ s/udivexact/udiv/ ||
+            $line2 =~ s/sdivexact/sdiv/ ||
+            $line2 =~ s/ashrexact/ashr/ ||
+            $line2 =~ s/lshrexact/lshr/
+            ) {
+            if ($cnt == $n) {
+                $line = $line2;
+                $good = 1;
+            }
+            $n++;
+        }
+        $out .= "$line\n";
+    }
+    if ($good) {
+        return (0, $out);
+    } else {
+        return (-1, "");
+    }
+}
+
+my @xforms = (
+    \&strength_reduce1,
+    \&strength_reduce2,
+    \&strength_reduce3,
+    \&makevar,
+    \&rmline,
+    );
+
+# ddmin, more or less
+sub reduce ($) {
+    (my $s) = @_;
+  again:
+    my $good = 0;
+    foreach my $xform (@xforms) {
+        my $cnt = 0;
+        while (1) {
+            (my $res, my $s2) = &$xform($s, $cnt);
+            goto out if ($res==-1);
+            # print "result of xform:\n$s2\n\n";
+            my $res2 = check($s2);
+            if ($res2==0) {
+                $s = $s2;
+                $good = 1;
+                # print "$s\n\n";
+            } else {
+                $cnt++;
+            }
+        }
+      out:
+    }
+    if ($good) {
+        goto again;
+    }
+    return $s;
+}
+
+sub bylen {
+    length $a <=> length $b or $a cmp $b
+}
+
+sub pretty ($) {
+    (my $red) = @_;
+    (my $fh, my $tmpfn) = File::Temp::tempfile();
+    open OUTF, ">$tmpfn" or die;
+    print OUTF $red;
+    close OUTF;
+    open INF, "${SOUPER_CHECK} --print-replacement $tmpfn |";
+    my $foo = <INF>;
+    my $pret = "";
+    while (my $line = <INF>) {
+        $line =~ s/\s*\;.*$//;
+        $pret .= $line;
+    }
+    close INF;
+    close $fh;
+    unlink $tmpfn;
+    return $pret;
+}
+
+my $x = "";
+while (my $line = <STDIN>) {
+    $x .= $line;
+}
+print pretty(reduce($x));
+
+print "foo\n";
