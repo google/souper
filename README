@@ -13,6 +13,9 @@ You will also need CMake to build Souper and its dependencies.
 To run Souper over a bitcode file, you will need an SMT solver. Souper can
 use Boolector, CVC4, STP or Z3.
 
+If you have Go installed, you will also need the Redigo Redis client:
+    $ go get github.com/garyburd/redigo/redis
+
 Building Souper
 ---------------
 
