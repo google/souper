@@ -17,6 +17,7 @@
 
 #include "llvm/Support/CommandLine.h"
 #include "souper/Extractor/Solver.h"
+#include "souper/KVStore/KVStore.h"
 #include "souper/SMTLIB2/Solver.h"
 #include <memory>
 #include <string>
@@ -66,7 +67,7 @@ static llvm::cl::opt<bool> MemCache(
   llvm::cl::desc("Cache solver results in memory (default=true)"),
   llvm::cl::init(true));
 
-static llvm::cl::opt<bool> RedisCache(
+static llvm::cl::opt<bool> ExternalCache(
   "souper-external-cache",
   llvm::cl::desc("Use external Redis-based cache (default=false)"),
   llvm::cl::init(false));
@@ -76,12 +77,13 @@ static llvm::cl::opt<int> SolverTimeout(
   llvm::cl::desc("Solver timeout in seconds (default=no timeout)"),
   llvm::cl::init(0));
 
-static std::unique_ptr<Solver> GetSolverFromArgs() {
+static std::unique_ptr<Solver> GetSolverFromArgs(KVStore *&KV) {
   std::unique_ptr<SMTLIBSolver> US = GetUnderlyingSolverFromArgs();
   if (!US) return NULL;
   std::unique_ptr<Solver> S = createBaseSolver (std::move(US), SolverTimeout);
-  if (RedisCache) {
-    S = createRedisCachingSolver (std::move(S));
+  if (ExternalCache) {
+    KV = new KVStore;
+    S = createExternalCachingSolver (std::move(S), KV);
   }
   if (MemCache) {
     S = createMemCachingSolver (std::move(S));

@@ -52,7 +52,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 
   if (InferRHS) {
     if (std::error_code EC = S->infer(Rep.PCs, Rep.Mapping.LHS, Rep.Mapping.RHS,
-                                      0, IC)) {
+                                      IC)) {
       llvm::errs() << EC.message() << '\n';
       return 1;
     }
@@ -101,7 +101,8 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
-  std::unique_ptr<Solver> S = GetSolverFromArgs();
+  KVStore *KV = 0;
+  std::unique_ptr<Solver> S = GetSolverFromArgs(KV);
   if (!S) {
     llvm::errs() << "Specify a solver\n";
     return 1;

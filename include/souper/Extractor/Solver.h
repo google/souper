@@ -16,6 +16,7 @@
 #define SOUPER_EXTRACTOR_SOLVER_H
 
 #include "llvm/ADT/APInt.h"
+#include "souper/KVStore/KVStore.h"
 #include "souper/Tool/CandidateMapUtils.h"
 #include "souper/Extractor/Candidates.h"
 #include "souper/SMTLIB2/Solver.h"
@@ -30,7 +31,7 @@ public:
   virtual ~Solver();
   virtual std::error_code
   infer(const std::vector<InstMapping> &PCs, Inst *LHS, Inst *&RHS,
-        const InstOrigin *O, InstContext &IC) = 0;
+        InstContext &IC) = 0;
   virtual std::error_code
   isValid(const std::vector<InstMapping> &PCs, InstMapping Mapping,
           bool &IsValid,
@@ -42,8 +43,8 @@ std::unique_ptr<Solver> createBaseSolver(
     std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout);
 std::unique_ptr<Solver> createMemCachingSolver(
     std::unique_ptr<Solver> UnderlyingSolver);
-std::unique_ptr<Solver> createRedisCachingSolver(
-    std::unique_ptr<Solver> UnderlyingSolver);
+std::unique_ptr<Solver> createExternalCachingSolver(
+    std::unique_ptr<Solver> UnderlyingSolver, KVStore *KV);
 
 }
 

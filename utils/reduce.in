@@ -36,7 +36,7 @@ sub check ($) {
     close INF;
     close $fh;
     unlink $tmpfn;
-    return 0 if ($s2 eq "LGTM");
+    return 0 if ($s2 =~ "LGTM");
     return 1;
 }
 
@@ -254,6 +254,5 @@ my $x = "";
 while (my $line = <STDIN>) {
     $x .= $line;
 }
+die "initial check fails" unless check($x) == 0;
 print pretty(reduce($x));
-
-print "foo\n";
