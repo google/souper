@@ -47,6 +47,10 @@ static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
 static cl::opt<bool> ProfileSouperOpts("souper-profile-opts", cl::init(false),
                                        cl::desc("Profile Souper optimizations"));
 
+static cl::opt<bool> IgnoreSolverErrors("souper-ignore-solver-errors",
+                                        cl::init(false),
+                                        cl::desc("Ignore solver errors"));
+
 static cl::opt<unsigned> FirstReplace("souper-first-opt", cl::Hidden,
     cl::init(0),
     cl::desc("First Souper optimization to perform (default=0)"));
@@ -173,7 +177,10 @@ public:
       if (std::error_code EC =
               S->infer(Cand.PCs, Cand.Mapping.LHS, Cand.Mapping.RHS,
                        &Cand.Origin, IC)) {
-        if (EC == std::errc::timed_out) {
+        if (EC == std::errc::timed_out)
+          continue;
+        if (IgnoreSolverErrors) {
+          llvm::errs() << "Unable to query solver: " + EC.message() + "\n";
           continue;
         } else {
           report_fatal_error("Unable to query solver: " + EC.message() + "\n");
