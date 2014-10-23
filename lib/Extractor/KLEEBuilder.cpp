@@ -346,36 +346,64 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     UBExprMap[I] = AndExpr::create(mulnswUB(I), mulnuwUB(I));
     return Mul;
   }
-  case Inst::UDiv: {
-    ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = udivUB(I);
-    return Udiv;
+  
+  // We introduce these extra checks here because KLEE invokes llvm::APInt's
+  // div functions , which crash upon divide-by-zero.
+  case Inst::UDiv:
+  case Inst::SDiv:
+  case Inst::UDivExact:
+  case Inst::SDivExact:
+  case Inst::URem:
+  case Inst::SRem: { // Fall-through
+    // If the second oprand is 0, then it definitely causes UB. 
+    // There are quite a few cases where KLEE folds operations into zero,
+    // e.g., "sext i16 0 to i32", "0 + 0", "2 - 2", etc.  In all cases, 
+    // we skip building the corresponding KLEE expressions and just return 
+    // a constant zero.
+    ref<Expr> R = get(Ops[1]);
+    if (R->isZero()) {
+      UBExprMap[I] = klee::ConstantExpr::create(0, 1);
+      return klee::ConstantExpr::create(0, Ops[1]->Width);
+    }
+
+    switch (I->K) {
+    default:
+      break;
+
+    case Inst::UDiv: {
+      ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = udivUB(I);
+      return Udiv;
+    }
+    case Inst::SDiv: {
+      ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = sdivUB(I);
+      return Sdiv;
+    }
+    case Inst::UDivExact: {
+      ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = AndExpr::create(udivUB(I), udivExactUB(I));
+      return Udiv;
+    }
+    case Inst::SDivExact: {
+      ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = AndExpr::create(sdivUB(I), sdivExactUB(I));
+      return Sdiv;
+    }
+    case Inst::URem: {
+      ref<Expr> Urem = URemExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = udivUB(I);
+      return Urem;
+    }
+    case Inst::SRem: {
+      ref<Expr> Srem = SRemExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = sdivUB(I);
+      return Srem;
+    }
+    llvm_unreachable("unknown kind");
   }
-  case Inst::SDiv: {
-    ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = sdivUB(I);
-    return Sdiv;
   }
-  case Inst::UDivExact: {
-    ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(udivUB(I), udivExactUB(I));
-    return Udiv;
-  }
-  case Inst::SDivExact: {
-    ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(sdivUB(I), sdivExactUB(I));
-    return Sdiv;
-  }
-  case Inst::URem: {
-    ref<Expr> Urem = URemExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = udivUB(I);
-    return Urem;
-  }
-  case Inst::SRem: {
-    ref<Expr> Srem = SRemExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = sdivUB(I);
-    return Srem;
-  }
+
   case Inst::And:
     return buildAssoc(AndExpr::create, Ops);
   case Inst::Or:
@@ -736,63 +764,6 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   CE.E = Expr::createImplies(Ante, Cons);
 
   return CE;
-}
-
-namespace {
-
-typedef std::set<std::pair<const Array *, uint64_t>> OffsetSet;
-
-bool IsPurelySymbolic(ref<Expr> E, OffsetSet &Offsets) {
-  if (auto RE = dyn_cast<ReadExpr>(E)) {
-    auto Offset = dyn_cast<klee::ConstantExpr>(RE->index);
-    if (!Offset)
-      return false;
-    // Check whether we're reading from this array/offset more than once.
-    // Such expressions are internally constrained and may be unsat.
-    return Offsets.insert(std::make_pair(RE->updates.root,
-                                         Offset->getZExtValue())).second;
-  }
-  else if (auto CE = dyn_cast<ConcatExpr>(E))
-    return IsPurelySymbolic(CE->getLeft(), Offsets) &&
-           IsPurelySymbolic(CE->getRight(), Offsets);
-  else if (auto EE = dyn_cast<ExtractExpr>(E))
-    return IsPurelySymbolic(EE->expr, Offsets);
-  else
-    return false;
-}
-
-bool IsPurelySymbolic(ref<Expr> E) {
-  OffsetSet Offsets;
-  return IsPurelySymbolic(E, Offsets);
-}
-
-}
-
-bool souper::IsTriviallyInvalid(ref<Expr> E) {
-  // !E => E.
-  if (auto EE = dyn_cast<EqExpr>(E)) {
-    if (EE->left->getWidth() == 1) {
-      if (EE->left->isZero())
-        E = EE->right;
-      else if (EE->right->isZero())
-        E = EE->left;
-    }
-  }
-
-  if (IsPurelySymbolic(E))
-    return true;
-
-  if (auto CE = dyn_cast<CmpExpr>(E)) {
-    // e.g. x u< 0 or x s< INT_MIN. TODO: check for these.
-    if (isa<UltExpr>(CE) || isa<SltExpr>(CE))
-      return false;
-    if (isa<klee::ConstantExpr>(CE->left) && IsPurelySymbolic(CE->right))
-      return true;
-    if (isa<klee::ConstantExpr>(CE->right) && IsPurelySymbolic(CE->left))
-      return true;
-  }
-
-  return false;
 }
 
 std::string souper::BuildQuery(const std::vector<InstMapping> &PCs,
