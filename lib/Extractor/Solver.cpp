@@ -205,6 +205,11 @@ public:
     }
   }
 
+  ~RedisCachingSolver() {
+    if (ctx)
+      redisFree(ctx);
+  }
+
   std::error_code infer(const std::vector<InstMapping> &PCs,
                         Inst *LHS, Inst *&RHS, const InstOrigin *O,
                         InstContext &IC) {
