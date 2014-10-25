@@ -161,7 +161,7 @@ public:
           errs() << "\n; For LLVM instruction:\n;";
           I->print(errs());
           errs() << "\n; Generating replacement:\n";
-          PrintReplacement(errs(), R.PCs, R.Mapping);
+          PrintReplacementLHS(errs(), R.PCs, R.Mapping.LHS);
         }
         AddToCandidateMap(CandMap, R);
       }
