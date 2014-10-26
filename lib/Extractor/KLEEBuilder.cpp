@@ -346,36 +346,64 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     UBExprMap[I] = AndExpr::create(mulnswUB(I), mulnuwUB(I));
     return Mul;
   }
-  case Inst::UDiv: {
-    ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = udivUB(I);
-    return Udiv;
+  
+  // We introduce these extra checks here because KLEE invokes llvm::APInt's
+  // div functions , which crash upon divide-by-zero.
+  case Inst::UDiv:
+  case Inst::SDiv:
+  case Inst::UDivExact:
+  case Inst::SDivExact:
+  case Inst::URem:
+  case Inst::SRem: { // Fall-through
+    // If the second oprand is 0, then it definitely causes UB. 
+    // There are quite a few cases where KLEE folds operations into zero,
+    // e.g., "sext i16 0 to i32", "0 + 0", "2 - 2", etc.  In all cases, 
+    // we skip building the corresponding KLEE expressions and just return 
+    // a constant zero.
+    ref<Expr> R = get(Ops[1]);
+    if (R->isZero()) {
+      UBExprMap[I] = klee::ConstantExpr::create(0, 1);
+      return klee::ConstantExpr::create(0, Ops[1]->Width);
+    }
+
+    switch (I->K) {
+    default:
+      break;
+
+    case Inst::UDiv: {
+      ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = udivUB(I);
+      return Udiv;
+    }
+    case Inst::SDiv: {
+      ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = sdivUB(I);
+      return Sdiv;
+    }
+    case Inst::UDivExact: {
+      ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = AndExpr::create(udivUB(I), udivExactUB(I));
+      return Udiv;
+    }
+    case Inst::SDivExact: {
+      ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = AndExpr::create(sdivUB(I), sdivExactUB(I));
+      return Sdiv;
+    }
+    case Inst::URem: {
+      ref<Expr> Urem = URemExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = udivUB(I);
+      return Urem;
+    }
+    case Inst::SRem: {
+      ref<Expr> Srem = SRemExpr::create(get(Ops[0]), R);
+      UBExprMap[I] = sdivUB(I);
+      return Srem;
+    }
+    llvm_unreachable("unknown kind");
   }
-  case Inst::SDiv: {
-    ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = sdivUB(I);
-    return Sdiv;
   }
-  case Inst::UDivExact: {
-    ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(udivUB(I), udivExactUB(I));
-    return Udiv;
-  }
-  case Inst::SDivExact: {
-    ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(sdivUB(I), sdivExactUB(I));
-    return Sdiv;
-  }
-  case Inst::URem: {
-    ref<Expr> Urem = URemExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = udivUB(I);
-    return Urem;
-  }
-  case Inst::SRem: {
-    ref<Expr> Srem = SRemExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = sdivUB(I);
-    return Srem;
-  }
+
   case Inst::And:
     return buildAssoc(AndExpr::create, Ops);
   case Inst::Or:
