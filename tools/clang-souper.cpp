@@ -50,6 +50,8 @@ int main(int argc, const char **argv) {
       getGlobalContext(), IC, EBC, OwnedMods, CandMap));
   Tool.run(Factory.get());
 
-  std::unique_ptr<Solver> S = GetSolverFromArgs();
-  return SolveCandidateMap(llvm::outs(), CandMap, S.get(), IC) ? 0 : 1;
+  KVStore *KV = 0;
+  std::unique_ptr<Solver> S = GetSolverFromArgs(KV);
+  return SolveCandidateMap(llvm::outs(), CandMap, S.get(), IC, false, KV)
+    ? 0 : 1;
 }

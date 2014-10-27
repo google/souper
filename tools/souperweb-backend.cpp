@@ -30,6 +30,8 @@ using namespace souper;
 
 extern "C" int boolector_main(int argc, char **argv);
 
+KVStore *KV;
+
 void SolveIR(std::unique_ptr<MemoryBuffer> MB, Solver *S) {
   SMDiagnostic Err;
   if (std::unique_ptr<Module> M =
@@ -40,7 +42,7 @@ void SolveIR(std::unique_ptr<MemoryBuffer> MB, Solver *S) {
 
     AddModuleToCandidateMap(IC, EBC, CandMap, M.get());
 
-    SolveCandidateMap(llvm::outs(), CandMap, S, IC);
+    SolveCandidateMap(llvm::outs(), CandMap, S, IC, false, KV);
   } else {
     Err.print(0, llvm::errs(), false);
   }
@@ -86,7 +88,7 @@ static llvm::cl::opt<std::string> Action("action", llvm::cl::init(""));
 
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
-  std::unique_ptr<Solver> S = GetSolverFromArgs();
+  std::unique_ptr<Solver> S = GetSolverFromArgs(KV);
 
   auto MB = MemoryBuffer::getSTDIN();
   if (MB) {

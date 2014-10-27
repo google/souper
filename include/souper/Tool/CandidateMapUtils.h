@@ -19,6 +19,7 @@
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/KLEEBuilder.h"
 #include "souper/Extractor/Solver.h"
+#include "souper/KVStore/KVStore.h"
 
 namespace llvm {
 
@@ -38,7 +39,8 @@ void AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
                              CandidateMap &CandMap, llvm::Module *M);
 
 bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
-                       Solver *Solver, InstContext &IC);
+                       Solver *Solver, InstContext &IC, bool StaticProfile,
+                       KVStore *KV);
 
 bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
                        InstContext &IC);
