@@ -91,7 +91,7 @@ struct ExprBuilder {
   ref<Expr> getInstMapping(const InstMapping &IM);
   std::vector<ref<Expr >> getBlockPredicates(Inst *I);
   ref<Expr> getUBInstCondition();
-  ref<Expr> createPhiPred(const std::unique_ptr<PhiPath> &Path, 
+  ref<Expr> createPhiPred(const std::unique_ptr<PhiPath> &Path,
                           Inst* Phi);
   void getUBPhiPaths(Inst *I, PhiPath *Current,
                      std::vector<std::unique_ptr<PhiPath>> &Paths,
@@ -200,7 +200,8 @@ ref<Expr> ExprBuilder::udivExactUB(Inst *I) {
 ref<Expr> ExprBuilder::sdivUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-   ref<Expr> ShiftBy = klee::ConstantExpr::create(L->getWidth()-1, L->getWidth());
+   ref<Expr> ShiftBy = klee::ConstantExpr::create(L->getWidth()-1,
+                                                  L->getWidth());
    ref<Expr> IntMin = ShlExpr::create(klee::ConstantExpr::create(
                                       1, L->getWidth()), ShiftBy);
    ref<Expr> NegOne = AShrExpr::create(IntMin, ShiftBy);
@@ -346,7 +347,7 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     UBExprMap[I] = AndExpr::create(mulnswUB(I), mulnuwUB(I));
     return Mul;
   }
-  
+
   // We introduce these extra checks here because KLEE invokes llvm::APInt's
   // div functions , which crash upon divide-by-zero.
   case Inst::UDiv:
@@ -355,10 +356,10 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   case Inst::SDivExact:
   case Inst::URem:
   case Inst::SRem: { // Fall-through
-    // If the second oprand is 0, then it definitely causes UB. 
+    // If the second oprand is 0, then it definitely causes UB.
     // There are quite a few cases where KLEE folds operations into zero,
-    // e.g., "sext i16 0 to i32", "0 + 0", "2 - 2", etc.  In all cases, 
-    // we skip building the corresponding KLEE expressions and just return 
+    // e.g., "sext i16 0 to i32", "0 + 0", "2 - 2", etc.  In all cases,
+    // we skip building the corresponding KLEE expressions and just return
     // a constant zero.
     ref<Expr> R = get(Ops[1]);
     if (R->isZero()) {
@@ -427,7 +428,8 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   }
   case Inst::ShlNW: {
     ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(shiftUB(I), AndExpr::create(shlnswUB(I), shlnuwUB(I)));
+    UBExprMap[I] = AndExpr::create(shiftUB(I), AndExpr::create(shlnswUB(I),
+                                                               shlnuwUB(I)));
     return Result;
   }
   case Inst::LShr: {
@@ -550,7 +552,7 @@ std::vector<ref<Expr> > ExprBuilder::getBlockPredicates(Inst *I) {
   return PredExpr;
 }
 
-ref<Expr> ExprBuilder::createPhiPred(const std::unique_ptr<PhiPath> &Path, 
+ref<Expr> ExprBuilder::createPhiPred(const std::unique_ptr<PhiPath> &Path,
                                      Inst* Phi) {
   assert((Phi->K == Inst::Phi) && "Must be a Phi instruction!");
 
@@ -574,7 +576,7 @@ ref<Expr> ExprBuilder::createPhiPred(const std::unique_ptr<PhiPath> &Path,
 // Collect UB Inst condition for each Phi instruction.
 // The basic algorithm is:
 // (1) for a given phi instruction, we first collect all paths that start
-//     from the phi. For each path, we also keep the the phi instructions 
+//     from the phi. For each path, we also keep the the phi instructions
 //     along the path and the UB instructions associated with these phi
 //     instructions;
 // (2) then for each path, we generate a corresponding KLEE expression
@@ -589,7 +591,7 @@ ref<Expr> ExprBuilder::createPhiPred(const std::unique_ptr<PhiPath> &Path,
 // to process some file due to the large memory footprint, i.e., `newing'
 // too many PhiPaths. Two tricks are used to relief the penalty of the
 // path explosion problem:
-// (1) caching the KLEE expresions for each processed phi, where each 
+// (1) caching the KLEE expresions for each processed phi, where each
 //     KLEE expression encodes the path that starts from one of the phi's
 //     values. For example, when processing a sample souper IR below
 //
@@ -607,21 +609,21 @@ ref<Expr> ExprBuilder::createPhiPred(const std::unique_ptr<PhiPath> &Path,
 //     for this phi encodes two paths, i.e., %3 and %5. We cache
 //     these two into CachedPhis. Then we move to process phi %12.
 //     At this point, rather than recursively re-contruct %11 (through
-//     %12's value), we just re-used the cached path-expressions. 
+//     %12's value), we just re-used the cached path-expressions.
 //     For each path-expression, we append it with %12's own predicate
 //     and also cache them with %12 for future use. After finishing
-//     %12, we will have three entries for phi %12. 
+//     %12, we will have three entries for phi %12.
 // (2) The first trick increases the performance, but we still suffer
 //     with large memory consumption, i.e., it's easy to cache too
 //     many paths. The second trick is to reduce the memory footprint
 //     by only caching "useful" path that has UB Insts. For example,
 //     in the example in (1), for phi %12, we don't need to cache
 //     the path starting from %6, because this path doesn't have any
-//     UB Insts. 
+//     UB Insts.
 //
 // These tricks basically relies on the dependency chain of instructions
 // generated by souper. For example, if we say %12 depends on %11, then
-// %12 would never appear earlier than %11. 
+// %12 would never appear earlier than %11.
 ref<Expr> ExprBuilder::getUBInstCondition() {
 
   // A map from a Phi instruction to all of its KLEE expressions that
@@ -726,7 +728,7 @@ void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current,
     Current->Phis.push_back(I);
     // Based on the dependency chain, looks like we would never
     // encounter this case.
-    assert(!Current->BlockConstraints.count(I->B) && 
+    assert(!Current->BlockConstraints.count(I->B) &&
            "Basic block has been added into BlockConstraints!");
     std::vector<PhiPath *> Tmp = { Current };
     // Create copies of the current path

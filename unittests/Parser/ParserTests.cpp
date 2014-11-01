@@ -199,7 +199,7 @@ TEST(ParserTest, ReplacementRHSErrors) {
       // parsing
       { "%0:i1 = var\n",
         "<input>:2:1: incomplete replacement, need a 'result' statement" },
-      { "infer 0:i1 0:i1 ; this is a comment\n", 
+      { "infer 0:i1 0:i1 ; this is a comment\n",
         "<input>:1:1: Not expecting 'infer' when parsing RHS" },
       { "cand 0:i1 0:i1", "<input>:1:1: Not expecting 'cand' when parsing RHS" },
       { "result 0:i1\nresult 0:i1", "<input>:2:1: expected a single replacement" },
@@ -327,7 +327,7 @@ cand %0 3:i32
 
 int countSubstring(const std::string& str, const std::string& sub)
 {
-  if (sub.length() == 0) 
+  if (sub.length() == 0)
     return 0;
   int count = 0;
   for (size_t offset = str.find(sub); offset != std::string::npos;
@@ -466,7 +466,7 @@ cand %6 0:i1
 
     std::string Split;
     for (auto i = LHSs.begin(), j = RHSs.begin(); i != LHSs.end(); ++i, ++j) {
-      Split += i->getLHSString() + j->getRHSString() + '\n';        
+      Split += i->getLHSString() + j->getRHSString() + '\n';
     }
     // one more RT to get the "cand" instructions back
     auto R2 = ParseReplacements(IC, "<input>", Split, ErrStr);

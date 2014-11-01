@@ -20,7 +20,8 @@ using namespace llvm;
 using namespace souper;
 
 static cl::opt<std::string>
-InputFilename(cl::Positional, cl::desc("<input souper optimization>"), cl::init("-"));
+InputFilename(cl::Positional, cl::desc("<input souper optimization>"), 
+              cl::init("-"));
 
 static cl::opt<bool> PrintCounterExample("print-counterexample",
     cl::desc("Print counterexample (default=true)"),

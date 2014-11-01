@@ -853,8 +853,8 @@ ParsedReplacement souper::ParseReplacement(InstContext &IC,
   Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseBoth);
   ParsedReplacement R = P.parseReplacement(ErrStr);
   if (ErrStr == "") {
-    assert (R.Mapping.LHS);
-    assert (R.Mapping.RHS);
+    assert(R.Mapping.LHS);
+    assert(R.Mapping.RHS);
   }
   return R;
 }
@@ -867,8 +867,8 @@ ParsedReplacement souper::ParseReplacementLHS(InstContext &IC,
   Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseLHS);
   ParsedReplacement R = P.parseReplacement(ErrStr);
   if (ErrStr == "") {
-    assert (R.Mapping.LHS);
-    assert (!R.Mapping.RHS);
+    assert(R.Mapping.LHS);
+    assert(!R.Mapping.RHS);
   }
   return R;
 }
@@ -881,8 +881,8 @@ ParsedReplacement souper::ParseReplacementRHS(InstContext &IC,
   Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseRHS);
   ParsedReplacement R = P.parseReplacement(ErrStr);
   if (ErrStr == "") {
-    assert (!R.Mapping.LHS);
-    assert (R.Mapping.RHS);
+    assert(!R.Mapping.LHS);
+    assert(R.Mapping.RHS);
   }
   return R;
 }
@@ -912,8 +912,8 @@ std::vector<ParsedReplacement> souper::ParseReplacements(
   std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
   if (ErrStr == "") {
     for (auto i = R.begin(); i != R.end(); ++i) {
-      assert (i->Mapping.LHS);
-      assert (i->Mapping.RHS);
+      assert(i->Mapping.LHS);
+      assert(i->Mapping.RHS);
     }
   }
   return R;
@@ -927,8 +927,8 @@ std::vector<ParsedReplacement> souper::ParseReplacementLHSs(
   std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
   if (ErrStr == "") {
     for (auto i = R.begin(); i != R.end(); ++i) {
-      assert (i->Mapping.LHS);
-      assert (!i->Mapping.RHS);
+      assert(i->Mapping.LHS);
+      assert(!i->Mapping.RHS);
     }
   }
   return R;
@@ -942,8 +942,8 @@ std::vector<ParsedReplacement> souper::ParseReplacementRHSs(
   std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
   if (ErrStr == "") {
     for (auto i = R.begin(); i != R.end(); ++i) {
-      assert (!i->Mapping.LHS);
-      assert (i->Mapping.RHS);
+      assert(!i->Mapping.LHS);
+      assert(i->Mapping.RHS);
     }
   }
   return R;
