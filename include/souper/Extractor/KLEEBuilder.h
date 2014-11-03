@@ -31,7 +31,6 @@ struct CandidateExpr {
 
 CandidateExpr GetCandidateExprForReplacement(const std::vector<InstMapping> &PCs,
                                              InstMapping Mapping);
-bool IsTriviallyInvalid(klee::ref<klee::Expr> E);
 std::string BuildQuery(const std::vector<InstMapping> &PCs, InstMapping Mapping,
                        std::vector<Inst *> *ModelVars);
 
