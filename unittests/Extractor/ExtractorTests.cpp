@@ -64,9 +64,7 @@ struct ExtractorTest : testing::Test {
           std::unique_ptr<CandidateExpr> CE(
               new CandidateExpr(GetCandidateExprForReplacement(R.PCs,
                                                                R.Mapping)));
-          if (!IsTriviallyInvalid(CE->E)) {
-            CandExprs.emplace_back(std::move(CE));
-          }
+          CandExprs.emplace_back(std::move(CE));
         }
       }
     }
@@ -104,20 +102,6 @@ struct ExtractorTest : testing::Test {
     return false;
   }
 };
-
-TEST_F(ExtractorTest, TriviallySat) {
-  ASSERT_TRUE(extractFromIR(R"m(
-define void @f(i32 %p) {
-  %ule = icmp ule i32 %p, 0
-  %sle = icmp sle i32 %p, 0
-  %eq = icmp eq i32 %p, 0
-  %ne = icmp ne i32 %p, 0
-  ret void
-}
-)m"));
-
-  EXPECT_EQ(0u, CandExprs.size());
-}
 
 TEST_F(ExtractorTest, Simple) {
   ASSERT_TRUE(extractFromIR(R"m(
@@ -197,7 +181,11 @@ cont:
 }
 )m"));
 
-  EXPECT_EQ(0u, CandExprs.size());
+  EXPECT_TRUE(hasCandidate(R"c(%0:i32 = var ; phi
+%1:i32 = add 1:i32, %0
+%2:i1 = eq 42:i32, %1
+cand %2 1:i1
+)c"));
 }
 
 TEST_F(ExtractorTest, PathCondition) {
