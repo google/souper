@@ -32,7 +32,6 @@ STATISTIC(MemHitsIsValid, "Number of internal cache hits for isValid()");
 STATISTIC(MemMissesIsValid, "Number of internal cache misses for isValid()");
 STATISTIC(RedisHits, "Number of external cache hits");
 STATISTIC(RedisMisses, "Number of external cache misses");
-STATISTIC(TriviallyInvalid, "Number of trivially invalid expressions");
 
 using namespace souper;
 using namespace llvm;
@@ -62,18 +61,14 @@ public:
       // of both guesses
       InstMapping Mapping(LHS, I);
       CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
-      if (IsTriviallyInvalid(CE.E)) {
-        ++TriviallyInvalid;
-      } else {
-        bool IsSat;
-        EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0), IsSat, 0, 0,
-                                      Timeout);
-        if (EC)
-          return EC;
-        if (!IsSat) {
-          RHS = I;
-          return EC;
-        }
+      bool IsSat;
+      EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0), IsSat, 0, 0,
+                                    Timeout);
+      if (EC)
+        return EC;
+      if (!IsSat) {
+        RHS = I;
+        return EC;
       }
     }
     RHS = 0;

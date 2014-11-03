@@ -768,63 +768,6 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   return CE;
 }
 
-namespace {
-
-typedef std::set<std::pair<const Array *, uint64_t>> OffsetSet;
-
-bool IsPurelySymbolic(ref<Expr> E, OffsetSet &Offsets) {
-  if (auto RE = dyn_cast<ReadExpr>(E)) {
-    auto Offset = dyn_cast<klee::ConstantExpr>(RE->index);
-    if (!Offset)
-      return false;
-    // Check whether we're reading from this array/offset more than once.
-    // Such expressions are internally constrained and may be unsat.
-    return Offsets.insert(std::make_pair(RE->updates.root,
-                                         Offset->getZExtValue())).second;
-  }
-  else if (auto CE = dyn_cast<ConcatExpr>(E))
-    return IsPurelySymbolic(CE->getLeft(), Offsets) &&
-           IsPurelySymbolic(CE->getRight(), Offsets);
-  else if (auto EE = dyn_cast<ExtractExpr>(E))
-    return IsPurelySymbolic(EE->expr, Offsets);
-  else
-    return false;
-}
-
-bool IsPurelySymbolic(ref<Expr> E) {
-  OffsetSet Offsets;
-  return IsPurelySymbolic(E, Offsets);
-}
-
-}
-
-bool souper::IsTriviallyInvalid(ref<Expr> E) {
-  // !E => E.
-  if (auto EE = dyn_cast<EqExpr>(E)) {
-    if (EE->left->getWidth() == 1) {
-      if (EE->left->isZero())
-        E = EE->right;
-      else if (EE->right->isZero())
-        E = EE->left;
-    }
-  }
-
-  if (IsPurelySymbolic(E))
-    return true;
-
-  if (auto CE = dyn_cast<CmpExpr>(E)) {
-    // e.g. x u< 0 or x s< INT_MIN. TODO: check for these.
-    if (isa<UltExpr>(CE) || isa<SltExpr>(CE))
-      return false;
-    if (isa<klee::ConstantExpr>(CE->left) && IsPurelySymbolic(CE->right))
-      return true;
-    if (isa<klee::ConstantExpr>(CE->right) && IsPurelySymbolic(CE->left))
-      return true;
-  }
-
-  return false;
-}
-
 std::string souper::BuildQuery(const std::vector<InstMapping> &PCs,
                                InstMapping Mapping,
                                std::vector<Inst *> *ModelVars) {
