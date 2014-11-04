@@ -47,23 +47,53 @@ public:
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
                         Inst *LHS, Inst *&RHS, InstContext &IC) {
-    assert(LHS->Width == 1);
     std::error_code EC;
-    std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
-                                 IC.getConst(APInt(1, false)) };
-    for (auto I : Guesses) {
-      // TODO: we can trivially synthesize an i1 undef by checking for validity
-      // of both guesses
+    // i1
+    if (LHS->Width == 1) {
+      std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
+                                   IC.getConst(APInt(1, false)) };
+      for (auto I : Guesses) {
+        // TODO: we can trivially synthesize an i1 undef by checking for validity
+        // of both guesses
+        InstMapping Mapping(LHS, I);
+        CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
+        bool IsSat;
+        EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, false, 0),
+                                                 IsSat, 0, 0,
+                                                 Timeout);
+        if (EC)
+          return EC;
+        if (!IsSat) {
+          RHS = I;
+          return EC;
+        }
+      }
+    // iN
+    } else if (SMTSolver->supportsQuantifiers()) {
+      std::vector<std::pair<Inst *, llvm::APInt>> Model;
+      std::vector<Inst *> ModelInsts;
+      std::vector<llvm::APInt> ModelVals;
+      Inst *I = IC.createVar(LHS->Width, "constant");
       InstMapping Mapping(LHS, I);
-      CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
+      // Use quantifiers only when synthesizing constants
+      std::string Query = BuildQuery(PCs, Mapping, true, &ModelInsts);
       bool IsSat;
-      EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0), IsSat, 0, 0,
-                                    Timeout);
+      EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInsts.size(),
+                                    &ModelVals, Timeout);
+      if (!EC && IsSat) {
+        for (unsigned I = 0; I != ModelInsts.size(); ++I)
+          Model.push_back(std::make_pair(ModelInsts[I], ModelVals[I]));
+      }
       if (EC)
         return EC;
-      if (!IsSat) {
-        RHS = I;
-        return EC;
+      if (IsSat) {
+        for (const auto &M : Model) {
+          if (M.first->Name == "constant") {
+            RHS = IC.getConst(M.second);
+            return EC;
+          }
+        }
+        assert(0 && "There must be a model for the constant");
       }
     }
     RHS = 0;
@@ -76,7 +106,7 @@ public:
     std::string Query;
     if (Model && SMTSolver->supportsModels()) {
       std::vector<Inst *> ModelInsts;
-      std::string Query = BuildQuery(PCs, Mapping, &ModelInsts);
+      std::string Query = BuildQuery(PCs, Mapping, false, &ModelInsts);
       bool IsSat;
       std::vector<llvm::APInt> ModelVals;
       std::error_code EC = SMTSolver->isSatisfiable(
@@ -92,7 +122,8 @@ public:
       return EC;
     } else {
       bool IsSat;
-      std::error_code EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0),
+      std::error_code EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping,
+                                                               false, 0),
                                                     IsSat, 0, 0, Timeout);
       IsValid = !IsSat;
       return EC;

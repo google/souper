@@ -78,6 +78,14 @@ if ($souper) {
             push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
         }
     }
+
+    if ($ENV{"SOUPER_INT_SYNTHESIS"}) {
+        push @ARGV, ("-mllvm", "-souper-iN-synthesis");
+    }
+
+    if ($ENV{"SOUPER_IGNORE_SOLVER_ERRORS"}) {
+        push @ARGV, ("-mllvm", "-souper-ignore-solver-errors");
+    }
 }
 
 exec @ARGV;

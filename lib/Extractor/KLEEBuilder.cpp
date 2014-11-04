@@ -16,7 +16,7 @@
 
 #include "klee/Expr.h"
 #include "klee/util/ExprPPrinter.h"
-#include "klee/util/ExprSMTLIBLetPrinter.h"
+#include "klee/util/ExprSMTLIBPrinter.h"
 #include "klee/util/Ref.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/BasicBlock.h"
@@ -769,14 +769,19 @@ CandidateExpr souper::GetCandidateExprForReplacement(
 }
 
 std::string souper::BuildQuery(const std::vector<InstMapping> &PCs,
-                               InstMapping Mapping,
+                               InstMapping Mapping, bool UseQuantifiers,
                                std::vector<Inst *> *ModelVars) {
   std::string SMTStr;
   llvm::raw_string_ostream SMTSS(SMTStr);
   ConstraintManager Manager;
   CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
   Query KQuery(Manager, CE.E);
-  ExprSMTLIBLetPrinter Printer;
+  ExprSMTLIBPrinter Printer;
+  if (UseQuantifiers) {
+    // Undo the negation
+    KQuery.expr = Expr::createIsZero(KQuery.expr);
+    Printer.setLogic(ExprSMTLIBPrinter::AUFBV);
+  }
   Printer.setOutput(SMTSS);
   Printer.setQuery(KQuery);
   std::vector<const klee::Array *> Arrays;
