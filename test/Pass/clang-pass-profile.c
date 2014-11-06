@@ -1,6 +1,6 @@
 // REQUIRES: solver
 
-// RUN: env SOUPER_NO_EXTERNAL_CACHE=1 SOUPER_PROFILE=1 SOUPER_SOLVER=%solver %sclang -O %s -o %t
+// RUN: env SOUPER_NO_EXTERNAL_CACHE=1 SOUPER_DYNAMIC_PROFILE=1 SOUPER_SOLVER=%solver %sclang -O %s -o %t
 
 // RUN: env SOUPER_PROFILE_TO_STDOUT=1 %t 0 | FileCheck %s -check-prefix=ARG0
 // ARG0: count = 0
