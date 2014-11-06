@@ -154,7 +154,7 @@ unsigned PrintContext::printBlock(Block *B) {
   unsigned BlockNum = PrintNums.size();
   PrintNums[static_cast<void *>(B)] = BlockNum;
 
-  Out << '%' << BlockNum << " = block\n";
+  Out << '%' << BlockNum << " = block " << B->Preds << "\n";
   return BlockNum;
 }
 
