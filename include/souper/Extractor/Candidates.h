@@ -95,9 +95,9 @@ struct BlockInfo {
   Block *B;
 
   // Each phi derived from this block must visit the predecessors in the same
-  // order, as a consumer may wish to use the same predicates to control each phi.
-  // This vector stores the blocks in the order observed in the first phi node
-  // we visit in the block. This allows us to write deterministic tests by
+  // order, as a consumer may wish to use the same predicates to control each
+  // phi. This vector stores the blocks in the order observed in the first phi
+  // node we visit in the block. This allows us to write deterministic tests by
   // controlling the order in which predecessors appear in each phi.
   std::vector<llvm::BasicBlock *> Preds;
 };

@@ -76,7 +76,7 @@ struct ExprBuilder {
   InstContext &IC;
   ExprBuilderContext &EBC;
 
-  void checkIrreducibleCFG(BasicBlock *BB, 
+  void checkIrreducibleCFG(BasicBlock *BB,
                            BasicBlock *FirstBB,
                            std::unordered_set<const BasicBlock *> &VisitedBBs,
                            bool &Loop);
@@ -94,12 +94,12 @@ struct ExprBuilder {
 // Use DFS to detect a possible loop, most likely an loop in an irreducible
 // CFG. One of the headers of the loop is the FirstBB.
 // Loop is set to true upon successfully detecting such a loop.
-void ExprBuilder::checkIrreducibleCFG(BasicBlock *BB, 
+void ExprBuilder::checkIrreducibleCFG(BasicBlock *BB,
                     BasicBlock *FirstBB,
                     std::unordered_set<const BasicBlock *> &VisitedBBs,
                     bool &Loop) {
   VisitedBBs.insert(BB);
-  for (succ_iterator PI = succ_begin(BB), E = succ_end(BB); 
+  for (succ_iterator PI = succ_begin(BB), E = succ_end(BB);
        PI != E; ++PI) {
     BasicBlock *Succ = *PI;
     if (Succ == FirstBB) {
@@ -121,7 +121,7 @@ void ExprBuilder::checkIrreducibleCFG(BasicBlock *BB,
 // a entry point for an irreducible CFG.
 bool ExprBuilder::isLoopEntryPoint(PHINode *Phi) {
   BasicBlock *BB = Phi->getParent();
-  // If LLVM can determine if BB is a loop header, simply return true. 
+  // If LLVM can determine if BB is a loop header, simply return true.
   // Presumably, this should handle structured loops.
   if (LI->isLoopHeader(BB))
     return true;
@@ -362,7 +362,8 @@ Inst *ExprBuilder::build(Value *V) {
       BasicBlock *BB = Phi->getParent();
       BlockInfo &BI = EBC.BlockMap[BB];
       if (!BI.B) {
-        std::copy(Phi->block_begin(), Phi->block_end(), std::back_inserter(BI.Preds));
+        std::copy(Phi->block_begin(), Phi->block_end(),
+                  std::back_inserter(BI.Preds));
         BI.B = IC.createBlock(BI.Preds.size());
       }
       std::vector<Inst *> Incomings;

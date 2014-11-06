@@ -196,7 +196,8 @@ public:
     int OutputFD;
     SmallString<64> OutputPath;
     if (std::error_code EC =
-            sys::fs::createTemporaryFile("output", "out", OutputFD, OutputPath)) {
+            sys::fs::createTemporaryFile("output", "out", OutputFD,
+                                         OutputPath)) {
       ++Errors;
       return EC;
     }
