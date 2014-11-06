@@ -44,6 +44,9 @@ static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"),
     cl::init(""), cl::value_desc("filename"));
 
+static cl::opt<bool> StaticProfile("souper-static-profile", cl::init(false),
+    cl::desc("Static profiling of Souper optimizations (default=false)"));
+
 static cl::opt<bool>
 Check("check", cl::desc("Check input for expected results"),
     cl::init(false));
@@ -90,7 +93,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  std::unique_ptr<Solver> S = GetSolverFromArgs();
+  KVStore *KV = 0;
+  std::unique_ptr<Solver> S = GetSolverFromArgs(KV);
 
   InstContext IC;
   ExprBuilderContext EBC;
@@ -101,6 +105,9 @@ int main(int argc, char **argv) {
   if (Check) {
     return CheckCandidateMap(*M.get(), CandMap, S.get(), IC) ? 0 : 1;
   } else {
-    return SolveCandidateMap(llvm::outs(), CandMap, S.get(), IC) ? 0 : 1;
+    if (StaticProfile && !KV)
+      KV = new KVStore;
+    return SolveCandidateMap(llvm::outs(), CandMap, S.get(), IC,
+                             StaticProfile ? KV : 0) ? 0 : 1;
   }
 }
