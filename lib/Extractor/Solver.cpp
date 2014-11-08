@@ -31,7 +31,6 @@ STATISTIC(MemHitsIsValid, "Number of internal cache hits for isValid()");
 STATISTIC(MemMissesIsValid, "Number of internal cache misses for isValid()");
 STATISTIC(ExternalHits, "Number of external cache hits");
 STATISTIC(ExternalMisses, "Number of external cache misses");
-STATISTIC(TriviallyInvalid, "Number of trivially invalid expressions");
 
 using namespace souper;
 using namespace llvm;
