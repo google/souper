@@ -359,7 +359,8 @@ bool Parser::typeCheckOpsMatchingWidths(llvm::MutableArrayRef<Inst *> Ops,
 bool Parser::typeCheckPhi(unsigned Width, Block *B,
                           std::vector<Inst *> &Ops, std::string &ErrStr) {
   if (B->Preds != Ops.size()) {
-    ErrStr = "number of operands inconsistent between phis";
+    ErrStr = "phi has " + utostr(Ops.size()) +
+      " operand(s) but preceding block has " + utostr(B->Preds);
     return false;
   }
 
@@ -729,9 +730,15 @@ bool Parser::parseLine(std::string &ErrStr) {
             return false;
           }
 
-          // We create the block later, as we need to know how many predecessors
-          // it has.
-          BlockMap[InstName] = 0;
+          if (!consumeToken(ErrStr))
+            return false;
+          if (CurTok.K != Token::UntypedInt) {
+            ErrStr = makeErrStr(TP, "block must be followed by number of preds");
+            return false;
+          }
+          unsigned Preds = CurTok.Val.getLimitedValue();
+
+          BlockMap[InstName] = IC.createBlock(Preds);
           return consumeToken(ErrStr);
         } else {
           ErrStr = makeErrStr(std::string("unexpected inst kind: '") +
@@ -792,9 +799,7 @@ bool Parser::parseLine(std::string &ErrStr) {
 
       Inst *I;
       if (IK == Inst::Phi) {
-        if (!PhiBlockIt->second) {
-          PhiBlockIt->second = IC.createBlock(Ops.size());
-        }
+        assert(PhiBlockIt->second);
         if (!typeCheckPhi(InstWidth, PhiBlockIt->second, Ops, ErrStr)) {
           ErrStr = makeErrStr(TP, ErrStr);
           return false;

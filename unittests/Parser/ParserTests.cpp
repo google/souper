@@ -39,17 +39,17 @@ TEST(ParserTest, Errors) {
       { "%0:i1 = eq foo\n", "<input>:1:12: unexpected token" },
       { "%0:i1 = var\n%0:i1 = var\n",
         "<input>:2:1: %0 already declared as an inst" },
-      { "%0 = block\n%0:i1 = var\n",
+      { "%0 = block 33\n%0:i1 = var\n",
         "<input>:2:1: %0 already declared as a block" },
       { "%0 foo\n", "<input>:1:4: expected '='" },
       { "%0 = %1\n", "<input>:1:6: expected identifier" },
-      { "%0:i1 = block\n", "<input>:1:1: blocks may not have a width" },
+      { "%0:i1 = block 3\n", "<input>:1:1: blocks may not have a width" },
       { "%0:i1 = foo\n", "<input>:1:9: unexpected inst kind: 'foo'" },
       { "%0 = var\n", "<input>:1:1: var must have a width" },
       { "%0:i1 = phi foo\n", "<input>:1:13: expected block number" },
-      { "%0:i1 = block\n", "<input>:1:1: blocks may not have a width" },
+      { "%0:i1 = block 122\n", "<input>:1:1: blocks may not have a width" },
       { "%0:i1 = phi %0\n", "<input>:1:13: %0 is not a block" },
-      { "%0 = block\n%1:i1 = phi %0 foo\n", "<input>:2:16: expected ','" },
+      { "%0 = block 1\n%1:i1 = phi %0 foo\n", "<input>:2:16: expected ','" },
       { ",\n", "<input>:1:1: expected inst, block, cand, infer, result, or pc" },
       { "%0:i128 = var ; 0\n%1:i128 = bswap %0\n",
         "<input>:2:1: bswap doesn't support 128 bits" },
@@ -111,11 +111,11 @@ TEST(ParserTest, Errors) {
       { "%0:i64 = trunc 1:i32\n",
         "<input>:1:1: inst must have width of at most 31, has width 64" },
 
-      { "%0 = block\n%1 = phi %0, 1:i32, 2:i32\n%2 = phi %0, 3:i32\n",
-        "<input>:3:1: number of operands inconsistent between phis" },
-      { "%0 = block\n%1 = phi %0, 1:i32, 2:i64\n",
+      { "%0 = block 2\n%1 = phi %0, 1:i32, 2:i32\n%2 = phi %0, 3:i32\n",
+        "<input>:3:1: phi has 1 operand(s) but preceding block has 2" },
+      { "%0 = block 2\n%1 = phi %0, 1:i32, 2:i64\n",
         "<input>:2:1: operands have different widths" },
-      { "%0 = block\n%1:i32 = phi %0, 1:i64, 2:i64\n",
+      { "%0 = block 2\n%1:i32 = phi %0, 1:i64, 2:i64\n",
         "<input>:2:1: inst must have width of 64, has width 32" },
     };
 
@@ -218,7 +218,7 @@ TEST(ParserTest, ReplacementRHSErrors) {
 TEST(ParserTest, RoundTrip) {
   std::string Tests[] = {
       "cand 0:i1 0:i1\n",
-      R"i(%0 = block
+      R"i(%0 = block 2
 %1:i32 = var ; 1
 %2:i32 = lshr %1, 31:i32
 %3:i32 = var ; 3
@@ -341,8 +341,8 @@ TEST(ParserTest, RoundTripMultiple) {
     std::string Test;
     int N;
   } Tests[] = {
-      { R"i(%0 = block
-%1 = block
+      { R"i(%0 = block 2
+%1 = block 2
 %2:i56 = var ; 2
 %3:i56 = and 8998403161718784:i56, %2
 %4:i1 = ne 0:i56, %3
@@ -355,7 +355,7 @@ TEST(ParserTest, RoundTripMultiple) {
 %11:i16 = trunc %10
 %12:i16 = shl %11, 8:i16
 %13:i16 = ashrexact %12, 8:i16
-%14 = block
+%14 = block 3
 %15:i32 = var ; 15
 %16:i32 = var ; 16
 %17:i32 = phi %14, 1:i32, %15, %16
