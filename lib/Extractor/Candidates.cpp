@@ -514,9 +514,8 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI,
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
     for (auto &I : BB) {
-      if (I.getType()->isIntegerTy(1))
-        BCS->Replacements.emplace_back(&I, InstMapping(EB.get(&I), 0));
-      else if (I.getType()->isIntegerTy() && SynthesizeInts)
+      if (I.getType()->isIntegerTy(1) ||
+          (I.getType()->isIntegerTy() && SynthesizeInts))
         BCS->Replacements.emplace_back(&I, InstMapping(EB.get(&I), 0));
     }
     if (!BCS->Replacements.empty()) {

@@ -90,7 +90,7 @@ struct SMTLIBParser {
     return false;
   }
 
-  APInt parseBinaryModel(std::string &ErrStr) {
+  APInt parseBinaryBitVector(std::string &ErrStr) {
     ErrStr.clear();
     const char *NumBegin = Begin;
     while (Begin != End && (*Begin == '0' || *Begin == '1'))
@@ -106,7 +106,7 @@ struct SMTLIBParser {
     return APInt(Width, StringRef(NumBegin, Width), 2);
   }
 
-  APInt parseDecimalModel(std::string &ErrStr) {
+  APInt parseDecimalBitVector(std::string &ErrStr) {
     ErrStr.clear();
     if (!consumeExpected('_', ErrStr))
       return APInt();
@@ -143,7 +143,7 @@ struct SMTLIBParser {
     return APInt(Width, StringRef(NumBegin, NumEnd - NumBegin), 10);
   }
 
-  APInt parseHexModel(std::string &ErrStr) {
+  APInt parseHexBitVector(std::string &ErrStr) {
     ErrStr.clear();
     const char *NumBegin = Begin;
     while (Begin != End && ((*Begin >= '0' && *Begin <= '9') ||
@@ -170,11 +170,11 @@ struct SMTLIBParser {
       return APInt();
     if (consumeExpected('#', ErrStr)) {
       if (consumeExpected('x', ErrStr))
-        return parseHexModel(ErrStr);
+        return parseHexBitVector(ErrStr);
       else
-        return parseBinaryModel(ErrStr);
+        return parseBinaryBitVector(ErrStr);
     } else {
-      return parseDecimalModel(ErrStr);
+      return parseDecimalBitVector(ErrStr);
     }
   }
 };

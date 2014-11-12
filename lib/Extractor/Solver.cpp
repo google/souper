@@ -70,7 +70,6 @@ public:
       }
     // iN
     } else if (SMTSolver->supportsQuantifiers()) {
-      std::vector<std::pair<Inst *, llvm::APInt>> Model;
       std::vector<Inst *> ModelInsts;
       std::vector<llvm::APInt> ModelVals;
       Inst *I = IC.createVar(LHS->Width, "constant");
@@ -80,16 +79,12 @@ public:
       bool IsSat;
       EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInsts.size(),
                                     &ModelVals, Timeout);
-      if (!EC && IsSat) {
-        for (unsigned I = 0; I != ModelInsts.size(); ++I)
-          Model.push_back(std::make_pair(ModelInsts[I], ModelVals[I]));
-      }
       if (EC)
         return EC;
       if (IsSat) {
-        for (const auto &M : Model) {
-          if (M.first->Name == "constant") {
-            RHS = IC.getConst(M.second);
+        for (unsigned J = 0; J != ModelInsts.size(); ++J) {
+          if (ModelInsts[J]->Name == "constant") {
+            RHS = IC.getConst(ModelVals[J]);
             return EC;
           }
         }
