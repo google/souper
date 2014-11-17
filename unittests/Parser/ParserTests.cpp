@@ -127,12 +127,14 @@ TEST(ParserTest, Errors) {
   }
   for (const auto &T : Tests) {
     std::string ErrStr;
-    ParseReplacementLHS(IC, "<input>", T.Test, ErrStr);
+    ReplacementContext Context;
+    ParseReplacementLHS(IC, "<input>", T.Test, Context, ErrStr);
     EXPECT_EQ(T.WantError, ErrStr);
   }
   for (const auto &T : Tests) {
     std::string ErrStr;
-    ParseReplacementRHS(IC, "<input>", T.Test, ErrStr);
+    ReplacementContext Context;
+    ParseReplacementRHS(IC, "<input>", T.Test, Context, ErrStr);
     EXPECT_EQ(T.WantError, ErrStr);
   }
 }
@@ -184,7 +186,8 @@ TEST(ParserTest, ReplacementLHSErrors) {
   InstContext IC;
   for (const auto &T : Tests) {
     std::string ErrStr;
-    ParseReplacementLHS(IC, "<input>", T.Test, ErrStr);
+    ReplacementContext Context;
+    ParseReplacementLHS(IC, "<input>", T.Test, Context, ErrStr);
     EXPECT_EQ(T.WantError, ErrStr);
   }
 }
@@ -210,7 +213,8 @@ TEST(ParserTest, ReplacementRHSErrors) {
   InstContext IC;
   for (const auto &T : Tests) {
     std::string ErrStr;
-    ParseReplacementRHS(IC, "<input>", T.Test, ErrStr);
+    ReplacementContext Context;
+    ParseReplacementRHS(IC, "<input>", T.Test, Context, ErrStr);
     EXPECT_EQ(T.WantError, ErrStr);
   }
 }
@@ -250,6 +254,12 @@ cand %2 1:i1
 %2:i1 = eq 1:i32, %1
 cand %2 1:i1
 )i",
+      R"i(%0:i64 = var ; 0
+%1:i64 = xor 18446744073709551615:i64, %0
+%2:i64 = add 1:i64, %1
+%3:i64 = sub 0:i64, %0
+cand %2 %3
+)i",
   };
 
   struct {
@@ -280,24 +290,25 @@ cand %0 3:i32
     std::string ErrStr;
     auto R = ParseReplacement(IC, "<input>", T, ErrStr);
     ASSERT_EQ("", ErrStr);
-    EXPECT_EQ(R.getString(), T);
+    EXPECT_EQ(R.getString(/*printNames=*/true), T);
 
-    auto LHS = R.getLHSString();
-    auto R2 = ParseReplacementLHS(IC, "<input>", LHS, ErrStr);
+    ReplacementContext Context1, Context2, Context3;
+    auto LHS = R.getLHSString(Context1);
+    auto R2 = ParseReplacementLHS(IC, "<input>", LHS, Context2, ErrStr);
     ASSERT_EQ("", ErrStr);
-    auto LHS2 = R2.getLHSString();
+    auto LHS2 = R2.getLHSString(Context3);
     EXPECT_EQ(LHS, LHS2);
 
-    auto RHS = R.getRHSString();
-    auto R3 = ParseReplacementRHS(IC, "<input>", RHS, ErrStr);
+    auto RHS = R.getRHSString(Context1);
+    auto R3 = ParseReplacementRHS(IC, "<input>", RHS, Context2, ErrStr);
     ASSERT_EQ("", ErrStr);
-    auto RHS2 = R3.getRHSString();
+    auto RHS2 = R3.getRHSString(Context3);
     EXPECT_EQ(RHS, RHS2);
 
     auto Split = LHS + RHS;
     auto R4 = ParseReplacement(IC, "<input>", Split, ErrStr);
     ASSERT_EQ("", ErrStr);
-    EXPECT_EQ(R4.getString(), T);
+    EXPECT_EQ(R4.getString(/*printNames=*/true), T);
   }
 
   for (const auto &T : NonEqualTests) {
@@ -306,16 +317,17 @@ cand %0 3:i32
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(R.getString(), T.Want);
 
-    auto LHS = R.getLHSString();
-    auto R2 = ParseReplacementLHS(IC, "<input>", LHS, ErrStr);
+    ReplacementContext Context1, Context2, Context3;
+    auto LHS = R.getLHSString(Context1);
+    auto R2 = ParseReplacementLHS(IC, "<input>", LHS, Context2, ErrStr);
     ASSERT_EQ("", ErrStr);
-    auto LHS2 = R2.getLHSString();
+    auto LHS2 = R2.getLHSString(Context3);
     EXPECT_EQ(LHS, LHS2);
 
-    auto RHS = R.getRHSString();
-    auto R3 = ParseReplacementRHS(IC, "<input>", RHS, ErrStr);
+    auto RHS = R.getRHSString(Context1);
+    auto R3 = ParseReplacementRHS(IC, "<input>", RHS, Context2, ErrStr);
     ASSERT_EQ("", ErrStr);
-    auto RHS2 = R3.getRHSString();
+    auto RHS2 = R3.getRHSString(Context3);
     EXPECT_EQ(RHS, RHS2);
 
     auto Split = LHS + RHS;
@@ -418,6 +430,14 @@ cand %5 0:i1
 %19:i1 = slt %18, 0:i8
 cand %19 1:i1
 
+%0:i64 = var ; 0
+%1:i1 = eq 0:i64, %0
+%2:i32 = zext %1
+%3:i32 = lshr 5:i32, %2
+%4:i8 = trunc %3
+%5:i1 = eq 0:i8, %4
+cand %5 0:i1
+
 %0:i8 = var ; 0
 %1:i32 = sext %0
 %2:i1 = slt %0, 0:i8
@@ -438,6 +458,60 @@ cand %8 0:i1
 %6:i1 = slt %5, 4:i32
 cand %6 0:i1
 
+)i", 7 },
+      { R"i(%0:i64 = var ; 0
+%1:i64 = xor 18446744073709551615:i64, %0
+%2:i64 = add 1:i64, %1
+%3:i64 = sub 0:i64, %0
+cand %2 %3
+
+%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = xor 4294967295:i32, %1
+%3:i32 = or %0, %2
+%4:i32 = xor 4294967295:i32, %3
+%5:i32 = xor 4294967295:i32, %0
+%6:i32 = and %1, %5
+cand %4 %6
+
+%0:i16 = var ; 0
+%1:i16 = var ; 1
+%2:i16 = xor 65535:i16, %1
+%3:i16 = and %0, %2
+%4:i16 = xor 65535:i16, %3
+%5:i16 = xor 65535:i16, %0
+%6:i16 = or %1, %5
+cand %4 %6
+
+%0:i64 = var ; 0
+%1:i64 = var ; 1
+%2:i64 = and %0, %1
+%3:i64 = var ; 3
+%4:i64 = and %1, %3
+%5:i64 = or %2, %4
+%6:i64 = or %0, %3
+%7:i64 = and %1, %6
+cand %5 %7
+
+%0:i64 = var ; 0
+%1:i64 = var ; 1
+%2:i64 = sub %0, %1
+%3:i64 = add %0, %2
+%4:i64 = sub %1, %0
+%5:i64 = add %4, %4
+%6:i64 = sub %1, %5
+cand %3 %6
+
+%0:i64 = var ; 0
+%1:i64 = var ; 1
+%2:i64 = var ; 2
+%3:i64 = xor %1, %2
+%4:i64 = and %0, %3
+%5:i64 = and %0, %1
+%6:i64 = and %0, %2
+%7:i64 = xor %5, %6
+cand %4 %7
+
 )i", 6 },
   };
 
@@ -450,23 +524,27 @@ cand %6 0:i1
 
     std::string LHSStr, RHSStr;
     for (auto i = R.begin(); i != R.end(); ++i) {
-      LHSStr += i->getLHSString() + '\n';
-      RHSStr += i->getRHSString() + '\n';
+      ReplacementContext Context;
+      LHSStr += i->getLHSString(Context) + '\n';
+      RHSStr += i->getRHSString(Context) + '\n';
     }
     EXPECT_EQ(T.N, countSubstring(LHSStr, "infer"));
     EXPECT_EQ(T.N, countSubstring(RHSStr, "result"));
     EXPECT_EQ(0, countSubstring(LHSStr, "result"));
     EXPECT_EQ(0, countSubstring(RHSStr, "infer"));
-    auto LHSs = ParseReplacementLHSs(IC, "<input>", LHSStr, ErrStr);
+    std::vector<ReplacementContext> Contexts;
+    auto LHSs = ParseReplacementLHSs(IC, "<input>", LHSStr, Contexts, ErrStr);
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(T.N, LHSs.size());
-    auto RHSs = ParseReplacementRHSs(IC, "<input>", RHSStr, ErrStr);
+    auto RHSs = ParseReplacementRHSs(IC, "<input>", RHSStr, Contexts, ErrStr);
     ASSERT_EQ("", ErrStr);
     EXPECT_EQ(T.N, RHSs.size());
 
     std::string Split;
     for (auto i = LHSs.begin(), j = RHSs.begin(); i != LHSs.end(); ++i, ++j) {
-      Split += i->getLHSString() + j->getRHSString() + '\n';
+      ReplacementContext Context;
+      Split += i->getLHSString(Context);
+      Split += j->getRHSString(Context) + '\n';
     }
     // one more RT to get the "cand" instructions back
     auto R2 = ParseReplacements(IC, "<input>", Split, ErrStr);
@@ -474,7 +552,7 @@ cand %6 0:i1
     EXPECT_EQ(T.N, R2.size());
     std::string UnSplit;
     for (auto i = R2.begin(); i != R2.end(); ++i) {
-      UnSplit += i->getString() + '\n';
+      UnSplit += i->getString(/*printNames=*/true) + '\n';
     }
     EXPECT_EQ(T.Test, UnSplit);
   }

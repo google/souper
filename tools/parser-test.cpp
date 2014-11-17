@@ -31,9 +31,10 @@ int main(int argc, char **argv) {
     InstContext IC;
     std::string ErrStr;
     std::vector<ParsedReplacement> Reps;
+    std::vector<ReplacementContext> Contexts;
     if (LHSOnly)
       Reps = ParseReplacementLHSs(IC, MB.get()->getBufferIdentifier(),
-                                  MB.get()->getBuffer(), ErrStr);
+                                  MB.get()->getBuffer(), Contexts, ErrStr);
     else
       Reps = ParseReplacements(IC, MB.get()->getBufferIdentifier(),
                                MB.get()->getBuffer(), ErrStr);
@@ -43,10 +44,12 @@ int main(int argc, char **argv) {
     }
 
     for (const auto &R : Reps) {
-      if (LHSOnly)
-        R.printLHS(llvm::outs());
-      else
+      if (LHSOnly) {
+        ReplacementContext Context;
+        R.printLHS(llvm::outs(), Context);
+      } else {
         R.print(llvm::outs());
+      }
     }
   } else {
     llvm::errs() << MB.getError().message() << '\n';

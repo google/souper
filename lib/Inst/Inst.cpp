@@ -85,12 +85,13 @@ const std::vector<Inst *> &Inst::orderedOps() const {
   return OrderedOps;
 }
 
-std::string PrintContext::printInst(Inst *I) {
+std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
+                                          bool printNames) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
 
-  auto PNI = PrintNums.find(static_cast<void *>(I));
-  if (PNI != PrintNums.end()) {
+  auto PNI = InstNames.find(I);
+  if (PNI != InstNames.end()) {
     SS << "%" << PNI->second;
     return SS.str();
   }
@@ -112,8 +113,8 @@ std::string PrintContext::printInst(Inst *I) {
     return SS.str();
 
   case Inst::Phi:
-    unsigned BlockNum = printBlock(I->B);
-    OpsSS << " %" << BlockNum << ",";
+    llvm::StringRef BlockName = printBlock(I->B, Out);
+    OpsSS << " %" << BlockName << ",";
     break;
   }
 
@@ -123,39 +124,76 @@ std::string PrintContext::printInst(Inst *I) {
       OpsSS << " ";
     else
       OpsSS << ", ";
-    OpsSS << printInst(Ops[I]);
+    OpsSS << printInst(Ops[I], Out, printNames);
   }
 
-  unsigned InstNum = PrintNums.size();
-  PrintNums[static_cast<void *>(I)] = InstNum;
+  std::string InstName = std::to_string(InstNames.size() + BlockNames.size());
+  assert(InstNames.find(I) == InstNames.end());
+  assert(NameToInst.find(InstName) == NameToInst.end());
+  assert(NameToBlock.find(InstName) == NameToBlock.end());
+  setInst(InstName, I);
 
-  Out << "%" << InstNum << ":i" << I->Width << " = " << Inst::getKindName(I->K)
+  Out << "%" << InstName << ":i" << I->Width << " = " << Inst::getKindName(I->K)
       << OpsSS.str();
 
-  if (!I->Name.empty()) {
+  if (printNames && !I->Name.empty()) {
     Out << " ; " << I->Name;
   }
 
   Out << '\n';
 
-  SS << "%" << InstNum;
+  SS << "%" << InstName;
   return SS.str();
 }
 
-unsigned PrintContext::printBlock(Block *B) {
+std::string ReplacementContext::printBlock(Block *B, llvm::raw_ostream &Out) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
 
-  auto PNI = PrintNums.find(static_cast<void *>(B));
-  if (PNI != PrintNums.end()) {
+  auto PNI = BlockNames.find(B);
+  if (PNI != BlockNames.end()) {
     return PNI->second;
   }
 
-  unsigned BlockNum = PrintNums.size();
-  PrintNums[static_cast<void *>(B)] = BlockNum;
+  std::string BlockName = std::to_string(InstNames.size() + BlockNames.size());
+  assert(BlockNames.find(B) == BlockNames.end());
+  assert(NameToInst.find(BlockName) == NameToInst.end());
+  assert(NameToBlock.find(BlockName) == NameToBlock.end());
+  setBlock(BlockName, B);
 
-  Out << '%' << BlockNum << " = block " << B->Preds << "\n";
-  return BlockNum;
+  Out << '%' << BlockName << " = block " << B->Preds << "\n";
+  return BlockName;
+}
+
+void ReplacementContext::clear() {
+  InstNames.clear();
+  BlockNames.clear();
+  NameToInst.clear();
+  NameToBlock.clear();
+}
+
+bool ReplacementContext::empty() {
+  return NameToInst.empty() && NameToBlock.empty();
+}
+
+Inst *ReplacementContext::getInst(llvm::StringRef Name) {
+  auto InstIt = NameToInst.find(Name);
+  return (InstIt == NameToInst.end()) ? 0 : InstIt->second;
+}
+
+void ReplacementContext::setInst(llvm::StringRef Name, Inst *I) {
+  NameToInst[Name] = I;
+  InstNames[I] = Name;
+}
+
+Block *ReplacementContext::getBlock(llvm::StringRef Name) {
+  auto BlockIt = NameToBlock.find(Name);
+  return (BlockIt == NameToBlock.end()) ? 0 : BlockIt->second;
+}
+
+void ReplacementContext::setBlock(llvm::StringRef Name, Block *B) {
+  NameToBlock[Name] = B;
+  BlockNames[B] = Name;
 }
 
 const char *Inst::getKindName(Kind K) {
@@ -442,61 +480,66 @@ bool Inst::isCommutative(Inst::Kind K) {
 
 void souper::PrintReplacement(llvm::raw_ostream &Out,
                               const std::vector<InstMapping> &PCs,
-                              InstMapping Mapping) {
+                              InstMapping Mapping, bool printNames) {
   assert(Mapping.LHS);
   assert(Mapping.RHS);
 
-  PrintContext Printer(Out);
+  ReplacementContext Context;
   for (const auto &PC : PCs) {
-    std::string SRef = Printer.printInst(PC.LHS);
-    std::string RRef = Printer.printInst(PC.RHS);
+    std::string SRef = Context.printInst(PC.LHS, Out, printNames);
+    std::string RRef = Context.printInst(PC.RHS, Out, printNames);
     Out << "pc " << SRef << " " << RRef << '\n';
   }
 
-  std::string SRef = Printer.printInst(Mapping.LHS);
-  std::string RRef = Printer.printInst(Mapping.RHS);
+  std::string SRef = Context.printInst(Mapping.LHS, Out, printNames);
+  std::string RRef = Context.printInst(Mapping.RHS, Out, printNames);
   Out << "cand " << SRef << " " << RRef << '\n';
 }
 
 std::string souper::GetReplacementString(const std::vector<InstMapping> &PCs,
-                                         InstMapping Mapping) {
+                                         InstMapping Mapping, bool printNames) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
-  PrintReplacement(SS, PCs, Mapping);
+  PrintReplacement(SS, PCs, Mapping, printNames);
   return SS.str();
 }
 
 void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
                                  const std::vector<InstMapping> &PCs,
-                                 Inst *LHS) {
+                                 Inst *LHS, ReplacementContext &Context,
+                                 bool printNames) {
   assert(LHS);
+  assert(Context.empty());
 
-  PrintContext Printer(Out);
   for (const auto &PC : PCs) {
-    std::string SRef = Printer.printInst(PC.LHS);
-    std::string RRef = Printer.printInst(PC.RHS);
+    std::string SRef = Context.printInst(PC.LHS, Out, printNames);
+    std::string RRef = Context.printInst(PC.RHS, Out, printNames);
     Out << "pc " << SRef << " " << RRef << '\n';
   }
 
-  std::string SRef = Printer.printInst(LHS);
+  std::string SRef = Context.printInst(LHS, Out, printNames);
   Out << "infer " << SRef << '\n';
 }
 
 std::string souper::GetReplacementLHSString(const std::vector<InstMapping> &PCs,
-                                            Inst *LHS) {
+    Inst *LHS, ReplacementContext &Context, bool printNames) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
-  PrintReplacementLHS(SS, PCs, LHS);
+  PrintReplacementLHS(SS, PCs, LHS, Context);
   return SS.str();
 }
 
-void souper::PrintReplacementRHS(llvm::raw_ostream &Out, llvm::APInt Const) {
-  Out << "result " << Const << ":i" << Const.getBitWidth() << '\n';
+void souper::PrintReplacementRHS(llvm::raw_ostream &Out, Inst *RHS,
+                                 ReplacementContext &Context, bool printNames) {
+  std::string SRef = Context.printInst(RHS, Out, printNames);
+  Out << "result " << SRef << '\n';
 }
 
-std::string souper::GetReplacementRHSString(llvm::APInt Const) {
+std::string souper::GetReplacementRHSString(Inst *RHS,
+                                            ReplacementContext &Context,
+                                            bool printNames) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
-  PrintReplacementRHS(SS, Const);
+  PrintReplacementRHS(SS, RHS, Context, printNames);
   return SS.str();
 }

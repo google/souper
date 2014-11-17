@@ -77,8 +77,7 @@ struct ExtractorTest : testing::Test {
       for (auto &R : B->Replacements) {
         std::string Str;
         llvm::raw_string_ostream SS(Str);
-        R.print(SS);
-
+        R.print(SS, /*printNames=*/true);
         if (SS.str() == Expected)
           return true;
       }

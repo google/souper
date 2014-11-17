@@ -168,7 +168,8 @@ public:
           errs() << "\n; For LLVM instruction:\n;";
           I->print(errs());
           errs() << "\n; Generating replacement:\n";
-          PrintReplacementLHS(errs(), R.PCs, R.Mapping.LHS);
+          ReplacementContext Context;
+          PrintReplacementLHS(errs(), R.PCs, R.Mapping.LHS, Context);
         }
         AddToCandidateMap(CandMap, R);
       }
@@ -187,8 +188,9 @@ public:
         Instruction *I = Cand.Origin.getInstruction();
         I->getDebugLoc().print(I->getContext(), Loc);
         std::string HField = "sprofile " + Loc.str();
-        KV->hIncrBy(GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS), HField,
-                    1);
+        ReplacementContext Context;
+        KV->hIncrBy(GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS, Context),
+                    HField, 1);
       }
       if (std::error_code EC =
           S->infer(Cand.PCs, Cand.Mapping.LHS, Cand.Mapping.RHS, IC)) {
@@ -224,9 +226,10 @@ public:
           std::string Str;
           llvm::raw_string_ostream Loc(Str);
           I->getDebugLoc().print(I->getContext(), Loc);
+          ReplacementContext Context;
           dynamicProfile (F.getContext(), F.getParent(),
-                          GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS),
-                          Loc.str(), BI);
+                          GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS,
+                                                  Context), Loc.str(), BI);
         }
         changed = true;
       } else {

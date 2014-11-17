@@ -236,23 +236,31 @@ enum class ReplacementKind {
 
 struct Parser {
   Parser(StringRef FileName, StringRef Str, InstContext &IC,
-         std::vector<ParsedReplacement> &Reps, ReplacementKind RK)
+         std::vector<ParsedReplacement> &Reps, ReplacementKind RK,
+         std::vector<ReplacementContext> *RCsIn,
+         std::vector<ReplacementContext> *RCsOut)
       : FileName(FileName),
         L(Str.data(), Str.data() + Str.size()),
         IC(IC),
         Reps(Reps),
-        RK(RK) {}
+        RK(RK),
+        RCsIn(RCsIn),
+        RCsOut(RCsOut) {
+    if (RCsIn)
+      Context = (*RCsIn)[0];
+  }
 
   std::string FileName;
   Lexer L;
   Token CurTok;
   InstContext &IC;
   std::vector<ParsedReplacement> &Reps;
+  std::vector<ReplacementContext> *RCsIn, *RCsOut;
+  ReplacementContext Context;
   ReplacementKind RK;
+  int Index = 0;
 
   std::vector<InstMapping> PCs;
-  std::map<StringRef, Inst *> InstMap;
-  std::map<StringRef, Block *> BlockMap;
   Inst *LHS = 0;
 
   std::string makeErrStr(const std::string &ErrStr) {
@@ -288,6 +296,7 @@ struct Parser {
 
   ParsedReplacement parseReplacement(std::string &ErrStr);
   std::vector<ParsedReplacement> parseReplacements(std::string &ErrStr);
+  void nextReplacement();
 };
 
 }
@@ -299,15 +308,15 @@ Inst *Parser::parseInst(std::string &ErrStr) {
         ErrStr = makeErrStr("inst reference may not have a width");
         return 0;
       }
-      auto InstBlockIt = InstMap.find(CurTok.Name);
-      if (InstBlockIt == InstMap.end()) {
+      Inst *I = Context.getInst(CurTok.Name);
+      if (!I) {
         ErrStr = makeErrStr(std::string("%") + CurTok.Name.str() +
                             " is not an inst");
         return 0;
       }
       if (!consumeToken(ErrStr))
         return 0;
-      return InstBlockIt->second;
+      return I;
     }
 
     case Token::Int: {
@@ -533,6 +542,18 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   return true;
 }
 
+void Parser::nextReplacement() {
+  PCs.clear();
+  if (RCsOut)
+    RCsOut->emplace_back(Context);
+  ++Index;
+  if (RCsIn)
+    Context = (*RCsIn)[Index];
+  else
+    Context.clear();
+  LHS = 0;
+}
+
 InstMapping Parser::parseInstMapping(std::string &ErrStr) {
   Inst *SrcRep[2];
   SrcRep[0] = parseInst(ErrStr);
@@ -566,10 +587,7 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!ErrStr.empty()) return false;
 
         Reps.push_back(ParsedReplacement{Cand, std::move(PCs)});
-        PCs.clear();
-        InstMap.clear();
-        BlockMap.clear();
-        LHS = 0;
+        nextReplacement();
 
         return true;
       } else if (CurTok.str() == "infer") {
@@ -588,10 +606,7 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         if (RK == ReplacementKind::ParseLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0), std::move(PCs)});
-          PCs.clear();
-          InstMap.clear();
-          BlockMap.clear();
-          LHS = 0;
+          nextReplacement();
         }
 
         return true;
@@ -611,10 +626,7 @@ bool Parser::parseLine(std::string &ErrStr) {
         InstMapping Cand = InstMapping(LHS, RHS);
 
         Reps.push_back(ParsedReplacement{Cand, std::move(PCs)});
-        PCs.clear();
-        InstMap.clear();
-        BlockMap.clear();
-        LHS = 0;
+        nextReplacement();
 
         return true;
       } else if (CurTok.str() == "pc") {
@@ -635,12 +647,12 @@ bool Parser::parseLine(std::string &ErrStr) {
       StringRef InstName = CurTok.Name;
       unsigned InstWidth = CurTok.Width;
 
-      if (InstMap.find(InstName) != InstMap.end()) {
+      if (Context.getInst(InstName)) {
         ErrStr = makeErrStr(std::string("%") + InstName.str() +
                             " already declared as an inst");
         return false;
       }
-      if (BlockMap.find(InstName) != BlockMap.end()) {
+      if (Context.getBlock(InstName)) {
         ErrStr = makeErrStr(std::string("%") + InstName.str() +
                             " already declared as a block");
         return false;
@@ -738,7 +750,7 @@ bool Parser::parseLine(std::string &ErrStr) {
           }
           unsigned Preds = CurTok.Val.getLimitedValue();
 
-          BlockMap[InstName] = IC.createBlock(Preds);
+          Context.setBlock(InstName, IC.createBlock(Preds));
           return consumeToken(ErrStr);
         } else {
           ErrStr = makeErrStr(std::string("unexpected inst kind: '") +
@@ -754,9 +766,11 @@ bool Parser::parseLine(std::string &ErrStr) {
 
       if (!consumeToken(ErrStr)) return false;
 
-      std::map<StringRef, Block *>::iterator PhiBlockIt;
+      Block *B = 0;
+
       if (IK == Inst::Var) {
-        InstMap[InstName] = IC.createVar(InstWidth, InstName);
+        Inst *I = IC.createVar(InstWidth, InstName);
+        Context.setInst(InstName, I);
         return true;
       }
 
@@ -769,8 +783,7 @@ bool Parser::parseLine(std::string &ErrStr) {
           ErrStr = makeErrStr("blocks may not have a width");
           return false;
         }
-        PhiBlockIt = BlockMap.find(CurTok.Name);
-        if (PhiBlockIt == BlockMap.end()) {
+        if (!(B = Context.getBlock(CurTok.Name))) {
           ErrStr =
               makeErrStr(std::string("%") + InstName.str() + " is not a block");
           return false;
@@ -799,12 +812,12 @@ bool Parser::parseLine(std::string &ErrStr) {
 
       Inst *I;
       if (IK == Inst::Phi) {
-        assert(PhiBlockIt->second);
-        if (!typeCheckPhi(InstWidth, PhiBlockIt->second, Ops, ErrStr)) {
+        assert(B);
+        if (!typeCheckPhi(InstWidth, B, Ops, ErrStr)) {
           ErrStr = makeErrStr(TP, ErrStr);
           return false;
         }
-        I = IC.getPhi(PhiBlockIt->second, Ops);
+        I = IC.getPhi(B, Ops);
       } else {
         if (!typeCheckInst(IK, InstWidth, Ops, ErrStr)) {
           ErrStr = makeErrStr(TP, ErrStr);
@@ -813,7 +826,7 @@ bool Parser::parseLine(std::string &ErrStr) {
         I = IC.getInst(IK, InstWidth, Ops);
       }
 
-      InstMap[InstName] = I;
+      Context.setInst(InstName, I);
       return true;
     }
 
@@ -855,7 +868,7 @@ ParsedReplacement souper::ParseReplacement(InstContext &IC,
                                            llvm::StringRef Str,
                                            std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseBoth);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseBoth, 0, 0);
   ParsedReplacement R = P.parseReplacement(ErrStr);
   if (ErrStr == "") {
     assert(R.Mapping.LHS);
@@ -867,13 +880,17 @@ ParsedReplacement souper::ParseReplacement(InstContext &IC,
 ParsedReplacement souper::ParseReplacementLHS(InstContext &IC,
                                               llvm::StringRef Filename,
                                               llvm::StringRef Str,
+                                              ReplacementContext &RC,
                                               std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseLHS);
+  std::vector<ReplacementContext> RCs;
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseLHS, 0, &RCs);
   ParsedReplacement R = P.parseReplacement(ErrStr);
   if (ErrStr == "") {
     assert(R.Mapping.LHS);
     assert(!R.Mapping.RHS);
+    assert(RCs.size() == 1);
+    RC = RCs[0];
   }
   return R;
 }
@@ -881,9 +898,12 @@ ParsedReplacement souper::ParseReplacementLHS(InstContext &IC,
 ParsedReplacement souper::ParseReplacementRHS(InstContext &IC,
                                               llvm::StringRef Filename,
                                               llvm::StringRef Str,
+                                              ReplacementContext &RC,
                                               std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseRHS);
+  std::vector<ReplacementContext> RCs =  { RC };
+  RCs.emplace_back();
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseRHS, &RCs, 0);
   ParsedReplacement R = P.parseReplacement(ErrStr);
   if (ErrStr == "") {
     assert(!R.Mapping.LHS);
@@ -901,7 +921,7 @@ std::vector<ParsedReplacement> Parser::parseReplacements(std::string &ErrStr) {
       return Reps;
   }
 
-  if (!PCs.empty() || !InstMap.empty() || !BlockMap.empty()) {
+  if (!PCs.empty() || !Context.empty()) {
     ErrStr = makeErrStr("incomplete replacement");
     return Reps;
   }
@@ -913,7 +933,7 @@ std::vector<ParsedReplacement> souper::ParseReplacements(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
     std::string &ErrStr) {
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseBoth);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseBoth, 0, 0);
   std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
   if (ErrStr == "") {
     for (auto i = R.begin(); i != R.end(); ++i) {
@@ -926,11 +946,13 @@ std::vector<ParsedReplacement> souper::ParseReplacements(
 
 std::vector<ParsedReplacement> souper::ParseReplacementLHSs(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
-    std::string &ErrStr) {
+    std::vector<ReplacementContext> &RCs, std::string &ErrStr) {
+  assert(RCs.size() == 0);
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseLHS);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseLHS, 0, &RCs);
   std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
   if (ErrStr == "") {
+    assert(RCs.size() == R.size());
     for (auto i = R.begin(); i != R.end(); ++i) {
       assert(i->Mapping.LHS);
       assert(!i->Mapping.RHS);
@@ -941,11 +963,14 @@ std::vector<ParsedReplacement> souper::ParseReplacementLHSs(
 
 std::vector<ParsedReplacement> souper::ParseReplacementRHSs(
     InstContext &IC, llvm::StringRef Filename, llvm::StringRef Str,
-    std::string &ErrStr) {
+    std::vector<ReplacementContext> &RCs, std::string &ErrStr) {
+  RCs.emplace_back();
   std::vector<ParsedReplacement> Reps;
-  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseRHS);
+  Parser P(Filename, Str, IC, Reps, ReplacementKind::ParseRHS, &RCs, 0);
   std::vector<ParsedReplacement> R = P.parseReplacements(ErrStr);
+  RCs.pop_back();
   if (ErrStr == "") {
+    assert(RCs.size() == R.size());
     for (auto i = R.begin(); i != R.end(); ++i) {
       assert(!i->Mapping.LHS);
       assert(i->Mapping.RHS);

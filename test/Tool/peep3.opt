@@ -1,0 +1,23 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-replacement %s > %t1
+; RUN: FileCheck %s < %t1
+; RUN: %parser-test < %t1
+; RUN: %souper-check %solver %t1 | FileCheck %s
+
+; RUN: %souper-check %solver -print-replacement-split %s > %t2
+; RUN: FileCheck %s < %t2
+; RUN: %parser-test < %t2
+; RUN: %souper-check %solver %t2 | FileCheck %s
+
+; CHECK: LGTM
+
+%0:i64 = var
+%1:i64 = var
+%2:i64 = var
+%3:i64 = and %0, %1
+%4:i64 = and %1, %2
+%5:i64 = or %3, %4
+%6:i64 = or %0, %2
+%7:i64 = and %6, %1
+cand %5 %7
