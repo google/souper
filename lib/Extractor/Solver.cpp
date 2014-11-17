@@ -116,15 +116,15 @@ public:
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
                         Inst *LHS, Inst *&RHS, InstContext &IC) {
-    std::string Repl = GetReplacementLHSString(PCs, LHS);
+    ReplacementContext Context;
+    std::string Repl = GetReplacementLHSString(PCs, LHS, Context);
     const auto &ent = InferCache.find(Repl);
     if (ent == InferCache.end()) {
       ++MemMissesInfer;
       std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, IC);
       std::string RHSStr;
       if (!EC && RHS) {
-        assert(RHS->K == Inst::Const);
-        RHSStr = GetReplacementRHSString(RHS->Val);
+        RHSStr = GetReplacementRHSString(RHS, Context);
       }
       InferCache.emplace(Repl, std::make_pair(EC, RHSStr));
       return EC;
@@ -135,7 +135,7 @@ public:
       if (S == "") {
         RHS = 0;
       } else {
-        ParsedReplacement R = ParseReplacementRHS(IC, "<cache>", S, ES);
+        ParsedReplacement R = ParseReplacementRHS(IC, "<cache>", S, Context, ES);
         if (ES != "")
           return std::make_error_code(std::errc::protocol_error);
         RHS = R.Mapping.RHS;
@@ -182,7 +182,8 @@ public:
 
   std::error_code infer(const std::vector<InstMapping> &PCs,
                         Inst *LHS, Inst *&RHS, InstContext &IC) {
-    std::string LHSStr = GetReplacementLHSString(PCs, LHS);
+    ReplacementContext Context;
+    std::string LHSStr = GetReplacementLHSString(PCs, LHS, Context);
     std::string S;
     if (KV->hGet(LHSStr, "result", S)) {
       ++ExternalHits;
@@ -190,7 +191,7 @@ public:
         RHS = 0;
       } else {
         std::string ES;
-        ParsedReplacement R = ParseReplacementRHS(IC, "<cache>", S, ES);
+        ParsedReplacement R = ParseReplacementRHS(IC, "<cache>", S, Context, ES);
         if (ES != "")
           return std::make_error_code(std::errc::protocol_error);
         RHS = R.Mapping.RHS;
@@ -201,8 +202,7 @@ public:
       std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, IC);
       std::string RHSStr;
       if (!EC && RHS) {
-        assert(RHS->K == Inst::Const);
-        RHSStr = GetReplacementRHSString(RHS->Val);
+        RHSStr = GetReplacementRHSString(RHS, Context);
       }
       KV->hSet(LHSStr, "result", RHSStr);
       return EC;

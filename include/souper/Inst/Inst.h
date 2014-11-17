@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
 
 namespace souper {
 
@@ -102,15 +103,21 @@ struct Inst : llvm::FoldingSetNode {
   static bool isCommutative(Kind K);
 };
 
-class PrintContext {
-  llvm::raw_ostream &Out;
-  llvm::DenseMap<void *, unsigned> PrintNums;
+class ReplacementContext {
+  llvm::DenseMap<Inst *, std::string> InstNames;
+  llvm::DenseMap<Block *, std::string> BlockNames;
+  std::map<std::string, Inst *> NameToInst;
+  std::map<std::string, Block *> NameToBlock;
 
 public:
-  PrintContext(llvm::raw_ostream &Out) : Out(Out) {}
-
-  std::string printInst(Inst *I);
-  unsigned printBlock(Block *B);
+  std::string printInst(Inst *I, llvm::raw_ostream &Out, bool printNames);
+  std::string printBlock(Block *B, llvm::raw_ostream &Out);
+  Inst *getInst(llvm::StringRef Name);
+  void setInst(llvm::StringRef Name, Inst *I);
+  Block *getBlock(llvm::StringRef Name);
+  void setBlock(llvm::StringRef Name, Block *B);
+  void clear();
+  bool empty();
 };
 
 class InstContext {
@@ -147,16 +154,23 @@ struct InstMapping {
 };
 
 void PrintReplacement(llvm::raw_ostream &Out,
-                      const std::vector<InstMapping> &PCs, InstMapping Mapping);
+                      const std::vector<InstMapping> &PCs, InstMapping Mapping,
+                      bool printNames = false);
 std::string GetReplacementString(const std::vector<InstMapping> &PCs,
-                                 InstMapping Mapping);
+                                 InstMapping Mapping,
+                                 bool printNames = false);
 void PrintReplacementLHS(llvm::raw_ostream &Out,
                          const std::vector<InstMapping> &PCs,
-                         Inst *LHS);
+                         Inst *LHS, ReplacementContext &Context,
+                         bool printNames = false);
 std::string GetReplacementLHSString(const std::vector<InstMapping> &PCs,
-                                    Inst *LHS);
-void PrintReplacementRHS(llvm::raw_ostream &Out, llvm::APInt Const);
-std::string GetReplacementRHSString(llvm::APInt Const);
+                                    Inst *LHS, ReplacementContext &Context,
+                                    bool printNames = false);
+void PrintReplacementRHS(llvm::raw_ostream &Out, Inst *RHS,
+                         ReplacementContext &Context,
+                         bool printNames = false);
+std::string GetReplacementRHSString(Inst *RHS, ReplacementContext &Context,
+                                    bool printNames = false);
 
 }
 

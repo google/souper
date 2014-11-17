@@ -55,7 +55,8 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
     std::map<std::string,int> Index;
     for (int I=0; I < M.size(); ++I) {
       auto &Cand = M[I];
-      auto S = GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS);
+      ReplacementContext Context;
+      auto S = GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS, Context);
       if (Index.find(S) == Index.end()) {
         Index[S] = I;
         Profile.push_back(1);
@@ -76,8 +77,9 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
         Instruction *I = Cand.Origin.getInstruction();
         I->getDebugLoc().print(I->getContext(), Loc);
         std::string HField = "sprofile " + Loc.str();
+        ReplacementContext Context;
         KVForStaticProfile->hIncrBy(GetReplacementLHSString(Cand.PCs,
-            Cand.Mapping.LHS), HField, 1);
+            Cand.Mapping.LHS, Context), HField, 1);
       }
 
       Inst *RHS;
@@ -99,7 +101,8 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
     for (auto &Cand : M) {
       OS << '\n';
       Cand.printFunction(OS);
-      Cand.printLHS(OS);
+      ReplacementContext Context;
+      Cand.printLHS(OS, Context);
     }
   }
 

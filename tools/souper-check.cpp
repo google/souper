@@ -20,7 +20,7 @@ using namespace llvm;
 using namespace souper;
 
 static cl::opt<std::string>
-InputFilename(cl::Positional, cl::desc("<input souper optimization>"), 
+InputFilename(cl::Positional, cl::desc("<input souper optimization>"),
               cl::init("-"));
 
 static cl::opt<bool> PrintCounterExample("print-counterexample",
@@ -29,6 +29,10 @@ static cl::opt<bool> PrintCounterExample("print-counterexample",
 
 static cl::opt<bool> PrintRepl("print-replacement",
     cl::desc("Print the replacement, if valid (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> PrintReplSplit("print-replacement-split", cl::Hidden,
+    cl::desc("Print the replacement as an infer/result pair (default=false)"),
     cl::init(false));
 
 static cl::opt<bool> InferRHS("infer-rhs",
@@ -40,9 +44,10 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   std::string ErrStr;
 
   ParsedReplacement Rep;
+  ReplacementContext Context;
   if (InferRHS) {
     Rep = ParseReplacementLHS(IC, MB.getBufferIdentifier(), MB.getBuffer(),
-                              ErrStr);
+                              Context, ErrStr);
   } else {
     Rep = ParseReplacement(IC, MB.getBufferIdentifier(), MB.getBuffer(), ErrStr);
   }
@@ -59,14 +64,22 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
     }
     if (Rep.Mapping.RHS) {
       llvm::outs() << "; RHS inferred successfully\n";
-      if (PrintRepl)
+      if (PrintRepl) {
         PrintReplacement(llvm::outs(), Rep.PCs, Rep.Mapping);
-      else
-        PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS->Val);
+      } else if (PrintReplSplit) {
+        ReplacementContext Context;
+        PrintReplacementLHS(llvm::outs(), Rep.PCs, Rep.Mapping.LHS, Context);
+        PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
+      } else {
+        ReplacementContext Context;
+        PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
+      }
     } else {
       llvm::outs() << "; Failed to infer RHS\n";
-      if (PrintRepl)
-        PrintReplacementLHS(llvm::outs(), Rep.PCs, Rep.Mapping.LHS);
+      if (PrintRepl || PrintReplSplit) {
+        ReplacementContext Context;
+        PrintReplacementLHS(llvm::outs(), Rep.PCs, Rep.Mapping.LHS, Context);
+      }
     }
   } else {
     bool Valid;
@@ -80,6 +93,11 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
       llvm::outs() << "; LGTM\n";
       if (PrintRepl)
         PrintReplacement(llvm::outs(), Rep.PCs, Rep.Mapping);
+      if (PrintReplSplit) {
+        ReplacementContext Context;
+        PrintReplacementLHS(llvm::outs(), Rep.PCs, Rep.Mapping.LHS, Context);
+        PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
+      }
     } else {
       llvm::outs() << "Invalid";
       if (PrintCounterExample && !Models.empty()) {

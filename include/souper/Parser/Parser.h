@@ -27,25 +27,27 @@ struct ParsedReplacement {
   /// The path conditions relevant to this replacement.
   std::vector<InstMapping> PCs;
 
-  void print(llvm::raw_ostream &OS) const {
-    PrintReplacement(OS, PCs, Mapping);
+  void print(llvm::raw_ostream &OS, bool printNames = false) const {
+    PrintReplacement(OS, PCs, Mapping, printNames);
   }
-  std::string getString() const {
-    return GetReplacementString(PCs, Mapping);
+  std::string getString(bool printNames = false) const {
+    return GetReplacementString(PCs, Mapping, printNames);
   }
-  void printLHS(llvm::raw_ostream &OS) const {
-    PrintReplacementLHS(OS, PCs, Mapping.LHS);
+  void printLHS(llvm::raw_ostream &OS, ReplacementContext &Context,
+                bool printNames = false) const {
+    PrintReplacementLHS(OS, PCs, Mapping.LHS, Context, printNames);
   }
-  std::string getLHSString() const {
-    return GetReplacementLHSString(PCs, Mapping.LHS);
+  std::string getLHSString(ReplacementContext &Context,
+                           bool printNames = false) const {
+    return GetReplacementLHSString(PCs, Mapping.LHS, Context, printNames);
   }
-  void printRHS(llvm::raw_ostream &OS) const {
-    assert(Mapping.RHS->K == Inst::Const);
-    PrintReplacementRHS(OS, Mapping.RHS->Val);
+  void printRHS(llvm::raw_ostream &OS, ReplacementContext &Context,
+                bool printNames = false) const {
+    PrintReplacementRHS(OS, Mapping.RHS, Context, printNames);
   }
-  std::string getRHSString() const {
-    assert(Mapping.RHS->K == Inst::Const);
-    return GetReplacementRHSString(Mapping.RHS->Val);
+  std::string getRHSString(ReplacementContext &Context,
+                           bool printNames = false) const {
+    return GetReplacementRHSString(Mapping.RHS, Context, printNames);
   }
 };
 
@@ -54,22 +56,22 @@ void TestLexer(llvm::StringRef Str);
 ParsedReplacement ParseReplacement(InstContext &IC, llvm::StringRef Filename,
                                    llvm::StringRef Str, std::string &ErrStr);
 ParsedReplacement ParseReplacementLHS(InstContext &IC, llvm::StringRef Filename,
-                                      llvm::StringRef Str, std::string &ErrStr);
+                                      llvm::StringRef Str,
+                                      ReplacementContext &Pr,
+                                      std::string &ErrStr);
 ParsedReplacement ParseReplacementRHS(InstContext &IC, llvm::StringRef Filename,
-                                      llvm::StringRef Str, std::string &ErrStr);
+                                      llvm::StringRef Str,
+                                      ReplacementContext &Pr,
+                                      std::string &ErrStr);
 
 std::vector<ParsedReplacement> ParseReplacements(InstContext &IC,
-                                                 llvm::StringRef Filename,
-                                                 llvm::StringRef Str,
-                                                 std::string &ErrStr);
+    llvm::StringRef Filename, llvm::StringRef Str, std::string &ErrStr);
 std::vector<ParsedReplacement> ParseReplacementLHSs(InstContext &IC,
-                                                    llvm::StringRef Filename,
-                                                    llvm::StringRef Str,
-                                                    std::string &ErrStr);
+    llvm::StringRef Filename, llvm::StringRef Str,
+    std::vector<ReplacementContext> &Contexts, std::string &ErrStr);
 std::vector<ParsedReplacement> ParseReplacementRHSs(InstContext &IC,
-                                                    llvm::StringRef Filename,
-                                                    llvm::StringRef Str,
-                                                    std::string &ErrStr);
+    llvm::StringRef Filename, llvm::StringRef Str,
+    std::vector<ReplacementContext> &Contexts, std::string &ErrStr);
 
 }
 

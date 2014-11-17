@@ -1,0 +1,19 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-replacement %s > %t1
+; RUN: FileCheck %s < %t1
+; RUN: %parser-test < %t1
+; RUN: %souper-check %solver %t1 | FileCheck %s
+
+; RUN: %souper-check %solver -print-replacement-split %s > %t2
+; RUN: FileCheck %s < %t2
+; RUN: %parser-test < %t2
+; RUN: %souper-check %solver %t2 | FileCheck %s
+
+; CHECK: LGTM
+
+%0:i64 = var
+%1:i64 = xor %0, -1:i64
+%2:i64 = add %1, 1:i64
+%3:i64 = sub 0:i64, %0
+cand %2 %3
