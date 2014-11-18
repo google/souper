@@ -18,25 +18,30 @@ use warnings;
 use strict;
 use File::Temp;
 
+my $usage = <<END;
+$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as
+-stp-path=/path/to/stp
+END
 my $solver = $ENV{"SOUPER_SOLVER"};
-die "$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp" unless $solver;
-my $SOUPER_CHECK = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15 ${solver}";
+die $usage unless $solver;
+
+my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15 ${solver}";
 
 sub check ($) {
     (my $s) = @_;
     (my $fh, my $tmpfn) = File::Temp::tempfile();
     print $fh $s;
     $fh->flush();
-    open INF, "${SOUPER_CHECK} --print-replacement < $tmpfn 2>/dev/null |";
-    my $s2 = "";
+    open INF, "${check} --print-replacement < $tmpfn 2>/dev/null |";
+    my $output = "";
     while (my $line = <INF>) {
         chomp $line;
-        $s2 .= $line;
+        $output .= $line;
     }
     close INF;
     close $fh;
     unlink $tmpfn;
-    return 0 if ($s2 =~ "LGTM");
+    return 0 if ($output =~ "LGTM");
     return 1;
 }
 
@@ -237,7 +242,7 @@ sub pretty ($) {
     open OUTF, ">$tmpfn" or die;
     print OUTF $red;
     close OUTF;
-    open INF, "${SOUPER_CHECK} --print-replacement $tmpfn |";
+    open INF, "${check} --print-replacement $tmpfn |";
     my $foo = <INF>;
     my $pret = "";
     while (my $line = <INF>) {
