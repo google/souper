@@ -113,7 +113,7 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
     return SS.str();
 
   case Inst::Phi:
-    llvm::StringRef BlockName = printBlock(I->B, Out);
+    std::string BlockName = printBlock(I->B, Out);
     OpsSS << " %" << BlockName << ",";
     break;
   }
