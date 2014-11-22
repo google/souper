@@ -112,17 +112,18 @@ Basic blocks and phi nodes
 --------------------------
 
 Convergent control flow is represented in ``Inst`` using two constructs:
-basic blocks and phi nodes. A basic block, written as ``%name = block``,
+basic blocks and phi nodes. A basic block, written as ``%name = block n``,
 represents a basic block, or more specifically the control flow of a basic
-block relative to its predecessors. Basic blocks appear as the first operand in
-a phi node, which may have any number of additional operands which represent
-values from predecessors of the block (however the number of operands must
-be consistent between phi nodes which use a specific block); the basic block
-controls which predecessor value is selected. For example:
+block relative to its predecessors, where ``n`` is its number of predecessors.
+Basic blocks appear as the first operand in a phi node, which may have any
+number of additional operands which represent values from predecessors of the
+block (however the number of operands must be consistent between phi nodes
+which use a specific block); the basic block controls which predecessor value
+is selected. For example:
 
 .. code-block:: text
 
-    %bb = block
+    %bb = block 3
     %phi1 = phi %bb, 1:i32, 2, 3
     %phi2 = phi %bb, 2:i32, 4, 6
     %phi1x2 = mul %phi1, 2
