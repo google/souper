@@ -27,6 +27,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/PassManager.h"
+#include "llvm/Support/CommandLine.h"
 #include "souper/Inst/Inst.h"
 #include "souper/Util/UniqueNameSet.h"
 #include <map>
@@ -37,6 +38,10 @@
 using namespace llvm;
 using namespace klee;
 using namespace souper;
+
+static llvm::cl::opt<bool> SynthesizeInts("souper-iN-synthesis",
+    llvm::cl::desc("Synthesize iN integers for N>1 (default=false)"),
+    llvm::cl::init(false));
 
 std::string InstOrigin::getFunctionName() const {
   if (Inst) {
@@ -509,7 +514,8 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI,
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
     for (auto &I : BB) {
-      if (I.getType()->isIntegerTy(1))
+      if (I.getType()->isIntegerTy(1) ||
+          (I.getType()->isIntegerTy() && SynthesizeInts))
         BCS->Replacements.emplace_back(&I, InstMapping(EB.get(&I), 0));
     }
     if (!BCS->Replacements.empty()) {

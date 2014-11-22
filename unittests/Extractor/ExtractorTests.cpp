@@ -56,9 +56,12 @@ struct ExtractorTest : testing::Test {
     CS = ExtractCandidates(&*M->begin(), IC, EBC, Opts);
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
-        assert(R.Mapping.LHS->Width == 1);
-        std::vector<Inst *>Guesses { IC.getConst(APInt(1, false)),
-                                     IC.getConst(APInt(1, true)) };
+        std::vector<Inst *> Guesses;
+        if (R.Mapping.LHS->Width == 1)
+          Guesses = { IC.getConst(APInt(1, false)),
+                      IC.getConst(APInt(1, true)) };
+        else
+          Guesses = { IC.createVar(R.Mapping.LHS->Width, "constant") };
         for (auto I : Guesses) {
           R.Mapping.RHS = I;
           std::unique_ptr<CandidateExpr> CE(

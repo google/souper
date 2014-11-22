@@ -15,7 +15,7 @@
 # limitations under the License.
 
 llvm_revision=221497
-klee_commit=0c8c812db1d331f1e49e27ccd35f1288e58d97e6
+klee_commit=d5ef198e24a27a9e7fef689307aa971e3ef8a48c
 hiredis_commit=8f60ee65327445ed8384290b4040685329eb03c5
 
 llvm_build_type=Debug
@@ -48,7 +48,7 @@ kleedir=third_party/klee
 if [ -d third_party/klee/.git ] ; then
   (cd $kleedir && git fetch)
 else
-  git clone https://github.com/klee/klee $kleedir
+  git clone https://github.com/rsas/klee $kleedir
 fi
 
 (cd $kleedir && git checkout $klee_commit)

@@ -33,6 +33,7 @@ public:
   virtual ~SMTLIBSolver();
   virtual std::string getName() const = 0;
   virtual bool supportsModels() const = 0;
+  virtual bool supportsQuantifiers() const = 0;
   virtual std::error_code isSatisfiable(llvm::StringRef Query, bool &Result,
                                         unsigned NumModels,
                                         std::vector<llvm::APInt> *Models,

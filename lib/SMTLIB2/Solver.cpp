@@ -18,6 +18,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Program.h"
@@ -89,16 +90,24 @@ struct SMTLIBParser {
     return false;
   }
 
-  APInt parseModel(std::string &ErrStr) {
-    if (!consumeExpected('(', ErrStr))
-      return APInt();
-    if (!consumeExpected('(', ErrStr))
-      return APInt();
-    if (!consumeSExpr(ErrStr))
-      return APInt();
+  APInt parseBinaryBitVector(std::string &ErrStr) {
+    ErrStr.clear();
+    const char *NumBegin = Begin;
+    while (Begin != End && (*Begin == '0' || *Begin == '1'))
+      ++Begin;
+    const char *NumEnd = Begin;
 
-    if (!consumeExpected('(', ErrStr))
+    if (!consumeExpected(')', ErrStr))
       return APInt();
+    if (!consumeExpected(')', ErrStr))
+      return APInt();
+    unsigned Width = NumEnd - NumBegin;
+
+    return APInt(Width, StringRef(NumBegin, Width), 2);
+  }
+
+  APInt parseDecimalBitVector(std::string &ErrStr) {
+    ErrStr.clear();
     if (!consumeExpected('_', ErrStr))
       return APInt();
     if (!consumeExpected('b', ErrStr))
@@ -133,6 +142,41 @@ struct SMTLIBParser {
 
     return APInt(Width, StringRef(NumBegin, NumEnd - NumBegin), 10);
   }
+
+  APInt parseHexBitVector(std::string &ErrStr) {
+    ErrStr.clear();
+    const char *NumBegin = Begin;
+    while (Begin != End && ((*Begin >= '0' && *Begin <= '9') ||
+           (*Begin >= 'a' && *Begin <= 'f') ||
+           (*Begin >= 'A' && *Begin <= 'F')))
+      ++Begin;
+    const char *NumEnd = Begin;
+
+    if (!consumeExpected(')', ErrStr))
+      return APInt();
+    if (!consumeExpected(')', ErrStr))
+      return APInt();
+    unsigned Width = NumEnd - NumBegin;
+
+    return APInt(Width*4, StringRef(NumBegin, Width), 16);
+  }
+
+  APInt parseModel(std::string &ErrStr) {
+    if (!consumeExpected('(', ErrStr))
+      return APInt();
+    if (!consumeExpected('(', ErrStr))
+      return APInt();
+    if (!consumeSExpr(ErrStr))
+      return APInt();
+    if (consumeExpected('#', ErrStr)) {
+      if (consumeExpected('x', ErrStr))
+        return parseHexBitVector(ErrStr);
+      else
+        return parseBinaryBitVector(ErrStr);
+    } else {
+      return parseDecimalBitVector(ErrStr);
+    }
+  }
 };
 
 std::vector<APInt> ParseModels(StringRef Models, unsigned NumModels,
@@ -157,14 +201,16 @@ class ProcessSMTLIBSolver : public SMTLIBSolver {
   bool Keep;
   SolverProgram Prog;
   bool SupportsModels;
+  bool SupportsQuantifiers;
   std::vector<std::string> Args;
   std::vector<const char *> ArgPtrs;
 
 public:
   ProcessSMTLIBSolver(std::string Name, bool Keep, SolverProgram Prog,
-                      bool SupportsModels, const std::vector<std::string> &Args)
+                      bool SupportsModels, bool SupportsQuantifiers,
+                      const std::vector<std::string> &Args)
       : Name(Name), Keep(Keep), Prog(Prog), SupportsModels(SupportsModels),
-        Args(Args) {
+        SupportsQuantifiers(SupportsQuantifiers), Args(Args) {
     std::transform(Args.begin(), Args.end(), std::back_inserter(ArgPtrs),
                    [](const std::string &Arg) { return Arg.c_str(); });
     ArgPtrs.push_back(0);
@@ -176,6 +222,10 @@ public:
 
   bool supportsModels() const {
     return SupportsModels;
+  }
+
+  bool supportsQuantifiers() const {
+    return SupportsQuantifiers;
   }
 
   std::error_code isSatisfiable(StringRef Query, bool &Result,
@@ -323,23 +373,23 @@ SolverProgram souper::makeInternalSolverProgram(int MainPtr(int argc,
 std::unique_ptr<SMTLIBSolver> souper::createBoolectorSolver(SolverProgram Prog,
                                                             bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("Boolector", Keep, Prog, false, {"--smt2"}));
+      new ProcessSMTLIBSolver("Boolector", Keep, Prog, false, false, {"--smt2"}));
 }
 
 std::unique_ptr<SMTLIBSolver> souper::createCVC4Solver(SolverProgram Prog,
                                                        bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("CVC4", Keep, Prog, true, {"--lang=smt"}));
+      new ProcessSMTLIBSolver("CVC4", Keep, Prog, true, true, {"--lang=smt"}));
 }
 
 std::unique_ptr<SMTLIBSolver> souper::createSTPSolver(SolverProgram Prog,
                                                       bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("STP", Keep, Prog, false, {"--SMTLIB2"}));
+      new ProcessSMTLIBSolver("STP", Keep, Prog, false, false, {"--SMTLIB2"}));
 }
 
 std::unique_ptr<SMTLIBSolver> souper::createZ3Solver(SolverProgram Prog,
                                                      bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("Z3", Keep, Prog, false, {"-smt2", "-in"}));
+      new ProcessSMTLIBSolver("Z3", Keep, Prog, true, true, {"-smt2", "-in"}));
 }

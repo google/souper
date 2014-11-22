@@ -32,7 +32,7 @@ struct CandidateExpr {
 CandidateExpr GetCandidateExprForReplacement(const std::vector<InstMapping> &PCs,
                                              InstMapping Mapping);
 std::string BuildQuery(const std::vector<InstMapping> &PCs, InstMapping Mapping,
-                       std::vector<Inst *> *ModelVars);
+                       bool UseQuantifiers, std::vector<Inst *> *ModelVars);
 
 }
 
