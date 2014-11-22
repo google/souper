@@ -21,37 +21,33 @@ use Getopt::Long;
 use File::Temp;
 use Time::HiRes;
 
+my $need_solver = <<END;
+$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as
+-stp-path=/path/to/stp
+END
+my $solver = $ENV{"SOUPER_SOLVER"};
+die $need_solver unless $solver;
+
+my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15 ${solver}";
+
 sub runit ($) {
     my $cmd = shift;
     my $res = (system "$cmd");
     return $? >> 8;
 }
 
-my $cur_key = 0;
-my $last_time = 0;
-my $backsp = "\b";
-sub spinner() {
-    my $now = Time::HiRes::time();
-    return if (time() <= ($last_time + 0.1));
-    $last_time = time();
-    my @chars = ("-", "\\", "|", "/");
-    $cur_key = 0 if ($cur_key == @chars);
-    print $backsp . $chars[$cur_key];
-    $cur_key++;
-}
-
-# TODO: add a -verify option
-
 sub usage() {
     print <<'END';
 Options:
-  -raw         Dump all keys and values and exit, ignoring all other options
+  -merge       Merge optimizations that differ only in bitwidths and constants
   -noopts      Dump not-optimizations instead of optimizations
+  -noparse     Do not ensure that each LHS in the cache parses as Souper
   -sort=size|sprofile|dprofile
                Sort optimizations by increasing size (default), decreasing
                static profile count, or descreasing dynamic profile count
+  -raw         Dump all keys and values and exit, ignoring all other options
   -reduce      Attempt to reduce the size of each optimization
-  -merge       Merge optimizations that differ only in bitwidths and constants
+  -verify      Verify each optimization
 END
     exit -1;
 }
@@ -61,16 +57,18 @@ my $NOOPTS = 0;
 my $SORT = "size";
 my $REDUCE = 0;
 my $MERGE = 0;
+my $NOPARSE = 0;
+my $VERIFY = 0;
 GetOptions(
-    "raw"  => \$RAW,
-    "noopts" => \$NOOPTS,
-    "sort=s" => \$SORT,
-    "reduce" => \$REDUCE,
     "merge" => \$MERGE,
+    "noopts" => \$NOOPTS,
+    "noparse" => \$NOPARSE,
+    "sort=s" => \$SORT,
+    "raw"  => \$RAW,
+    "reduce" => \$REDUCE,
+    "verify" => \$VERIFY,
     ) or usage();
 usage() unless ($SORT eq "size" || $SORT eq "sprofile" || $SORT eq "dprofile");
-die "-reduce and -noopts cannot be used together" if ($REDUCE && $NOOPTS);
-die "-merge and -noopts cannot be used together" if ($MERGE && $NOOPTS);
 
 my $reducer = "@CMAKE_BINARY_DIR@/reduce";
 
@@ -88,9 +86,9 @@ $r->ping || die "no server?";
 my @keys = $r->keys('*');
 
 if ($RAW) {
-    foreach my $k (@keys) {
-        my %h = $r->hgetall($k);
-        print "<$k>\n";
+    foreach my $LHS (sort @keys) {
+        my %h = $r->hgetall($LHS);
+        print "<$LHS>\n";
         foreach my $kk (sort keys %h) {
             print "  <$kk> <$h{$kk}>\n";
         }
@@ -102,12 +100,42 @@ if ($RAW) {
 
 print "\nGrabbing Redis values...";
 
-foreach my $k (@keys) {
-    spinner();
-    my %h = $r->hgetall($k);
+sub parse ($$) {
+    (my $LHS, my $RHS) = @_;
+    (my $fh, my $tmpfn) = File::Temp::tempfile();
+    print $fh $LHS;
+    $fh->flush();
+    my $arg;
+    if ($VERIFY) {
+        $arg = "--infer-rhs";
+    } else {
+        $arg = "--parse-lhs-only";
+    }
+    open INF, "${check} $arg < $tmpfn 2>/dev/null |";
+    my $output = "";
+    my $success = 0;
+    while (my $line = <INF>) {
+        $success = 1 if ($line =~ /success/);
+        next if ($line =~ /^;/);
+        $output .= $line;
+    }
+    close INF;
+    close $fh;
+    unlink $tmpfn;
+    if ($VERIFY) {
+        die "expected '$RHS' but souper-check returned '$output'" unless
+            ($output eq $RHS);
+    } else {
+        die "'$LHS' does not parse as Souper" unless $success;
+    }
+}
+
+foreach my $LHS (@keys) {
+    my %h = $r->hgetall($LHS);
     my $result = $h{"result"};
-    if (!defined($result)) {
-        print STDERR "WARNING: no result for key\n";
+    if (defined($result)) {
+        parse($LHS, $result) unless $NOPARSE;
+    } else {
         next;
     }
     my $sprofile = 0;
@@ -120,16 +148,16 @@ foreach my $k (@keys) {
             $dprofile += $h{$kk};
         }
     }
-    $k .= $result;
+    $LHS .= $result;
     if ($result eq "") {
         $noopt_count++;
-        $toprint{$k} = 1 if $NOOPTS;
+        $toprint{$LHS} = 1 if $NOOPTS;
     } else {
         $opt_count++;
-        $toprint{$k} = 1 if !$NOOPTS;
+        $toprint{$LHS} = 1 if !$NOOPTS;
     }
-    $sprofiles{$k} = $sprofile;
-    $dprofiles{$k} = $dprofile;
+    $sprofiles{$LHS} = $sprofile;
+    $dprofiles{$LHS} = $dprofile;
 }
 
 sub replace($$) {
@@ -145,11 +173,10 @@ if ($REDUCE) {
     print "\nReducing...";
 
     my @keys = keys %toprint;
-    foreach my $k (@keys) {
-        spinner();
+    foreach my $LHS (@keys) {
         (my $fh1, my $fn1) = File::Temp::tempfile();
         (my $fh2, my $fn2) = File::Temp::tempfile();
-        print $fh1 $k;
+        print $fh1 $LHS;
         close $fh1;
         close $fh2;
         runit ("$reducer < $fn1 > $fn2") == 0 or die;
@@ -162,10 +189,10 @@ if ($REDUCE) {
         unlink $fn1;
         unlink $fn2;
         if ($new eq "") {
-            print "can't reduce $k\n";
+            print "can't reduce $LHS\n";
             die;
         } else {
-            replace($k, $new);
+            replace($LHS, $new);
         }
     }
 }
@@ -174,12 +201,11 @@ if ($MERGE) {
     print "\nMerging...";
 
     my @keys = keys %toprint;
-    foreach my $k (@keys) {
-        spinner();
-        my $new = $k;
+    foreach my $LHS (@keys) {
+        my $new = $LHS;
         $new =~ s/:i[0-9]+//g;
         $new =~ s/ [0-9]+/ C/g;
-        replace($k, $new);
+        replace($LHS, $new);
     }
 }
 
@@ -196,10 +222,10 @@ my $byx = \&bylen;
 $byx = \&bysprofile if ($SORT eq "sprofile");
 $byx = \&bydprofile if ($SORT eq "dprofile");
 
-foreach my $k (sort $byx keys %toprint) {
-    print "$k";
+foreach my $LHS (sort $byx keys %toprint) {
+    print "$LHS";
     print "\n";
-    print "; sprofile = $sprofiles{$k}\n";
-    print "; dprofile = $dprofiles{$k}\n";
+    print "; sprofile = $sprofiles{$LHS}\n";
+    print "; dprofile = $dprofiles{$LHS}\n";
     print "------------------------------------------------------\n\n";
 }

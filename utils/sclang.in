@@ -56,16 +56,16 @@ if ($souper) {
         "-mllvm", "-solver-timeout=15",
     );
 
-    if (!$ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
-        push @ARGV, ("-mllvm", "-souper-external-cache");
-    }
-
     if ($ENV{"SOUPER_DEBUG"}) {
         push @ARGV, ("-mllvm", "-souper-debug");
     }
 
-    if ($ENV{"SOUPER_STATS"}) {
-        push @ARGV, ("-mllvm", "-stats");
+    if (!$ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
+        push @ARGV, ("-mllvm", "-souper-external-cache");
+    }
+
+    if ($ENV{"SOUPER_NO_INFER"}) {
+        push @ARGV, ("-mllvm", "-souper-no-infer");
     }
 
     if ($ENV{"SOUPER_STATIC_PROFILE"}) {
@@ -77,6 +77,10 @@ if ($souper) {
         if (linkp()) {
             push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
         }
+    }
+
+    if ($ENV{"SOUPER_STATS"}) {
+        push @ARGV, ("-mllvm", "-stats");
     }
 }
 

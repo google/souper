@@ -17,6 +17,7 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/Instruction.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
 #include "souper/KVStore/KVStore.h"
@@ -36,6 +37,10 @@ using namespace souper;
 using namespace llvm;
 
 namespace {
+
+static cl::opt<bool> NoInfer("souper-no-infer",
+    cl::desc("Populate the external cache, but don't infer replacements"),
+    cl::init(false));
 
 class BaseSolver : public Solver {
   std::unique_ptr<SMTLIBSolver> SMTSolver;
@@ -199,6 +204,10 @@ public:
       return std::error_code();
     } else {
       ++ExternalMisses;
+      if (NoInfer) {
+        KV->hSet(LHSStr, "result", "");
+        return std::error_code();
+      }
       std::error_code EC = UnderlyingSolver->infer(PCs, LHS, RHS, IC);
       std::string RHSStr;
       if (!EC && RHS) {
