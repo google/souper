@@ -16,6 +16,7 @@
 
 use warnings;
 use strict;
+use File::Temp;
 
 sub linkp() {
     foreach my $arg (@ARGV) {
@@ -30,6 +31,25 @@ if ($0 =~ /clang$/) {
     unshift @ARGV, "@LLVM_BINDIR@/clang++";
 } else {
     die "Didn't expect sclang to be invoked as '$0'";
+}
+
+my $bitcodedir = $ENV{"SOUPER_SAVE_BITCODE"};
+if (defined $bitcodedir && -d $bitcodedir && fork() == 0) {
+    for (my $i=0; $i<scalar(@ARGV); $i++) {
+	splice @ARGV, $i, 2 if ($ARGV[$i] eq "-o");
+    }
+    my $tmp = File::Temp->new(UNLINK => 1, DIR => $bitcodedir)->filename;
+    push @ARGV, "-c", "-emit-llvm";
+    push @ARGV, "-o", "${tmp}.bc";
+    my $ofn = "${tmp}.cmd";
+    open OUTF, ">$ofn" or die;
+    foreach my $a (@ARGV) {
+	print OUTF "$a ";
+    }
+    print OUTF "\n";
+    close OUTF;
+    exec @ARGV;
+    die "bailing, exec failed";
 }
 
 my $solver = $ENV{"SOUPER_SOLVER"};
@@ -47,6 +67,8 @@ if ($ENV{"SOUPER_SKIP_FILES"}) {
         $souper = 0 if ($skips{$a});
     }
 }
+
+$souper = 0 if $ENV{"SOUPER_NO_SOUPER"};
 
 if ($souper) {
     push @ARGV, (
