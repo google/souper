@@ -17,6 +17,14 @@
 use warnings;
 use strict;
 
+sub compiling() {
+    foreach my $arg (@ARGV) {
+        return 1
+            if ($arg =~ /\.c$|\.cpp$|\.CC$|\.c\+\+$|\.cc$|\.cxx$|\.C$|\.c\+$/);
+    }
+    return 0;
+}
+
 sub linkp() {
     foreach my $arg (@ARGV) {
         return 0 if ($arg eq "-S" || $arg eq "-c" || $arg eq "-shared");
@@ -48,6 +56,8 @@ if ($ENV{"SOUPER_SKIP_FILES"}) {
     }
 }
 
+$souper = 0 unless compiling();
+
 if ($souper) {
     push @ARGV, (
         "-Xclang", "-load",
@@ -74,14 +84,19 @@ if ($souper) {
 
     if ($ENV{"SOUPER_DYNAMIC_PROFILE"}) {
         push @ARGV, ("-g", "-mllvm", "-souper-dynamic-profile");
-        if (linkp()) {
-            push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
-        }
+    }
+
+    if ($ENV{"SOUPER_IGNORE_SOLVER_ERRORS"}) {
+        push @ARGV, ("-mllvm", "-souper-ignore-solver-errors");
     }
 
     if ($ENV{"SOUPER_STATS"}) {
         push @ARGV, ("-mllvm", "-stats");
     }
+}
+
+if ($ENV{"SOUPER_DYNAMIC_PROFILE"} && linkp()) {
+    push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
 }
 
 exec @ARGV;
