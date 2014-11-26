@@ -1,0 +1,57 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+
+%0:i8 = var
+%a1:i8 = and 1, %0
+%a2:i1 = ne %a1, 0
+%a3:i8 = zext %a2
+%a4:i8 = or 0, %a3
+%a5:i8 = shl %a4, 1
+%b1:i8 = and 2, %0
+%b2:i1 = ne %b1, 0
+%b3:i8 = zext %b2
+%b4:i8 = or %a5, %b3
+%b5:i8 = shl %b4, 1
+%c1:i8 = and 4, %0
+%c2:i1 = ne %c1, 0
+%c3:i8 = zext %c2
+%c4:i8 = or %b5, %c3
+%c5:i8 = shl %c4, 1
+%d1:i8 = and 8, %0
+%d2:i1 = ne %d1, 0
+%d3:i8 = zext %d2
+%d4:i8 = or %c5, %d3
+%d5:i8 = shl %d4, 1
+%e1:i8 = and 16, %0
+%e2:i1 = ne %e1, 0
+%e3:i8 = zext %e2
+%e4:i8 = or %d5, %e3
+%e5:i8 = shl %e4, 1
+%f1:i8 = and 32, %0
+%f2:i1 = ne %f1, 0
+%f3:i8 = zext %f2
+%f4:i8 = or %e5, %f3
+%f5:i8 = shl %f4, 1
+%g1:i8 = and 64, %0
+%g2:i1 = ne %g1, 0
+%g3:i8 = zext %g2
+%g4:i8 = or %f5, %g3
+%g5:i8 = shl %g4, 1
+%h1:i8 = and 128, %0
+%h2:i1 = ne %h1, 0
+%h3:i8 = zext %h2
+%h4:i8 = or %g5, %h3
+infer %h4
+
+; ((b * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32
+
+%1:i64 = zext %0
+%2:i64 = mul %1, 2149582850
+%3:i64 = and %2, 36578664720
+%4:i64 = mul %3, 4311810305
+%6:i64 = lshr %4, 32
+%7:i8 = trunc %6
+result %7
+
+

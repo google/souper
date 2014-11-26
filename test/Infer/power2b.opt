@@ -1,0 +1,15 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+
+%0:i16 = var
+%1:i1 = ne %0, 0
+%2:i16 = sub %0, 1
+%3:i16 = and %0, %2
+%4:i1 = eq %3, 0
+%5:i1 = and %1, %4
+infer %5
+
+%6:i16 = ctpop %0
+%7:i1 = eq %6, 1
+result %7
