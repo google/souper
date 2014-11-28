@@ -198,7 +198,7 @@ FoundChar:
     }
 
     return Token{Token::UntypedInt, NumBegin, size_t(Begin - NumBegin),
-                 APInt((NumEnd - NumBegin) * 4,
+                 APInt((NumEnd - NumBegin) * 5,
                         StringRef(NumBegin, NumEnd - NumBegin), 10)};
   }
 
