@@ -1,0 +1,421 @@
+#!/usr/bin/env python
+
+# Copyright 2014 The Souper Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import fileinput, sys, copy
+
+widths = dict()
+pcmap, argmap = dict(), dict()
+cand = None
+intrdecl = dict()
+printedblocks = []
+labels = ["foo0"]
+cnt = 0
+cnt2 = 0
+cnt3 = 0
+
+# souper IR -> LLVM inst map
+instmap = {
+    "addnsw"    : "add nsw",
+    "addnuw"    : "add nuw",
+    "addnw"     : "add nsw nuw",
+    "subnsw"    : "sub nsw",
+    "subnuw"    : "sub nuw",
+    "subnw"     : "sub nsw nuw",
+    "mulnsw"    : "mul nsw",
+    "mulnuw"    : "mul nuw",
+    "mulnw"     : "mul nsw nuw",
+    "udivexact" : "udiv exact",
+    "sdivexact" : "sdiv exact",
+    "shlnsw"    : "shl nsw",
+    "shlnuw"    : "shl nuw",
+    "shlnw"     : "shl nsw nuw",
+    "lshrexact" : "lshr exact",
+    "ashrexact" : "ashr exact",
+    "eq"        : "icmp eq",
+    "ne"        : "icmp ne",
+    "ult"       : "icmp ult",
+    "slt"       : "icmp slt",
+    "ule"       : "icmp ule",
+    "sle"       : "icmp sle",
+}
+
+# special inst handling
+nestedinsts = ["add", "mul", "and", "or", "xor"]
+boolinsts = ["eq", "ne", "ugt", "uge", "ult", "ule", "sgt", "sge", "slt", "sle"]
+towidthinsts = ["sext", "trunc", "zext"];
+intrinsts = ["bswap", "ctpop", "cttz", "ctlz"]
+specialinsts = ["block", "pc", "cand", "infer", "result"]
+
+def parseConst(c):
+    assert ":" in c, "wrong constant format %s" % c
+    tmp = c.split(':')
+    constant = tmp[0]
+    width = tmp[1]
+    assert width[0] == "i", "wront type format %s" % width
+    return [constant, width]
+
+def parseOps(ops):
+    r = [] 
+    for op in ops:
+        op = op.strip().strip(",")
+        if op[0] == "%":
+            r.append([op, widths[op]])
+        else:
+            r.append(parseConst(op))
+    return r
+
+def parseInst(i):
+    reg, width, inst, ops = None, None, None, []
+    assert len(i) >= 2, "wrong inst format %s" % i
+    if i[0] == "infer":
+        assert len(i) == 2, "wrong infer inst length %d, %s" % (len(i), i)
+        inst = i[0]
+        reg = i[1]
+        width = widths[reg]
+        ops = []
+    elif i[0] == "result":
+        assert len(i) == 2, "wrong result inst length %d, %s" % (len(i), i)
+        inst = i[0]
+        ops = parseOps([i[1]])
+    elif i[2] == "block":
+        assert len(i) == 4, "wrong block inst length %d, %s" % (len(i), i)
+        reg = i[0]
+        inst = i[2]
+        if reg not in widths:
+            widths[reg] = None
+        ops = [i[3]]
+    elif i[0] == "cand":
+        assert len(i) == 3, "wrong cand inst length %d, %s" % (len(i), i)
+        inst = i[0]
+        reg = i[1]
+        ops = parseOps([i[2]])
+    elif i[0] == "pc":
+        assert len(i) == 3, "wrong instruction length %d, %s" % (len(i), i)
+        inst = i[0]
+        reg = i[1]
+        ops = [parseConst(i[2])]
+    elif i[0][0] == "%":
+        assert len(i) >= 3, "wrong instruction length %d, %s" % (len(i), i)
+        tmp = i[0].split(":")
+        assert len(tmp) == 2, "wrong reg length %d, %s" % (len(tmp), tmp)
+        reg = tmp[0]
+        width = tmp[1] 
+        widths[reg] = width
+        assert i[1] == "=", "expecting '=', got %s" % i[1]
+        inst = i[2] 
+        ops = parseOps(i[3:])
+    else:
+        assert 0, "unknown LHS: %s" % i[0]
+    return [reg, width, inst, ops]
+
+def translateInstToLLVM(i):
+    reg, width, inst, ops = i
+    s = ""
+    if inst == "phi":
+        block = ops[0][0]
+        philabel = "philabel" + str(block[1:])
+        if not block in printedblocks:
+            printedblocks.append(block)
+            global cnt3
+            if cnt3 == 0:
+                s += "  br label %" + philabel + "\n"
+            else:
+                s += "  br label %foo" + str(cnt3) + "\n"
+            for k in range(len(ops[1:])):
+                # don't print the first label of the func
+                if cnt3 == 0:
+                    cnt3 += 1
+                    continue
+                label = "foo" + str(cnt3)
+                cnt3 += 1
+                labels.append(label)
+                s += label + ":\n"
+                s += "  br label %" + philabel + "\n"
+            s += philabel + ":\n"
+        s += "  " + reg + " = phi " + width + " "
+        # grab the necessary number of predecessor labels
+        blocklabels = labels[-len(ops[1:]):]
+        for k, op in enumerate(ops[1:]):
+            s += "[" + op[0] + ", %" + blocklabels[k] + "]"
+            if k < len(ops[1:])-1:
+                s += ", "
+    else:
+        s = "  " + reg + " = "
+        if inst in instmap:
+            s += instmap[inst]
+        elif not inst in intrinsts:
+            s += inst
+        # special cases
+        if inst in boolinsts:
+            assert len(ops) >= 1, "must have at least one op %s" % inst
+            s += " " + ops[0][1]
+        elif inst in towidthinsts: 
+            assert len(ops) == 1, "must have exactly one op %s" % inst
+            s += " " + ops[0][1] + " " + ops[0][0] + " to " + width
+        elif inst in intrinsts:
+            s += "call " + width + " @llvm." + inst + "." + width + "(" \
+                         + ops[0][1] + " " + ops[0][0] + ")"
+        elif inst == "select":
+            pass
+        else:
+            s += " " + width
+        # write ops
+        if inst not in towidthinsts and inst not in intrinsts:
+            for op in ops:
+                if inst == "select":
+                    s += " " + op[1] + " " + op[0] + ","
+                else:
+                    s += " " + op[0] + ","
+    return s.strip(",")
+
+def readOpt():
+    res = []
+    for line in fileinput.input():
+        if not line.strip():
+            continue
+        res.append(line.split())
+    assert len(res), "empty file"
+    return res
+
+def parseInsts(lines):
+    res = []
+    for line in lines:
+        res.append(parseInst(line))
+    return res
+
+def propagateArgNames(insts):
+    res = []
+    counter = 1
+    for i in insts:
+        reg, width, inst, ops = i
+        if inst == "var":
+            newreg = "%x" + str(counter)
+            argmap[reg] = newreg
+            widths[newreg] = width
+            counter += 1
+            continue
+        for k, op in enumerate(ops):
+            if op[0] in argmap:
+                ops[k][0] = argmap[op[0]]
+        res.append(i)
+    return res
+
+def groupPhis(insts):
+    blocks = dict()
+    regmap = getRegMap(insts)
+    # scan for blocks and phis
+    for k in range(len(insts)):
+        i = insts[k]
+        reg, width, inst, ops = i
+        if inst == "block":
+            assert not reg in blocks, "block %s already parsed" % reg
+            blocks[reg] = []
+            # move block def to front
+            insts.insert(0, insts.pop(k))
+        # skip pc/cand/infer/result insts
+        elif inst in specialinsts:
+            pass
+        elif inst == "phi":
+            block = ops[0][0]
+            assert block in blocks, "unknown block %s" % block
+            blocks[block].append(i)
+    # group phis (incl. deps) of the same block together
+    res = []
+    for i in insts:
+        reg, width, inst, ops = i
+        if i in res:
+            continue
+        if inst == "phi":
+            block = ops[0][0]
+            for phi in blocks[block]:
+                if phi == i:
+                    continue
+                deps = getInstDeps(regmap, phi)
+                deps.reverse()
+                # first, print dependent insts
+                for dep in deps:
+                    if not dep in res:
+                        res.append(dep)
+            # second, print phis
+            for phi in blocks[block]:
+                res.append(phi)
+        else:
+            # all other insts
+            res.append(i)
+    return res
+
+def getRegMap(insts):
+    res = dict()
+    for i in insts:
+        reg, width, inst, ops = i
+        if inst in specialinsts:
+            continue
+        if not reg in res:
+            res[reg] = i
+    return res
+
+def getInstDeps(regmap, i):
+    res = []
+    queue = [i]
+    while len(queue):
+        reg, width, inst, ops = queue.pop()
+        assert not inst in specialinsts
+        for k, op in enumerate(ops):
+            if inst == "phi" and k == 0:
+                continue
+            dep = op[0]
+            if dep[0] == "%" and dep in regmap:
+                res.append(regmap[dep])
+                queue.append(regmap[dep])
+    return res
+
+def rewriteRegs(insts):
+    counter = 0
+    res = []
+    newregs = copy.deepcopy(argmap)
+    for i in insts:
+        reg, width, inst, ops = i
+        if inst == "block":
+            continue
+        elif inst == "cand":
+            assert reg in newregs, "unknown reg %s for %s" % (reg, i)
+            global cand
+            rewriteOps(inst, newregs, ops)
+            cand = [newregs[reg], width, inst, ops]
+            continue
+        elif inst == "infer":
+            assert not cand, "cand must be empty"
+            cand = [newregs[reg], width, inst, ops]
+            continue
+        elif inst == "result":
+            assert cand, "cand must not be empty"
+            rewriteOps(inst, newregs, ops)
+            cand[3] = ops
+            continue
+        elif inst == "pc":
+            assert reg in newregs, "unknown reg %s for %s" % (reg, i)
+            newreg = newregs[reg]
+            pc = [newreg, width, inst, ops]
+            if newreg in pcmap:
+                pcmap[newreg].append(pc)
+            else:
+                pcmap[newreg] = [pc]
+            continue
+        # give regs new names
+        newreg = "%" + str(counter)
+        counter += 1
+        newregs[reg] = newreg
+        widths[newreg] = width
+        rewriteOps(inst, newregs, ops)
+        # special case: unroll nested insts
+        if inst in nestedinsts and len(ops) > 2:
+            res.append([newreg, width, inst, [ops[0], ops[1]]])
+            for op in ops[2:]:
+                newreg = "%" + str(counter)
+                counter += 1
+                widths[newreg] = width
+                lastreg = res[len(res)-1][0]
+                res.append([newreg, width, inst, [[lastreg, width], op]])
+            newregs[reg] = newreg
+        else:
+            newinst = [newreg, width, inst, ops]
+            # store intrinsic func decls
+            if inst in intrinsts:
+                if (inst+width) not in intrdecl:
+                    decl = "declare " + width + " @llvm." + inst + "." \
+                                      + width + "(" + width + ") #" \
+                                      + str(len(intrdecl))
+                    intrdecl[inst+width] = decl
+            res.append(newinst)
+    return res
+
+def rewriteOps(inst, newregs, ops):
+   for j, op in enumerate(ops):
+       # don't change phi's first op, namely the block ref
+       if inst == "phi" and j == 0:
+           continue
+       elif op[0][0] == "%" and not "%x" in op[0]:
+           assert op[0] in newregs, "unknown reg %s, reordering bug in %s" % (op[0], i)
+           ops[j][0] = newregs[op[0]]
+
+def printFuncHeader():
+    # global declarations: dummy store, intrinsics
+    print "target datalayout = \"e-m:e-i64:64-f80:128-n8:16:32:64-S128\"\n"
+    print "@dummy1 = global i32 0, align 4"
+    print "@dummy2 = global i32 0, align 4"
+    print "@dummy3 = global i32 0, align 4"
+    for decl in intrdecl.values():
+        print decl
+    assert cand, "there must be a candidate"
+    print "\ndefine void @foo(",
+    # print args
+    for i, reg in enumerate(argmap.values()):
+        sys.stdout.write(widths[reg] + " " + reg)
+        if i < len(argmap)-1:
+            sys.stdout.write(", ")
+    print ") {"
+    # first label
+    print labels[0] + ":"
+
+def printFuncBody(insts):
+    for i in insts:
+        print translateInstToLLVM(i)
+
+def printPCs():
+    for reg, pcs in pcmap.items():
+        global cnt
+        global cnt2
+        s = ""
+        for k, pc in enumerate(pcs):
+            s += "  %tmp" + str(cnt) + " = icmp eq " + widths[pc[0]] + " " \
+                         + pc[3][0][0] + ", " + pc[0] + "\n"
+            s += "  br i1 %tmp" + str(cnt) + ", label %cont" + str(cnt2) \
+                                + ", label %out\n"
+            s += "cont" + str(cnt2) + ":"
+            if k < len(pcs)-1:
+                s += "\n"
+            cnt += 1
+            cnt2 += 1
+        print s
+
+def printFuncFooter():
+    assert cand, "there must be a candidate"
+    print "  %cand = icmp eq " + cand[3][0][1] + " " \
+                               + cand[3][0][0] + ", " + cand[0]
+    print "  br i1 %cand, label %return, label %dead"
+    print "return:"
+    print "  %dummy1w = atomicrmw add i32* @dummy1, i32 1 monotonic"
+    print "  ret void"
+    # dummy global variable modifications
+    print "dead:"
+    print "  %dummy2w = atomicrmw add i32* @dummy2, i32 1 monotonic"
+    print "  ret void"
+    if len(pcmap):
+        print "out:"
+        print "  %dummy3w = atomicrmw add i32* @dummy3, i32 1 monotonic"
+        print "  ret void"
+    print "}"
+
+lines = readOpt()
+insts = parseInsts(lines)
+insts = propagateArgNames(insts)
+insts = groupPhis(insts)
+insts = rewriteRegs(insts)
+
+printFuncHeader()
+printFuncBody(insts)
+printPCs()
+printFuncFooter()
