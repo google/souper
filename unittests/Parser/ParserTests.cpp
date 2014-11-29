@@ -283,6 +283,32 @@ cand %foo 3
      R"i(%0:i32 = select 1:i1, 2:i32, 3:i32
 cand %0 3:i32
 )i"},
+    {R"i(%0:i8 = var
+%1:i1 = eq 1, %0
+%2:i1 = eq 2, %0
+%3:i1 = eq 4, %0
+%4:i1 = eq 8, %0
+%5:i1 = eq 16, %0
+%6:i1 = eq 32, %0
+%7:i1 = eq 64, %0
+%8:i1 = eq 128, %0
+%9:i1 = or %1, %2, %3, %4, %5, %6, %7, %8
+%10:i1 = eq 1, %9
+cand %9 %10
+)i",
+     R"i(%0:i8 = var
+%1:i1 = eq 1:i8, %0
+%2:i1 = eq 2:i8, %0
+%3:i1 = eq 4:i8, %0
+%4:i1 = eq 8:i8, %0
+%5:i1 = eq 16:i8, %0
+%6:i1 = eq 32:i8, %0
+%7:i1 = eq 64:i8, %0
+%8:i1 = eq 128:i8, %0
+%9:i1 = or %1, %2, %3, %4, %5, %6, %7, %8
+%10:i1 = eq 1:i1, %9
+cand %9 %10
+)i" },
   };
 
   InstContext IC;
@@ -555,53 +581,5 @@ cand %4 %7
       UnSplit += i->getString(/*printNames=*/true) + '\n';
     }
     EXPECT_EQ(T.Test, UnSplit);
-  }
-}
-
-TEST(ParserTest, ExpectedReplacement) {
-  struct {
-    std::string Test;
-    std::string ExpectedReplacement;
-  } Tests[] = {
-      { R"i(%0:i8 = var ; 0
-%1:i1 = eq 1, %0
-%2:i1 = eq 2, %0
-%3:i1 = eq 4, %0
-%4:i1 = eq 8, %0
-%5:i1 = eq 16, %0
-%6:i1 = eq 32, %0
-%7:i1 = eq 64, %0
-%8:i1 = eq 128, %0
-%9:i1 = or %1, %2, %3, %4, %5, %6, %7, %8
-%10:i1 = eq 1, %9
-cand %9 %10
-)i",
-        R"i(%0:i8 = var ; 0
-%1:i1 = eq 1:i8, %0
-%2:i1 = eq 2:i8, %0
-%3:i1 = eq 4:i8, %0
-%4:i1 = eq 8:i8, %0
-%5:i1 = eq 16:i8, %0
-%6:i1 = eq 32:i8, %0
-%7:i1 = eq 64:i8, %0
-%8:i1 = eq 128:i8, %0
-%9:i1 = or %1, %2, %3, %4, %5, %6, %7, %8
-%10:i1 = eq 1:i1, %9
-cand %9 %10
-
-)i" },
-  };
-
-  InstContext IC;
-  for (const auto &T : Tests) {
-    std::string ErrStr;
-    auto R = ParseReplacements(IC, "<input>", T.Test, ErrStr);
-    EXPECT_EQ("", ErrStr);
-
-    std::string Replacement;
-    for (auto I = R.begin(); I != R.end(); ++I) {
-      Replacement += I->getString(/*printNames=*/true) + '\n';
-    }
-    EXPECT_EQ(T.ExpectedReplacement, Replacement);
   }
 }
