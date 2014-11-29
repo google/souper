@@ -24,6 +24,7 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include "souper/Inst/Inst.h"
 #include "souper/KVStore/KVStore.h"
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/GetSolverFromArgs.h"
@@ -205,9 +206,19 @@ public:
       }
       if (!Cand.Mapping.RHS)
         continue;
-      Instruction *I = Cand.Origin.getInstruction();
 
-      Constant *CI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
+      Instruction *I = Cand.Origin.getInstruction();
+      Value *NewI = Cand.Mapping.RHS->Origin;
+      if (!NewI) {
+        switch (Cand.Mapping.RHS->K) {
+        case Inst::Const:
+          NewI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
+          break;
+        }
+      }
+      if (!NewI)
+        llvm::report_fatal_error("Unsupported replacement on RHS");
+
       if (DebugSouperPass) {
         errs() << "\n";
         errs() << "; Replacing \"";
@@ -215,13 +226,13 @@ public:
         errs() << "\"\n; from \"";
         I->getDebugLoc().print(I->getContext(), errs());
         errs() << "\"\n; with \"";
-        CI->print(errs());
+        NewI->print(errs());
         errs() << "\" in:\n";
         PrintReplacement(errs(), Cand.PCs, Cand.Mapping);
       }
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
         BasicBlock::iterator BI = I;
-        ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
+        ReplaceInstWithValue(I->getParent()->getInstList(), BI, NewI);
         if (DynamicProfile) {
           std::string Str;
           llvm::raw_string_ostream Loc(Str);

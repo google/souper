@@ -400,6 +400,7 @@ Inst *ExprBuilder::get(Value *V) {
   Inst *&E = EBC.InstMap[V];
   if (!E) {
     E = build(V);
+    E->Origin = V;
   }
   return E;
 }
