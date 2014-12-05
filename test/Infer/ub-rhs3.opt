@@ -1,0 +1,14 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: Invalid
+
+%0:i8 = var
+%1:i8 = var
+%2:i8 = var
+%3:i8 = mul %0, %1
+%4:i8 = shl %3, %2
+infer %4
+
+%5:i8 = shl %1, %2
+%6:i8 = mulnw %0, %5
+result %6
