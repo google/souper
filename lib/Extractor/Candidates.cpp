@@ -17,6 +17,7 @@
 #include "klee/Expr.h"
 #include "klee/util/Ref.h"
 #include "llvm/ADT/EquivalenceClasses.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -34,9 +35,14 @@
 #include <sstream>
 #include <unordered_set>
 
+#define DEBUG_TYPE "souper"
+
 using namespace llvm;
 using namespace klee;
 using namespace souper;
+
+STATISTIC(StoppedICmpNotInteger, "Stopped due to icmp of a not-integer");
+STATISTIC(StoppedBinopNotInteger, "Stopped due to binop on a not-integer");
 
 std::string InstOrigin::getFunctionName() const {
   if (Inst) {
@@ -191,8 +197,10 @@ Inst *ExprBuilder::build(Value *V) {
   if (auto C = dyn_cast<Constant>(V)) {
     return buildConstant(C);
   } else if (auto ICI = dyn_cast<ICmpInst>(V)) {
-    if (!isa<IntegerType>(ICI->getType()))
+    if (!isa<IntegerType>(ICI->getType())) {
+      ++StoppedICmpNotInteger;
       return makeArrayRead(V); // could be a vector operation
+    }
 
     Inst *L = get(ICI->getOperand(0)), *R = get(ICI->getOperand(1));
     switch (ICI->getPredicate()) {
@@ -220,8 +228,10 @@ Inst *ExprBuilder::build(Value *V) {
         llvm_unreachable("not ICmp");
     }
   } else if (auto BO = dyn_cast<BinaryOperator>(V)) {
-    if (!isa<IntegerType>(BO->getType()))
+    if (!isa<IntegerType>(BO->getType())) {
+      ++StoppedBinopNotInteger;
       return makeArrayRead(V); // could be a vector operation
+    }
 
     Inst *L = get(BO->getOperand(0)), *R = get(BO->getOperand(1));
     Inst::Kind K;
