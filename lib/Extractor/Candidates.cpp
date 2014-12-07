@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define DEBUG_TYPE "souper"
+
 #include "souper/Extractor/Candidates.h"
 
 #include "klee/Expr.h"
@@ -34,8 +36,6 @@
 #include <memory>
 #include <sstream>
 #include <unordered_set>
-
-#define DEBUG_TYPE "souper"
 
 using namespace llvm;
 using namespace klee;
