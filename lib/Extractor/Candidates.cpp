@@ -41,8 +41,17 @@ using namespace llvm;
 using namespace klee;
 using namespace souper;
 
-STATISTIC(StoppedICmpNotInteger, "Stopped due to icmp of a not-integer");
-STATISTIC(StoppedBinopNotInteger, "Stopped due to binop on a not-integer");
+STATISTIC(StoppedICmpNotInteger, "Stopped due to icmp of a non-integer");
+STATISTIC(StoppedBinopNotInteger, "Stopped due to binop on a non-integer");
+STATISTIC(StoppedSelectNotInteger, "Stopped due to select on a non-integer");
+STATISTIC(StoppedConstant, "Stopped due to unsupported constant");
+STATISTIC(StoppedGEPVector, "Stopped due to GEP of vector");
+STATISTIC(StoppedAlloca, "Stopped due to alloca");
+STATISTIC(StoppedLoad, "Stopped due to load");
+STATISTIC(StoppedCall, "Stopped due to call");
+STATISTIC(StoppedExtractValue, "Stopped due to extract value");
+STATISTIC(StoppedLoop, "Stopped due to loop");
+STATISTIC(StoppedOther, "Stopped for another reason");
 
 std::string InstOrigin::getFunctionName() const {
   if (Inst) {
@@ -161,6 +170,7 @@ Inst *ExprBuilder::buildConstant(Constant *c) {
     return IC.getConst(APInt(DL->getTypeSizeInBits(c->getType()), 0));
   } else {
     // Constant{Expr, Vector, DataSequential, Struct, Array}
+    ++StoppedConstant;
     return makeArrayRead(c);
   }
 }
@@ -320,8 +330,10 @@ Inst *ExprBuilder::build(Value *V) {
     }
     return IC.getInst(K, L->Width, {L, R});
   } else if (auto Sel = dyn_cast<SelectInst>(V)) {
-    if (!isa<IntegerType>(Sel->getType()))
+    if (!isa<IntegerType>(Sel->getType())) {
+      ++StoppedSelectNotInteger;
       return makeArrayRead(V); // could be a vector operation
+    }
     Inst *C = get(Sel->getCondition()), *T = get(Sel->getTrueValue()),
          *F = get(Sel->getFalseValue());
     return IC.getInst(Inst::Select, T->Width, {C, T, F});
@@ -361,8 +373,10 @@ Inst *ExprBuilder::build(Value *V) {
       ; // fallthrough to return below
     }
   } else if (auto GEP = dyn_cast<GetElementPtrInst>(V)) {
-    if (isa<VectorType>(GEP->getType()))
+    if (isa<VectorType>(GEP->getType())) {
+      ++StoppedGEPVector;
       return makeArrayRead(V); // vector operation
+    }
     return buildGEP(get(GEP->getOperand(0)), gep_type_begin(GEP),
                     gep_type_end(GEP));
   } else if (auto Phi = dyn_cast<PHINode>(V)) {
@@ -371,7 +385,9 @@ Inst *ExprBuilder::build(Value *V) {
     // TODO: In principle we could track loop iterations and maybe even maintain
     // a separate set of values for each iteration (as in bounded model
     // checking).
-    if (!isLoopEntryPoint(Phi)) {
+    if (isLoopEntryPoint(Phi)) {
+      ++StoppedLoop;
+    } else {
       BasicBlock *BB = Phi->getParent();
       BlockInfo &BI = EBC.BlockMap[BB];
       if (!BI.B) {
@@ -403,6 +419,17 @@ Inst *ExprBuilder::build(Value *V) {
     }
   }
 
+  if (dyn_cast<AllocaInst>(V)) {
+    ++StoppedAlloca;
+  } else if (dyn_cast<LoadInst>(V)) {
+    ++StoppedLoad;
+  } else if (dyn_cast<CallInst>(V)) {
+    ++StoppedCall;
+  } else if (dyn_cast<ExtractValueInst>(V)) {
+    ++StoppedExtractValue;
+  } else {
+    ++StoppedOther;
+  }
   return makeArrayRead(V);
 }
 
