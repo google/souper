@@ -1,0 +1,22 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+
+; (a<0 && b>=0) || (a>=0 && b<0)
+
+%0:i32 = var
+%1:i1 = slt 4294967295:i32, %0
+%2:i32 = var
+%3:i1 = slt %2, 0:i32
+%4:i1 = and %1, %3
+pc %4 0:i1
+%5:i1 = slt 4294967295:i32, %2
+%6:i1 = slt %0, 0:i32
+%7:i1 = and %5, %6
+infer %7
+
+; (a^b) < 0;
+
+%8:i32 = xor %0, %2
+%9:i1 = slt %8, 0
+result %9
