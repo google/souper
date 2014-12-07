@@ -51,6 +51,8 @@ STATISTIC(StoppedLoad, "Stopped due to load");
 STATISTIC(StoppedCall, "Stopped due to call");
 STATISTIC(StoppedExtractValue, "Stopped due to extract value");
 STATISTIC(StoppedLoop, "Stopped due to loop");
+STATISTIC(StoppedCast, "Stopped due to unsupported cast");
+STATISTIC(StoppedIntrinsic, "Stopped due to unsupported intrinsic");
 STATISTIC(StoppedOther, "Stopped for another reason");
 
 std::string InstOrigin::getFunctionName() const {
@@ -370,7 +372,8 @@ Inst *ExprBuilder::build(Value *V) {
       return IC.getInst(Inst::Trunc, DestSize, {Op});
 
     default:
-      ; // fallthrough to return below
+      ++StoppedCast;
+      return makeArrayRead(V);
     }
   } else if (auto GEP = dyn_cast<GetElementPtrInst>(V)) {
     if (isa<VectorType>(GEP->getType())) {
@@ -387,6 +390,7 @@ Inst *ExprBuilder::build(Value *V) {
     // checking).
     if (isLoopEntryPoint(Phi)) {
       ++StoppedLoop;
+      return makeArrayRead(V);
     } else {
       BasicBlock *BB = Phi->getParent();
       BlockInfo &BI = EBC.BlockMap[BB];
@@ -405,8 +409,6 @@ Inst *ExprBuilder::build(Value *V) {
     if (auto II = dyn_cast<IntrinsicInst>(Call)) {
       Inst *L = get(II->getOperand(0));
       switch (II->getIntrinsicID()) {
-        default:
-          break;
         case Intrinsic::ctpop:
           return IC.getInst(Inst::CtPop, L->Width, {L});
         case Intrinsic::bswap:
@@ -415,6 +417,9 @@ Inst *ExprBuilder::build(Value *V) {
           return IC.getInst(Inst::Cttz, L->Width, {L});
         case Intrinsic::ctlz:
           return IC.getInst(Inst::Ctlz, L->Width, {L});
+        default:
+          ++StoppedIntrinsic;
+          return makeArrayRead(V);
       }
     }
   }
