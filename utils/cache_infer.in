@@ -30,12 +30,19 @@ sub usage() {
     print <<"END";
 Options:
   -n           number of CPUs to use (default=$NPROCS)
+  -tag         add this tag to cache entries, and skip entries with it
+  -verbose
 END
     exit -1;
 }
 
+my $tag = "x";
+my $VERBOSE = 0;
+
 GetOptions(
     "n=i" => \$NPROCS,
+    "tag=s" => \$tag,
+    "verbose" => \$VERBOSE,
     ) or usage();
 
 my $need_solver = <<END;
@@ -44,6 +51,11 @@ $0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as
 END
 my $solver = $ENV{"SOUPER_SOLVER"};
 die $need_solver unless $solver;
+
+my $OPTS = "";
+$OPTS .= "-souper-infer-i1=false " if $ENV{"SOUPER_NO_INFER_I1"};
+$OPTS .= "-souper-infer-nop " if $ENV{"SOUPER_INFER_NOP"};
+$OPTS .= "-souper-infer-unary " if $ENV{"SOUPER_INFER_UNARY"};
 
 my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15 ${solver}";
 
@@ -62,18 +74,27 @@ sub infer($) {
     (my $fh, my $tmpfn) = File::Temp::tempfile();
     print $fh $k;
     $fh->flush();
-    open INF, "${check} -infer-rhs -souper-external-cache < $tmpfn |";
+    open INF, "${check} -infer-rhs $OPTS < $tmpfn |";
     my $ok = 0;
+    my $failed = 0;
     my $output = "";
     while (my $line = <INF>) {
-        exit 1 if ($line =~ /Failed/);
+        if ($line =~ /Failed/) {
+            $failed = 1;
+            next;
+        }
         if ($line =~ /successfully/) {
             $ok = 1;
             next;
         }
         $output .= $line;
     }
+    exit 1 unless $ok || $failed;
+    my $red = Redis->new();
+    $red->ping || die "no server?";
+    $red->hset($k, "cache-infer-tag" => $tag);
     exit 1 unless $ok;
+    $red->hset($k, "result" => $output);
     exit 0;
 }
 
@@ -93,9 +114,39 @@ sub wait_for_one() {
     }
 }
 
+my $status_cnt;
+my $status_opct;
+my $status_total;
+
+sub reset_status($) {
+    (my $t) = @_;
+    $status_total = $t;
+    $status_opct = 0;
+    $status_cnt = 0;
+}
+
+sub status() {
+    print ".";
+    $status_cnt++;
+    my $pct = int(100.0*$status_cnt/$status_total);
+    if ($pct > $status_opct) {
+        $status_opct = $pct;
+        print "$pct %\n";
+    }
+}
+
 my $opid = $$;
+my $skip = 0;
+
+reset_status(scalar(@keys)) if $VERBOSE;
 
 foreach my $k (@keys) {
+    status() if $VERBOSE;
+    my $result = $r->hget($k, "cache-infer-tag");
+    if (defined $result && $result eq $tag) {
+        $skip++;
+        next;
+    }
     wait_for_one() unless $num_running < $NPROCS;
     die unless $num_running < $NPROCS;
     my $pid = fork();
@@ -110,3 +161,4 @@ wait_for_one() while ($num_running > 0);
 
 print "$good optimizations\n";
 print "$fail not-optimizations\n";
+print "$skip skipped due to tag match\n";
