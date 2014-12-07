@@ -78,6 +78,18 @@ if ($souper) {
         push @ARGV, ("-mllvm", "-souper-no-infer");
     }
 
+    if ($ENV{"SOUPER_NO_INFER_I1"}) {
+        push @ARGV, ("-mllvm", "-souper-infer-i1=false");
+    }
+
+    if ($ENV{"SOUPER_INFER_NOP"}) {
+        push @ARGV, ("-mllvm", "-souper-infer-nop");
+    }
+
+    if ($ENV{"SOUPER_INFER_INST"}) {
+        push @ARGV, ("-mllvm", "-souper-infer-inst");
+    }
+
     if ($ENV{"SOUPER_STATIC_PROFILE"}) {
         push @ARGV, ("-mllvm", "-souper-static-profile");
     }
