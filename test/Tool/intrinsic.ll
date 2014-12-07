@@ -17,8 +17,6 @@ declare i64 @llvm.bswap.i64(i64) #0
 
 define void @foo(i64 %x) {
 entry:
-  %swap1 = call i64 @llvm.bswap.i64(i64 %x)
-  %swap2 = call i64 @llvm.bswap.i64(i64 %swap1)
-  %cmp = icmp eq i64 %x, %swap2
+  %cmp = icmp eq i64 %x, %x
   ret void
 }

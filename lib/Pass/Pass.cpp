@@ -203,7 +203,7 @@ public:
           report_fatal_error("Unable to query solver: " + EC.message() + "\n");
         }
       }
-      if (!Cand.Mapping.RHS)
+      if (!Cand.Mapping.RHS || Cand.Mapping.RHS->K != Inst::Const)
         continue;
       Instruction *I = Cand.Origin.getInstruction();
 
