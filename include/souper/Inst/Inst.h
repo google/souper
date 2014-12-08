@@ -23,6 +23,12 @@
 #include <vector>
 #include <map>
 
+namespace llvm {
+
+class Value;
+
+}
+
 namespace souper {
 
 struct Block {
@@ -91,7 +97,9 @@ struct Inst : llvm::FoldingSetNode {
   std::string Name;
   std::vector<Inst *> Ops;
   mutable std::vector<Inst *> OrderedOps;
+  llvm::Value *Origin;
 
+  Inst() : Origin() {}
   bool operator<(const Inst &I) const;
   const std::vector<Inst *> &orderedOps() const;
 
