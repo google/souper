@@ -50,7 +50,18 @@ TEST(ParserTest, Errors) {
       { "%0:i1 = block 122\n", "<input>:1:1: blocks may not have a width" },
       { "%0:i1 = phi %0\n", "<input>:1:13: %0 is not a block" },
       { "%0 = block 1\n%1:i1 = phi %0 foo\n", "<input>:2:16: expected ','" },
-      { ",\n", "<input>:1:1: expected inst, block, cand, infer, result, or pc" },
+      { "%0 = block 1\n%1:i32 = var\nblockpc 0 %1",
+        "<input>:3:9: expected block var"},
+      { "%0 = block 1\n%1:i32 = var\nblockpc %0:i32 0 %2 1",
+        "<input>:3:9: blocks may not have a width" },
+      { "%0 = block 1\n%1:i32 = var\nblockpc %0 %1\n%2:i32 = var",
+        "<input>:3:12: expected block number"},
+      { "%0 = block 1\n%1:i32 = var\nblockpc %1 0 %1 1",
+        "<input>:3:9: %1 is declared as an inst" },
+      { "%0 = block 1\n%1:i32 = var\nblockpc %2 0 %1 1",
+        "<input>:3:9: block %2 is undeclared" },
+      { ",\n", "<input>:1:1: expected inst, block, cand, infer, result, pc, "
+        "or blockpc" },
       { "%0:i128 = var ; 0\n%1:i128 = bswap %0\n",
         "<input>:2:1: bswap doesn't support 128 bits" },
       { "%0:i33 = var ; 0\n%1:i33 = ctpop %0\n",
@@ -117,6 +128,10 @@ TEST(ParserTest, Errors) {
         "<input>:2:1: operands have different widths" },
       { "%0 = block 2\n%1:i32 = phi %0, 1:i64, 2:i64\n",
         "<input>:2:1: inst must have width of 64, has width 32" },
+      { "%0 = block 2\n%1:i32 = var\nblockpc %0 0 %1 1\nblockpc %0 1 %1 1\n"
+        "blockpc %0 2 %1 1\n%2:i32 = phi %0, %1, %1",
+        "<input>:6:1: blockpc's predecessor number is larger "
+        "than the number of phi's operands" },
     };
 
   InstContext IC;
@@ -260,6 +275,13 @@ cand %2 1:i1
 %3:i64 = sub 0:i64, %0
 cand %2 %3
 )i",
+      R"i(%0 = block 1
+%1:i32 = var ; 1
+blockpc %0 1 %1 1:i32
+blockpc %0 0 %1 2:i32
+%2:i32 = var ; 2
+cand %1 %2
+)i",
   };
 
   struct {
@@ -308,6 +330,24 @@ cand %9 %10
 %9:i1 = or %1, %2, %3, %4, %5, %6, %7, %8
 %10:i1 = eq 1:i1, %9
 cand %9 %10
+)i" },
+    {R"i(%0 = block 1
+%1 = block 2
+%2:i32 = var
+blockpc %0 0 %2 1
+blockpc %1 0 %2 2
+blockpc %0 1 %2 3
+%3:i32 = var
+cand %2 %3
+)i",
+     R"i(%0 = block 1
+%1:i32 = var
+blockpc %0 0 %1 1:i32
+%2 = block 2
+blockpc %2 0 %1 2:i32
+blockpc %0 1 %1 3:i32
+%3:i32 = var
+cand %1 %3
 )i" },
   };
 

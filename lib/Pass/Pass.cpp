@@ -169,7 +169,7 @@ public:
           I->print(errs());
           errs() << "\n; Generating replacement:\n";
           ReplacementContext Context;
-          PrintReplacementLHS(errs(), R.PCs, R.Mapping.LHS, Context);
+          PrintReplacementLHS(errs(), R.BPCs, R.PCs, R.Mapping.LHS, Context);
         }
         AddToCandidateMap(CandMap, R);
       }
@@ -189,11 +189,13 @@ public:
         I->getDebugLoc().print(I->getContext(), Loc);
         std::string HField = "sprofile " + Loc.str();
         ReplacementContext Context;
-        KV->hIncrBy(GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS, Context),
+        KV->hIncrBy(GetReplacementLHSString(Cand.BPCs, Cand.PCs,
+                                            Cand.Mapping.LHS, Context),
                     HField, 1);
       }
       if (std::error_code EC =
-          S->infer(Cand.PCs, Cand.Mapping.LHS, Cand.Mapping.RHS, IC)) {
+          S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
+                   Cand.Mapping.RHS, IC)) {
         if (EC == std::errc::timed_out)
           continue;
         if (IgnoreSolverErrors) {
@@ -217,7 +219,7 @@ public:
         errs() << "\"\n; with \"";
         CI->print(errs());
         errs() << "\" in:\n";
-        PrintReplacement(errs(), Cand.PCs, Cand.Mapping);
+        PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
       }
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
         BasicBlock::iterator BI = I;
@@ -228,8 +230,9 @@ public:
           I->getDebugLoc().print(I->getContext(), Loc);
           ReplacementContext Context;
           dynamicProfile (F.getContext(), F.getParent(),
-                          GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS,
-                                                  Context), Loc.str(), BI);
+                          GetReplacementLHSString(Cand.BPCs, Cand.PCs,
+                                                  Cand.Mapping.LHS, Context),
+                          Loc.str(), BI);
         }
         changed = true;
       } else {

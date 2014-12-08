@@ -103,6 +103,28 @@ struct Inst : llvm::FoldingSetNode {
   static bool isCommutative(Kind K);
 };
 
+/// A mapping from an Inst to a replacement. This may either represent a
+/// path condition or a candidate replacement.
+struct InstMapping {
+  InstMapping() : LHS(0), RHS(0) {}
+  InstMapping(Inst *LHS, Inst *RHS)
+      : LHS(LHS), RHS(RHS) {}
+
+  Inst *LHS, *RHS;
+};
+
+struct BlockPCMapping {
+  BlockPCMapping() : B(0) {}
+  BlockPCMapping(Block *B, unsigned I, InstMapping PC)
+      : B(B), PredIdx(I), PC(PC) {}
+
+  Block *B;
+  unsigned PredIdx;
+  InstMapping PC;
+};
+
+typedef std::vector<BlockPCMapping> BlockPCs;
+
 class ReplacementContext {
   llvm::DenseMap<Inst *, std::string> InstNames;
   llvm::DenseMap<Block *, std::string> BlockNames;
@@ -110,6 +132,10 @@ class ReplacementContext {
   std::map<std::string, Block *> NameToBlock;
 
 public:
+  void printPCs(const std::vector<InstMapping> &PCs,
+                llvm::raw_ostream &Out, bool printNames);
+  void printBlockPCs(const BlockPCs &BPCs,
+                     llvm::raw_ostream &Out, bool printNames);
   std::string printInst(Inst *I, llvm::raw_ostream &Out, bool printNames);
   std::string printBlock(Block *B, llvm::raw_ostream &Out);
   Inst *getInst(llvm::StringRef Name);
@@ -143,27 +169,19 @@ public:
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops);
 };
 
-/// A mapping from an Inst to a replacement. This may either represent a
-/// path condition or a candidate replacement.
-struct InstMapping {
-  InstMapping() : LHS(0), RHS(0) {}
-  InstMapping(Inst *LHS, Inst *RHS)
-      : LHS(LHS), RHS(RHS) {}
-
-  Inst *LHS, *RHS;
-};
-
-void PrintReplacement(llvm::raw_ostream &Out,
+void PrintReplacement(llvm::raw_ostream &Out, const BlockPCs &BPCs,
                       const std::vector<InstMapping> &PCs, InstMapping Mapping,
                       bool printNames = false);
-std::string GetReplacementString(const std::vector<InstMapping> &PCs,
+std::string GetReplacementString(const BlockPCs &BPCs,
+                                 const std::vector<InstMapping> &PCs,
                                  InstMapping Mapping,
                                  bool printNames = false);
-void PrintReplacementLHS(llvm::raw_ostream &Out,
+void PrintReplacementLHS(llvm::raw_ostream &Out, const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,
                          Inst *LHS, ReplacementContext &Context,
                          bool printNames = false);
-std::string GetReplacementLHSString(const std::vector<InstMapping> &PCs,
+std::string GetReplacementLHSString(const BlockPCs &BPCs,
+                                    const std::vector<InstMapping> &PCs,
                                     Inst *LHS, ReplacementContext &Context,
                                     bool printNames = false);
 void PrintReplacementRHS(llvm::raw_ostream &Out, Inst *RHS,

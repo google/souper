@@ -56,7 +56,8 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
     for (int I=0; I < M.size(); ++I) {
       auto &Cand = M[I];
       ReplacementContext Context;
-      auto S = GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS, Context);
+      auto S = GetReplacementLHSString(Cand.BPCs, Cand.PCs,
+                                       Cand.Mapping.LHS, Context);
       if (Index.find(S) == Index.end()) {
         Index[S] = I;
         Profile.push_back(1);
@@ -78,13 +79,13 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
         I->getDebugLoc().print(I->getContext(), Loc);
         std::string HField = "sprofile " + Loc.str();
         ReplacementContext Context;
-        KVForStaticProfile->hIncrBy(GetReplacementLHSString(Cand.PCs,
-            Cand.Mapping.LHS, Context), HField, 1);
+        KVForStaticProfile->hIncrBy(GetReplacementLHSString(Cand.BPCs,
+            Cand.PCs, Cand.Mapping.LHS, Context), HField, 1);
       }
 
       Inst *RHS;
       if (std::error_code EC =
-              S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
+              S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
         llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
         return false;
       }
@@ -122,7 +123,7 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
   for (auto &Cand : M) {
     Inst *RHS;
     if (std::error_code EC =
-            S->infer(Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
+            S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
       llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
       return false;
     }
