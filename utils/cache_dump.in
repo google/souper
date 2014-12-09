@@ -21,37 +21,33 @@ use Getopt::Long;
 use File::Temp;
 use Time::HiRes;
 
+my $llvmas = "@LLVM_BINDIR@/llvm-as";
+my $llvmopt = "@LLVM_BINDIR@/opt";
+my $llvmdis = "@LLVM_BINDIR@/llvm-dis";
+my $check = "@CMAKE_BINARY_DIR@/souper-check";
+my $reducer = "@CMAKE_BINARY_DIR@/reduce";
+my $triager = "@CMAKE_BINARY_DIR@/souper2llvm";
+
 sub runit ($) {
     my $cmd = shift;
     my $res = (system "$cmd");
     return $? >> 8;
 }
 
-my $cur_key = 0;
-my $last_time = 0;
-my $backsp = "\b";
-sub spinner() {
-    my $now = Time::HiRes::time();
-    return if (time() <= ($last_time + 0.1));
-    $last_time = time();
-    my @chars = ("-", "\\", "|", "/");
-    $cur_key = 0 if ($cur_key == @chars);
-    print $backsp . $chars[$cur_key];
-    $cur_key++;
-}
-
-# TODO: add a -verify option
-
 sub usage() {
     print <<'END';
 Options:
-  -raw         Dump all keys and values and exit, ignoring all other options
+  -merge       Merge optimizations that differ only in bitwidths and constants
   -noopts      Dump not-optimizations instead of optimizations
+  -parse       Ensure that each LHS in the cache parses as Souper
   -sort=size|sprofile|dprofile
                Sort optimizations by increasing size (default), decreasing
                static profile count, or descreasing dynamic profile count
+  -raw         Dump all keys and values and exit, ignoring all other options
   -reduce      Attempt to reduce the size of each optimization
-  -merge       Merge optimizations that differ only in bitwidths and constants
+  -triage      Attempt to avoid reporting optimizations that LLVM can do
+  -verbose
+  -verify      Verify each optimization
 END
     exit -1;
 }
@@ -61,36 +57,39 @@ my $NOOPTS = 0;
 my $SORT = "size";
 my $REDUCE = 0;
 my $MERGE = 0;
+my $PARSE = 0;
+my $TRIAGE = 0;
+my $VERBOSE = 0;
+my $VERIFY = 0;
 GetOptions(
-    "raw"  => \$RAW,
-    "noopts" => \$NOOPTS,
-    "sort=s" => \$SORT,
-    "reduce" => \$REDUCE,
     "merge" => \$MERGE,
+    "noopts" => \$NOOPTS,
+    "parse" => \$PARSE,
+    "sort=s" => \$SORT,
+    "raw"  => \$RAW,
+    "reduce" => \$REDUCE,
+    "triage" => \$TRIAGE,
+    "verbose" => \$VERBOSE,
+    "verify" => \$VERIFY,
     ) or usage();
 usage() unless ($SORT eq "size" || $SORT eq "sprofile" || $SORT eq "dprofile");
-die "-reduce and -noopts cannot be used together" if ($REDUCE && $NOOPTS);
-die "-merge and -noopts cannot be used together" if ($MERGE && $NOOPTS);
 
-my $reducer = "@CMAKE_BINARY_DIR@/reduce";
-
-my $opt_count=0;
 my $noopt_count=0;
 my %values;
 my %sprofiles;
 my %dprofiles;
+my %sprofile_locs;
+my %dprofile_locs;
 my %toprint;
-
-print "\nGrabbing Redis keys...";
 
 my $r = Redis->new();
 $r->ping || die "no server?";
-my @keys = $r->keys('*');
+my @all_keys = $r->keys('*');
 
 if ($RAW) {
-    foreach my $k (@keys) {
-        my %h = $r->hgetall($k);
-        print "<$k>\n";
+    foreach my $opt (sort @all_keys) {
+        my %h = $r->hgetall($opt);
+        print "<$opt>\n";
         foreach my $kk (sort keys %h) {
             print "  <$kk> <$h{$kk}>\n";
         }
@@ -100,59 +99,170 @@ if ($RAW) {
     exit 0;
 }
 
-print "\nGrabbing Redis values...";
+print "; Inspecting ".scalar(@all_keys)." Redis values\n";
 
-foreach my $k (@keys) {
-    spinner();
-    my %h = $r->hgetall($k);
+sub parse ($$) {
+    (my $opt, my $RHS) = @_;
+    (my $fh, my $tmpfn) = File::Temp::tempfile();
+    print $fh $opt;
+    $fh->flush();
+    my $arg;
+    if ($VERIFY) {
+        $arg = "--infer-rhs";
+    } else {
+        $arg = "--parse-lhs-only";
+    }
+    open INF, "${check} $arg < $tmpfn 2>/dev/null |";
+    my $output = "";
+    my $success = 0;
+    while (my $line = <INF>) {
+        $success = 1 if ($line =~ /success/);
+        next if ($line =~ /^;/);
+        $output .= $line;
+    }
+    close INF;
+    close $fh;
+    unlink $tmpfn;
+    if ($VERIFY) {
+        die "expected '$RHS' but souper-check returned '$output'" unless
+            ($output eq $RHS);
+    } else {
+        die "'$opt' does not parse as Souper" unless $success;
+    }
+}
+
+sub add_sprofile($$) {
+    (my $opt, my $href) = @_;
+    my %h = %{$href};
+    foreach my $k (keys %h) {
+        $sprofile_locs{$opt}{$k} += $h{$k};
+    }
+    if (!$sprofile_locs{$opt}) {
+        $sprofile_locs{$opt} = {};
+    }
+}
+
+sub add_dprofile($$) {
+    (my $opt, my $href) = @_;
+    my %h = %{$href};
+    foreach my $k (keys %h) {
+        $dprofile_locs{$opt}{$k} += $h{$k};
+    }
+    if (!$dprofile_locs{$opt}) {
+        $dprofile_locs{$opt} = {};
+    }
+}
+
+my $xcnt = 0;
+foreach my $opt (@all_keys) {
+    # last if $xcnt++ > 2500;
+    my %h = $r->hgetall($opt);
     my $result = $h{"result"};
-    if (!defined($result)) {
-        print STDERR "WARNING: no result for key\n";
+    if (defined($result)) {
+        parse($opt, $result) if $PARSE;
+    } else {
         next;
     }
     my $sprofile = 0;
     my $dprofile = 0;
+    my %sprofile_loc;
+    my %dprofile_loc;
     foreach my $kk (keys %h) {
-        if ($kk =~ /^sprofile /) {
-            $sprofile += $h{$kk};
+        if ($kk =~ /^sprofile (.*)$/) {
+            my $count = $h{$kk};
+            $sprofile += $count;
+            $sprofile_loc{$1} += $count;
         }
-        if ($kk =~ /^dprofile /) {
-            $dprofile += $h{$kk};
+        if ($kk =~ /^dprofile (.*)$/) {
+            my $count = $h{$kk};
+            $dprofile += $count;
+            $dprofile_loc{$1} += $count;
         }
     }
-    $k .= $result;
+    $opt .= $result;
     if ($result eq "") {
         $noopt_count++;
-        $toprint{$k} = 1 if $NOOPTS;
+        $toprint{$opt} = 1 if $NOOPTS;
     } else {
-        $opt_count++;
-        $toprint{$k} = 1 if !$NOOPTS;
+        $toprint{$opt} = 1 if !$NOOPTS;
     }
-    $sprofiles{$k} = $sprofile;
-    $dprofiles{$k} = $dprofile;
+    add_sprofile($opt, \%sprofile_loc);
+    add_dprofile($opt, \%dprofile_loc);
+    $sprofiles{$opt} = $sprofile;
+    $dprofiles{$opt} = $dprofile;
 }
+
+print "; Discarding ${noopt_count} not-optimizations leaving ".
+    scalar(keys %toprint)." optimizations\n";
 
 sub replace($$) {
     (my $old, my $new) = @_;
     die if $new eq "";
     $sprofiles{$new} += $sprofiles{$old};
     $dprofiles{$new} += $dprofiles{$old};
+    my %ss = %{$sprofile_locs{$old}};
+    add_sprofile($new, \%ss);
+    my %dd = %{$dprofile_locs{$old}};
+    add_dprofile($new, \%dd);
     $toprint{$new} = 1;
     delete $toprint{$old};
 }
 
+sub remove($) {
+    (my $opt) = @_;
+    delete $toprint{$opt};
+    delete $sprofiles{$opt};
+    delete $dprofiles{$opt};
+    delete $sprofile_locs{$opt};
+    delete $dprofile_locs{$opt};
+}
+
+my $status_cnt;
+my $status_opct;
+my $status_total;
+
+sub reset_status($) {
+    (my $t) = @_;
+    $status_total = $t;
+    $status_opct = 0;
+    $status_cnt = 0;
+}
+
+sub status() {
+    print ".";
+    $status_cnt++;
+    my $pct = int(100.0*$status_cnt/$status_total);
+    if ($pct > $status_opct) {
+        $status_opct = $pct;
+        print "$pct %\n";
+    }
+}
+
+sub total_profile_count() {
+    my $cnt = 0;
+    foreach my $opt (keys %toprint) {
+        $cnt += $sprofiles{$opt} + $dprofiles{$opt};
+    }
+    return $cnt;
+}
+
 if ($REDUCE) {
-    print "\nReducing...";
+    print "; Reducing\n";
+    my $tprofile = total_profile_count();
 
     my @keys = keys %toprint;
-    foreach my $k (@keys) {
-        spinner();
+    reset_status(scalar(@keys)) if $VERBOSE;
+    foreach my $opt (@keys) {
         (my $fh1, my $fn1) = File::Temp::tempfile();
         (my $fh2, my $fn2) = File::Temp::tempfile();
-        print $fh1 $k;
+        print $fh1 $opt;
         close $fh1;
         close $fh2;
-        runit ("$reducer < $fn1 > $fn2") == 0 or die;
+        if (runit ("$reducer < $fn1 > $fn2") != 0) {
+            print "cannot reduce '$opt'\n";
+            remove($opt);
+            next;
+        }
         open INF, "<$fn2" or die;
         my $new = "";
         while (my $line = <INF>) {
@@ -162,31 +272,58 @@ if ($REDUCE) {
         unlink $fn1;
         unlink $fn2;
         if ($new eq "") {
-            print "can't reduce $k\n";
-            die;
-        } else {
-            replace($k, $new);
+            print "cannot reduce '$opt'\n";
+            next;
         }
+        replace($opt, $new);
+        status() if $VERBOSE;
     }
+
+    print "; After reducing there are ".scalar(keys %toprint)." optimizations\n";
+    # die unless ($tprofile == total_profile_count());
+}
+
+if ($TRIAGE) {
+    print "; Triaging\n";
+
+    my @keys = keys %toprint;
+    reset_status(scalar(@keys)) if $VERBOSE;
+    foreach my $opt (@keys) {
+        (my $fh1, my $fn1) = File::Temp::tempfile();
+        print $fh1 $opt;
+        close $fh1;
+        open INF, "$triager < $fn1 | $llvmas | $llvmopt -O3 | $llvmdis |" or die;
+        my $good = 0;
+        my $bogus = 1;
+        my $llvm = "";
+        while (my $line = <INF>) {
+            $bogus = 0 if ($line =~ /dummy2/);
+            $good = 1 if ($line =~ /dummy2w = atomicrmw/);
+            $llvm .= $line;
+        }
+        close INF;
+        print "oops: '$opt' turned into bogus LLVM: '$llvm'\n\n" if $bogus;
+        remove($opt) unless $good && !$bogus;
+        status() if $VERBOSE;
+    }
+
+    print "; After triaging there are ".scalar(keys %toprint)." optimizations\n";
 }
 
 if ($MERGE) {
-    print "\nMerging...";
+    print "; Merging\n";
+    my $tprofile = total_profile_count();
 
     my @keys = keys %toprint;
-    foreach my $k (@keys) {
-        spinner();
-        my $new = $k;
+    foreach my $opt (@keys) {
+        my $new = $opt;
         $new =~ s/:i[0-9]+//g;
         $new =~ s/ [0-9]+/ C/g;
-        replace($k, $new);
+        replace($opt, $new);
     }
+    print "; After merging there are ".scalar(keys %toprint)." optimizations\n";
+    # die unless ($tprofile == total_profile_count());
 }
-
-print "\n\n";
-print "; $opt_count optimizations\n";
-print "; $noopt_count not-optimizations\n";
-print "\n";
 
 sub bylen { length $a <=> length $b }
 sub bysprofile { $sprofiles{$b} <=> $sprofiles{$a} }
@@ -196,10 +333,22 @@ my $byx = \&bylen;
 $byx = \&bysprofile if ($SORT eq "sprofile");
 $byx = \&bydprofile if ($SORT eq "dprofile");
 
-foreach my $k (sort $byx keys %toprint) {
-    print "$k";
+print "\n\n";
+
+foreach my $opt (sort $byx keys %toprint) {
+    print "$opt";
     print "\n";
-    print "; sprofile = $sprofiles{$k}\n";
-    print "; dprofile = $dprofiles{$k}\n";
+    print "; total static profile = $sprofiles{$opt}\n";
+    my %h = %{$sprofile_locs{$opt}};
+    foreach my $k (sort { $h{$b} <=> $h{$a} } keys %h) {
+        next if ($k eq "");
+        print "; sprofile $h{$k} \"$k\"\n";
+    }
+    print "; total dynamic profile = $dprofiles{$opt}\n";
+    %h = %{$dprofile_locs{$opt}};
+    foreach my $k (sort { $h{$b} <=> $h{$a} } keys %h) {
+        next if ($k eq "");
+        print "; dprofile $h{$k} \"$k\"\n";
+    }
     print "------------------------------------------------------\n\n";
 }

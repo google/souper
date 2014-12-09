@@ -18,6 +18,14 @@ use warnings;
 use strict;
 use File::Temp;
 
+sub compiling() {
+    foreach my $arg (@ARGV) {
+        return 1
+            if ($arg =~ /\.c$|\.cpp$|\.CC$|\.c\+\+$|\.cc$|\.cxx$|\.C$|\.c\+$/);
+    }
+    return 0;
+}
+
 sub linkp() {
     foreach my $arg (@ARGV) {
         return 0 if ($arg eq "-S" || $arg eq "-c" || $arg eq "-shared");
@@ -69,6 +77,7 @@ if ($ENV{"SOUPER_SKIP_FILES"}) {
 }
 
 $souper = 0 if $ENV{"SOUPER_NO_SOUPER"};
+$souper = 0 unless compiling();
 
 if ($souper) {
     push @ARGV, (
@@ -78,16 +87,16 @@ if ($souper) {
         "-mllvm", "-solver-timeout=15",
     );
 
-    if (!$ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
-        push @ARGV, ("-mllvm", "-souper-external-cache");
-    }
-
     if ($ENV{"SOUPER_DEBUG"}) {
         push @ARGV, ("-mllvm", "-souper-debug");
     }
 
-    if ($ENV{"SOUPER_STATS"}) {
-        push @ARGV, ("-mllvm", "-stats");
+    if (!$ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
+        push @ARGV, ("-mllvm", "-souper-external-cache");
+    }
+
+    if ($ENV{"SOUPER_NO_INFER"}) {
+        push @ARGV, ("-mllvm", "-souper-no-infer");
     }
 
     if ($ENV{"SOUPER_STATIC_PROFILE"}) {
@@ -96,10 +105,19 @@ if ($souper) {
 
     if ($ENV{"SOUPER_DYNAMIC_PROFILE"}) {
         push @ARGV, ("-g", "-mllvm", "-souper-dynamic-profile");
-        if (linkp()) {
-            push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
-        }
     }
+
+    if ($ENV{"SOUPER_IGNORE_SOLVER_ERRORS"}) {
+        push @ARGV, ("-mllvm", "-souper-ignore-solver-errors");
+    }
+
+    if ($ENV{"SOUPER_STATS"}) {
+        push @ARGV, ("-mllvm", "-stats");
+    }
+}
+
+if ($ENV{"SOUPER_DYNAMIC_PROFILE"} && linkp()) {
+    push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
 }
 
 exec @ARGV;

@@ -139,7 +139,7 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
       llvm::APInt ActualVal = Cand.Mapping.RHS->Val;
 
       llvm::Instruction *Inst = Cand.Origin.getInstruction();
-      llvm::MDNode *ExpectedMD = Inst->getMDNode(ExpectedID);
+      llvm::MDNode *ExpectedMD = Inst->getMetadata(ExpectedID);
       if (!ExpectedMD) {
         llvm::errs() << "instruction:\n";
         Inst->dump();
@@ -176,7 +176,7 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
   for (const auto &F : Mod) {
     for (const auto &BB : F) {
       for (const auto &Inst : BB) {
-        llvm::MDNode *ExpectedMD = Inst.getMDNode(ExpectedID);
+        llvm::MDNode *ExpectedMD = Inst.getMetadata(ExpectedID);
         if (ExpectedMD) {
           llvm::errs() << "instruction:\n";
           Inst.dump();

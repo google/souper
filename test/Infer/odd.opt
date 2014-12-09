@@ -1,0 +1,11 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+
+%0:i32 = var
+%1:i32 = urem %0, 2
+%2:i1 = eq %1, 1
+infer %2
+
+%3:i1 = trunc %0
+result %3

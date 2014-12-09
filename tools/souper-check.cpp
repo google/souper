@@ -39,13 +39,21 @@ static cl::opt<bool> InferRHS("infer-rhs",
     cl::desc("Try to infer a RHS for a Souper LHS (default=false)"),
     cl::init(false));
 
+static cl::opt<bool> ParseOnly("parse-only",
+    cl::desc("Only parse the replacement, don't call isValid() (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> ParseLHSOnly("parse-lhs-only",
+    cl::desc("Only parse the LHS, don't call infer() (default=false)"),
+    cl::init(false));
+
 int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
   std::string ErrStr;
 
   ParsedReplacement Rep;
   ReplacementContext Context;
-  if (InferRHS) {
+  if (InferRHS || ParseLHSOnly) {
     Rep = ParseReplacementLHS(IC, MB.getBufferIdentifier(), MB.getBuffer(),
                               Context, ErrStr);
   } else {
@@ -54,6 +62,11 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   if (!ErrStr.empty()) {
     llvm::errs() << ErrStr << '\n';
     return 1;
+  }
+
+  if (ParseOnly || ParseLHSOnly) {
+    llvm::outs() << "; parsing successful\n";
+    return 0;
   }
 
   if (InferRHS) {
@@ -71,7 +84,6 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
         PrintReplacementLHS(llvm::outs(), Rep.PCs, Rep.Mapping.LHS, Context);
         PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
       } else {
-        ReplacementContext Context;
         PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
       }
     } else {
@@ -121,10 +133,13 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
   KVStore *KV = 0;
-  std::unique_ptr<Solver> S = GetSolverFromArgs(KV);
-  if (!S) {
-    llvm::errs() << "Specify a solver\n";
-    return 1;
+  std::unique_ptr<Solver> S = 0;
+  if (!ParseOnly && !ParseLHSOnly) {
+    S = GetSolverFromArgs(KV);
+    if (!S) {
+      llvm::errs() << "Specify a solver\n";
+      return 1;
+    }
   }
 
   auto MB = MemoryBuffer::getFileOrSTDIN(InputFilename);
