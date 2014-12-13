@@ -76,7 +76,6 @@ set(KLEE_EXPR_FILES
   third_party/klee/lib/Expr/Expr.cpp
   third_party/klee/lib/Expr/ExprEvaluator.cpp
   third_party/klee/lib/Expr/ExprPPrinter.cpp
-  third_party/klee/lib/Expr/ExprSMTLIBLetPrinter.cpp
   third_party/klee/lib/Expr/ExprSMTLIBPrinter.cpp
   third_party/klee/lib/Expr/ExprUtil.cpp
   third_party/klee/lib/Expr/ExprVisitor.cpp
