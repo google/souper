@@ -61,7 +61,6 @@ public:
       // TODO: we can trivially synthesize an i1 undef by checking for validity
       // of both guesses
       InstMapping Mapping(LHS, I);
-      CandidateExpr CE = GetCandidateExprForReplacement(BPCs, PCs, Mapping);
       bool IsSat;
       EC = SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, Mapping, 0),
                                     IsSat, 0, 0, Timeout);
