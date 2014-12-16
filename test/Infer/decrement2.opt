@@ -1,0 +1,26 @@
+; REQUIRES: solver
+; RUN: %souper-check -souper-infer-nop -souper-infer-unary -infer-rhs %solver %s | FileCheck %s
+; CHECK: Failed
+
+%c0:i64 = var
+%c1:i64 = var
+%2:i64 = ctpop %c1
+%3:i1 = eq %2, 1
+pc %3 1
+%4:i64 = mul 2, %c1
+%5:i64 = sub %4, 1
+%6:i64 = and %c0, %5
+%7:i64 = sub %c1, 1
+%8:i1 = eq %7, %6
+pc %8 1
+%9:i64 = var
+%10:i64 = sub %c0, %9
+%11:i64 = and %c1, %10
+infer %11
+
+; powerof2(c1) && c0&(2*c1-1)==c1-1 ->
+; c0-x&c1 => x&c1
+
+; %12:i64 = and %9, %c1
+; result %12
+

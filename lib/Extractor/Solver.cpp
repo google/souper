@@ -39,7 +39,19 @@ using namespace llvm;
 namespace {
 
 static cl::opt<bool> NoInfer("souper-no-infer",
-    cl::desc("Populate the external cache, but don't infer replacements"),
+    cl::desc("Populate the external cache, but don't infer replacements (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> InferI1("souper-infer-i1",
+    cl::desc("Infer Boolean values (default=true)"),
+    cl::init(true));
+
+static cl::opt<bool> InferNop("souper-infer-nop",
+    cl::desc("Infer nops (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> InferUnary("souper-infer-unary",
+    cl::desc("Infer unary instructions (default=false)"),
     cl::init(false));
 
 class BaseSolver : public Solver {
@@ -50,27 +62,122 @@ public:
   BaseSolver(std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout)
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
+private:
+  void getInputs(Inst *I, std::set<Inst *> &Inputs) {
+    if (Inputs.insert(I).second)
+      for (auto Op : I->Ops)
+        getInputs(Op, Inputs);
+  }
+
+  int costHelper(Inst *I, std::set<Inst *> &Visited) {
+    if (!Visited.insert(I).second)
+      return 0;
+    int ret = 1;
+    for (auto Op : I->Ops)
+      ret += costHelper(Op, Visited);
+    return ret;
+  }
+
+  int cost(Inst *I) {
+    std::set<Inst *> Visited;
+    return costHelper(I, Visited);
+  }
+
+public:
   std::error_code infer(const std::vector<InstMapping> &PCs,
                         Inst *LHS, Inst *&RHS, InstContext &IC) {
-    assert(LHS->Width == 1);
     std::error_code EC;
-    std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
-                                 IC.getConst(APInt(1, false)) };
-    for (auto I : Guesses) {
-      // TODO: we can trivially synthesize an i1 undef by checking for validity
-      // of both guesses
-      InstMapping Mapping(LHS, I);
-      CandidateExpr CE = GetCandidateExprForReplacement(PCs, Mapping);
-      bool IsSat;
-      EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0), IsSat, 0, 0,
-                                    Timeout);
-      if (EC)
-        return EC;
-      if (!IsSat) {
-        RHS = I;
-        return EC;
+
+    if (LHS->Width == 1 && InferI1) {
+      std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
+          IC.getConst(APInt(1, false)) };
+      for (auto G : Guesses) {
+        // TODO: we can trivially synthesize an i1 undef by checking for
+        // validity of both guesses
+        InstMapping Mapping(LHS, G);
+        bool IsSat;
+        EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0), IsSat, 0, 0,
+                                      Timeout);
+        if (EC)
+          return EC;
+        if (!IsSat) {
+          RHS = G;
+          return EC;
+        }
       }
     }
+
+    // TODO: constant synthesis goes here
+
+    std::set<Inst *> Inputs;
+    if (InferNop || InferUnary)
+      for (auto Op : LHS->Ops)
+        getInputs(Op, Inputs);
+
+    if (InferNop) {
+      int LHSCost = cost(LHS);
+      for (auto I : Inputs) {
+        if (I->Width == 1 &&
+            (I->K == Inst::Const || I->K == Inst::UntypedConst))
+          continue;
+        if (LHS->Width != I->Width)
+          continue;
+        InstMapping Mapping(LHS, I);
+        bool IsSat;
+        EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0), IsSat, 0, 0,
+                                      Timeout);
+        if (EC)
+          return EC;
+        if (!IsSat) {
+          RHS = I;
+          return EC;
+        }
+      }
+    }
+
+    if (InferUnary) {
+      int LHSCost = cost(LHS);
+      for (auto I : Inputs) {
+        if (I->Width == 1 &&
+            (I->K == Inst::Const || I->K == Inst::UntypedConst))
+          continue;
+        std::vector<Inst *> Guesses;
+        if (LHS->Width > I->Width) {
+          Guesses.push_back(IC.getInst(Inst::SExt, LHS->Width, {I}));
+          Guesses.push_back(IC.getInst(Inst::ZExt, LHS->Width, {I}));
+        } else if (LHS->Width < I->Width) {
+          Guesses.push_back(IC.getInst(Inst::Trunc, LHS->Width, {I}));
+        } else {
+          Guesses.push_back(IC.getInst(Inst::Xor, LHS->Width,
+              { IC.getConst(APInt(I->Width, -1)), I }));
+          Guesses.push_back(IC.getInst(Inst::Sub, LHS->Width,
+              { IC.getConst(APInt(I->Width, 0)), I }));
+          if (I->Width == 8 || I->Width == 16 || I->Width == 32 ||
+              I->Width == 64 || I->Width == 256) {
+            Guesses.push_back(IC.getInst(Inst::Ctlz, LHS->Width, {I}));
+            Guesses.push_back(IC.getInst(Inst::Cttz, LHS->Width, {I}));
+            Guesses.push_back(IC.getInst(Inst::CtPop, LHS->Width, {I}));
+          }
+          if (I->Width == 16 || I->Width == 32 || I->Width == 64)
+            Guesses.push_back(IC.getInst(Inst::BSwap, LHS->Width, {I}));
+        }
+        for (auto G : Guesses) {
+          if (LHSCost - cost(G) < 1)
+            continue;
+          InstMapping Mapping(LHS, G);
+          bool IsSat;
+          EC = SMTSolver->isSatisfiable(BuildQuery(PCs, Mapping, 0),
+                                        IsSat, 0, 0, Timeout);
+          if (EC)
+            return EC;
+          if (!IsSat) {
+            RHS = G;
+            return EC;
+          }
+        }
+      }
+    }
+
     RHS = 0;
     return EC;
   }

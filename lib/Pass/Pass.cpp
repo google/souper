@@ -205,6 +205,8 @@ public:
       }
       if (!Cand.Mapping.RHS)
         continue;
+      if (Cand.Mapping.RHS->K != Inst::Const)
+        continue;
       Instruction *I = Cand.Origin.getInstruction();
 
       Constant *CI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
