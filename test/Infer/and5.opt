@@ -20,4 +20,3 @@ infer %11
 
 %12:i64 = and %9, %1
 result %12
-
