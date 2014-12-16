@@ -401,6 +401,7 @@ Inst *ExprBuilder::get(Value *V) {
   if (!E) {
     E = build(V);
   }
+  EBC.Origins.insert(std::pair<Inst *, Value *>(E, V));
   return E;
 }
 
@@ -509,7 +510,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI,
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
     for (auto &I : BB) {
-      if (I.getType()->isIntegerTy(1))
+      if (I.getType()->isIntegerTy())
         BCS->Replacements.emplace_back(&I, InstMapping(EB.get(&I), 0));
     }
     if (!BCS->Replacements.empty()) {

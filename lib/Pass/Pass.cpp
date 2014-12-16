@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define DEBUG_TYPE "souper"
+
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/PostDominators.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
@@ -31,6 +35,9 @@
 
 using namespace souper;
 using namespace llvm;
+
+STATISTIC(DomFail, "Failed dominator checks");
+STATISTIC(Opts, "Optimizations");
 
 namespace {
 std::unique_ptr<Solver> S;
@@ -71,21 +78,7 @@ static bool dumpAllReplacements() {
 struct SouperPass : public FunctionPass {
   static char ID;
 
-public:
-  SouperPass() : FunctionPass(ID) {
-    if (!S) {
-      S = GetSolverFromArgs(KV);
-      if (StaticProfile && !KV)
-        KV = new KVStore;
-      if (!S)
-        report_fatal_error("Souper requires a solver to be specified");
-    }
-  }
-
-  void getAnalysisUsage(AnalysisUsage &Info) const {
-    Info.addRequired<LoopInfo>();
-  }
-
+private:
   void dynamicProfile(LLVMContext &C, Module *M, std::string LHS,
                       std::string SrcLoc, BasicBlock::iterator BI) {
     Function *RegisterFunc = M->getFunction("_souper_profile_register");
@@ -137,6 +130,59 @@ public:
                       BI);
   }
 
+  Value *getValue(Inst *RHS, Instruction *ReplacedInst,
+                  ExprBuilderContext &EBC, PostDominatorTree *DT) {
+    if (RHS->K == Inst::Const) {
+      return ConstantInt::get(ReplacedInst->getType(), RHS->Val);
+    } else if (EBC.Origins.count(RHS) != 0) {
+      // if there's an Origin, we're connecting to existing code
+      auto It = EBC.Origins.equal_range(RHS);
+      for (auto O = It.first; O != It.second; ++O) {
+        Value *V = O->second;
+        if (V->getType() != ReplacedInst->getType())
+          continue;
+        if (Instruction *IP = dyn_cast<Instruction>(V)) {
+          if (DT->dominates(IP->getParent(), ReplacedInst->getParent()))
+            return IP;
+        } else if (dyn_cast<Argument>(V) || dyn_cast<Constant>(V)) {
+          return V;
+        } else {
+          report_fatal_error("Unhandled LLVM instruction in getValue()");
+        }
+      }
+      return 0;
+    } else {
+      // otherwise, recursively synthesize
+      Value *V = getValue(RHS->Ops[0], ReplacedInst, EBC, DT);
+      if (!V)
+        return 0;
+      switch (RHS->K) {
+      case Inst::Trunc:
+        return new TruncInst(V, ReplacedInst->getType());
+      default:
+        report_fatal_error((std::string)"Unhandled Souper instruction " +
+                           Inst::getKindName(RHS->K) + " in getValue()");
+      }
+    }
+  }
+
+public:
+  void getAnalysisUsage(AnalysisUsage &Info) const {
+    Info.addRequired<PostDominatorTree>();
+    Info.addRequired<LoopInfo>();
+    // TODO there should be some setPreserves that we can add here
+  }
+
+  SouperPass() : FunctionPass(ID) {
+    if (!S) {
+      S = GetSolverFromArgs(KV);
+      if (StaticProfile && !KV)
+        KV = new KVStore;
+      if (!S)
+        report_fatal_error("Souper requires a solver to be specified");
+    }
+  }
+
   bool runOnFunction(Function &F) {
     bool changed = false;
     InstContext IC;
@@ -144,6 +190,7 @@ public:
     CandidateMap CandMap;
 
     LoopInfo *LI = &getAnalysis<LoopInfo>();
+    PostDominatorTree *DT = &getAnalysis<PostDominatorTree>();
 
     FunctionCandidateSet CS = ExtractCandidatesFromPass(&F, LI, IC, EBC);
 
@@ -205,27 +252,37 @@ public:
       }
       if (!Cand.Mapping.RHS)
         continue;
-      Instruction *I = Cand.Origin.getInstruction();
 
-      Constant *CI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
+      Instruction *ReplacedInst = Cand.Origin.getInstruction();
+      Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT);
+      if (!NewVal) {
+        ++DomFail;
+        continue;
+      }
+      ++Opts;
+      EBC.Origins.erase(Cand.Mapping.LHS);
+      EBC.Origins.insert(std::pair<Inst *, Value *>(Cand.Mapping.LHS, NewVal));
+
       if (DebugSouperPass) {
         errs() << "\n";
         errs() << "; Replacing \"";
-        I->print(errs());
+        ReplacedInst->print(errs());
         errs() << "\"\n; from \"";
-        I->getDebugLoc().print(I->getContext(), errs());
+        ReplacedInst->getDebugLoc().print(ReplacedInst->getContext(), errs());
         errs() << "\"\n; with \"";
-        CI->print(errs());
+        NewVal->print(errs());
         errs() << "\" in:\n";
         PrintReplacement(errs(), Cand.PCs, Cand.Mapping);
       }
+
+      BasicBlock::iterator BI = ReplacedInst;
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
-        BasicBlock::iterator BI = I;
-        ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
+        ReplaceInstWithValue(ReplacedInst->getParent()->getInstList(), BI,
+                             NewVal);
         if (DynamicProfile) {
           std::string Str;
           llvm::raw_string_ostream Loc(Str);
-          I->getDebugLoc().print(I->getContext(), Loc);
+          ReplacedInst->getDebugLoc().print(ReplacedInst->getContext(), Loc);
           ReplacementContext Context;
           dynamicProfile (F.getContext(), F.getParent(),
                           GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS,
@@ -255,6 +312,7 @@ void initializeSouperPassPass(llvm::PassRegistry &);
 INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(LoopInfo)
+INITIALIZE_PASS_DEPENDENCY(PostDominatorTree)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 
