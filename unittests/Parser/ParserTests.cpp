@@ -50,7 +50,18 @@ TEST(ParserTest, Errors) {
       { "%0:i1 = block 122\n", "<input>:1:1: blocks may not have a width" },
       { "%0:i1 = phi %0\n", "<input>:1:13: %0 is not a block" },
       { "%0 = block 1\n%1:i1 = phi %0 foo\n", "<input>:2:16: expected ','" },
-      { ",\n", "<input>:1:1: expected inst, block, cand, infer, result, or pc" },
+      { "%0 = block 1\n%1:i32 = var\nblockpc 0 %1",
+        "<input>:3:9: expected block var"},
+      { "%0 = block 1\n%1:i32 = var\nblockpc %0:i32 0 %2 1",
+        "<input>:3:9: blocks may not have a width" },
+      { "%0 = block 1\n%1:i32 = var\nblockpc %0 %1\n%2:i32 = var",
+        "<input>:3:12: expected block number"},
+      { "%0 = block 1\n%1:i32 = var\nblockpc %1 0 %1 1",
+        "<input>:3:9: %1 is declared as an inst" },
+      { "%0 = block 1\n%1:i32 = var\nblockpc %2 0 %1 1",
+        "<input>:3:9: block %2 is undeclared" },
+      { ",\n", "<input>:1:1: expected inst, block, cand, infer, result, pc, "
+        "or blockpc" },
       { "%0:i128 = var ; 0\n%1:i128 = bswap %0\n",
         "<input>:2:1: bswap doesn't support 128 bits" },
       { "%0:i33 = var ; 0\n%1:i33 = ctpop %0\n",
@@ -62,7 +73,9 @@ TEST(ParserTest, Errors) {
 
       // type checking
       { "%0 = add 1:i32\n",
-        "<input>:1:1: expected at least 2 operands, found 1" },
+        "<input>:1:1: expected 2 operands, found 1" },
+      { "%0 = add 1:i32, 2:i32, 3:i32\n",
+        "<input>:1:1: expected 2 operands, found 3" },
       { "%0:i64 = add 1:i32, 2:i32\n",
         "<input>:1:1: inst must have width of 32, has width 64" },
       { "%0 = add 1:i32, 2:i64\n",
@@ -117,6 +130,10 @@ TEST(ParserTest, Errors) {
         "<input>:2:1: operands have different widths" },
       { "%0 = block 2\n%1:i32 = phi %0, 1:i64, 2:i64\n",
         "<input>:2:1: inst must have width of 64, has width 32" },
+      { "%0 = block 2\n%1:i32 = var\nblockpc %0 0 %1 1\nblockpc %0 1 %1 1\n"
+        "blockpc %0 2 %1 1\n%2:i32 = phi %0, %1, %1",
+        "<input>:6:1: blockpc's predecessor number is larger "
+        "than the number of phi's operands" },
     };
 
   InstContext IC;
@@ -260,6 +277,13 @@ cand %2 1:i1
 %3:i64 = sub 0:i64, %0
 cand %2 %3
 )i",
+      R"i(%0 = block 1
+%1:i32 = var ; 1
+blockpc %0 1 %1 1:i32
+blockpc %0 0 %1 2:i32
+%2:i32 = var ; 2
+cand %1 %2
+)i",
   };
 
   struct {
@@ -286,28 +310,58 @@ cand %0 3:i32
     {R"i(%0:i8 = var
 %1:i1 = eq 1, %0
 %2:i1 = eq 2, %0
-%3:i1 = eq 4, %0
-%4:i1 = eq 8, %0
-%5:i1 = eq 16, %0
-%6:i1 = eq 32, %0
-%7:i1 = eq 64, %0
-%8:i1 = eq 128, %0
-%9:i1 = or %1, %2, %3, %4, %5, %6, %7, %8
-%10:i1 = eq 1, %9
-cand %9 %10
+%3:i1 = or %1, %2
+%4:i1 = eq 4, %0
+%5:i1 = eq 8, %0
+%6:i1 = or %4, %5
+%7:i1 = or %3, %6
+%8:i1 = eq 16, %0
+%9:i1 = eq 32, %0
+%10:i1 = or %8, %9
+%11:i1 = eq 64, %0
+%12:i1 = eq 128, %0
+%13:i1 = or %11, %12
+%14:i1 = or %10, %13
+%15:i1 = or %7, %14
+%16:i1 = eq 1:i1, %15
+cand %15 %16
 )i",
      R"i(%0:i8 = var
 %1:i1 = eq 1:i8, %0
 %2:i1 = eq 2:i8, %0
-%3:i1 = eq 4:i8, %0
-%4:i1 = eq 8:i8, %0
-%5:i1 = eq 16:i8, %0
-%6:i1 = eq 32:i8, %0
-%7:i1 = eq 64:i8, %0
-%8:i1 = eq 128:i8, %0
-%9:i1 = or %1, %2, %3, %4, %5, %6, %7, %8
-%10:i1 = eq 1:i1, %9
-cand %9 %10
+%3:i1 = or %1, %2
+%4:i1 = eq 4:i8, %0
+%5:i1 = eq 8:i8, %0
+%6:i1 = or %4, %5
+%7:i1 = or %3, %6
+%8:i1 = eq 16:i8, %0
+%9:i1 = eq 32:i8, %0
+%10:i1 = or %8, %9
+%11:i1 = eq 64:i8, %0
+%12:i1 = eq 128:i8, %0
+%13:i1 = or %11, %12
+%14:i1 = or %10, %13
+%15:i1 = or %7, %14
+%16:i1 = eq 1:i1, %15
+cand %15 %16
+)i" },
+    {R"i(%0 = block 1
+%1 = block 2
+%2:i32 = var
+blockpc %0 0 %2 1
+blockpc %1 0 %2 2
+blockpc %0 1 %2 3
+%3:i32 = var
+cand %2 %3
+)i",
+     R"i(%0 = block 1
+%1:i32 = var
+blockpc %0 0 %1 1:i32
+%2 = block 2
+blockpc %2 0 %1 2:i32
+blockpc %0 1 %1 3:i32
+%3:i32 = var
+cand %1 %3
 )i" },
   };
 

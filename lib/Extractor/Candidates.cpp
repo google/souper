@@ -33,6 +33,7 @@
 #include <memory>
 #include <sstream>
 #include <unordered_set>
+#include <tuple>
 
 using namespace llvm;
 using namespace klee;
@@ -58,12 +59,12 @@ void CandidateReplacement::printFunction(llvm::raw_ostream &Out) const {
 void CandidateReplacement::printLHS(llvm::raw_ostream &Out,
                                     ReplacementContext &Context,
                                     bool printNames) const {
-  PrintReplacementLHS(Out, PCs, Mapping.LHS, Context, printNames);
+  PrintReplacementLHS(Out, BPCs, PCs, Mapping.LHS, Context, printNames);
 }
 
 void CandidateReplacement::print(llvm::raw_ostream &Out,
                                  bool printNames) const {
-  PrintReplacement(Out, PCs, Mapping, printNames);
+  PrintReplacement(Out, BPCs, PCs, Mapping, printNames);
 }
 
 namespace {
@@ -88,7 +89,9 @@ struct ExprBuilder {
   Inst *buildConstant(Constant *c);
   Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
   Inst *build(Value *V);
-  void addPathConditions(std::vector<InstMapping> &PCs, BasicBlock *BB);
+  void addPathConditions(BlockPCs &BPCs, std::vector<InstMapping> &PCs,
+                         std::unordered_set<Block *> &VisitedBlocks,
+                         BasicBlock *BB);
   Inst *get(Value *V);
 };
 
@@ -412,10 +415,64 @@ void emplace_back_dedup(std::vector<InstMapping> &PCs, Inst *LHS, Inst *RHS) {
   PCs.emplace_back(LHS, RHS);
 }
 
-void ExprBuilder::addPathConditions(std::vector<InstMapping> &PCs,
+// Collect path conditions for a basic block. 
+// There are two kinds of path conditions, which correspond to
+// two Souper instruction kinds, pc and blockpc, respectively.
+// (1) The PC condition is added when the given predecessor of
+//     the given basic block is chosen. For example, given the
+//     simple CFG below:
+//          B1
+//         /  \
+//       B2    B3
+//     The path conditions [B1->B2] and [B1->B3] will be added 
+//     to B2 and B3's PCs, respectively, because B1 can determine 
+//     the choice of either B2 or B3.
+// (2) The BlockPC condition handles cases where we don't know
+//     which predecessor would be chosen. In this case, we recursively
+//     process each predecessor of the given basic block until
+//     the PC condition (as defined above) is met. Then we add
+//     the this condition into the BlockPCs of the basic block from
+//     which we start our recursion. If a loop head or an entry
+//     point of an irreducible loop is encountered along any path, 
+//     we stash the collected BlockPCs (if there is any) and return.
+//     The following examples (without loops) describe the idea. 
+//     A simple example:
+//         B1
+//        /  \
+//            B2  B3
+//             \  /
+//              B4
+//     Suppose we are collecting BlockPCs for B4. Either
+//     B2 or B3 can reach B4, we cannot add them into B4's PC.
+//     Instead, we add whatever path conditions dominating B2 and
+//     B3 into B4's BlockPCs. In this simple case, we will have
+//     blockpc %B4, 0, s1, r1 // B1->B2
+//      
+// Now consider a more complex example:
+//            B1          B2
+//           /  \        /  \
+//               B3    B4
+//                \    /
+//                  B5        B6
+//                 /  \      /  \
+//                    B7   B8
+//                   /  \  /
+//                       B9
+// Suppose we are dealing with an instruction %i in B9, After we iterate all
+// basic blocks (in ExtractExprCandidates), we will have something like these:
+// blockpc %B5, 0, s1, r1 // B1->B3
+// blockpc %B5, 1, s2, r2 // B2->B4
+// ...
+// blockpc %B9, 0, s3, r3 // B5 -> B7
+// blockpc %B9, 1, s4, r4 // B6 -> B8
+// ...
+// cand %i, 1
+void ExprBuilder::addPathConditions(BlockPCs &BPCs,
+                                    std::vector<InstMapping> &PCs,
+                                    std::unordered_set<Block *> &VisitedBlocks,
                                     BasicBlock *BB) {
   if (auto Pred = BB->getSinglePredecessor()) {
-    addPathConditions(PCs, Pred);
+    addPathConditions(BPCs, PCs, VisitedBlocks, Pred);
     if (auto Branch = dyn_cast<BranchInst>(Pred->getTerminator())) {
       if (Branch->isConditional()) {
         emplace_back_dedup(
@@ -438,6 +495,37 @@ void ExprBuilder::addPathConditions(std::vector<InstMapping> &PCs,
         emplace_back_dedup(PCs, IC.getInst(Inst::And, 1, Cases),
                            IC.getConst(APInt(1, true)));
       }
+    }
+  } else {
+    // BB is the entry of the function.
+    if (pred_begin(BB) == pred_end(BB))
+      return;
+
+    BlockInfo &BI = EBC.BlockMap[BB];
+    // We encounter a loop entry point.
+    // FIXME: Basically, we stop at this point, i.e., we don't collect
+    // BlockPC's before loops. Maybe we should consider to resume from BB's
+    // immediate dominator. If we do, generate another pull request for this
+    // purpose.
+    if (!BI.B)
+      return;
+
+    // It's possible that we will re-visit a Block, e.g.,
+    //          \  /
+    //           B1
+    //          /  \
+    //         B2  B3
+    //          \  /
+    //           B4
+    if (VisitedBlocks.count(BI.B))
+      return;
+
+    VisitedBlocks.insert(BI.B);
+    for (unsigned i = 0; i < BI.Preds.size(); ++i) {
+      std::vector<InstMapping> PCs;
+      addPathConditions(BPCs, PCs, VisitedBlocks, BI.Preds[i]);
+      for (auto PC : PCs)
+        BPCs.emplace_back(BlockPCMapping(BI.B, i, PC));
     }
   }
 }
@@ -484,21 +572,42 @@ std::vector<Inst *> AddPCSets(const std::vector<InstMapping> &PCs,
   return PCSets;
 }
 
-// Return a vector of relevant PCs for a candidate, namely those whose variable
-// sets are in the same equivalence class as the candidate's.
-std::vector<InstMapping> GetRelevantPCs(const std::vector<InstMapping> &PCs,
-                                        const std::vector<Inst *> &PCSets,
-                                        InstClasses Vars,
-                                        InstMapping Cand) {
+// Similar to AddPCSets, add the variable sets of BlockPCs as equivalence
+// classes to Vars. Return a BPCSets of the same size as BPCs.
+std::vector<Inst *> AddBlockPCSets(const BlockPCs &BPCs, InstClasses &Vars) {
+  std::vector<Inst *> BPCSets(BPCs.size());
+  for (unsigned i = 0; i != BPCs.size(); ++i) {
+    llvm::DenseSet<Inst *> SeenInsts;
+    auto BPCLeader =
+        AddVarSet(Vars.member_end(), Vars, SeenInsts, BPCs[i].PC.LHS);
+    if (BPCLeader != Vars.member_end())
+      BPCSets[i] = *BPCLeader;
+  }
+  return BPCSets;
+}
+
+// Return vectors of relevant BlockPCs and PCs for a candidate, namely those
+// whose variable sets are in the same equivalence class as the candidate's.
+std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
+    const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+    const std::vector<Inst *> &BPCSets, const std::vector<Inst *> &PCSets,
+    InstClasses Vars, InstMapping Cand) {
+
   llvm::DenseSet<Inst *> SeenInsts;
   auto Leader = AddVarSet(Vars.member_end(), Vars, SeenInsts, Cand.LHS);
+
+  BlockPCs RelevantBPCs;
+  for (unsigned i = 0; i != BPCs.size(); ++i) {
+    if (BPCSets[i] != 0 && Vars.findLeader(BPCSets[i]) == Leader)
+      RelevantBPCs.emplace_back(BPCs[i]);
+  }
 
   std::vector<InstMapping> RelevantPCs;
   for (unsigned i = 0; i != PCs.size(); ++i) {
     if (PCSets[i] != 0 && Vars.findLeader(PCSets[i]) == Leader)
       RelevantPCs.emplace_back(PCs[i]);
   }
-  return RelevantPCs;
+  return std::make_tuple(RelevantBPCs, RelevantPCs);
 }
 
 void ExtractExprCandidates(Function &F, const LoopInfo *LI,
@@ -514,13 +623,16 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI,
         BCS->Replacements.emplace_back(&I, InstMapping(EB.get(&I), 0));
     }
     if (!BCS->Replacements.empty()) {
-      EB.addPathConditions(BCS->PCs, &BB);
+      std::unordered_set<Block *> VisitedBlocks;
+      EB.addPathConditions(BCS->BPCs, BCS->PCs, VisitedBlocks, &BB);
 
-      InstClasses Vars;
+      InstClasses Vars, BPCVars;
       auto PCSets = AddPCSets(BCS->PCs, Vars);
+      auto BPCSets = AddBlockPCSets(BCS->BPCs, BPCVars);
 
       for (auto &R : BCS->Replacements) {
-        R.PCs = GetRelevantPCs(BCS->PCs, PCSets, Vars, R.Mapping);
+        std::tie(R.BPCs, R.PCs) = 
+          GetRelevantPCs(BCS->BPCs, BCS->PCs, BPCSets, PCSets, Vars, R.Mapping);
       }
 
       Result.Blocks.emplace_back(std::move(BCS));

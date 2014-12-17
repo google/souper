@@ -172,6 +172,28 @@ void ReplacementContext::clear() {
   NameToBlock.clear();
 }
 
+void ReplacementContext::printPCs(const std::vector<InstMapping> &PCs,
+                                  llvm::raw_ostream &Out, bool printNames) {
+  for (const auto &PC : PCs) {
+    std::string SRef = printInst(PC.LHS, Out, printNames);
+    std::string RRef = printInst(PC.RHS, Out, printNames);
+    Out << "pc " << SRef << " " << RRef << '\n';
+  }
+}
+
+void ReplacementContext::printBlockPCs(const BlockPCs &BPCs,
+                                       llvm::raw_ostream &Out,
+                                       bool printNames) {
+  for (auto &BPC : BPCs) {
+    assert(BPC.B && "NULL Block pointer!");
+    std::string BlockName = printBlock(BPC.B, Out);
+    std::string SRef = printInst(BPC.PC.LHS, Out, printNames);
+    std::string RRef = printInst(BPC.PC.RHS, Out, printNames);
+    Out << "blockpc %" << BlockName << " " << BPC.PredIdx << " ";
+    Out << SRef << " " << RRef << '\n';
+  }
+}
+
 bool ReplacementContext::empty() {
   return NameToInst.empty() && NameToBlock.empty();
 }
@@ -408,16 +430,7 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   std::vector<Inst *> OrderedOps;
 
   const std::vector<Inst *> *InstOps;
-  if (Inst::isAssociative(K)) {
-    for (Inst *Op : Ops) {
-      if (Op->K == K)
-        OrderedOps.insert(OrderedOps.end(), Op->Ops.begin(), Op->Ops.end());
-      else
-        OrderedOps.push_back(Op);
-    }
-    std::sort(OrderedOps.begin(), OrderedOps.end());
-    InstOps = &OrderedOps;
-  } else if (Inst::isCommutative(K)) {
+  if (Inst::isCommutative(K)) {
     OrderedOps = Ops;
     std::sort(OrderedOps.begin(), OrderedOps.end());
     InstOps = &OrderedOps;
@@ -444,19 +457,6 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   return N;
 }
 
-bool Inst::isAssociative(Inst::Kind K) {
-  switch (K) {
-  case Add:
-  case Mul:
-  case And:
-  case Or:
-  case Xor:
-    return true;
-  default:
-    return false;
-  }
-}
-
 bool Inst::isCommutative(Inst::Kind K) {
   switch (K) {
   case Add:
@@ -479,53 +479,49 @@ bool Inst::isCommutative(Inst::Kind K) {
 }
 
 void souper::PrintReplacement(llvm::raw_ostream &Out,
+                              const BlockPCs &BPCs,
                               const std::vector<InstMapping> &PCs,
                               InstMapping Mapping, bool printNames) {
   assert(Mapping.LHS);
   assert(Mapping.RHS);
 
   ReplacementContext Context;
-  for (const auto &PC : PCs) {
-    std::string SRef = Context.printInst(PC.LHS, Out, printNames);
-    std::string RRef = Context.printInst(PC.RHS, Out, printNames);
-    Out << "pc " << SRef << " " << RRef << '\n';
-  }
-
+  Context.printPCs(PCs, Out, printNames);
+  Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(Mapping.LHS, Out, printNames);
   std::string RRef = Context.printInst(Mapping.RHS, Out, printNames);
   Out << "cand " << SRef << " " << RRef << '\n';
 }
 
-std::string souper::GetReplacementString(const std::vector<InstMapping> &PCs,
+std::string souper::GetReplacementString(const BlockPCs &BPCs,
+                                         const std::vector<InstMapping> &PCs,
                                          InstMapping Mapping, bool printNames) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
-  PrintReplacement(SS, PCs, Mapping, printNames);
+  PrintReplacement(SS, BPCs, PCs, Mapping, printNames);
   return SS.str();
 }
 
 void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
+                                 const BlockPCs &BPCs,
                                  const std::vector<InstMapping> &PCs,
                                  Inst *LHS, ReplacementContext &Context,
                                  bool printNames) {
   assert(LHS);
   assert(Context.empty());
 
-  for (const auto &PC : PCs) {
-    std::string SRef = Context.printInst(PC.LHS, Out, printNames);
-    std::string RRef = Context.printInst(PC.RHS, Out, printNames);
-    Out << "pc " << SRef << " " << RRef << '\n';
-  }
-
+  Context.printPCs(PCs, Out, printNames);
+  Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(LHS, Out, printNames);
   Out << "infer " << SRef << '\n';
 }
 
-std::string souper::GetReplacementLHSString(const std::vector<InstMapping> &PCs,
+std::string souper::GetReplacementLHSString(const BlockPCs &BPCs,
+    const std::vector<InstMapping> &PCs,
     Inst *LHS, ReplacementContext &Context, bool printNames) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
-  PrintReplacementLHS(SS, PCs, LHS, Context);
+  PrintReplacementLHS(SS, BPCs, PCs, LHS, Context);
   return SS.str();
 }
 
