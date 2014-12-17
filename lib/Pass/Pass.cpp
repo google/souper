@@ -292,8 +292,8 @@ public:
       EBC.Origins.erase(Cand.Mapping.LHS);
       EBC.Origins.insert(std::pair<Inst *, Value *>(Cand.Mapping.LHS, NewVal));
 
-      BasicBlock::iterator BI = ReplacedInst;
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
+        BasicBlock::iterator BI = ReplacedInst;
         ReplaceInstWithValue(ReplacedInst->getParent()->getInstList(), BI,
                              NewVal);
         if (DynamicProfile) {
