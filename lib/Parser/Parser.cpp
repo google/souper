@@ -399,7 +399,7 @@ bool Parser::typeCheckPhi(unsigned Width, Block *B,
 bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
                            std::vector<Inst *> &Ops,
                            std::string &ErrStr) {
-  unsigned MinOps = 2, MaxOps = ~0U;
+  unsigned MinOps = 2, MaxOps = 2;
   llvm::MutableArrayRef<Inst *> OpsMatchingWidths = Ops;
 
   switch (IK) {

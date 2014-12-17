@@ -73,7 +73,9 @@ TEST(ParserTest, Errors) {
 
       // type checking
       { "%0 = add 1:i32\n",
-        "<input>:1:1: expected at least 2 operands, found 1" },
+        "<input>:1:1: expected 2 operands, found 1" },
+      { "%0 = add 1:i32, 2:i32, 3:i32\n",
+        "<input>:1:1: expected 2 operands, found 3" },
       { "%0:i64 = add 1:i32, 2:i32\n",
         "<input>:1:1: inst must have width of 32, has width 64" },
       { "%0 = add 1:i32, 2:i64\n",
@@ -308,28 +310,40 @@ cand %0 3:i32
     {R"i(%0:i8 = var
 %1:i1 = eq 1, %0
 %2:i1 = eq 2, %0
-%3:i1 = eq 4, %0
-%4:i1 = eq 8, %0
-%5:i1 = eq 16, %0
-%6:i1 = eq 32, %0
-%7:i1 = eq 64, %0
-%8:i1 = eq 128, %0
-%9:i1 = or %1, %2, %3, %4, %5, %6, %7, %8
-%10:i1 = eq 1, %9
-cand %9 %10
+%3:i1 = or %1, %2
+%4:i1 = eq 4, %0
+%5:i1 = eq 8, %0
+%6:i1 = or %4, %5
+%7:i1 = or %3, %6
+%8:i1 = eq 16, %0
+%9:i1 = eq 32, %0
+%10:i1 = or %8, %9
+%11:i1 = eq 64, %0
+%12:i1 = eq 128, %0
+%13:i1 = or %11, %12
+%14:i1 = or %10, %13
+%15:i1 = or %7, %14
+%16:i1 = eq 1:i1, %15
+cand %15 %16
 )i",
      R"i(%0:i8 = var
 %1:i1 = eq 1:i8, %0
 %2:i1 = eq 2:i8, %0
-%3:i1 = eq 4:i8, %0
-%4:i1 = eq 8:i8, %0
-%5:i1 = eq 16:i8, %0
-%6:i1 = eq 32:i8, %0
-%7:i1 = eq 64:i8, %0
-%8:i1 = eq 128:i8, %0
-%9:i1 = or %1, %2, %3, %4, %5, %6, %7, %8
-%10:i1 = eq 1:i1, %9
-cand %9 %10
+%3:i1 = or %1, %2
+%4:i1 = eq 4:i8, %0
+%5:i1 = eq 8:i8, %0
+%6:i1 = or %4, %5
+%7:i1 = or %3, %6
+%8:i1 = eq 16:i8, %0
+%9:i1 = eq 32:i8, %0
+%10:i1 = or %8, %9
+%11:i1 = eq 64:i8, %0
+%12:i1 = eq 128:i8, %0
+%13:i1 = or %11, %12
+%14:i1 = or %10, %13
+%15:i1 = or %7, %14
+%16:i1 = eq 1:i1, %15
+cand %15 %16
 )i" },
     {R"i(%0 = block 1
 %1 = block 2
