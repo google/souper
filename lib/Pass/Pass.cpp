@@ -131,46 +131,62 @@ private:
   }
 
   Value *getValue(Inst *I, Instruction *ReplacedInst,
-                  ExprBuilderContext &EBC, PostDominatorTree *DT) {
+                  ExprBuilderContext &EBC, PostDominatorTree *DT,
+                  IRBuilder<> &Builder) {
     Type *T = Type::getIntNTy(ReplacedInst->getContext(), I->Width);
     if (I->K == Inst::Const) {
+      errs() << "getValue(): making an integer\n";
       return ConstantInt::get(T, I->Val);
     } else if (EBC.Origins.count(I) != 0) {
       // if there's an Origin, we're connecting to existing code
+      errs() << "getValue(): connecting to existing code\n";
       auto It = EBC.Origins.equal_range(I);
       for (auto O = It.first; O != It.second; ++O) {
         Value *V = O->second;
+        assert(V);
         if (V->getType() != T)
           continue;
         if (Instruction *IP = dyn_cast<Instruction>(V)) {
-          if (DT->dominates(IP->getParent(), ReplacedInst->getParent()))
-            return IP;
+          if (DT->dominates(IP->getParent(), ReplacedInst->getParent())) {
+            errs() << "connected to instruction that dominates the replaced instruction\n";
+            return V;
+          }
         } else if (dyn_cast<Argument>(V) || dyn_cast<Constant>(V)) {
+          errs() << "connected to argument or constant\n";
           return V;
         } else {
           report_fatal_error("Unhandled LLVM instruction in getValue()");
         }
       }
+      errs() << "can't make a connection\n";
       return 0;
     } else {
       // otherwise, recursively synthesize
-      Value *V1 = getValue(I->Ops[0], ReplacedInst, EBC, DT);
-      if (!V1)
-        return 0;
       switch (I->K) {
-      case Inst::Trunc:
-        return new TruncInst(V1, T);
-      case Inst::Xor: {
-        Value *V2 = getValue(I->Ops[1], ReplacedInst, EBC, DT);
-        if (!V2)
+      case Inst::Trunc:{
+        errs() << "getValue(): making a trunc instruction\n";
+        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
+        if (!V0)
           return 0;
-        return BinaryOperator::CreateXor(V1, V2);
+        return Builder.CreateTrunc(V0, T);
       }
-      case Inst::Sub: {
-        Value *V2 = getValue(I->Ops[1], ReplacedInst, EBC, DT);
-        if (!V2)
+      case Inst::Xor:{
+        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
+        if (!V0)
           return 0;
-        return BinaryOperator::CreateSub(V1, V2);
+        Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder);
+        if (!V1)
+          return 0;
+        return Builder.CreateXor(V0, V1);
+      }
+      case Inst::Sub:{
+        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
+        if (!V0)
+          return 0;
+        Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder);
+        if (!V1)
+          return 0;
+        return Builder.CreateSub(V0, V1);
       }
       default:
         report_fatal_error((std::string)"Unhandled Souper instruction " +
@@ -278,7 +294,9 @@ public:
         errs() << "\"\n; from \"";
         ReplacedInst->getDebugLoc().print(ReplacedInst->getContext(), errs());
       }
-      Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT);
+      IRBuilder<> Builder(ReplacedInst->getParent());
+      Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT,
+                               Builder);
       if (!NewVal) {
         if (DebugSouperPass)
           errs() << "\"\n; replacement failed\n";
