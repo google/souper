@@ -36,7 +36,7 @@
 using namespace souper;
 using namespace llvm;
 
-STATISTIC(DomFail, "Failed dominator checks");
+STATISTIC(SynthFail, "Failure to synthesize");
 STATISTIC(Opts, "Optimizations");
 
 namespace {
@@ -130,16 +130,17 @@ private:
                       BI);
   }
 
-  Value *getValue(Inst *RHS, Instruction *ReplacedInst,
+  Value *getValue(Inst *I, Instruction *ReplacedInst,
                   ExprBuilderContext &EBC, PostDominatorTree *DT) {
-    if (RHS->K == Inst::Const) {
-      return ConstantInt::get(ReplacedInst->getType(), RHS->Val);
-    } else if (EBC.Origins.count(RHS) != 0) {
+    Type *T = Type::getIntNTy(ReplacedInst->getContext(), I->Width);
+    if (I->K == Inst::Const) {
+      return ConstantInt::get(T, I->Val);
+    } else if (EBC.Origins.count(I) != 0) {
       // if there's an Origin, we're connecting to existing code
-      auto It = EBC.Origins.equal_range(RHS);
+      auto It = EBC.Origins.equal_range(I);
       for (auto O = It.first; O != It.second; ++O) {
         Value *V = O->second;
-        if (V->getType() != ReplacedInst->getType())
+        if (V->getType() != T)
           continue;
         if (Instruction *IP = dyn_cast<Instruction>(V)) {
           if (DT->dominates(IP->getParent(), ReplacedInst->getParent()))
@@ -153,15 +154,27 @@ private:
       return 0;
     } else {
       // otherwise, recursively synthesize
-      Value *V = getValue(RHS->Ops[0], ReplacedInst, EBC, DT);
-      if (!V)
+      Value *V1 = getValue(I->Ops[0], ReplacedInst, EBC, DT);
+      if (!V1)
         return 0;
-      switch (RHS->K) {
+      switch (I->K) {
       case Inst::Trunc:
-        return new TruncInst(V, ReplacedInst->getType());
+        return new TruncInst(V1, T);
+      case Inst::Xor: {
+        Value *V2 = getValue(I->Ops[1], ReplacedInst, EBC, DT);
+        if (!V2)
+          return 0;
+        return BinaryOperator::CreateXor(V1, V2);
+      }
+      case Inst::Sub: {
+        Value *V2 = getValue(I->Ops[1], ReplacedInst, EBC, DT);
+        if (!V2)
+          return 0;
+        return BinaryOperator::CreateSub(V1, V2);
+      }
       default:
         report_fatal_error((std::string)"Unhandled Souper instruction " +
-                           Inst::getKindName(RHS->K) + " in getValue()");
+                           Inst::getKindName(I->K) + " in getValue()");
       }
     }
   }
@@ -222,7 +235,7 @@ public:
       }
     }
 
-    if (DebugSouperPass) {
+    if (DebugSouperPass && 0) {
       errs() << "\n";
       errs() << "; Listing applied replacements for " << FunctionName << "\n";
       errs() << "; Using solver: " << S->getName() << '\n';
@@ -254,26 +267,30 @@ public:
         continue;
 
       Instruction *ReplacedInst = Cand.Origin.getInstruction();
-      Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT);
-      if (!NewVal) {
-        ++DomFail;
-        continue;
-      }
-      ++Opts;
-      EBC.Origins.erase(Cand.Mapping.LHS);
-      EBC.Origins.insert(std::pair<Inst *, Value *>(Cand.Mapping.LHS, NewVal));
-
       if (DebugSouperPass) {
         errs() << "\n";
+        errs() << "; In:\n";
+        PrintReplacement(errs(), Cand.PCs, Cand.Mapping);
         errs() << "; Replacing \"";
         ReplacedInst->print(errs());
         errs() << "\"\n; from \"";
         ReplacedInst->getDebugLoc().print(ReplacedInst->getContext(), errs());
+      }
+      Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT);
+      if (!NewVal) {
+        if (DebugSouperPass)
+          errs() << "\"\n; replacement failed\n";
+        ++SynthFail;
+        continue;
+      }
+      ++Opts;
+      if (DebugSouperPass) {
         errs() << "\"\n; with \"";
         NewVal->print(errs());
-        errs() << "\" in:\n";
-        PrintReplacement(errs(), Cand.PCs, Cand.Mapping);
+        errs() << "\"\n";
       }
+      EBC.Origins.erase(Cand.Mapping.LHS);
+      EBC.Origins.insert(std::pair<Inst *, Value *>(Cand.Mapping.LHS, NewVal));
 
       BasicBlock::iterator BI = ReplacedInst;
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
