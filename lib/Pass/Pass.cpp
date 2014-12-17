@@ -135,11 +135,9 @@ private:
                   IRBuilder<> &Builder) {
     Type *T = Type::getIntNTy(ReplacedInst->getContext(), I->Width);
     if (I->K == Inst::Const) {
-      errs() << "getValue(): making an integer\n";
       return ConstantInt::get(T, I->Val);
     } else if (EBC.Origins.count(I) != 0) {
       // if there's an Origin, we're connecting to existing code
-      errs() << "getValue(): connecting to existing code\n";
       auto It = EBC.Origins.equal_range(I);
       for (auto O = It.first; O != It.second; ++O) {
         Value *V = O->second;
@@ -148,23 +146,31 @@ private:
           continue;
         if (Instruction *IP = dyn_cast<Instruction>(V)) {
           if (DT->dominates(IP->getParent(), ReplacedInst->getParent())) {
-            errs() << "connected to instruction that dominates the replaced instruction\n";
             return V;
           }
         } else if (dyn_cast<Argument>(V) || dyn_cast<Constant>(V)) {
-          errs() << "connected to argument or constant\n";
           return V;
         } else {
           report_fatal_error("Unhandled LLVM instruction in getValue()");
         }
       }
-      errs() << "can't make a connection\n";
       return 0;
     } else {
       // otherwise, recursively synthesize
       switch (I->K) {
+      case Inst::SExt:{
+        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
+        if (!V0)
+          return 0;
+        return Builder.CreateSExt(V0, T);
+      }
+      case Inst::ZExt:{
+        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
+        if (!V0)
+          return 0;
+        return Builder.CreateZExt(V0, T);
+      }
       case Inst::Trunc:{
-        errs() << "getValue(): making a trunc instruction\n";
         Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
         if (!V0)
           return 0;
