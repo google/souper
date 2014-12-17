@@ -430,16 +430,7 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   std::vector<Inst *> OrderedOps;
 
   const std::vector<Inst *> *InstOps;
-  if (Inst::isAssociative(K)) {
-    for (Inst *Op : Ops) {
-      if (Op->K == K)
-        OrderedOps.insert(OrderedOps.end(), Op->Ops.begin(), Op->Ops.end());
-      else
-        OrderedOps.push_back(Op);
-    }
-    std::sort(OrderedOps.begin(), OrderedOps.end());
-    InstOps = &OrderedOps;
-  } else if (Inst::isCommutative(K)) {
+  if (Inst::isCommutative(K)) {
     OrderedOps = Ops;
     std::sort(OrderedOps.begin(), OrderedOps.end());
     InstOps = &OrderedOps;
@@ -464,19 +455,6 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   N->Ops = *InstOps;
   InstSet.InsertNode(N, IP);
   return N;
-}
-
-bool Inst::isAssociative(Inst::Kind K) {
-  switch (K) {
-  case Add:
-  case Mul:
-  case And:
-  case Or:
-  case Xor:
-    return true;
-  default:
-    return false;
-  }
 }
 
 bool Inst::isCommutative(Inst::Kind K) {

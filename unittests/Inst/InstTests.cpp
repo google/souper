@@ -42,14 +42,6 @@ TEST(InstTest, Fold) {
   Inst *I3SI1 = IC.getInst(Inst::Sub, 64, {I3, I1});
 
   ASSERT_NE(I1SI3, I3SI1);
-
-  Inst *I5 = IC.getConst(llvm::APInt(64, 2));
-
-  Inst *I3AI5 = IC.getInst(Inst::Add, 64, {I3, I5});
-  Inst *I1A_I3AI5 = IC.getInst(Inst::Add, 64, {I1, I3AI5});
-  Inst *I1AI3_AI5 = IC.getInst(Inst::Add, 64, {I1AI3, I5});
-
-  ASSERT_EQ(I1A_I3AI5, I1AI3_AI5);
 }
 
 TEST(InstTest, Print) {
