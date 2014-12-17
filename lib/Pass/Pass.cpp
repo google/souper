@@ -295,6 +295,7 @@ public:
         ReplacedInst->getDebugLoc().print(ReplacedInst->getContext(), errs());
       }
       IRBuilder<> Builder(ReplacedInst->getParent());
+      Builder.SetInsertPoint(ReplacedInst);
       Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT,
                                Builder);
       if (!NewVal) {
