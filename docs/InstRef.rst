@@ -25,7 +25,9 @@ This pattern states that instructions of the form ``%aa = add %a, %a``, where
 ``%2a = mul %a, 2``.
 
 It is also possible to express path conditions in ``Inst``\s. Path conditions
-are of the form ``pc X Y`` and express that the relation ``X = Y`` must
+are of the form of either ``pc X Y`` or ``blockpc b i X Y``.
+
+The first form express that the relation ``X = Y`` must
 hold in order for the transformation to be valid. The harvester derives
 path conditions from control flow. For example, in the following C program:
 
@@ -48,6 +50,37 @@ is how we might express this as a Souper ``Inst``:
     pc %2lx 1
     %1lx = slt 1, %x
     cand %1lx 1
+
+The second form expresses that the relation ``X = Y`` holds on the ``ith``
+incoming path of the given block ``b``, where ``i`` is zero-based.
+For example, in the C program below:
+
+.. code-block:: c
+
+   int foo (int a) {
+     int c;
+     if (a == 0) {
+       c = a + 1;
+     } else {
+       c = 1;
+     }
+     return c == 2;
+   }
+
+the expression ``c == 2`` can be evaluated based on the values of ``c``
+from both of the incoming paths. In souper, we might express this as:
+
+.. code-block:: text
+
+    %0 = block 2
+    %1:i32 = var
+    %2:i1 = eq 0:i32, %1
+    blockpc %0 0 %2 1:i1
+    blockpc %0 1 %2 0:i1
+    %3:i32 = addnsw 1:i32, %1
+    %4:i32 = phi %0, %3, 1:i32
+    %5:i1 = eq 1:i32, %4
+    cand %5 1:i1
 
 Instructions
 ============
@@ -95,10 +128,10 @@ inferred from the operands. However, the types of the instructions ``var``,
 specify the type manually by starting the line with ``%var:iN = ...`` where
 ``N`` is the desired bit width.
 
-Operands to instructions, ``cand`` and ``pc`` may be of the form ``%v``, ``X``
-or ``X:iN``, where ``v`` is an alphanumeric string referring to a previously
-defined instruction, ``X`` is a (possibly negative) integer literal and ``N``
-is the constant's bit width. It is not necessary to specify a constant's
+Operands to instructions, ``cand``, ``pc`` and ``blockpc`` may be of the form
+``%v``, ``X`` or ``X:iN``, where ``v`` is an alphanumeric string referring to
+a previously defined instruction, ``X`` is a (possibly negative) integer literal
+and ``N`` is the constant's bit width. It is not necessary to specify a constant's
 bit width unless the instruction has no other operands which may be used to
 infer the width.
 

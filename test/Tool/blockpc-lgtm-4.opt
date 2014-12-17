@@ -1,0 +1,19 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: LGTM
+%0 = block 3
+%1:i32 = var
+%2:i1 = ne 0:i32, %1
+%3:i1 = ne 1:i32, %1
+%4:i1 = and %2, %3
+blockpc %0 1 %1 1:i32
+%5:i32 = addnsw 9:i32, %1
+blockpc %0 2 %1 0:i32
+%6:i32 = addnsw 10:i32, %1
+blockpc %0 0 %4 1:i1
+%7:i32 = phi %0, 10:i32, %5, %6
+%8:i1 = eq 10:i32, %7
+cand %8 1:i1

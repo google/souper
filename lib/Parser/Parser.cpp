@@ -261,6 +261,11 @@ struct Parser {
   int Index = 0;
 
   std::vector<InstMapping> PCs;
+  BlockPCs BPCs;
+  // When we finish, BlockPCIdxMap[B] is the largest PredIdx for the
+  // set of blockpc(s) related to B. The map is used for error- and
+  // type-checking.
+  std::map<Block *, unsigned> BlockPCIdxMap;
   Inst *LHS = 0;
 
   std::string makeErrStr(const std::string &ErrStr) {
@@ -370,6 +375,12 @@ bool Parser::typeCheckPhi(unsigned Width, Block *B,
   if (B->Preds != Ops.size()) {
     ErrStr = "phi has " + utostr(Ops.size()) +
       " operand(s) but preceding block has " + utostr(B->Preds);
+    return false;
+  }
+  auto IdxIt = BlockPCIdxMap.find(B);
+  if (IdxIt != BlockPCIdxMap.end() && IdxIt->second >= Ops.size()) {
+    ErrStr = "blockpc's predecessor number is larger "
+             "than the number of phi's operands";
     return false;
   }
 
@@ -544,6 +555,8 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
 
 void Parser::nextReplacement() {
   PCs.clear();
+  BPCs.clear();
+  BlockPCIdxMap.clear();
   if (RCsOut)
     RCsOut->emplace_back(Context);
   ++Index;
@@ -586,7 +599,8 @@ bool Parser::parseLine(std::string &ErrStr) {
         InstMapping Cand = parseInstMapping(ErrStr);
         if (!ErrStr.empty()) return false;
 
-        Reps.push_back(ParsedReplacement{Cand, std::move(PCs)});
+        Reps.push_back(ParsedReplacement{Cand, std::move(PCs),
+                                         std::move(BPCs)});
         nextReplacement();
 
         return true;
@@ -605,7 +619,8 @@ bool Parser::parseLine(std::string &ErrStr) {
           return false;
 
         if (RK == ReplacementKind::ParseLHS) {
-          Reps.push_back(ParsedReplacement{InstMapping(LHS, 0), std::move(PCs)});
+          Reps.push_back(ParsedReplacement{InstMapping(LHS, 0),
+                                           std::move(PCs), std::move(BPCs)});
           nextReplacement();
         }
 
@@ -625,7 +640,8 @@ bool Parser::parseLine(std::string &ErrStr) {
           return false;
         InstMapping Cand = InstMapping(LHS, RHS);
 
-        Reps.push_back(ParsedReplacement{Cand, std::move(PCs)});
+        Reps.push_back(ParsedReplacement{Cand, std::move(PCs),
+                                         std::move(BPCs)});
         nextReplacement();
 
         return true;
@@ -635,6 +651,53 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!ErrStr.empty()) return false;
 
         PCs.push_back(PC);
+
+        return true;
+      } else if (CurTok.str() == "blockpc") {
+        if (!consumeToken(ErrStr)) return false;
+        if (CurTok.K != Token::ValName) {
+          ErrStr = makeErrStr("expected block var");
+          return false;
+        }
+        StringRef InstName = CurTok.Name;
+        unsigned InstWidth = CurTok.Width;
+        if (InstWidth != 0) {
+          ErrStr = makeErrStr("blocks may not have a width");
+          return false;
+        }
+        if (Context.getInst(CurTok.Name)) {
+          ErrStr = makeErrStr(std::string("%") + InstName.str() +
+                            " is declared as an inst");
+          return false;
+        }
+        Block *B = Context.getBlock(InstName);
+        if (B == 0) {
+          ErrStr = makeErrStr(std::string("block %") + InstName.str() +
+                              " is undeclared");
+          return false;
+        }
+        if (!consumeToken(ErrStr)) return false;
+
+        if (CurTok.K != Token::UntypedInt) {
+          ErrStr = makeErrStr(std::string("expected block number"));
+          return false;
+        }
+        unsigned CurrIdx = CurTok.Val.getLimitedValue();
+        if (!consumeToken(ErrStr)) return false;
+
+        InstMapping PC = parseInstMapping(ErrStr);
+        if (!ErrStr.empty()) return false;
+
+        std::map<Block *, unsigned>::iterator IdxIt = BlockPCIdxMap.find(B);
+        if (IdxIt == BlockPCIdxMap.end()) {
+          BlockPCIdxMap[B] = CurrIdx;
+        }
+        else {
+          assert(BPCs.size() && "Empty BlockPCs!");
+          if (CurrIdx > IdxIt->second)
+            BlockPCIdxMap[B] = CurrIdx;
+        }
+        BPCs.emplace_back(B, CurrIdx, PC);
 
         return true;
       } else {
@@ -831,7 +894,8 @@ bool Parser::parseLine(std::string &ErrStr) {
     }
 
     default:
-      ErrStr = makeErrStr("expected inst, block, cand, infer, result, or pc");
+      ErrStr =
+        makeErrStr("expected inst, block, cand, infer, result, pc, or blockpc");
       return false;
   }
 }
@@ -921,7 +985,8 @@ std::vector<ParsedReplacement> Parser::parseReplacements(std::string &ErrStr) {
       return Reps;
   }
 
-  if (!PCs.empty() || !Context.empty()) {
+  if (!PCs.empty() || !BPCs.empty() || !Context.empty() ||
+      !BlockPCIdxMap.empty()) {
     ErrStr = makeErrStr("incomplete replacement");
     return Reps;
   }

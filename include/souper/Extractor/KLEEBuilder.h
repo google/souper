@@ -29,9 +29,11 @@ struct CandidateExpr {
   klee::ref<klee::Expr> E;
 };
 
-CandidateExpr GetCandidateExprForReplacement(const std::vector<InstMapping> &PCs,
+CandidateExpr GetCandidateExprForReplacement(const BlockPCs &BPCs,
+                                             const std::vector<InstMapping> &PCs,
                                              InstMapping Mapping);
-std::string BuildQuery(const std::vector<InstMapping> &PCs, InstMapping Mapping,
+std::string BuildQuery(const BlockPCs &BPCs,
+                       const std::vector<InstMapping> &PCs, InstMapping Mapping,
                        std::vector<Inst *> *ModelVars);
 
 }
