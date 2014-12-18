@@ -257,12 +257,6 @@ public:
       }
     }
 
-    if (DebugSouperPass && 0) {
-      errs() << "\n";
-      errs() << "; Listing applied replacements for " << FunctionName << "\n";
-      errs() << "; Using solver: " << S->getName() << '\n';
-    }
-
     for (auto &Cand : CandMap) {
       if (StaticProfile) {
         std::string Str;
@@ -293,7 +287,7 @@ public:
       Instruction *ReplacedInst = Cand.Origin.getInstruction();
       if (DebugSouperPass) {
         errs() << "\n";
-        errs() << "; In:\n";
+        errs() << "; In " << FunctionName <<":\n";
         PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
         errs() << "; Replacing \"";
         ReplacedInst->print(errs());
