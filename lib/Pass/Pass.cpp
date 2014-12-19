@@ -157,38 +157,23 @@ private:
       return 0;
     } else {
       // otherwise, recursively synthesize
+      Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
+      if (!V0)
+        return 0;
       switch (I->K) {
-      case Inst::SExt:{
-        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
-        if (!V0)
-          return 0;
+      case Inst::SExt:
         return Builder.CreateSExt(V0, T);
-      }
-      case Inst::ZExt:{
-        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
-        if (!V0)
-          return 0;
+      case Inst::ZExt:
         return Builder.CreateZExt(V0, T);
-      }
-      case Inst::Trunc:{
-        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
-        if (!V0)
-          return 0;
+      case Inst::Trunc:
         return Builder.CreateTrunc(V0, T);
-      }
       case Inst::Xor:{
-        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
-        if (!V0)
-          return 0;
         Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder);
         if (!V1)
           return 0;
         return Builder.CreateXor(V0, V1);
       }
       case Inst::Sub:{
-        Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
-        if (!V0)
-          return 0;
         Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder);
         if (!V1)
           return 0;

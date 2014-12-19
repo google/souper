@@ -148,20 +148,10 @@ private:
         } else if (LHS->Width < I->Width) {
           Guesses.push_back(IC.getInst(Inst::Trunc, LHS->Width, {I}));
         } else {
-#if 0
           Guesses.push_back(IC.getInst(Inst::Xor, LHS->Width,
               { IC.getConst(APInt(I->Width, -1)), I }));
           Guesses.push_back(IC.getInst(Inst::Sub, LHS->Width,
               { IC.getConst(APInt(I->Width, 0)), I }));
-#endif
-          if (I->Width == 8 || I->Width == 16 || I->Width == 32 ||
-              I->Width == 64 || I->Width == 256) {
-            //Guesses.push_back(IC.getInst(Inst::Ctlz, LHS->Width, {I}));
-            //Guesses.push_back(IC.getInst(Inst::Cttz, LHS->Width, {I}));
-            //Guesses.push_back(IC.getInst(Inst::CtPop, LHS->Width, {I}));
-          }
-          //if (I->Width == 16 || I->Width == 32 || I->Width == 64)
-            //Guesses.push_back(IC.getInst(Inst::BSwap, LHS->Width, {I}));
         }
         for (auto G : Guesses) {
           if (LHSCost - cost(G) < 1)
