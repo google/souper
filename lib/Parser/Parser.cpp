@@ -255,9 +255,9 @@ struct Parser {
   Token CurTok;
   InstContext &IC;
   std::vector<ParsedReplacement> &Reps;
+  ReplacementKind RK;
   std::vector<ReplacementContext> *RCsIn, *RCsOut;
   ReplacementContext Context;
-  ReplacementKind RK;
   int Index = 0;
 
   std::vector<InstMapping> PCs;
