@@ -96,6 +96,19 @@ SOUPER_NO_EXTERNAL_CACHE environment variable. Souper's Redis cache does not yet
 have any support for versioning; you should stop Redis and delete its dump file
 any time Souper is upgraded.
 
+Souper uses KLEE's Expr library to construct SMT queries in SMT-LIBv2 format
+and pass them to a solver. KLEE's default encoding for symbolic inputs
+is based on Theory of Arrays (QF_AUFBV). We experienced significant performance
+boost in solvers by using pure BitVector encoding (QF_BV) instead. You can
+use this workaround by pulling the following KLEE branch and recompiling
+Souper:
+
+    $ cd /path/to/souper
+    $ rm -rf third_party/klee
+    $ git clone -b pure-bv-qf https://github.com/rsas/klee third_party/klee
+    $ cd build
+    $ make
+
 Disclaimer
 ----------
 
