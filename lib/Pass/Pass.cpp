@@ -141,7 +141,6 @@ private:
       auto It = EBC.Origins.equal_range(I);
       for (auto O = It.first; O != It.second; ++O) {
         Value *V = O->second;
-        assert(V);
         if (V->getType() != T)
           continue;
         if (auto IP = dyn_cast<Instruction>(V)) {
