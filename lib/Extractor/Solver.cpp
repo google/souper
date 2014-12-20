@@ -72,10 +72,10 @@ private:
   int costHelper(Inst *I, std::set<Inst *> &Visited) {
     if (!Visited.insert(I).second)
       return 0;
-    int ret = 1;
+    int Cost = 1;
     for (auto Op : I->Ops)
-      ret += costHelper(Op, Visited);
-    return ret;
+      Cost += costHelper(Op, Visited);
+    return Cost;
   }
 
   int cost(Inst *I) {
@@ -90,7 +90,7 @@ private:
 
     if (LHS->Width == 1 && InferI1) {
       std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
-          IC.getConst(APInt(1, false)) };
+                                   IC.getConst(APInt(1, false)) };
       for (auto G : Guesses) {
         // TODO: we can trivially synthesize an i1 undef by checking for
         // validity of both guesses
@@ -115,7 +115,6 @@ private:
         getInputs(Op, Inputs);
 
     if (InferNop) {
-      int LHSCost = cost(LHS);
       for (auto I : Inputs) {
         if (I->Width == 1 &&
             (I->K == Inst::Const || I->K == Inst::UntypedConst))

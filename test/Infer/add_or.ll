@@ -1,9 +1,9 @@
 ; REQUIRES: solver
 
-; RUN: opt -load %pass -souper %solver %s -souper-infer-nop -adce | llvm-dis -o - | FileCheck %s
-; CHECK-NOT: add
-; CHECK-NOT: or
-; CHECK-NOT: sub
+; RUN: opt -load %pass -souper %solver %s -souper-infer-nop -adce -S -o - | FileCheck %s
+; CHECK-NOT: add i32
+; CHECK-NOT: or i32
+; CHECK-NOT: sub i32
 
 define i32 @f(i32 %a) #0 {
 entry:

@@ -1,6 +1,6 @@
 ; REQUIRES: solver
 
-; RUN: opt -load %pass -souper %solver %s -souper-infer-nop -adce | llvm-dis -o - | FileCheck %s
+; RUN: opt -load %pass -souper %solver %s -souper-infer-nop -adce -S -o - | FileCheck %s
 ; CHECK-NOT: -8
 
 define i64 @f(i64 %a) #0 {

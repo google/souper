@@ -16,7 +16,7 @@
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/PostDominators.h"
+#include "llvm/IR/Dominators.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
@@ -131,7 +131,7 @@ private:
   }
 
   Value *getValue(Inst *I, Instruction *ReplacedInst,
-                  ExprBuilderContext &EBC, PostDominatorTree *DT,
+                  ExprBuilderContext &EBC, DominatorTree *DT,
                   IRBuilder<> &Builder) {
     Type *T = Type::getIntNTy(ReplacedInst->getContext(), I->Width);
     if (I->K == Inst::Const) {
@@ -144,11 +144,10 @@ private:
         assert(V);
         if (V->getType() != T)
           continue;
-        if (Instruction *IP = dyn_cast<Instruction>(V)) {
-          if (DT->dominates(IP->getParent(), ReplacedInst->getParent())) {
+        if (auto IP = dyn_cast<Instruction>(V)) {
+          if (DT->dominates(IP->getParent(), ReplacedInst->getParent()))
             return V;
-          }
-        } else if (dyn_cast<Argument>(V) || dyn_cast<Constant>(V)) {
+        } else if (isa<Argument>(V) || isa<Constant>(V)) {
           return V;
         } else {
           report_fatal_error("Unhandled LLVM instruction in getValue()");
@@ -188,7 +187,7 @@ private:
 
 public:
   void getAnalysisUsage(AnalysisUsage &Info) const {
-    Info.addRequired<PostDominatorTree>();
+    Info.addRequired<DominatorTreeWrapperPass>();
     Info.addRequired<LoopInfo>();
     // TODO there should be some setPreserves that we can add here
   }
@@ -210,7 +209,7 @@ public:
     CandidateMap CandMap;
 
     LoopInfo *LI = &getAnalysis<LoopInfo>();
-    PostDominatorTree *DT = &getAnalysis<PostDominatorTree>();
+    DominatorTree *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
 
     FunctionCandidateSet CS = ExtractCandidatesFromPass(&F, LI, IC, EBC);
 
@@ -336,7 +335,7 @@ void initializeSouperPassPass(llvm::PassRegistry &);
 INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(LoopInfo)
-INITIALIZE_PASS_DEPENDENCY(PostDominatorTree)
+INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 

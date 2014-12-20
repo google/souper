@@ -404,6 +404,7 @@ Inst *ExprBuilder::get(Value *V) {
   if (!E) {
     E = build(V);
   }
+  // TODO: avoid adding the origin if it's already there
   EBC.Origins.insert(std::pair<Inst *, Value *>(E, V));
   return E;
 }

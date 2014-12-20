@@ -1,8 +1,8 @@
 ; REQUIRES: solver
 
-; RUN: opt -load %pass -souper %solver %s -souper-infer-nop -adce | llvm-dis -o - | FileCheck %s
-; CHECK-NOT: sdiv
-; CHECK-NOT: shl
+; RUN: opt -load %pass -souper %solver %s -souper-infer-nop -adce -S -o - | FileCheck %s
+; CHECK-NOT: sdiv i64
+; CHECK-NOT: shl i64
 
 define i64 @f(i1 %in0, i64 %in1) #0 {
 entry:
