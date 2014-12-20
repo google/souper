@@ -879,18 +879,33 @@ CandidateExpr souper::GetCandidateExprForReplacement(
 
   CandidateExpr CE;
   ExprBuilder EB(CE.Arrays, CE.ArrayVars);
-
-  ref<Expr> Cons = EB.getInstMapping(Mapping);
+  // Build LHS
+  ref<Expr> LHS = EB.get(Mapping.LHS);
+  // Build PCs
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
   for (const auto &PC : PCs) {
     Ante = AndExpr::create(Ante, EB.getInstMapping(PC));
   }
-  Ante = AndExpr::create(Ante, EB.getUBInstCondition());
+  // Build BPCs 
   if (BPCs.size()) {
     EB.setBlockPCMap(BPCs);
     Ante = AndExpr::create(Ante, EB.getBlockPCs());
   }
+  // Get UB constraints of LHS and (B)PCs
+  ref<Expr> LHSPCsUB = EB.getUBInstCondition();
+  // Build RHS
+  ref<Expr> RHS = EB.get(Mapping.RHS);
+  // Get all UB constraints (LHS && (B)PCs && RHS)
+  ref<Expr> UB = EB.getUBInstCondition();
 
+  // (LHS == RHS)
+  ref<Expr> Cons = EqExpr::create(LHS, RHS);
+  // (LHS == RHS) && UB
+  if (Mapping.RHS->K != Inst::Const)
+    Cons = AndExpr::create(Cons, UB);
+  // (LHS UB && (B)PCs && (B)PCs UB)
+  Ante = AndExpr::create(Ante, LHSPCsUB);
+  // (LHS UB && (B)PCs && (B)PCs UB) => (LHS == RHS) && UB
   CE.E = Expr::createImplies(Ante, Cons);
 
   return CE;
