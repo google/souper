@@ -72,7 +72,7 @@ private:
   int costHelper(Inst *I, std::set<Inst *> &Visited) {
     if (!Visited.insert(I).second)
       return 0;
-    int Cost = 1;
+    int Cost = Inst::getCost(I->K);
     for (auto Op : I->Ops)
       Cost += costHelper(Op, Visited);
     return Cost;
@@ -151,6 +151,14 @@ private:
               { IC.getConst(APInt(I->Width, -1)), I }));
           Guesses.push_back(IC.getInst(Inst::Sub, LHS->Width,
               { IC.getConst(APInt(I->Width, 0)), I }));
+          if (I->Width == 16 || I->Width == 32 || I->Width == 64)
+            Guesses.push_back(IC.getInst(Inst::BSwap, LHS->Width, {I}));
+          if (I->Width == 8 || I->Width == 16 || I->Width == 32 ||
+              I->Width == 64 || I->Width == 256) {
+            Guesses.push_back(IC.getInst(Inst::CtPop, LHS->Width, {I}));
+            Guesses.push_back(IC.getInst(Inst::Cttz, LHS->Width, {I}));
+            Guesses.push_back(IC.getInst(Inst::Ctlz, LHS->Width, {I}));
+          }
         }
         for (auto G : Guesses) {
           if (LHSCost - cost(G) < 1)

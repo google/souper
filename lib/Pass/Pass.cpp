@@ -19,6 +19,7 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
@@ -132,7 +133,7 @@ private:
 
   Value *getValue(Inst *I, Instruction *ReplacedInst,
                   ExprBuilderContext &EBC, DominatorTree *DT,
-                  IRBuilder<> &Builder) {
+                  IRBuilder<> &Builder, Module *M) {
     Type *T = Type::getIntNTy(ReplacedInst->getContext(), I->Width);
     if (I->K == Inst::Const) {
       return ConstantInt::get(T, I->Val);
@@ -155,7 +156,7 @@ private:
       return 0;
     } else {
       // otherwise, recursively synthesize
-      Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder);
+      Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder, M);
       if (!V0)
         return 0;
       switch (I->K) {
@@ -166,16 +167,32 @@ private:
       case Inst::Trunc:
         return Builder.CreateTrunc(V0, T);
       case Inst::Xor:{
-        Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder);
+        Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder, M);
         if (!V1)
           return 0;
         return Builder.CreateXor(V0, V1);
       }
       case Inst::Sub:{
-        Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder);
+        Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder, M);
         if (!V1)
           return 0;
         return Builder.CreateSub(V0, V1);
+      }
+      case Inst::CtPop:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctpop, T);
+        return Builder.CreateCall(F, V0);
+      }
+      case Inst::BSwap:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::bswap, T);
+        return Builder.CreateCall(F, V0);
+      }
+      case Inst::Cttz:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::cttz, T);
+        return Builder.CreateCall(F, V0);
+      }
+      case Inst::Ctlz:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctlz, T);
+        return Builder.CreateCall(F, V0);
       }
       default:
         report_fatal_error((std::string)"Unhandled Souper instruction " +
@@ -280,7 +297,7 @@ public:
       IRBuilder<> Builder(ReplacedInst->getParent());
       Builder.SetInsertPoint(ReplacedInst);
       Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT,
-                               Builder);
+                               Builder, F.getParent());
       if (!NewVal) {
         if (DebugSouperPass)
           errs() << "\"\n; replacement failed\n";
