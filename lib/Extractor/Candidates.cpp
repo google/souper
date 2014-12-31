@@ -354,6 +354,9 @@ Inst *ExprBuilder::build(Value *V) {
       ; // fallthrough to return below
     }
   } else if (auto GEP = dyn_cast<GetElementPtrInst>(V)) {
+
+    return makeArrayRead(V);
+
     if (isa<VectorType>(GEP->getType()))
       return makeArrayRead(V); // vector operation
     return buildGEP(get(GEP->getOperand(0)), gep_type_begin(GEP),

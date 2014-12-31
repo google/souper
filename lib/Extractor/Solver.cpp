@@ -109,6 +109,7 @@ private:
 
     // TODO: constant synthesis goes here
 
+    // TODO drop inputs that are guaranteed to fail the dominance test
     std::set<Inst *> Inputs;
     if (InferNop || InferUnary)
       for (auto Op : LHS->Ops)
