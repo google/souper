@@ -485,14 +485,12 @@ void ExprBuilder::addPathConditions(BlockPCs &BPCs,
         emplace_back_dedup(PCs, Cond, get(Case));
       } else {
         // default
-        std::vector<Inst *> Cases;
+        Inst *DI = IC.getConst(APInt(1, true));
         for (auto I = Switch->case_begin(), E = Switch->case_end(); I != E;
              ++I) {
-          Cases.push_back(
-              IC.getInst(Inst::Ne, 1, {Cond, get(I.getCaseValue())}));
+          Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I.getCaseValue())});
+          emplace_back_dedup(PCs, CI, DI);
         }
-        emplace_back_dedup(PCs, IC.getInst(Inst::And, 1, Cases),
-                           IC.getConst(APInt(1, true)));
       }
     }
   } else {
