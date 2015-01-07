@@ -1,9 +1,9 @@
-; REQUIRES: solver solver-model
+; REQUIRES: solver, solver-model
 
 ; RUN: llvm-as -o %t1 %s
 ; RUN: %souper %solver -souper-infer-iN %t1 > %t2
-; RUN: FileCheck -implicit-check-not=FIRST < %t2
-; RUN: FileCheck -implicit-check-not=SECOND < %t2
+; RUN: FileCheck %s -implicit-check-not=FIRST < %t2
+; RUN: FileCheck %s -implicit-check-not=SECOND < %t2
 
 ; FIRST: cand %11 301:i10
 ; SECOND: cand %11 721:i10
