@@ -67,10 +67,14 @@ public:
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
 private:
-  void getInputs(Inst *I, std::set<Inst *> &Inputs) {
-    if (Inputs.insert(I).second)
+  void getInputs(Inst *I, std::set<Inst *> &Inputs, std::set<Inst *> &PhiOps) {
+    if (Inputs.insert(I).second) {
+      if (I->K == Inst::Phi)
+        for (auto Op : I->Ops)
+          PhiOps.insert(Op);
       for (auto Op : I->Ops)
-        getInputs(Op, Inputs);
+        getInputs(Op, Inputs, PhiOps);
+    }
   }
 
   int costHelper(Inst *I, std::set<Inst *> &Visited) {
@@ -145,11 +149,14 @@ private:
       }
     }
 
-    // TODO drop inputs that are guaranteed to fail the dominance test
     std::set<Inst *> Inputs;
-    if (InferNop || InferUnary)
+    if (InferNop || InferUnary) {
+      std::set<Inst *> PhiOps, AllInputs;
       for (auto Op : LHS->Ops)
-        getInputs(Op, Inputs);
+        getInputs(Op, AllInputs, PhiOps);
+      std::set_difference(AllInputs.begin(), AllInputs.end(), PhiOps.begin(),
+                          PhiOps.end(), std::inserter(Inputs, Inputs.end()));
+    }
 
     if (InferNop) {
       for (auto I : Inputs) {
