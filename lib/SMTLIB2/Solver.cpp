@@ -252,7 +252,8 @@ public:
     }
     ::close(OutputFD);
 
-    int ExitCode = Prog(Args, InputPath, OutputPath, Timeout);
+    int ExitCode =
+        Prog(Args, InputPath, OutputPath, /*ErrorPath=*/"/dev/null", Timeout);
 
     if (Keep) {
       llvm::errs() << "Solver input saved to " << InputPath << '\n';
@@ -313,14 +314,15 @@ public:
 SolverProgram souper::makeExternalSolverProgram(StringRef Path) {
   std::string PathStr = Path;
   return [PathStr](const std::vector<std::string> &Args, StringRef RedirectIn,
-                   StringRef RedirectOut, unsigned Timeout) {
+                   StringRef RedirectOut, StringRef RedirectErr,
+                   unsigned Timeout) {
     std::vector<const char *> ArgPtrs;
     ArgPtrs.push_back(PathStr.c_str());
     std::transform(Args.begin(), Args.end(), std::back_inserter(ArgPtrs),
                    [](const std::string &Arg) { return Arg.c_str(); });
     ArgPtrs.push_back(0);
 
-    const StringRef *Redirects[] = {&RedirectIn, &RedirectOut, &RedirectOut};
+    const StringRef *Redirects[] = {&RedirectIn, &RedirectOut, &RedirectErr};
     return sys::ExecuteAndWait(PathStr, ArgPtrs.data(), 0, Redirects, Timeout);
   };
 }
@@ -328,13 +330,16 @@ SolverProgram souper::makeExternalSolverProgram(StringRef Path) {
 SolverProgram souper::makeInternalSolverProgram(int MainPtr(int argc,
                                                             char **argv)) {
   return [MainPtr](const std::vector<std::string> &Args, StringRef RedirectIn,
-                   StringRef RedirectOut, unsigned Timeout) {
+                   StringRef RedirectOut, StringRef RedirectErr,
+                   unsigned Timeout) {
     int pid = fork();
     if (pid == 0) {
       int InFD = open(RedirectIn.str().c_str(), O_RDONLY);
       if (InFD == -1) _exit(1);
       int OutFD = open(RedirectOut.str().c_str(), O_WRONLY);
       if (OutFD == -1) _exit(1);
+      int ErrFD = open(RedirectErr.str().c_str(), O_WRONLY);
+      if (ErrFD == -1) _exit(1);
 
       close(STDIN_FILENO);
       close(STDOUT_FILENO);
@@ -342,7 +347,7 @@ SolverProgram souper::makeInternalSolverProgram(int MainPtr(int argc,
 
       if (dup2(InFD, STDIN_FILENO) == -1) _exit(1);
       if (dup2(OutFD, STDOUT_FILENO) == -1) _exit(1);
-      if (dup2(OutFD, STDERR_FILENO) == -1) _exit(1);
+      if (dup2(ErrFD, STDERR_FILENO) == -1) _exit(1);
 
       rlimit rlim;
       if (getrlimit(RLIMIT_NOFILE, &rlim) == -1) _exit(1);

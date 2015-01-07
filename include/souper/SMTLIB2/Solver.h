@@ -26,7 +26,8 @@ namespace souper {
 
 typedef std::function<
     int(const std::vector<std::string> &Args, llvm::StringRef RedirectIn,
-        llvm::StringRef RedirectOut, unsigned Timeout)> SolverProgram;
+        llvm::StringRef RedirectOut, llvm::StringRef RedirectErr,
+        unsigned Timeout)> SolverProgram;
 
 class SMTLIBSolver {
 public:
