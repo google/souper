@@ -1,10 +1,11 @@
 ; REQUIRES: solver
 ; RUN: %souper-check -souper-infer-nop -souper-infer-unary -infer-rhs %solver %s | FileCheck %s
-; CHECK: successfully
-; CHECK-NEXT: %3:i1 = trunc %0
-; CHECK-NEXT: result %3
+; CHECK: Failed
 
 %0:i32 = var
-%1:i32 = urem %0, 2
-%2:i1 = eq %1, 1
+%1:i32 = and %0, -2147483648
+%2:i32 = add %0, %1
 infer %2
+
+; %3:i32 = and %0, 2147483647
+; result %3

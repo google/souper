@@ -478,6 +478,18 @@ bool Inst::isCommutative(Inst::Kind K) {
   }
 }
 
+int Inst::getCost(Inst::Kind K) {
+  switch (K) {
+  case BSwap:
+  case CtPop:
+  case Cttz:
+  case Ctlz:
+    return 5;
+  default:
+    return 1;
+  }
+}
+
 void souper::PrintReplacement(llvm::raw_ostream &Out,
                               const BlockPCs &BPCs,
                               const std::vector<InstMapping> &PCs,

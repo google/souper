@@ -1,0 +1,11 @@
+; REQUIRES: solver
+; RUN: %souper-check -souper-infer-nop -souper-infer-unary -infer-rhs %solver %s | FileCheck %s
+; CHECK: successfully
+; souper infers this w/o explicit constant synthesis because the desired
+; constant is sitting there in the LHS -- it gets guessed during nop synthesis
+; CHECK-NEXT: result 4294967295:i32
+
+%0:i32 = var
+%1:i32 = xor %0, -1
+%2:i32 = add %0, %1
+infer %2

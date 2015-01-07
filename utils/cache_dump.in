@@ -352,3 +352,9 @@ foreach my $opt (sort $byx keys %toprint) {
     }
     print "------------------------------------------------------\n\n";
 }
+
+my $cnt = 0;
+foreach my $opt (keys %toprint) {
+    $cnt += $sprofiles{$opt};
+}
+print "; overall total static profile weight = $cnt\n";
