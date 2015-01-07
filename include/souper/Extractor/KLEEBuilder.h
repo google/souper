@@ -31,10 +31,11 @@ struct CandidateExpr {
 
 CandidateExpr GetCandidateExprForReplacement(const BlockPCs &BPCs,
                                              const std::vector<InstMapping> &PCs,
-                                             InstMapping Mapping);
+                                             InstMapping Mapping, bool Negate);
+
 std::string BuildQuery(const BlockPCs &BPCs,
                        const std::vector<InstMapping> &PCs, InstMapping Mapping,
-                       std::vector<Inst *> *ModelVars);
+                       std::vector<Inst *> *ModelVars, bool Negate=false);
 
 }
 

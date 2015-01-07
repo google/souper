@@ -54,6 +54,7 @@ die $need_solver unless $solver;
 
 my $OPTS = "";
 $OPTS .= "-souper-infer-i1=false " if $ENV{"SOUPER_NO_INFER_I1"};
+$OPTS .= "-souper-infer-iN " if $ENV{"SOUPER_INFER_INT"};
 $OPTS .= "-souper-infer-nop " if $ENV{"SOUPER_INFER_NOP"};
 $OPTS .= "-souper-infer-unary " if $ENV{"SOUPER_INFER_UNARY"};
 
