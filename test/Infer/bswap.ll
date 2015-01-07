@@ -1,4 +1,4 @@
-; REQUIRES: solver solver-model
+; REQUIRES: solver, solver-model
 
 ; RUN: llvm-as -o %t1 %s
 ; RUN: %souper %solver -souper-infer-iN %t1 > %t2
