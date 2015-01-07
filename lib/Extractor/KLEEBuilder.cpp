@@ -875,7 +875,7 @@ void ExprBuilder::getBlockPCPhiPaths(
 // Return an expression which must be proven valid for the candidate to apply.
 CandidateExpr souper::GetCandidateExprForReplacement(
     const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-    InstMapping Mapping) {
+    InstMapping Mapping, bool Negate) {
 
   CandidateExpr CE;
   ExprBuilder EB(CE.Arrays, CE.ArrayVars);
@@ -898,14 +898,17 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   // Get all UB constraints (LHS && (B)PCs && RHS)
   ref<Expr> UB = EB.getUBInstCondition();
 
-  // (LHS == RHS)
-  ref<Expr> Cons = EqExpr::create(LHS, RHS);
-  // (LHS == RHS) && UB
+  ref<Expr> Cons;
+  if (Negate) // (LHS != RHS)
+    Cons = NeExpr::create(LHS, RHS);
+  else        // (LHS == RHS)
+    Cons = EqExpr::create(LHS, RHS);
+  // Cons && UB
   if (Mapping.RHS->K != Inst::Const)
     Cons = AndExpr::create(Cons, UB);
   // (LHS UB && (B)PCs && (B)PCs UB)
   Ante = AndExpr::create(Ante, LHSPCsUB);
-  // (LHS UB && (B)PCs && (B)PCs UB) => (LHS == RHS) && UB
+  // (LHS UB && (B)PCs && (B)PCs UB) => Cons && UB
   CE.E = Expr::createImplies(Ante, Cons);
 
   return CE;
@@ -914,11 +917,11 @@ CandidateExpr souper::GetCandidateExprForReplacement(
 std::string souper::BuildQuery(const BlockPCs &BPCs,
                                const std::vector<InstMapping> &PCs,
                                InstMapping Mapping,
-                               std::vector<Inst *> *ModelVars) {
+                               std::vector<Inst *> *ModelVars, bool Negate) {
   std::string SMTStr;
   llvm::raw_string_ostream SMTSS(SMTStr);
   ConstraintManager Manager;
-  CandidateExpr CE = GetCandidateExprForReplacement(BPCs, PCs, Mapping);
+  CandidateExpr CE = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
   Query KQuery(Manager, CE.E);
   ExprSMTLIBPrinter Printer;
   Printer.setOutput(SMTSS);

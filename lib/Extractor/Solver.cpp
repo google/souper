@@ -46,6 +46,10 @@ static cl::opt<bool> InferI1("souper-infer-i1",
     cl::desc("Infer Boolean values (default=true)"),
     cl::init(true));
 
+static cl::opt<bool> InferInts("souper-infer-iN",
+    cl::desc("Infer iN integers for N>1 (default=false)"),
+    cl::init(false));
+
 static cl::opt<bool> InferNop("souper-infer-nop",
     cl::desc("Infer nops (default=false)"),
     cl::init(false));
@@ -91,23 +95,55 @@ private:
     if (LHS->Width == 1 && InferI1) {
       std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
                                    IC.getConst(APInt(1, false)) };
-      for (auto G : Guesses) {
-        // TODO: we can trivially synthesize an i1 undef by checking for
-        // validity of both guesses
-        InstMapping Mapping(LHS, G);
+      for (auto I : Guesses) {
+        // TODO: we can trivially synthesize an i1 undef by checking for validity
+        // of both guesses
+        InstMapping Mapping(LHS, I);
         bool IsSat;
-        EC = SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, Mapping, 0),
-                                      IsSat, 0, 0, Timeout);
+        EC = SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, Mapping, 0), IsSat, 0, 0,
+                                      Timeout);
         if (EC)
           return EC;
         if (!IsSat) {
-          RHS = G;
+          RHS = I;
           return EC;
         }
       }
     }
 
-    // TODO: constant synthesis goes here
+    if (InferInts && SMTSolver->supportsModels() && LHS->Width > 1) {
+      std::vector<Inst *> ModelInsts;
+      std::vector<llvm::APInt> ModelVals;
+      Inst *I = IC.createVar(LHS->Width, "constant");
+      InstMapping Mapping(LHS, I);
+      std::string Query = BuildQuery(BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
+      bool IsSat;
+      EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInsts.size(),
+                                    &ModelVals, Timeout);
+      if (EC)
+        return EC;
+      if (IsSat) {
+        // We found a model for a constant
+        Inst *Const = 0;
+        for (unsigned J = 0; J != ModelInsts.size(); ++J) {
+          if (ModelInsts[J]->Name == "constant") {
+            Const = IC.getConst(ModelVals[J]);
+            break;
+          }
+        }
+        assert(Const && "there must be a model for the constant");
+        // Check if the constant is valid for all inputs
+        InstMapping ConstMapping(LHS, Const);
+        EC = SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, ConstMapping, 0),
+                                      IsSat, 0, 0, Timeout);
+        if (EC)
+          return EC;
+        if (!IsSat) {
+          RHS = Const;
+          return EC;
+        }
+      }
+    }
 
     // TODO drop inputs that are guaranteed to fail the dominance test
     std::set<Inst *> Inputs;

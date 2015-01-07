@@ -64,7 +64,7 @@ struct ExtractorTest : testing::Test {
           R.Mapping.RHS = I;
           std::unique_ptr<CandidateExpr> CE(
               new CandidateExpr(GetCandidateExprForReplacement(R.BPCs, R.PCs,
-                                                               R.Mapping)));
+                                                               R.Mapping, false)));
           CandExprs.emplace_back(std::move(CE));
         }
       }
