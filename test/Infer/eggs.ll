@@ -1,7 +1,12 @@
-; REQUIRES: solver
+; REQUIRES: solver solver-model
 
-; RUN: llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: llvm-as -o %t1 %s
+; RUN: %souper %solver -souper-infer-iN %t1 > %t2
+; RUN: FileCheck -implicit-check-not=FIRST < %t2
+; RUN: FileCheck -implicit-check-not=SECOND < %t2
+
+; FIRST: cand %11 301:i10
+; SECOND: cand %11 721:i10
 
 ; A woman was carrying a large basket of eggs when a passer-by bumped her and
 ; she dropped the basket and all the eggs broke. The passer-by asked how many
@@ -28,22 +33,12 @@ cont3:
   %cmp4 = icmp eq i10 %rem4, 1
   br i1 %cmp4, label %cont4, label %out
 cont4:
-  %rem5 = urem i10 %x, 6
-  %cmp5 = icmp eq i10 %rem5, 1, !expected !1 ; redundant check
-  br i1 %cmp5, label %cont5, label %out
-cont5:
   %rem6 = urem i10 %x, 7
   %cmp6 = icmp eq i10 %rem6, 0
   br i1 %cmp6, label %cont6, label %out
 cont6:
-  %check1 = icmp eq i10 %x, 301
-  %check2 = icmp eq i10 %x, 721
-  %check = or i1 %check1, %check2, !expected !1 
-  %check3 = icmp eq i10 %x, 999, !expected !0
+  %res = add i10 %x, 0
   ret i10 %x
 out:
   ret i10 0
 }
-
-!0 = metadata !{ i1 0 }
-!1 = metadata !{ i1 1 }

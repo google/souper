@@ -41,6 +41,9 @@ namespace {
 static cl::opt<bool> NoInfer("souper-no-infer",
     cl::desc("Populate the external cache, but don't infer replacements"),
     cl::init(false));
+static cl::opt<bool> InferInts("souper-infer-iN",
+    cl::desc("Infer iN integers for N>1 (default=false)"),
+    cl::init(false));
 
 class BaseSolver : public Solver {
   std::unique_ptr<SMTLIBSolver> SMTSolver;
@@ -53,24 +56,61 @@ public:
   std::error_code infer(const BlockPCs &BPCs,
                         const std::vector<InstMapping> &PCs,
                         Inst *LHS, Inst *&RHS, InstContext &IC) {
-    assert(LHS->Width == 1);
     std::error_code EC;
-    std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
-                                 IC.getConst(APInt(1, false)) };
-    for (auto I : Guesses) {
-      // TODO: we can trivially synthesize an i1 undef by checking for validity
-      // of both guesses
-      InstMapping Mapping(LHS, I);
-      bool IsSat;
-      EC = SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, Mapping, 0),
-                                    IsSat, 0, 0, Timeout);
-      if (EC)
-        return EC;
-      if (!IsSat) {
-        RHS = I;
-        return EC;
+
+    if (LHS->Width == 1) {
+      std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
+                                   IC.getConst(APInt(1, false)) };
+      for (auto I : Guesses) {
+        // TODO: we can trivially synthesize an i1 undef by checking for validity
+        // of both guesses
+        InstMapping Mapping(LHS, I);
+        bool IsSat;
+        EC = SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, Mapping, 0), IsSat, 0, 0,
+                                      Timeout);
+        if (EC)
+          return EC;
+        if (!IsSat) {
+          RHS = I;
+          return EC;
+        }
       }
     }
+
+    if (InferInts && SMTSolver->supportsModels() && LHS->Width > 1) {
+      std::vector<Inst *> ModelInsts;
+      std::vector<llvm::APInt> ModelVals;
+      Inst *I = IC.createVar(LHS->Width, "constant");
+      InstMapping Mapping(LHS, I);
+      std::string Query = BuildQuery(BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
+      bool IsSat;
+      EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInsts.size(),
+                                    &ModelVals, Timeout);
+      if (EC)
+        return EC;
+      if (IsSat) {
+        // We found a model for a constant
+        Inst *Const = 0;
+        for (unsigned J = 0; J != ModelInsts.size(); ++J) {
+          if (ModelInsts[J]->Name == "constant") {
+            Const = IC.getConst(ModelVals[J]);
+            break;
+          }
+        }
+        assert(Const && "there must be a model for the constant");
+        // Check if the constant is valid for all inputs
+        InstMapping ConstMapping(LHS, Const);
+        EC = SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, ConstMapping, 0),
+                                      IsSat, 0, 0, Timeout);
+        if (EC)
+          return EC;
+        if (!IsSat) {
+          RHS = Const;
+          return EC;
+        }
+      }
+    }
+
     RHS = 0;
     return EC;
   }
