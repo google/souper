@@ -87,7 +87,6 @@ struct ExprBuilder {
   bool isLoopEntryPoint(PHINode *Phi);
   Inst *makeArrayRead(Value *V);
   Inst *buildConstant(Constant *c);
-  Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
   Inst *build(Value *V);
   void addPathConditions(BlockPCs &BPCs, std::vector<InstMapping> &PCs,
                          std::unordered_set<Block *> &VisitedBlocks,
@@ -160,34 +159,6 @@ Inst *ExprBuilder::buildConstant(Constant *c) {
     // Constant{Expr, Vector, DataSequential, Struct, Array}
     return makeArrayRead(c);
   }
-}
-
-Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
-                            gep_type_iterator end) {
-  unsigned PSize = DL->getPointerSizeInBits();
-  for (auto i = begin; i != end; ++i) {
-    if (StructType *ST = dyn_cast<StructType>(*i)) {
-      const StructLayout *SL = DL->getStructLayout(ST);
-      ConstantInt *CI = cast<ConstantInt>(i.getOperand());
-      uint64_t Addend = SL->getElementOffset((unsigned) CI->getZExtValue());
-      if (Addend != 0) {
-        Ptr = IC.getInst(Inst::Add, PSize,
-                         {Ptr, IC.getConst(APInt(PSize, Addend))});
-      }
-    } else {
-      SequentialType *SET = cast<SequentialType>(*i);
-      uint64_t ElementSize =
-        DL->getTypeStoreSize(SET->getElementType());
-      Value *Operand = i.getOperand();
-      Inst *Index = get(Operand);
-      if (PSize > Index->Width)
-        Index = IC.getInst(Inst::SExt, PSize, {Index});
-      Inst *Addend = IC.getInst(
-          Inst::Mul, PSize, {Index, IC.getConst(APInt(PSize, ElementSize))});
-      Ptr = IC.getInst(Inst::Add, PSize, {Ptr, Addend});
-    }
-  }
-  return Ptr;
 }
 
 Inst *ExprBuilder::build(Value *V) {
@@ -354,13 +325,7 @@ Inst *ExprBuilder::build(Value *V) {
       ; // fallthrough to return below
     }
   } else if (auto GEP = dyn_cast<GetElementPtrInst>(V)) {
-
     return makeArrayRead(V);
-
-    if (isa<VectorType>(GEP->getType()))
-      return makeArrayRead(V); // vector operation
-    return buildGEP(get(GEP->getOperand(0)), gep_type_begin(GEP),
-                    gep_type_end(GEP));
   } else if (auto Phi = dyn_cast<PHINode>(V)) {
     // We can't look through phi nodes in loop headers because we might
     // encounter a previous iteration of an instruction and get a wrong result.
