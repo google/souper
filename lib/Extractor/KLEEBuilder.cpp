@@ -74,6 +74,8 @@ struct ExprBuilder {
   std::vector<Inst *> &ArrayVars;
   std::vector<Inst *> PhiInsts;
   UniqueNameSet ArrayNames;
+  // Holding the precondition, i.e. blockpc, for the UBInst under process.
+  ref<Expr> UBInstPrecondition;
 
   ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin);
   ref<Expr> addnswUB(Inst *I);
@@ -92,6 +94,7 @@ struct ExprBuilder {
   ref<Expr> lshrExactUB(Inst *I);
   ref<Expr> ashrExactUB(Inst *I);
   ref<Expr> countOnes(ref<Expr> E);
+  void recordUBInstruction(Inst *I, ref<Expr> E);
   ref<Expr> buildAssoc(std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
                        llvm::ArrayRef<Inst *> Ops);
   ref<Expr> build(Inst *I);
@@ -293,6 +296,13 @@ ref<Expr> ExprBuilder::countOnes(ref<Expr> L) {
    return Count;
 }
 
+void ExprBuilder::recordUBInstruction(Inst *I, ref<Expr> E) {
+  if (UBInstPrecondition.isNull())
+    UBExprMap[I] = E;
+  else
+    UBExprMap[I] = Expr::createImplies(UBInstPrecondition, E);
+}
+
 ref<Expr> ExprBuilder::build(Inst *I) {
   const std::vector<Inst *> &Ops = I->orderedOps();
   switch (I->K) {
@@ -316,51 +326,51 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     return buildAssoc(AddExpr::create, Ops);
   case Inst::AddNSW: {
     ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = addnswUB(I);
+    recordUBInstruction(I, addnswUB(I));
     return Add;
   }
   case Inst::AddNUW: {
     ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = addnuwUB(I);
+    recordUBInstruction(I, addnuwUB(I));
     return Add;
   }
   case Inst::AddNW: {
     ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(addnswUB(I), addnuwUB(I));
+    recordUBInstruction(I, AndExpr::create(addnswUB(I), addnuwUB(I)));
     return Add;
   }
   case Inst::Sub:
     return SubExpr::create(get(Ops[0]), get(Ops[1]));
   case Inst::SubNSW: {
     ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = subnswUB(I);
+    recordUBInstruction(I, subnswUB(I));
     return Sub;
   }
   case Inst::SubNUW: {
     ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = subnuwUB(I);
+    recordUBInstruction(I, subnuwUB(I));
     return Sub;
   }
   case Inst::SubNW: {
     ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(subnswUB(I), subnuwUB(I));
+    recordUBInstruction(I, AndExpr::create(subnswUB(I), subnuwUB(I)));
     return Sub;
   }
   case Inst::Mul:
     return buildAssoc(MulExpr::create, Ops);
   case Inst::MulNSW: {
     ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = mulnswUB(I);
+    recordUBInstruction(I, mulnswUB(I));
     return Mul;
   }
   case Inst::MulNUW: {
     ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = mulnuwUB(I);
+    recordUBInstruction(I, mulnuwUB(I));
     return Mul;
   }
   case Inst::MulNW: {
     ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(mulnswUB(I), mulnuwUB(I));
+    recordUBInstruction(I, AndExpr::create(mulnswUB(I), mulnuwUB(I)));
     return Mul;
   }
 
@@ -379,7 +389,7 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     // a constant zero.
     ref<Expr> R = get(Ops[1]);
     if (R->isZero()) {
-      UBExprMap[I] = klee::ConstantExpr::create(0, 1);
+      recordUBInstruction(I, klee::ConstantExpr::create(0, 1));
       return klee::ConstantExpr::create(0, Ops[1]->Width);
     }
 
@@ -389,32 +399,32 @@ ref<Expr> ExprBuilder::build(Inst *I) {
 
     case Inst::UDiv: {
       ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-      UBExprMap[I] = udivUB(I);
+      recordUBInstruction(I, udivUB(I));
       return Udiv;
     }
     case Inst::SDiv: {
       ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-      UBExprMap[I] = sdivUB(I);
+      recordUBInstruction(I, sdivUB(I));
       return Sdiv;
     }
     case Inst::UDivExact: {
       ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-      UBExprMap[I] = AndExpr::create(udivUB(I), udivExactUB(I));
+      recordUBInstruction(I, AndExpr::create(udivUB(I), udivExactUB(I)));
       return Udiv;
     }
     case Inst::SDivExact: {
       ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-      UBExprMap[I] = AndExpr::create(sdivUB(I), sdivExactUB(I));
+      recordUBInstruction(I, AndExpr::create(sdivUB(I), sdivExactUB(I)));
       return Sdiv;
     }
     case Inst::URem: {
       ref<Expr> Urem = URemExpr::create(get(Ops[0]), R);
-      UBExprMap[I] = udivUB(I);
+      recordUBInstruction(I, udivUB(I));
       return Urem;
     }
     case Inst::SRem: {
       ref<Expr> Srem = SRemExpr::create(get(Ops[0]), R);
-      UBExprMap[I] = sdivUB(I);
+      recordUBInstruction(I, sdivUB(I));
       return Srem;
     }
     llvm_unreachable("unknown kind");
@@ -429,43 +439,44 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     return buildAssoc(XorExpr::create, Ops);
   case Inst::Shl: {
     ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = shiftUB(I);
+    recordUBInstruction(I, shiftUB(I));
     return Result;
   }
   case Inst::ShlNSW: {
     ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(shiftUB(I), shlnswUB(I));
+    recordUBInstruction(I, AndExpr::create(shiftUB(I), shlnswUB(I)));
     return Result;
   }
   case Inst::ShlNUW: {
     ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(shiftUB(I), shlnuwUB(I));
+    recordUBInstruction(I, AndExpr::create(shiftUB(I), shlnuwUB(I)));
     return Result;
   }
   case Inst::ShlNW: {
     ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(shiftUB(I), AndExpr::create(shlnswUB(I),
-                                                               shlnuwUB(I)));
+    recordUBInstruction(I, AndExpr::create(shiftUB(I),
+                                           AndExpr::create(shlnswUB(I),
+                                                           shlnuwUB(I))));
     return Result;
   }
   case Inst::LShr: {
     ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = shiftUB(I);
+    recordUBInstruction(I, shiftUB(I));
     return Result;
   }
   case Inst::LShrExact: {
     ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(shiftUB(I), lshrExactUB(I));
+    recordUBInstruction(I, AndExpr::create(shiftUB(I), lshrExactUB(I)));
     return Result;
   }
   case Inst::AShr: {
     ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = shiftUB(I);
+    recordUBInstruction(I, shiftUB(I));
     return Result;
   }
   case Inst::AShrExact: {
     ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-    UBExprMap[I] = AndExpr::create(shiftUB(I), ashrExactUB(I));
+    recordUBInstruction(I, AndExpr::create(shiftUB(I), ashrExactUB(I)));
     return Result;
   }
   case Inst::Select:
@@ -778,8 +789,18 @@ void ExprBuilder::setBlockPCMap(const BlockPCs &BPCs) {
   for (auto BPC : BPCs) {
     assert(BPC.B && "Block is NULL!");
     BlockPCPredMap &PCMap = BlockPCMap[BPC.B];
-    ref<Expr> PE = getInstMapping(BPC.PC);
     auto I = PCMap.find(BPC.PredIdx);
+    // Relying on a class-level flag may not be a nice solution,
+    // but it seems hard to differentiate two cases:
+    //   (1) UBInstExpr collected through blockpc, and;
+    //   (2) UBInstExpr collected through pc/lhs/rhs
+    // For the first case, UBInst(s) is conditional, i.e.,
+    // they are dependent on the fact that blockpc(s) are true.
+    if (I != PCMap.end()) {
+      UBInstPrecondition = I->second;
+    }
+    ref<Expr> PE = getInstMapping(BPC.PC);
+    UBInstPrecondition = nullptr;
     if (I == PCMap.end()) {
       PCMap[BPC.PredIdx] = PE;
     }
