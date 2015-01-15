@@ -255,8 +255,13 @@ configure_file(
   ${CMAKE_BINARY_DIR}/test/lit.site.cfg
 )
 
+configure_file(
+  ${CMAKE_SOURCE_DIR}/utils/run_lit.in
+  ${CMAKE_BINARY_DIR}/run_lit
+)
+
 add_custom_target(check
-  COMMAND ${LLVM_BINDIR}/llvm-lit -sv ${CMAKE_BINARY_DIR}/test
+  COMMAND ${CMAKE_BINARY_DIR}/run_lit
   DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souperPass)
 
 find_program(GO_EXECUTABLE NAMES go DOC "go executable")
