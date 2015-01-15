@@ -18,7 +18,7 @@ llvm_revision=223586
 klee_commit=5acb6356d1fdf6b87c8669e8eb88c720b8dc3ee9
 hiredis_commit=8f60ee65327445ed8384290b4040685329eb03c5
 
-llvm_build_type=Debug
+llvm_build_type=Release
 if [ -n "$1" ] ; then
   llvm_build_type="$1"
   shift
