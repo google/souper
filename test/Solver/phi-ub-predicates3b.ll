@@ -37,4 +37,4 @@ define i1 @foo(i32 %a, i32 %b, i32 %c) {
   ret i1 %11
 }
 
-!1 = metadata !{ i1 1 }
+!1 = !{i1 1}

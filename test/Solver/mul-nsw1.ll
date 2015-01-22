@@ -11,4 +11,4 @@ entry:
   ret i32 %conv
 }
 
-!0 = metadata !{ i1 0 }
+!0 = !{i1 0}

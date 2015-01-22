@@ -77,5 +77,5 @@ attributes #0 = { nounwind uwtable "less-precise-fpmad"="false" "no-frame-pointe
 
 !llvm.ident = !{!0}
 
-!0 = metadata !{metadata !"clang version 3.6.0 (219188)"}
-!1 = metadata !{ i1 1 }
+!0 = !{!"clang version 3.6.0 (219188)"}
+!1 = !{i1 1}

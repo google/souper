@@ -35,4 +35,4 @@ bb5:                                        ; preds = %bb1, %bb2, %bb3, %bb4, %d
   ret i1 %cmp4
 }
 
-!1 = metadata !{ i1 1 }
+!1 = !{i1 1}
