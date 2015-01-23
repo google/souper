@@ -16,4 +16,4 @@ entry:
   ret i16 %swap1
 }
 
-!1 = metadata !{ i1 1 }
+!1 = !{i1 1}

@@ -83,7 +83,7 @@ public:
   }
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
-    Info.addRequired<LoopInfo>();
+    Info.addRequired<LoopInfoWrapperPass>();
   }
 
   void dynamicProfile(LLVMContext &C, Module *M, std::string LHS,
@@ -143,7 +143,7 @@ public:
     ExprBuilderContext EBC;
     CandidateMap CandMap;
 
-    LoopInfo *LI = &getAnalysis<LoopInfo>();
+    LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 
     FunctionCandidateSet CS = ExtractCandidatesFromPass(&F, LI, IC, EBC);
 
@@ -257,7 +257,7 @@ void initializeSouperPassPass(llvm::PassRegistry &);
 
 INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
                       false, false)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
+INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 

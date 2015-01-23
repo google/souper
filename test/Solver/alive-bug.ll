@@ -18,4 +18,4 @@ false:
   ret i32 555
 }
 
-!0 = metadata !{ i1 0 }
+!0 = !{i1 0}

@@ -16,4 +16,4 @@ label1:
   ret i1 %res
 }
 
-!1 = metadata !{ i1 1 }
+!1 = !{i1 1}

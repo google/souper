@@ -74,14 +74,12 @@ int main(int argc, char **argv) {
   // Use the bitcode streaming interface
   DataStreamer *streamer = getDataFileStreamer(InputFilename, &ErrorMessage);
   if (streamer) {
-    M.reset(getStreamedBitcodeModule(DisplayFilename, streamer, Context,
-                                     &ErrorMessage));
-    if (M.get() != 0) {
-      if (std::error_code EC = M->materializeAllPermanently()) {
-        ErrorMessage = EC.message();
-        M.reset();
-      }
-    }
+    auto ModOrError = getStreamedBitcodeModule(DisplayFilename, streamer,
+                                               Context);
+    if (auto EC = ModOrError.getError())
+      ErrorMessage = EC.message();
+    else
+      M = std::move(ModOrError.get());
   }
 
   if (M.get() == 0) {

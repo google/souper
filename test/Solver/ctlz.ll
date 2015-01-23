@@ -12,4 +12,4 @@ entry:
   ret i64 %count
 }
 
-!1 = metadata !{ i1 1 }
+!1 = !{i1 1}

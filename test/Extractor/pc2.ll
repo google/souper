@@ -49,4 +49,4 @@ if.end13:                                         ; preds = %for.end, %entry, %i
   ret i32 undef
 }
 
-!0 = metadata !{ i1 0 }
+!0 = !{i1 0}
