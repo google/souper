@@ -39,6 +39,10 @@ static llvm::cl::opt<bool> DumpKLEEExprs(
     "dump-klee-exprs",
     llvm::cl::desc("Dump KLEE expressions after SMTLIB queries"),
     llvm::cl::init(false));
+static llvm::cl::opt<bool> ExploitUB(
+    "souper-exploit-ub",
+    llvm::cl::desc("Exploit undefined behavior (default=true)"),
+    llvm::cl::init(true));
 
 using namespace llvm;
 using namespace klee;
@@ -913,11 +917,15 @@ CandidateExpr souper::GetCandidateExprForReplacement(
     Ante = AndExpr::create(Ante, EB.getBlockPCs());
   }
   // Get UB constraints of LHS and (B)PCs
-  ref<Expr> LHSPCsUB = EB.getUBInstCondition();
+  ref<Expr> LHSPCsUB = klee::ConstantExpr::create(1, Expr::Bool);
+  if (ExploitUB)
+    LHSPCsUB = EB.getUBInstCondition();
   // Build RHS
   ref<Expr> RHS = EB.get(Mapping.RHS);
   // Get all UB constraints (LHS && (B)PCs && RHS)
-  ref<Expr> UB = EB.getUBInstCondition();
+  ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
+  if (ExploitUB)
+    UB = EB.getUBInstCondition();
 
   ref<Expr> Cons;
   if (Negate) // (LHS != RHS)
