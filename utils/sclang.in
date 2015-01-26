@@ -91,6 +91,10 @@ if ($souper) {
         push @ARGV, ("-mllvm", "-souper-debug");
     }
 
+    if ($ENV{"SOUPER_NO_EXPLOIT_UB"}) {
+        push @ARGV, ("-mllvm", "-souper-exploit-ub=false");
+    }
+
     if (!$ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
         push @ARGV, ("-mllvm", "-souper-external-cache");
     }
