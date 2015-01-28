@@ -115,6 +115,9 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   if (DebugSynthesis)
     llvm::outs() << "starting synthesis\n";
   unsigned Rounds = 0;
+  // Constants are not constrained by the inputs, thus, we must track the
+  // invalid values explicitly
+  std::set<Inst *> InvalidConstants;
   while (true) {
     Inst *Query = IC.getConst(APInt(1, true));
     // Each set of concrete inputs is used in a separate copy of the
@@ -159,6 +162,10 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       return EC;
     }
 
+    // We saw this constant already and it didn't match
+    if (Cand->K == Inst::Const && InvalidConstants.count(Cand))
+      return EC;
+
     if (DebugSynthesis) {
       llvm::outs() << "candidate:\n";
       ReplacementContext Context;
@@ -183,6 +190,10 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       RHS = Cand;
       return EC;
     }
+
+    // If the not-working Cand is a constant, skip it in the future
+    if (Cand->K == Inst::Const)
+      InvalidConstants.insert(Cand);
 
     if (DebugSynthesis)
       llvm::outs() << "didn't work for all inputs, counterexample(s):\n";
