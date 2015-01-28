@@ -1,0 +1,21 @@
+; REQUIRES: solver, solver-model, synthesis
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=xor,xor,xor,and,shl,lshr %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK:      %9:i32 = xor %0, %5
+; CHECK-NEXT: %10:i32 = xor %9, %6
+; CHECK-NEXT: result %10
+
+; Exchanging 2 fields A and B of the same register x where m is mask which identifies
+; field B and k is number of bits from end of A to start of B
+%0:i32 = var
+%1:i32 = var
+%2:i32 = var
+%3:i32 = lshr %0, %1
+%4:i32 = xor %0, %3
+%5:i32 = and %4, %2
+%6:i32 = shl %5, %1
+%7:i32 = xor %6, %5
+%8:i32 = xor %7, %0
+infer %8
