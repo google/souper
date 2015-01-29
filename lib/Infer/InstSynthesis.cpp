@@ -78,7 +78,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   // Initial concrete input set S.
   // With every new input set that proves a synthesised program is invalid,
-  // we'll have to copy WiringQuery and replace it's inputs with the new
+  // we'll have to copy WiringQuery and replace its inputs with the new
   // concrete values from S
   std::vector<std::map<Inst *, Inst *>> S;
   // A maping from a var's string to the actual instruction.
@@ -144,7 +144,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     ModelVals.clear();
     InstMapping Mapping(Query, IC.getConst(APInt(1, true)));
     // Negate the query to get a SAT model.
-    // Don't use original BPCs/PCs, the are useless
+    // Don't use original BPCs/PCs, they are useless
     QueryStr = BuildQuery({}, NewPCs, Mapping, &ModelInsts, /*Negate=*/true);
     EC = SMTSolver->isSatisfiable(QueryStr, IsSat, ModelInsts.size(),
                                   &ModelVals, Timeout);
@@ -441,7 +441,7 @@ Inst *InstSynthesis::getWidthConstraint(InstContext &IC) {
   // Inputs
   for (auto const &In : I) {
     unsigned Width = CompInstMap[In.first]->Width;
-    // Compare with component inputs and it's output
+    // Compare with component inputs and its output
     for (auto const &L_x : Tmp) {
       if (Width == CompInstMap[L_x.first]->Width)
         continue;
