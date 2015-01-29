@@ -242,14 +242,20 @@ void InstSynthesis::setCompLibrary(const std::vector<Inst::Kind> *UserCompKinds)
       else
         Kinds.push_back(K);
     }
+    // If only one component is supplied and it's a Const, assume constant
+    // synthesis and init only one const comp that will match the output width
+    if (Kinds.size() == 1 && Kinds[0] == Inst::Const)
+      DoConstSynthesis = true;
     for (auto const &Comp : CompLibrary)
       for (auto const &Kind : Kinds)
-        if (Comp.Kind == Kind)
+        if (Comp.Kind == Kind && (!DoConstSynthesis || Comp.Width == ~0))
           Comps.push_back(Comp);
   } else if (UserCompKinds) {
+    if (UserCompKinds->size() == 1 && (*UserCompKinds)[0] == Inst::Const)
+      DoConstSynthesis = true;
     for (auto const &Comp : CompLibrary)
       for (auto Kind : *UserCompKinds)
-        if (Comp.Kind == Kind)
+        if (Comp.Kind == Kind && (!DoConstSynthesis || Comp.Width == ~0))
           Comps.push_back(Comp);
   } else {
     llvm::outs() << "WARNING: using all " << CompLibrary.size()
@@ -280,7 +286,7 @@ void InstSynthesis::initInputVars(Inst *LHS, InstContext &IC) {
     // Add input location to I
     I.emplace_back(In, Loc);
     // Update input name
-    Inputs[J]->Name = INPUT_PREFIX + std::to_string(J+1);
+    Inputs[J]->Name = INPUT_PREFIX + "0" + std::to_string(J+1);
     // Update CompInstMap map with concrete Inst
     CompInstMap[In] = Inputs[J];
     // Set the DefaultInstWidth of component instances to the max width
@@ -509,6 +515,10 @@ Inst *InstSynthesis::getConsistencyConstraint(InstContext &IC) {
   // Don't wire a component's input to the output
   for (auto const &L_x : P)
     InvalidWirings.insert(std::make_pair(L_x, O));
+  // Sepecial case: during constant synthesis, don't wire input(s) to the output
+  if (DoConstSynthesis)
+    for (auto const &L_x : I)
+      InvalidWirings.insert(std::make_pair(L_x, O));
 
   for (auto const &Wiring : InvalidWirings) {
     if (DebugSynthesis)

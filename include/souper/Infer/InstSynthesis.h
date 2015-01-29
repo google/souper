@@ -180,6 +180,8 @@ private:
   unsigned DefaultInstWidth = 0;
   /// LocInst width is fixed
   unsigned const LocInstWidth = 32;
+  /// Constant synthesis mode
+  bool DoConstSynthesis = false;
   /// A mapping from a location variable's string representation to its location.
   /// Required during model parsing
   std::map<std::string, LocInst> LocInstMap;
