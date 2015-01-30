@@ -1,0 +1,13 @@
+; REQUIRES: solver, solver-model, synthesis
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,xor,sub,and,const %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: result %3
+
+; Form a mask that identifies the trailing 0's
+%0:i32 = var
+%1:i32 = sub %0, 1
+%2:i32 = xor %0, -1
+%3:i32 = and %1, %2
+infer %3

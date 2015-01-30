@@ -1,0 +1,13 @@
+; REQUIRES: solver, solver-model, synthesis
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,sub,ashr,xor %s > %t1
+; RUN: FileCheck %s -check-prefix=SUCCESS < %t1
+
+; SUCCESS: result %3
+
+; Absolute value function
+%0:i32 = var
+%1:i32 = ashr %0, 31
+%2:i32 = xor %0, %1
+%3:i32 = sub %2, %1
+infer %3

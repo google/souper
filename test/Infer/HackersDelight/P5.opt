@@ -1,0 +1,12 @@
+; REQUIRES: solver, solver-model, synthesis
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,or,sub %s > %t1
+; RUN: FileCheck %s -check-prefix=SUCCESS < %t1
+
+; SUCCESS: result %2
+
+; Right propogate rightmost 1-bit
+%0:i32 = var
+%1:i32 = sub %0, 1
+%2:i32 = or %0, %1
+infer %2

@@ -20,6 +20,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
+#include "souper/Infer/InstSynthesis.h"
 #include "souper/KVStore/KVStore.h"
 #include "souper/Parser/Parser.h"
 
@@ -43,6 +44,9 @@ static cl::opt<bool> NoInfer("souper-no-infer",
     cl::init(false));
 static cl::opt<bool> InferInts("souper-infer-iN",
     cl::desc("Infer iN integers for N>1 (default=false)"),
+    cl::init(false));
+static cl::opt<bool> InferInsts("souper-infer-inst",
+    cl::desc("Infer instructions (default=false)"),
     cl::init(false));
 
 class BaseSolver : public Solver {
@@ -109,6 +113,18 @@ public:
           return EC;
         }
       }
+    }
+
+    if (InferInsts && SMTSolver->supportsModels()) {
+      // Synthesis API usage example
+      std::vector<Inst::Kind> UserComps = { Inst::And, Inst::Const, Inst::Mul };
+      InstSynthesis IS(/*Comps=*/&UserComps);
+      //InstSynthesis IS(/*Comps=*/&UserComps, /*MaxCompNum=*/2);
+      // Warning: using all components will probably run out of memory
+      //InstSynthesis IS;
+      EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
+      if (EC || RHS)
+        return EC;
     }
 
     RHS = 0;

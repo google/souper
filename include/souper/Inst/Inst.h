@@ -98,6 +98,7 @@ struct Inst : llvm::FoldingSetNode {
   void Profile(llvm::FoldingSetNodeID &ID) const;
 
   static const char *getKindName(Kind K);
+  static Kind getKind(std::string Name);
 
   static bool isAssociative(Kind K);
   static bool isCommutative(Kind K);

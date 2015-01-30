@@ -1,0 +1,12 @@
+; REQUIRES: solver, solver-model, synthesis
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,or,add %s > %t1
+; RUN: FileCheck %s -check-prefix=SUCCESS < %t1
+
+; SUCCESS: result %2
+
+; Turn on the rightmost 0-bit in a word
+%0:i32 = var
+%1:i32 = add %0, 1
+%2:i32 = or %0, %1
+infer %2

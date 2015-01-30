@@ -1,0 +1,14 @@
+; REQUIRES: solver, solver-model, synthesis
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=ule,and,xor %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: result %4
+
+; Test if nlz(x) == nlz(y) where nlz is number of leading zeros
+%0:i32 = var
+%1:i32 = var
+%2:i32 = and %0, %1
+%3:i32 = xor %0, %1
+%4:i1 = ule %3, %2
+infer %4
