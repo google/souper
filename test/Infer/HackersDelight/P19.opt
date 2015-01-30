@@ -3,9 +3,9 @@
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=xor,xor,xor,and,shl,lshr %s > %t1
 ; RUN: FileCheck %s < %t1
 
-; CHECK:      %9:i32 = xor %0, %5
-; CHECK-NEXT: %10:i32 = xor %9, %6
-; CHECK-NEXT: result %10
+; CHECK  {{(%9:i32 = xor %0, %5|result %8)}}
+; CHECK: {{(%10:i32 = xor %9, %6)?}}
+; CHECK: {{(result %10)?}}
 
 ; Exchanging 2 fields A and B of the same register x where m is mask which identifies
 ; field B and k is number of bits from end of A to start of B

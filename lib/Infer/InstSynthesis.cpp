@@ -115,10 +115,6 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   if (DebugSynthesis)
     llvm::outs() << "starting synthesis\n";
   unsigned Rounds = 0;
-  // Constants are not constrained by the inputs, thus, we must track the
-  // invalid values explicitly. Similarly, if an input is wired to the output
-  // and is identified as invalid, we must skip it in the future too
-  std::set<Inst *> InvalidInputs;
   while (true) {
     Inst *Query = IC.getConst(APInt(1, true));
     // Each set of concrete inputs is used in a separate copy of the
@@ -163,10 +159,6 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       return EC;
     }
 
-    // We saw this constant/input already and it didn't match
-    if (InvalidInputs.count(Cand))
-      return EC;
-
     if (DebugSynthesis) {
       llvm::outs() << "candidate:\n";
       ReplacementContext Context;
@@ -192,9 +184,14 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       return EC;
     }
 
-    // If the not-working Cand is a constant or an input, skip it in the future
-    if (Cand->K == Inst::Const || Cand->K == Inst::Var)
-      InvalidInputs.insert(Cand);
+    // Constants are not constrained by the inputs, thus, we must forbid the
+    // invalid values explicitly. Similarly, if an input is wired to the output
+    // and is identified as invalid, we must skip it in the future too
+    if (Cand->K == Inst::Const || Cand->K == Inst::Var) {
+      assert(LocInstMap.count(Cand->Name) && "unknown const/var candidate location");
+      Inst *Ne = IC.getInst(Inst::Ne, 1, {LocInstMap[Cand->Name].second, O.second});
+      NewPCs.emplace_back(Ne, IC.getConst(APInt(1, true)));
+    }
 
     if (DebugSynthesis)
       llvm::outs() << "didn't work for all inputs, counterexample(s):\n";
@@ -286,8 +283,10 @@ void InstSynthesis::initInputVars(Inst *LHS, InstContext &IC) {
     // Add input location to I
     I.emplace_back(In, Loc);
     // Update input name
-    Inputs[J]->Name = INPUT_PREFIX + "0" + std::to_string(J+1);
+    std::string LocVarStr = getLocVarStr(In, INPUT_PREFIX);
+    Inputs[J]->Name = LocVarStr;
     // Update CompInstMap map with concrete Inst
+    LocInstMap[LocVarStr] = std::make_pair(In, Loc);
     CompInstMap[In] = Inputs[J];
     // Set the DefaultInstWidth of component instances to the max width
     // seen in input variables
@@ -831,7 +830,22 @@ Inst *InstSynthesis::createInstFromWiring(
     if (DebugSynthesis)
       llvm::outs() << "- creating constant inst " << getLocVarStr(OutLoc)
                    << " with value " << ConstValMap.at(OutLoc) << "\n";
-    return IC.getConst(ConstValMap.at(OutLoc));
+    Inst *Const = IC.getConst(ConstValMap.at(OutLoc));
+    // Find const comp's output location
+    LocInst Loc;
+    for (const auto &L_x : R) {
+      if (L_x.first == OutLoc) {
+        Loc = L_x;
+        break;
+      }
+    }
+    assert(Loc.first.first != 0 || Loc.first.second != 0 &&
+           "unknown const comp's output location");
+    // Update const inst's name
+    std::string LocVarStr = getLocVarStr(OutLoc, CONST_PREFIX);
+    Const->Name = LocVarStr;
+    LocInstMap[LocVarStr] = Loc;
+    return Const;
   }
   // Grab the target component
   Component Comp = Comps[OutLoc.first-1];
