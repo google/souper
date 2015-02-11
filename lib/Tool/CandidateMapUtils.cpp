@@ -151,7 +151,7 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
         continue;
       }
       if (ExpectedMD->getNumOperands() != 1 ||
-          !isa<llvm::ConstantInt>(ExpectedMD->getOperand(0))) {
+          !mdconst::hasa<ConstantInt>(ExpectedMD->getOperand(0))) {
         llvm::errs() << "instruction:\n";
         Inst->dump();
         llvm::errs() << "invalid metadata\n";
@@ -159,7 +159,7 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
         continue;
       }
       llvm::APInt ExpectedVal =
-        cast<llvm::ConstantInt>(ExpectedMD->getOperand(0))->getValue();
+        mdconst::extract<ConstantInt>(ExpectedMD->getOperand(0))->getValue();
       Inst->setMetadata(ExpectedID, 0);
       if (ExpectedVal != ActualVal) {
         llvm::errs() << "instruction:\n";
