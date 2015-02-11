@@ -251,6 +251,7 @@ public:
     } else {
       ++ExternalMisses;
       if (NoInfer) {
+        RHS = 0;
         KV->hSet(LHSStr, "result", "");
         return std::error_code();
       }
