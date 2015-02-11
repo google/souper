@@ -657,12 +657,12 @@ public:
      : FunctionPass(ID), Opts(Opts), IC(IC), EBC(EBC), Result(Result) {}
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
-    Info.addRequired<LoopInfo>();
+    Info.addRequired<LoopInfoWrapperPass>();
     Info.setPreservesAll();
   }
 
   bool runOnFunction(Function &F) {
-    LoopInfo *LI = &getAnalysis<LoopInfo>();
+    LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
     ExtractExprCandidates(F, LI, Opts, IC, EBC, Result);
     return false;
   }

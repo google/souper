@@ -36,5 +36,5 @@ phi2:                    ; preds = %cond3, %cond4
 ret i32 %conv
 }
 
-!1 = metadata !{ i1 1 }
+!1 = !{i1 1}
 

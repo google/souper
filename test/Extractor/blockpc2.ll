@@ -36,4 +36,4 @@ return:                                     ; preds = %bb4, %default
   ret i1 %retval.0
 }
 
-!1 = metadata !{ i1 1 }
+!1 = !{i1 1}

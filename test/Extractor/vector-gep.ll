@@ -21,4 +21,4 @@ entry:
   ret i1 %res
 }
 
-!0 = metadata !{ i1 0 }
+!0 = !{i1 0}
