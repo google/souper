@@ -60,13 +60,14 @@ if (defined $bitcodedir && -d $bitcodedir && fork() == 0) {
     die "bailing, exec failed";
 }
 
+die "$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp" 
+    unless exists $ENV{"SOUPER_SOLVER"};
 my $solver = $ENV{"SOUPER_SOLVER"};
-die "$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp" unless $solver;
 
 my $souper = 1;
 # this environment variable is a comma-separated list of source files that
 # souper should avoid processing, for example because they trigger known bugs
-if ($ENV{"SOUPER_SKIP_FILES"}) {
+if (exists $ENV{"SOUPER_SKIP_FILES"}) {
     my %skips;
     foreach my $f (split(',', $ENV{"SOUPER_SKIP_FILES"})) {
         $skips{$f} = 1;
@@ -76,7 +77,7 @@ if ($ENV{"SOUPER_SKIP_FILES"}) {
     }
 }
 
-$souper = 0 if $ENV{"SOUPER_NO_SOUPER"};
+$souper = 0 if exists $ENV{"SOUPER_NO_SOUPER"};
 $souper = 0 unless compiling();
 
 if ($souper) {
@@ -87,49 +88,64 @@ if ($souper) {
         "-mllvm", "-solver-timeout=15",
     );
 
-    if ($ENV{"SOUPER_DEBUG"}) {
+    if (exists $ENV{"SOUPER_DEBUG"}) {
         push @ARGV, ("-mllvm", "-souper-debug");
     }
 
-    if ($ENV{"SOUPER_NO_EXPLOIT_BLOCKPCS"}) {
+    if (exists $ENV{"SOUPER_NO_EXPLOIT_BLOCKPCS"}) {
         push @ARGV, ("-mllvm", "-souper-exploit-blockpcs=false");
     }
 
-    if ($ENV{"SOUPER_NO_EXPLOIT_UB"}) {
+    if (exists $ENV{"SOUPER_NO_EXPLOIT_UB"}) {
         push @ARGV, ("-mllvm", "-souper-exploit-ub=false");
     }
 
-    if (!$ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
+    if (!exists $ENV{"SOUPER_NO_EXTERNAL_CACHE"}) {
         push @ARGV, ("-mllvm", "-souper-external-cache");
     }
 
-    if ($ENV{"SOUPER_NO_INFER"}) {
+    if (exists $ENV{"SOUPER_NO_INFER"}) {
         push @ARGV, ("-mllvm", "-souper-no-infer");
     }
 
-    if ($ENV{"SOUPER_STATIC_PROFILE"}) {
+    if (exists $ENV{"SOUPER_FIRST_OPT"}) {
+        push @ARGV, ("-mllvm", "-souper-first-opt=".$ENV{"SOUPER_FIRST_OPT"});
+    }
+
+    if (exists $ENV{"SOUPER_LAST_OPT"}) {
+        push @ARGV, ("-mllvm", "-souper-last-opt=".$ENV{"SOUPER_LAST_OPT"});
+    }
+
+    if (exists $ENV{"SOUPER_STATIC_PROFILE"}) {
         push @ARGV, ("-mllvm", "-souper-static-profile");
     }
 
-    if ($ENV{"SOUPER_DYNAMIC_PROFILE"}) {
+    if (exists $ENV{"SOUPER_DYNAMIC_PROFILE"}) {
         push @ARGV, ("-g", "-mllvm", "-souper-dynamic-profile");
     }
 
-    if ($ENV{"SOUPER_INFER_INT"}) {
+    if (exists $ENV{"SOUPER_INFER_INT"}) {
       push @ARGV, ("-mllvm", "-souper-infer-iN");
     }
 
-    if ($ENV{"SOUPER_IGNORE_SOLVER_ERRORS"}) {
+    if (exists $ENV{"SOUPER_IGNORE_SOLVER_ERRORS"}) {
         push @ARGV, ("-mllvm", "-souper-ignore-solver-errors");
     }
 
-    if ($ENV{"SOUPER_STATS"}) {
+    if (exists $ENV{"SOUPER_STATS"}) {
         push @ARGV, ("-mllvm", "-stats");
     }
 }
 
-if ($ENV{"SOUPER_DYNAMIC_PROFILE"} && linkp()) {
+if (exists $ENV{"SOUPER_DYNAMIC_PROFILE"} && linkp()) {
     push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
+}
+
+if (exists $ENV{"SOUPER_DEBUG"}) {
+    foreach my $arg (@ARGV) {
+        print "$arg ";
+    }
+    print "\n";
 }
 
 exec @ARGV;
