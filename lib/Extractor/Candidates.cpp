@@ -589,21 +589,56 @@ std::vector<Inst *> AddBlockPCSets(const BlockPCs &BPCs, InstClasses &Vars) {
   return BPCSets;
 }
 
+bool HasRelevantPhi(const Block *B, llvm::DenseMap<const Block *, bool> SeenBlocks,
+                    InstMapping Cand) {
+  auto Iter = SeenBlocks.find(B);
+  if (Iter != SeenBlocks.end())
+    return Iter->second;
+
+  bool RV = false;
+  for (auto &Phi : B->Phis) {
+    InstClasses PhiVars;
+    llvm::DenseSet<Inst *> SeenInsts;
+    auto PhiLeader = AddVarSet(PhiVars.member_end(), PhiVars, SeenInsts, Phi);
+    if (PhiLeader == PhiVars.member_end())
+      continue;
+    SeenInsts.clear();
+    auto Leader = AddVarSet(PhiVars.member_end(), PhiVars, SeenInsts, Cand.LHS);
+    if (PhiVars.findLeader(*PhiLeader) == Leader) {
+      RV = true;
+      break;
+    }
+  }
+  SeenBlocks[B] = RV;
+  return RV;
+}
+
 // Return vectors of relevant BlockPCs and PCs for a candidate, namely those
 // whose variable sets are in the same equivalence class as the candidate's.
 std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
     const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
     const std::vector<Inst *> &BPCSets, const std::vector<Inst *> &PCSets,
-    InstClasses Vars, InstMapping Cand) {
+    InstClasses Vars, InstClasses BPCVars, InstMapping Cand) {
 
   llvm::DenseSet<Inst *> SeenInsts;
-  auto Leader = AddVarSet(Vars.member_end(), Vars, SeenInsts, Cand.LHS);
+  auto BPCLeader = AddVarSet(BPCVars.member_end(),
+                             BPCVars, SeenInsts, Cand.LHS);
 
   BlockPCs RelevantBPCs;
+  llvm::DenseMap<const Block *, bool> SeenBlocks;
+  // In addition to making sure BPC's LHS and Cand.LHS are in the same
+  // equivalence class, we also need to check whether any Phi of the block
+  // and Cand.LHS are in the same equivalence class. If no Phi instructions
+  // relate to Cand.LHS, then the Phi instructions won't be printed out.
+  // Consequently, we will end up with insufficeint souper IR.
   for (unsigned i = 0; i != BPCs.size(); ++i) {
-    if (BPCSets[i] != 0 && Vars.findLeader(BPCSets[i]) == Leader)
+    if (BPCSets[i] != 0 && BPCVars.findLeader(BPCSets[i]) == BPCLeader &&
+        HasRelevantPhi(BPCs[i].B, SeenBlocks, Cand))
       RelevantBPCs.emplace_back(BPCs[i]);
   }
+
+  SeenInsts.clear();
+  auto Leader = AddVarSet(Vars.member_end(), Vars, SeenInsts, Cand.LHS);
 
   std::vector<InstMapping> RelevantPCs;
   for (unsigned i = 0; i != PCs.size(); ++i) {
@@ -635,7 +670,8 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI,
 
       for (auto &R : BCS->Replacements) {
         std::tie(R.BPCs, R.PCs) = 
-          GetRelevantPCs(BCS->BPCs, BCS->PCs, BPCSets, PCSets, Vars, R.Mapping);
+          GetRelevantPCs(BCS->BPCs, BCS->PCs, BPCSets,
+                         PCSets, Vars, BPCVars, R.Mapping);
       }
 
       Result.Blocks.emplace_back(std::move(BCS));

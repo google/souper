@@ -422,6 +422,7 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
   N->B = B;
   N->Ops = Ops;
   InstSet.InsertNode(N, IP);
+  B->Phis.emplace_back(N);
   return N;
 }
 

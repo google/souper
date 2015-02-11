@@ -25,10 +25,12 @@
 
 namespace souper {
 
+struct Inst;
 struct Block {
   std::string Name;
   unsigned Preds;
   unsigned Number;
+  std::vector<Inst *> Phis;
 };
 
 struct Inst : llvm::FoldingSetNode {
