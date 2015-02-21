@@ -1,0 +1,12 @@
+; REQUIRES: solver, solver-model, synthesis
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,and,add %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: result %2
+
+; Test whether an unsigned integer is of the form 2^(n-1)
+%0:i32 = var
+%1:i32 = add %0, 1
+%2:i32 = and %0, %1
+infer %2

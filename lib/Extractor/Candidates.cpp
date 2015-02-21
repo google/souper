@@ -362,8 +362,10 @@ Inst *ExprBuilder::build(Value *V) {
   } else if (auto GEP = dyn_cast<GetElementPtrInst>(V)) {
     if (isa<VectorType>(GEP->getType()))
       return makeArrayRead(V); // vector operation
-    return buildGEP(get(GEP->getOperand(0)), gep_type_begin(GEP),
-                    gep_type_end(GEP));
+    // TODO: replace with a GEP instruction
+    //return buildGEP(get(GEP->getOperand(0)), gep_type_begin(GEP),
+    //                gep_type_end(GEP));
+    return makeArrayRead(V);
   } else if (auto Phi = dyn_cast<PHINode>(V)) {
     // We can't look through phi nodes in loop headers because we might
     // encounter a previous iteration of an instruction and get a wrong result.

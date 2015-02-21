@@ -207,6 +207,9 @@ public:
       }
       if (!Cand.Mapping.RHS)
         continue;
+      // TODO: add non-const instruction support
+      if (Cand.Mapping.RHS->K != Inst::Const)
+        continue;
       Instruction *I = Cand.Origin.getInstruction();
 
       Constant *CI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);

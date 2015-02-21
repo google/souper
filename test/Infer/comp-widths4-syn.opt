@@ -1,0 +1,10 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,const,select %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: result %1
+
+%0:i1 = var
+%1:i32 = select %0, 1992348783:i32, 1942344544:i32
+infer %1

@@ -1,0 +1,10 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,and %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK-NOT: result %1
+
+%0:i16 = var
+%1:i16 = and 256:i16, %0
+infer %1
