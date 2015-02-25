@@ -1,0 +1,12 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=eq,const,const,urem %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK:      %3:i1 = trunc %0
+; CHECK-NEXT: result %3
+
+%0:i32 = var
+%1:i32 = urem %0, 2
+%2:i1 = eq %1, 1
+infer %2

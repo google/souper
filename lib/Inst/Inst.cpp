@@ -14,6 +14,7 @@
 
 #include "souper/Inst/Inst.h"
 
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -129,7 +130,6 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
 
   std::string InstName = std::to_string(InstNames.size() + BlockNames.size());
   assert(InstNames.find(I) == InstNames.end());
-  assert(NameToInst.find(InstName) == NameToInst.end());
   assert(NameToBlock.find(InstName) == NameToBlock.end());
   setInst(InstName, I);
 
@@ -319,6 +319,56 @@ const char *Inst::getKindName(Kind K) {
   llvm_unreachable("all cases covered");
 }
 
+Inst::Kind Inst::getKind(std::string Name) {
+  return llvm::StringSwitch<Inst::Kind>(Name)
+                   .Case("var", Inst::Var)
+                   .Case("phi", Inst::Phi)
+                   .Case("add", Inst::Add)
+                   .Case("addnsw", Inst::AddNSW)
+                   .Case("addnuw", Inst::AddNUW)
+                   .Case("addnw", Inst::AddNW)
+                   .Case("sub", Inst::Sub)
+                   .Case("subnsw", Inst::SubNSW)
+                   .Case("subnuw", Inst::SubNUW)
+                   .Case("subnw", Inst::SubNW)
+                   .Case("mul", Inst::Mul)
+                   .Case("mulnsw", Inst::MulNSW)
+                   .Case("mulnuw", Inst::MulNUW)
+                   .Case("mulnw", Inst::MulNW)
+                   .Case("udiv", Inst::UDiv)
+                   .Case("sdiv", Inst::SDiv)
+                   .Case("udivexact", Inst::UDivExact)
+                   .Case("sdivexact", Inst::SDivExact)
+                   .Case("urem", Inst::URem)
+                   .Case("srem", Inst::SRem)
+                   .Case("and", Inst::And)
+                   .Case("or", Inst::Or)
+                   .Case("xor", Inst::Xor)
+                   .Case("shl", Inst::Shl)
+                   .Case("shlnsw", Inst::ShlNSW)
+                   .Case("shlnuw", Inst::ShlNUW)
+                   .Case("shlnw", Inst::ShlNW)
+                   .Case("lshr", Inst::LShr)
+                   .Case("lshrexact", Inst::LShrExact)
+                   .Case("ashr", Inst::AShr)
+                   .Case("ashrexact", Inst::AShrExact)
+                   .Case("select", Inst::Select)
+                   .Case("zext", Inst::ZExt)
+                   .Case("sext", Inst::SExt)
+                   .Case("trunc", Inst::Trunc)
+                   .Case("eq", Inst::Eq)
+                   .Case("ne", Inst::Ne)
+                   .Case("ult", Inst::Ult)
+                   .Case("slt", Inst::Slt)
+                   .Case("ule", Inst::Ule)
+                   .Case("sle", Inst::Sle)
+                   .Case("ctpop", Inst::CtPop)
+                   .Case("bswap", Inst::BSwap)
+                   .Case("cttz", Inst::Cttz)
+                   .Case("ctlz", Inst::Ctlz)
+                   .Default(Inst::Kind(~0));
+}
+
 void Inst::Profile(llvm::FoldingSetNodeID &ID) const {
   ID.AddInteger(K);
   ID.AddInteger(Width);
@@ -475,6 +525,22 @@ bool Inst::isCommutative(Inst::Kind K) {
     return true;
   default:
     return false;
+  }
+}
+
+int Inst::getCost(Inst::Kind K) {
+  switch (K) {
+    case Var:
+    case Const:
+    case Phi:
+      return 0;
+    case BSwap:
+    case CtPop:
+    case Cttz:
+    case Ctlz:
+      return 5;
+    default:
+      return 1;
   }
 }
 

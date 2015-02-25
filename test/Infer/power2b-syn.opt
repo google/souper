@@ -1,0 +1,16 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=eq,const,ctpop %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK:      %6:i16 = ctpop %0
+; CHECK-NEXT: %7:i1 = eq 1:i16, %6
+; CHECK-NEXT: result %7
+
+%0:i16 = var
+%1:i1 = ne %0, 0
+%2:i16 = sub %0, 1
+%3:i16 = and %0, %2
+%4:i1 = eq %3, 0
+%5:i1 = and %1, %4
+infer %5
