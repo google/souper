@@ -163,8 +163,8 @@ private:
   /// A mapping from a location variable to a concrete component instance,
   /// namely created instruction
   std::map<LocVar, Inst *> CompInstMap;
-  /// Location variable's width (increase it for support of >64 comps)
-  const unsigned LocInstWidth = 6;
+  /// Location variable's width (increase for support of >256 comps+inputs)
+  const unsigned LocInstWidth = 8;
   /// A mapping from a location variable's string representation to its location.
   /// Required during model parsing
   std::map<std::string, LocInst> LocInstMap;
