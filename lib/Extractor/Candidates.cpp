@@ -386,6 +386,29 @@ Inst *ExprBuilder::build(Value *V) {
       }
       return IC.getPhi(BI.B, Incomings);
     }
+  } else if (auto EV = dyn_cast<ExtractValueInst>(V)) {
+    Inst *L = get(EV->getOperand(0));
+    ArrayRef<unsigned> Idx = EV->getIndices();
+    // NOTE: extractvalue instruction can take set of indices. Most of the
+    // times we just pass one index value, i.e. why I am extracting 0th index
+    // always, Idx[0]. If required, we can fix it by iterating over set of
+    // indices. Additonally, we harvest extractvalue instruction only if the
+    // extracted value comes from an overflow instruction. Otherwise, we simply
+    // create a var.
+    Inst *R = IC.getConst(APInt(32, Idx[0]));
+    switch (L->K) {
+      default:
+        return makeArrayRead(V);
+      case Inst::SAddWithOverflow:
+      case Inst::UAddWithOverflow:
+      case Inst::SSubWithOverflow:
+      case Inst::USubWithOverflow:
+      case Inst::SMulWithOverflow:
+      case Inst::UMulWithOverflow: {
+        unsigned WidthExtracted = L->Ops[Idx[0]]->Width;
+        return IC.getInst(Inst::ExtractValue, WidthExtracted, {L, R});
+      }
+    }
   } else if (auto Call = dyn_cast<CallInst>(V)) {
     if (auto II = dyn_cast<IntrinsicInst>(Call)) {
       Inst *L = get(II->getOperand(0));
@@ -400,6 +423,42 @@ Inst *ExprBuilder::build(Value *V) {
           return IC.getInst(Inst::Cttz, L->Width, {L});
         case Intrinsic::ctlz:
           return IC.getInst(Inst::Ctlz, L->Width, {L});
+        case Intrinsic::sadd_with_overflow: {
+          Inst *R = get(II->getOperand(1));
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R});
+          Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R});
+          return IC.getInst(Inst::SAddWithOverflow, L->Width+1, {Add, Overflow});
+        }
+        case Intrinsic::uadd_with_overflow: {
+          Inst *R = get(II->getOperand(1));
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R});
+          Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R});
+          return IC.getInst(Inst::UAddWithOverflow, L->Width+1, {Add, Overflow});
+        }
+        case Intrinsic::ssub_with_overflow: {
+          Inst *R = get(II->getOperand(1));
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R});
+          Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R});
+          return IC.getInst(Inst::SSubWithOverflow, L->Width+1, {Sub, Overflow});
+        }
+        case Intrinsic::usub_with_overflow: {
+          Inst *R = get(II->getOperand(1));
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R});
+          Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R});
+          return IC.getInst(Inst::USubWithOverflow, L->Width+1, {Sub, Overflow});
+        }
+        case Intrinsic::smul_with_overflow: {
+          Inst *R = get(II->getOperand(1));
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R});
+          Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R});
+          return IC.getInst(Inst::SMulWithOverflow, L->Width+1, {Mul, Overflow});
+        }
+        case Intrinsic::umul_with_overflow: {
+          Inst *R = get(II->getOperand(1));
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R});
+          Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R});
+          return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
+        }
       }
     }
   }

@@ -284,6 +284,37 @@ blockpc %0 0 %1 2:i32
 %2:i32 = var ; 2
 cand %1 %2
 )i",
+      R"i(%0:i32 = var ; 0
+%1:i1 = ult 0:i32, %0
+%2:i33 = usub.with.overflow 0:i32, %0
+%3:i1 = extractvalue %2, 1:i32
+%4:i1 = xor %1, %3
+cand %4 0:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i33 = uadd.with.overflow %0, 1:i32
+%2:i32 = extractvalue %1, 0:i32
+%3:i1 = ult 0:i32, %2
+%4:i1 = extractvalue %1, 1:i32
+%5:i1 = or %3, %4
+cand %5 1:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = shl %0, 3:i32
+%2:i64 = sext %1
+%3:i64 = var ; 3
+%4:i64 = sext %0
+%5:i65 = sadd.with.overflow %3, %4
+%6:i64 = extractvalue %5, 0:i32
+%7:i65 = ssub.with.overflow %6, 1:i64
+%8:i64 = extractvalue %7, 0:i32
+%9:i65 = sadd.with.overflow %2, %8
+%10:i64 = extractvalue %9, 0:i32
+%11:i64 = srem %10, %2
+%12:i65 = ssub.with.overflow %2, %11
+%13:i1 = extractvalue %12, 1:i32
+cand %13 0:i1
+)i",
   };
 
   struct {
