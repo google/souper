@@ -116,7 +116,8 @@ FoundChar:
       const char *NameBegin = Begin;
       while (Begin != End && ((*Begin >= '0' && *Begin <= '9') ||
                               (*Begin >= 'A' && *Begin <= 'Z') ||
-                              (*Begin >= 'a' && *Begin <= 'z'))) {
+                              (*Begin >= 'a' && *Begin <= 'z') ||
+                              (*Begin == '.'))) {
         ++Begin;
       }
       if (Begin == NameBegin) {
@@ -157,11 +158,12 @@ FoundChar:
     }
   }
 
-  if (*Begin >= 'a' && *Begin <= 'z') {
+  if ((*Begin >= 'a' && *Begin <= 'z') || (*Begin == '.')) {
     const char *TokenBegin = Begin;
     do {
       ++Begin;
-    } while (Begin != End && *Begin >= 'a' && *Begin <= 'z');
+    } while (Begin != End && ((*Begin >= 'a' && *Begin <= 'z') ||
+             (*Begin == '.')));
     return Token{Token::Ident, TokenBegin, size_t(Begin - TokenBegin), APInt()};
   }
 
@@ -448,6 +450,22 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     MaxOps = 2;
     break;
 
+  case Inst::SAddO:
+  case Inst::UAddO:
+  case Inst::SSubO:
+  case Inst::USubO:
+  case Inst::SMulO:
+  case Inst::UMulO:
+  case Inst::SAddWithOverflow:
+  case Inst::UAddWithOverflow:
+  case Inst::SSubWithOverflow:
+  case Inst::USubWithOverflow:
+  case Inst::SMulWithOverflow:
+  case Inst::UMulWithOverflow:
+  case Inst::ExtractValue:
+    MinOps = MaxOps = 2;
+    break;
+
   case Inst::Select:
     MinOps = MaxOps = 3;
     if (Ops.size() > 1) {
@@ -508,8 +526,25 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     return false;
   }
 
-  if (!typeCheckOpsMatchingWidths(OpsMatchingWidths, ErrStr))
-    return false;
+  // NOTE: We don't 'typeCheckOpsMatchingWidths' because the overflow
+  // instructions operands width and the instruction width is different. 
+  // The overflow instruction is a tuple of two elements (i32, i1)
+  // that makes the overall width equals to (32 + 1 = 33). Likewise, for
+  // 64-bit operands, overall width will be (64 + 1 = 65).
+  switch (IK) {
+    case Inst::SAddWithOverflow:
+    case Inst::UAddWithOverflow:
+    case Inst::SSubWithOverflow:
+    case Inst::USubWithOverflow:
+    case Inst::SMulWithOverflow:
+    case Inst::UMulWithOverflow:
+    case Inst::ExtractValue:
+      break;
+    default:
+      if (!typeCheckOpsMatchingWidths(OpsMatchingWidths, ErrStr))
+        return false;
+      break;
+  }
 
   unsigned ExpectedWidth;
   switch (IK) {
@@ -530,6 +565,33 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   case Inst::Ule:
   case Inst::Sle:
     ExpectedWidth = 1;
+    break;
+
+  case Inst::SAddO:
+  case Inst::UAddO:
+  case Inst::SSubO:
+  case Inst::USubO:
+  case Inst::SMulO:
+  case Inst::UMulO:
+    ExpectedWidth = 1;
+    break;
+
+  case Inst::SAddWithOverflow:
+  case Inst::UAddWithOverflow:
+  case Inst::SSubWithOverflow:
+  case Inst::USubWithOverflow:
+  case Inst::SMulWithOverflow:
+  case Inst::UMulWithOverflow:
+    ExpectedWidth = Ops[0]->Width + 1;
+    break;
+
+  case Inst::ExtractValue:
+    if (Ops[1]->Val.getZExtValue() == 0)
+      ExpectedWidth = Ops[0]->Ops[0]->Width;
+    else if (Ops[1]->Val.getZExtValue() == 1)
+      ExpectedWidth = 1;
+    else
+      ErrStr = "extractvalue inst doesn't expect index value other than 0 or 1";
     break;
 
   default:
@@ -839,7 +901,35 @@ bool Parser::parseLine(std::string &ErrStr) {
           ErrStr = makeErrStr(TP, ErrStr);
           return false;
         }
-        I = IC.getInst(IK, InstWidth, Ops);
+        switch (IK) {
+          case Inst::SAddWithOverflow:
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Add, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::SAddO, 1, Ops)});
+            break;
+          case Inst::UAddWithOverflow:
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Add, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::UAddO, 1, Ops)});
+            break;
+          case Inst::SSubWithOverflow:
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Sub, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::SSubO, 1, Ops)});
+            break;
+          case Inst::USubWithOverflow:
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Sub, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::USubO, 1, Ops)});
+            break;
+          case Inst::SMulWithOverflow:
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Mul, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::SMulO, 1, Ops)});
+            break;
+          case Inst::UMulWithOverflow:
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Mul, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::UMulO, 1, Ops)});
+            break;
+          default:
+            I = IC.getInst(IK, InstWidth, Ops);
+            break;
+        }
       }
 
       Context.setInst(InstName, I);

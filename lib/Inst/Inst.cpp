@@ -120,12 +120,24 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
   }
 
   const std::vector<Inst *> &Ops = I->orderedOps();
-  for (unsigned I = 0; I != Ops.size(); ++I) {
-    if (I == 0)
+  for (unsigned Idx = 0; Idx != Ops.size(); ++Idx) {
+    if (Idx == 0)
       OpsSS << " ";
     else
       OpsSS << ", ";
-    OpsSS << printInst(Ops[I], Out, printNames);
+    switch (I->K) {
+      default:
+        OpsSS << printInst(Ops[Idx], Out, printNames);
+        break;
+      case Inst::SAddWithOverflow:
+      case Inst::UAddWithOverflow:
+      case Inst::SSubWithOverflow:
+      case Inst::USubWithOverflow:
+      case Inst::SMulWithOverflow:
+      case Inst::UMulWithOverflow:
+        OpsSS << printInst(I->Ops[1]->Ops[Idx], Out, printNames);
+        break;
+    }
   }
 
   std::string InstName = std::to_string(InstNames.size() + BlockNames.size());
@@ -133,14 +145,25 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
   assert(NameToBlock.find(InstName) == NameToBlock.end());
   setInst(InstName, I);
 
-  Out << "%" << InstName << ":i" << I->Width << " = " << Inst::getKindName(I->K)
-      << OpsSS.str();
-
-  if (printNames && !I->Name.empty()) {
-    Out << " ; " << I->Name;
+  // Skip the elements of overflow instruction tuple in souper IR
+  switch (I->K) {
+    case Inst::SAddO:
+    case Inst::UAddO:
+    case Inst::SSubO:
+    case Inst::USubO:
+    case Inst::SMulO:
+    case Inst::UMulO:
+      break;
+    default: {
+      Out << "%" << InstName << ":i" << I->Width << " = "
+          << Inst::getKindName(I->K) << OpsSS.str();
+      if (printNames && !I->Name.empty()) {
+        Out << " ; " << I->Name;
+      }
+      Out << '\n';
+      break;
+    }
   }
-
-  Out << '\n';
 
   SS << "%" << InstName;
   return SS.str();
@@ -314,6 +337,32 @@ const char *Inst::getKindName(Kind K) {
     return "cttz";
   case Ctlz:
     return "ctlz";
+  case ExtractValue:
+    return "extractvalue";
+  case SAddWithOverflow:
+    return "sadd.with.overflow";
+  case UAddWithOverflow:
+    return "uadd.with.overflow";
+  case SSubWithOverflow:
+    return "ssub.with.overflow";
+  case USubWithOverflow:
+    return "usub.with.overflow";
+  case SMulWithOverflow:
+    return "smul.with.overflow";
+  case UMulWithOverflow:
+    return "umul.with.overflow";
+  case SAddO:
+    break;
+  case UAddO:
+    break;
+  case SSubO:
+    break;
+  case USubO:
+    break;
+  case SMulO:
+    break;
+  case UMulO:
+    break;
   }
 
   llvm_unreachable("all cases covered");
@@ -366,6 +415,13 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("bswap", Inst::BSwap)
                    .Case("cttz", Inst::Cttz)
                    .Case("ctlz", Inst::Ctlz)
+                   .Case("sadd.with.overflow", Inst::SAddWithOverflow)
+                   .Case("uadd.with.overflow", Inst::UAddWithOverflow)
+                   .Case("ssub.with.overflow", Inst::SSubWithOverflow)
+                   .Case("usub.with.overflow", Inst::USubWithOverflow)
+                   .Case("smul.with.overflow", Inst::SMulWithOverflow)
+                   .Case("umul.with.overflow", Inst::UMulWithOverflow)
+                   .Case("extractvalue", Inst::ExtractValue)
                    .Default(Inst::Kind(~0));
 }
 

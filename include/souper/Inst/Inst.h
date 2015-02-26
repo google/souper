@@ -81,6 +81,19 @@ struct Inst : llvm::FoldingSetNode {
     BSwap,
     Cttz,
     Ctlz,
+    ExtractValue,
+    SAddWithOverflow,
+    SAddO,
+    UAddWithOverflow,
+    UAddO,
+    SSubWithOverflow,
+    SSubO,
+    USubWithOverflow,
+    USubO,
+    SMulWithOverflow,
+    SMulO,
+    UMulWithOverflow,
+    UMulO,
   } Kind;
 
   Kind K;

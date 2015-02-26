@@ -188,11 +188,16 @@ ref<Expr> ExprBuilder::subnuwUB(Inst *I) {
 
 ref<Expr> ExprBuilder::mulnswUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
-   ref<Expr> L = SExtExpr::create(get(Ops[0]), 2*I->Width);
-   ref<Expr> R = SExtExpr::create(get(Ops[1]), 2*I->Width);
+   // The computation below has to be performed on the operands of
+   // multiplication instruction. The instruction using mulnswUB()
+   // can be of different width, for instance in SMulO instruction
+   // which is of 1-bit, but the operands width are to be used here.
+   Expr::Width Width = get(Ops[0])->getWidth();
+   ref<Expr> L = SExtExpr::create(get(Ops[0]), 2*Width);
+   ref<Expr> R = SExtExpr::create(get(Ops[1]), 2*Width);
    ref<Expr> Mul = MulExpr::create(L, R);
-   ref<Expr> LowerBits = ExtractExpr::create(Mul, 0, I->Width);
-   ref<Expr> LowerBitsExt = SExtExpr::create(LowerBits, 2*I->Width);
+   ref<Expr> LowerBits = ExtractExpr::create(Mul, 0, Width);
+   ref<Expr> LowerBitsExt = SExtExpr::create(LowerBits, 2*Width);
    return EqExpr::create(Mul, LowerBitsExt);
 }
 
@@ -554,6 +559,29 @@ ref<Expr> ExprBuilder::build(Inst *I) {
     return SubExpr::create(klee::ConstantExpr::create(Width, Width),
                            countOnes(Val));
   }
+  case Inst::SAddO:
+    return XorExpr::create(addnswUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+  case Inst::UAddO:
+    return XorExpr::create(addnuwUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+  case Inst::SSubO:
+    return XorExpr::create(subnswUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+  case Inst::USubO:
+    return XorExpr::create(subnuwUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+  case Inst::SMulO:
+    return XorExpr::create(mulnswUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+  case Inst::UMulO:
+    return XorExpr::create(mulnuwUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+  case Inst::ExtractValue: {
+    unsigned Index = Ops[1]->Val.getZExtValue();
+    return get(Ops[0]->Ops[Index]);
+  }
+  case Inst::SAddWithOverflow:
+  case Inst::UAddWithOverflow:
+  case Inst::SSubWithOverflow:
+  case Inst::USubWithOverflow:
+  case Inst::SMulWithOverflow:
+  case Inst::UMulWithOverflow:
+    break;
   }
   llvm_unreachable("unknown kind");
 }
