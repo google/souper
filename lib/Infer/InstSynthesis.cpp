@@ -75,6 +75,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   N = I.size();
   M = Comps.size() + N;
+  assert(M < (1<<LocInstWidth) && "too many inputs and components");
 
   int LHSCost = cost(LHS);
 
