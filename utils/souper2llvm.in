@@ -19,6 +19,7 @@ import fileinput, sys, copy
 widths = dict()
 pcmap, argmap = dict(), dict()
 cand = None
+needsResult = False
 intrdecl = dict()
 printedblocks = []
 labels = ["foo0"]
@@ -56,7 +57,9 @@ instmap = {
 nestedinsts = ["add", "mul", "and", "or", "xor"]
 boolinsts = ["eq", "ne", "ugt", "uge", "ult", "ule", "sgt", "sge", "slt", "sle"]
 towidthinsts = ["sext", "trunc", "zext"];
-intrinsts = ["bswap", "ctpop", "cttz", "ctlz"]
+intrinsts = ["bswap", "ctpop", "cttz", "ctlz", "sadd.with.overflow",
+             "uadd.with.overflow", "ssub.with.overflow", "usub.with.overflow",
+             "smul.with.overflow", "umul.with.overflow"]
 specialinsts = ["block", "pc", "cand", "infer", "result"]
 
 def parseConst(c):
@@ -111,11 +114,13 @@ def parseInst(i):
         assert len(i) >= 3, "wrong instruction length %d, %s" % (len(i), i)
         tmp = i[0].split(":")
         assert len(tmp) == 2, "wrong reg length %d, %s" % (len(tmp), tmp)
+        assert i[1] == "=", "expecting '=', got %s" % i[1]
         reg = tmp[0]
         width = tmp[1] 
-        widths[reg] = width
-        assert i[1] == "=", "expecting '=', got %s" % i[1]
         inst = i[2] 
+        if "overflow" in i[2]:
+            width = "i" + str(int(width[1:])-1)
+        widths[reg] = width
         ops = parseOps(i[3:])
     else:
         assert 0, "unknown LHS: %s" % i[0]
@@ -165,9 +170,17 @@ def translateInstToLLVM(i):
         elif inst in towidthinsts: 
             assert len(ops) == 1, "must have exactly one op %s" % inst
             s += " " + ops[0][1] + " " + ops[0][0] + " to " + width
+        elif inst == "extractvalue":
+            # extracting i1s only
+            s += " {" + ops[0][1] + ", i1}"
         elif inst in intrinsts:
-            s += "call " + width + " @llvm." + inst + "." + width + "(" \
-                         + ops[0][1] + " " + ops[0][0] + ")"
+            if "overflow" in inst:
+                s += "call {" + width + ", i1} @llvm." + inst + "." + width \
+                              + "(" + ops[0][1] + " " + ops[0][0] + ", " \
+                              + ops[1][1] + " " + ops[1][0] + ")"
+            else:
+                s += "call " + width + " @llvm." + inst + "." + width + "(" \
+                             + ops[0][1] + " " + ops[0][0] + ")"
         elif inst == "select":
             pass
         else:
@@ -185,6 +198,8 @@ def readOpt():
     res = []
     for line in fileinput.input():
         if not line.strip():
+            continue
+        elif line.strip()[0] == ";":
             continue
         res.append(line.split())
     assert len(res), "empty file"
@@ -286,24 +301,29 @@ def rewriteRegs(insts):
     counter = 0
     res = []
     newregs = copy.deepcopy(argmap)
+    global cand
+    global needsResult
     for i in insts:
         reg, width, inst, ops = i
         if inst == "block":
             continue
         elif inst == "cand":
+            assert not cand, "cand must be empty"
             assert reg in newregs, "unknown reg %s for %s" % (reg, i)
-            global cand
             rewriteOps(inst, newregs, ops)
             cand = [newregs[reg], width, inst, ops]
             continue
         elif inst == "infer":
             assert not cand, "cand must be empty"
             cand = [newregs[reg], width, inst, ops]
+            needsResult = True
             continue
         elif inst == "result":
+            assert needsResult, "infer inst not found"
             assert cand, "cand must not be empty"
             rewriteOps(inst, newregs, ops)
             cand[3] = ops
+            needsResult = False
             continue
         elif inst == "pc":
             assert reg in newregs, "unknown reg %s for %s" % (reg, i)
@@ -335,9 +355,14 @@ def rewriteRegs(insts):
             # store intrinsic func decls
             if inst in intrinsts:
                 if (inst+width) not in intrdecl:
-                    decl = "declare " + width + " @llvm." + inst + "." \
-                                      + width + "(" + width + ") #" \
-                                      + str(len(intrdecl))
+                    if "overflow" in inst:
+                        decl = "declare {" + width + ", i1} @llvm." + inst \
+                                           + "." + width + "(" + width + ", " \
+                                           + width + ") #" + str(len(intrdecl))
+                    else:
+                        decl = "declare " + width + " @llvm." + inst + "." \
+                                          + width + "(" + width + ") #" \
+                                          + str(len(intrdecl))
                     intrdecl[inst+width] = decl
             res.append(newinst)
     return res
@@ -357,9 +382,9 @@ def printFuncHeader():
     print "@dummy1 = global i32 0, align 4"
     print "@dummy2 = global i32 0, align 4"
     print "@dummy3 = global i32 0, align 4"
+    print
     for decl in intrdecl.values():
         print decl
-    assert cand, "there must be a candidate"
     print "\ndefine void @foo(",
     # print args
     for i, reg in enumerate(argmap.values()):
@@ -414,6 +439,9 @@ insts = parseInsts(lines)
 insts = propagateArgNames(insts)
 insts = groupPhis(insts)
 insts = rewriteRegs(insts)
+
+assert not needsResult, "result inst found"
+assert cand, "cand inst not found"
 
 printFuncHeader()
 printFuncBody(insts)
