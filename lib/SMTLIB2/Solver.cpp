@@ -219,11 +219,11 @@ public:
     ArgPtrs.push_back(0);
   }
 
-  std::string getName() const {
+  std::string getName() const override {
     return Name;
   }
 
-  bool supportsModels() const {
+  bool supportsModels() const override {
     return SupportsModels;
   }
 

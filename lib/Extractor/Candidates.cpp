@@ -26,7 +26,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
-#include "llvm/PassManager.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/CommandLine.h"
 #include "souper/Inst/Inst.h"
 #include "souper/Util/UniqueNameSet.h"
@@ -81,7 +81,7 @@ struct ExprBuilder {
       : Opts(Opts), DL(M->getDataLayout()), LI(LI), IC(IC), EBC(EBC) {}
 
   const ExprBuilderOptions &Opts;
-  const DataLayout *DL;
+  const DataLayout &DL;
   const LoopInfo *LI;
   InstContext &IC;
   ExprBuilderContext &EBC;
@@ -150,7 +150,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
   StringRef Name;
   if (Opts.NamedArrays)
     Name = V->getName();
-  unsigned Width = DL->getTypeSizeInBits(V->getType());
+  unsigned Width = DL.getTypeSizeInBits(V->getType());
   return IC.createVar(Width, Name);
 }
 
@@ -161,7 +161,7 @@ Inst *ExprBuilder::buildConstant(Constant *c) {
     return IC.getConst(cf->getValueAPF().bitcastToAPInt());
   } else if (isa<ConstantPointerNull>(c) || isa<UndefValue>(c) ||
              isa<ConstantAggregateZero>(c)) {
-    return IC.getConst(APInt(DL->getTypeSizeInBits(c->getType()), 0));
+    return IC.getConst(APInt(DL.getTypeSizeInBits(c->getType()), 0));
   } else {
     // Constant{Expr, Vector, DataSequential, Struct, Array}
     return makeArrayRead(c);
@@ -170,10 +170,10 @@ Inst *ExprBuilder::buildConstant(Constant *c) {
 
 Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
                             gep_type_iterator end) {
-  unsigned PSize = DL->getPointerSizeInBits();
+  unsigned PSize = DL.getPointerSizeInBits();
   for (auto i = begin; i != end; ++i) {
     if (StructType *ST = dyn_cast<StructType>(*i)) {
-      const StructLayout *SL = DL->getStructLayout(ST);
+      const StructLayout *SL = DL.getStructLayout(ST);
       ConstantInt *CI = cast<ConstantInt>(i.getOperand());
       uint64_t Addend = SL->getElementOffset((unsigned) CI->getZExtValue());
       if (Addend != 0) {
@@ -183,7 +183,7 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
     } else {
       SequentialType *SET = cast<SequentialType>(*i);
       uint64_t ElementSize =
-        DL->getTypeStoreSize(SET->getElementType());
+        DL.getTypeStoreSize(SET->getElementType());
       Value *Operand = i.getOperand();
       Inst *Index = get(Operand);
       if (PSize > Index->Width)
@@ -326,7 +326,7 @@ Inst *ExprBuilder::build(Value *V) {
     return IC.getInst(Inst::Select, T->Width, {C, T, F});
   } else if (auto Cast = dyn_cast<CastInst>(V)) {
     Inst *Op = get(Cast->getOperand(0));
-    unsigned DestSize = DL->getTypeSizeInBits(Cast->getType());
+    unsigned DestSize = DL.getTypeSizeInBits(Cast->getType());
 
     switch (Cast->getOpcode()) {
     case Instruction::BitCast:
@@ -749,7 +749,7 @@ FunctionCandidateSet souper::ExtractCandidates(Function *F, InstContext &IC,
   PassRegistry &Registry = *PassRegistry::getPassRegistry();
   initializeAnalysis(Registry);
 
-  FunctionPassManager FPM(F->getParent());
+  legacy::FunctionPassManager FPM(F->getParent());
   FPM.add(new ExtractExprCandidatesPass(Opts, IC, EBC, Result));
   FPM.run(*F);
 

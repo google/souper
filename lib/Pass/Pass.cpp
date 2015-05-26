@@ -18,7 +18,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
-#include "llvm/PassManager.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
@@ -127,7 +127,8 @@ public:
     BasicBlock *BB = BasicBlock::Create(C, "entry", Ctor);
     IRBuilder<> Builder(BB);
 
-    Builder.CreateCall3(RegisterFunc, ReplPtr, FieldPtr, CntVar);
+    Value *Args[] = { ReplPtr, FieldPtr, CntVar };
+    Builder.CreateCall(RegisterFunc, Args);
     Builder.CreateRetVoid();
 
     appendToGlobalCtors(*M, Ctor, 0);
@@ -186,7 +187,7 @@ public:
         std::string Str;
         llvm::raw_string_ostream Loc(Str);
         Instruction *I = Cand.Origin.getInstruction();
-        I->getDebugLoc().print(I->getContext(), Loc);
+        I->getDebugLoc().print(Loc);
         std::string HField = "sprofile " + Loc.str();
         ReplacementContext Context;
         KV->hIncrBy(GetReplacementLHSString(Cand.BPCs, Cand.PCs,
@@ -218,7 +219,7 @@ public:
         errs() << "; Replacing \"";
         I->print(errs());
         errs() << "\"\n; from \"";
-        I->getDebugLoc().print(I->getContext(), errs());
+        I->getDebugLoc().print(errs());
         errs() << "\"\n; with \"";
         CI->print(errs());
         errs() << "\" in:\n";
@@ -230,7 +231,7 @@ public:
         if (DynamicProfile) {
           std::string Str;
           llvm::raw_string_ostream Loc(Str);
-          I->getDebugLoc().print(I->getContext(), Loc);
+          I->getDebugLoc().print(Loc);
           ReplacementContext Context;
           dynamicProfile (F.getContext(), F.getParent(),
                           GetReplacementLHSString(Cand.BPCs, Cand.PCs,
@@ -271,7 +272,7 @@ static struct Register {
 } X;
 
 static void registerSouperPass(
-    const llvm::PassManagerBuilder &Builder, llvm::PassManagerBase &PM) {
+    const llvm::PassManagerBuilder &Builder, llvm::legacy::PassManagerBase &PM) {
   PM.add(new SouperPass);
 }
 

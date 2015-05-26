@@ -14,8 +14,8 @@ entry:
   br i1 false, label %cond.end, label %cond.false
 
 cond.false:                                       ; preds = %entry
-  %0 = load i32** @a, align 8
-  %1 = load i32* %0, align 4
+  %0 = load i32*, i32** @a, align 8
+  %1 = load i32, i32* %0, align 4
   br label %cond.end
 
 cond.end:                                         ; preds = %entry, %cond.false
