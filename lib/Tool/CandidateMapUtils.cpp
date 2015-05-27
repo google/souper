@@ -76,7 +76,7 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
         std::string Str;
         llvm::raw_string_ostream Loc(Str);
         Instruction *I = Cand.Origin.getInstruction();
-        I->getDebugLoc().print(I->getContext(), Loc);
+        I->getDebugLoc().print(Loc);
         std::string HField = "sprofile " + Loc.str();
         ReplacementContext Context;
         KVForStaticProfile->hIncrBy(GetReplacementLHSString(Cand.BPCs,

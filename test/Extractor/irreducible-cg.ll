@@ -13,7 +13,7 @@ target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 ; Function Attrs: nounwind uwtable
 define noalias i32* @foo(%class.A* nocapture readnone %this) #0 align 2 {
 entry:
-  %0 = load i32* @a, align 4, !tbaa !1
+  %0 = load i32, i32* @a, align 4, !tbaa !1
   %tobool = icmp eq i32 %0, 0
   br i1 %tobool, label %for.body, label %land.rhs
 
@@ -23,7 +23,7 @@ land.rhs:                                         ; preds = %entry
 
 for.bodythread-pre-split:                         ; preds = %for.inc, %land.rhs
   %K.010.ph = phi i32 [ undef, %land.rhs ], [ %inc, %for.inc ]
-  %.pr = load i32* @a, align 4, !tbaa !1
+  %.pr = load i32, i32* @a, align 4, !tbaa !1
   %phitmp = icmp eq i32 %.pr, 0
   br label %for.body
 

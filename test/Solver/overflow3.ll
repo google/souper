@@ -15,7 +15,7 @@ target triple = "x86_64-unknown-linux-gnu"
 ; Function Attrs: nounwind uwtable
 define i32 @x1() #0 {
 entry:
-  %0 = load i32* @x0, align 4
+  %0 = load i32, i32* @x0, align 4
   %1 = call { i32, i1 } @llvm.smul.with.overflow.i32(i32 %0, i32 1000)
   %2 = extractvalue { i32, i1 } %1, 0
   %3 = extractvalue { i32, i1 } %1, 1

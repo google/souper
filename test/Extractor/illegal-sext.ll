@@ -7,8 +7,8 @@ target triple = "x86_64-unknown-linux-gnu"
 
 define i1 @foo(i8** %a, i8* %b) #0 {
 entry:
-  %0 = load i8** %a, align 8
-  %1 = getelementptr inbounds i8* %0, i64 1
+  %0 = load i8*, i8** %a, align 8
+  %1 = getelementptr inbounds i8, i8* %0, i64 1
   %res = icmp ugt i8* %1, %b
   ret i1 %res
 }

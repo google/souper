@@ -59,7 +59,7 @@ public:
 
   std::error_code infer(const BlockPCs &BPCs,
                         const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, InstContext &IC) {
+                        Inst *LHS, Inst *&RHS, InstContext &IC) override {
     std::error_code EC;
 
     if (LHS->Width == 1) {
@@ -129,7 +129,8 @@ public:
   std::error_code isValid(const BlockPCs &BPCs,
                           const std::vector<InstMapping> &PCs,
                           InstMapping Mapping, bool &IsValid,
-                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
+                          std::vector<std::pair<Inst *, llvm::APInt>> *Model)
+  override {
     std::string Query;
     if (Model && SMTSolver->supportsModels()) {
       std::vector<Inst *> ModelInsts;
@@ -157,7 +158,7 @@ public:
     }
   }
 
-  std::string getName() {
+  std::string getName() override {
     return SMTSolver->getName();
   }
 };
@@ -174,7 +175,7 @@ public:
 
   std::error_code infer(const BlockPCs &BPCs,
                         const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, InstContext &IC) {
+                        Inst *LHS, Inst *&RHS, InstContext &IC) override {
     ReplacementContext Context;
     std::string Repl = GetReplacementLHSString(BPCs, PCs, LHS, Context);
     const auto &ent = InferCache.find(Repl);
@@ -206,7 +207,8 @@ public:
   std::error_code isValid(const BlockPCs &BPCs,
                           const std::vector<InstMapping> &PCs,
                           InstMapping Mapping, bool &IsValid,
-                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
+                          std::vector<std::pair<Inst *, llvm::APInt>> *Model)
+    override {
     // TODO: add caching support for models.
     if (Model)
       return UnderlyingSolver->isValid(BPCs, PCs, Mapping, IsValid, Model);
@@ -226,7 +228,7 @@ public:
     }
   }
 
-  std::string getName() {
+  std::string getName() override {
     return UnderlyingSolver->getName() + " + internal cache";
   }
 
@@ -243,7 +245,7 @@ public:
 
   std::error_code infer(const BlockPCs &BPCs,
                         const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, InstContext &IC) {
+                        Inst *LHS, Inst *&RHS, InstContext &IC) override {
     ReplacementContext Context;
     std::string LHSStr = GetReplacementLHSString(BPCs, PCs, LHS, Context);
     std::string S;
@@ -279,13 +281,14 @@ public:
   std::error_code isValid(const BlockPCs &BPCs,
                           const std::vector<InstMapping> &PCs,
                           InstMapping Mapping, bool &IsValid,
-                          std::vector<std::pair<Inst *, llvm::APInt>> *Model) {
+                          std::vector<std::pair<Inst *, llvm::APInt>> *Model)
+  override {
     // N.B. we decided that since the important clients have moved to infer(),
     // we'll no longer support external caching for isValid()
     return UnderlyingSolver->isValid(BPCs, PCs, Mapping, IsValid, Model);
   }
 
-  std::string getName() {
+  std::string getName() override {
     return UnderlyingSolver->getName() + " + external cache";
   }
 
