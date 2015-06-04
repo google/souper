@@ -3,7 +3,11 @@
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=select,add %s > %t1
 ; RUN: FileCheck %s < %t1
 
-; CHECK: result %6
+; CHECK:      %7:i64 = zext %1
+; CHECK-NEXT: %8:i64 = zext %2
+; CHECK-NEXT: %9:i64 = select %0, %7, %8
+; CHECK-NEXT: %10:i64 = add %3, %9
+; CHECK-NEXT: result %10
 
 %0:i1 = var
 %1:i32 = var
