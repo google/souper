@@ -537,6 +537,12 @@ void ExprBuilder::addPathConditions(BlockPCs &BPCs,
                                     std::vector<InstMapping> &PCs,
                                     std::unordered_set<Block *> &VisitedBlocks,
                                     BasicBlock *BB) {
+  for (auto &I : *BB) {
+    if (auto Call = dyn_cast<CallInst>(&I))
+      if (auto II = dyn_cast<IntrinsicInst>(Call))
+        if (II->getIntrinsicID() == Intrinsic::assume)
+          emplace_back_dedup(PCs, get(II->getOperand(0)), IC.getConst(APInt(1, 1)));
+  }
   if (auto Pred = BB->getSinglePredecessor()) {
     addPathConditions(BPCs, PCs, VisitedBlocks, Pred);
     if (auto Branch = dyn_cast<BranchInst>(Pred->getTerminator())) {
@@ -698,8 +704,26 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI,
         std::tie(R.BPCs, R.PCs) = 
           GetRelevantPCs(BCS->BPCs, BCS->PCs, BPCSets, PCSets, Vars, R.Mapping);
       }
-
-      Result.Blocks.emplace_back(std::move(BCS));
+      // Remove any replacements that seek to prove something already known
+      for (auto iter = BCS->Replacements.begin(), end = BCS->Replacements.end();
+           iter != end;) {
+        bool MatchesPC = false;
+        for (const auto &PC : iter->PCs) {
+          if ((iter->Mapping.LHS == PC.LHS) && (NULL != PC.RHS) &&
+              (PC.RHS->K == Inst::Const)) {
+            MatchesPC = true;
+            break;
+          }
+        }
+        if (MatchesPC) {
+          iter = BCS->Replacements.erase(iter);
+        } else {
+          ++iter;
+        }
+      }
+      if (!BCS->Replacements.empty()) {
+        Result.Blocks.emplace_back(std::move(BCS));
+      }
     }
   }
 }
