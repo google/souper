@@ -1,0 +1,32 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-wiring-iterations=100 -souper-synthesis-comps=const,shl,lshr,ashr,and,or,xor,add,sub  %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: Failed to infer RHS
+
+%0 = block 2
+%1 = block 2
+%2 = block 2
+%3 = block 2
+%4:i32 = var
+%5:i32 = var
+%6:i32 = var
+%7:i32 = var
+%8:i32 = var
+%9:i32 = var
+%10:i32 = var
+%11:i32 = var
+%12:i32 = var
+%13:i32 = var
+%14:i32 = var
+%15:i32 = var
+%16:i32 = var
+%17:i32 = var
+%18:i32 = var
+%19:i32 = var
+%20:i32 = var
+%21:i32 = add %18, %20
+%22:i32 = add 4294967291:i32, %17
+%23:i32 = phi %0, %21, %22
+infer %23
