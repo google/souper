@@ -300,53 +300,67 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       if (!CexExists)
         S.push_back(InputMap);
 
-      if (!hasConst(Cand))
-        continue;
-
       // Constants are not constrained by the inputs, thus, we must explicitly
       // constrain the not-working cand wiring incl. the constants and forbid
       // the wiring completely after MaxWiringAttempts is reached
-      auto WI = NotWorkingConstWirings.find(CandWiring);
-      if (WI == NotWorkingConstWirings.end()) {
-        NotWorkingConstWirings[CandWiring] = 0;
-        continue;
-      }
-      WI->second++;
-      if (DebugLevel > 2) {
-        llvm::outs() << "cand with constants, constraining wiring\n";
-        if (WI->second == MaxWiringAttempts)
-          llvm::outs() << "cand reached MaxWiringAttempts "
-                       << "(" << MaxWiringAttempts << "), forbidding\n";
-      }
       Inst *Ante = TrueConst;
-      for (auto const &Pair : CandWiring) {
-        auto const &L_x = Pair.first;
-        auto const &L_y = Pair.second;
-        if (DebugLevel > 3)
-          llvm::outs() << getLocVarStr(L_x.first) << " == "
-                       << getLocVarStr(L_y.first) << "\n";
-        // Constrain the wiring
-        Inst *Eq = IC.getInst(Inst::Eq, 1, {L_x.second, L_y.second});
-        Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
-        // If the cand is a constant, forbid the wiring immediately
-        if (Cand->K == Inst::Const)
+      if (hasConst(Cand)) {
+        auto WI = NotWorkingConstWirings.find(CandWiring);
+        if (WI == NotWorkingConstWirings.end()) {
+          NotWorkingConstWirings[CandWiring] = 0;
           continue;
-        // Otherwise, constrain the wiring with constants as long as
-        // MaxWiringAttempts is not reached. Afterwards, the wiring
-        // will be banned (without constants)
-        if (WI->second < MaxWiringAttempts) {
-          auto CI = ConstValMap.find(L_y.first);
-          if (CI == ConstValMap.end())
+        }
+        WI->second++;
+        if (DebugLevel > 2) {
+          llvm::outs() << "cand with constants, constraining wiring\n";
+          if (WI->second == MaxWiringAttempts)
+            llvm::outs() << "cand reached MaxWiringAttempts "
+              << "(" << MaxWiringAttempts << "), forbidding\n";
+        }
+        for (auto const &Pair : CandWiring) {
+          auto const &L_x = Pair.first;
+          auto const &L_y = Pair.second;
+          if (DebugLevel > 3)
+            llvm::outs() << getLocVarStr(L_x.first) << " == "
+              << getLocVarStr(L_y.first) << "\n";
+          // Constrain the wiring
+          Inst *Eq = IC.getInst(Inst::Eq, 1, {L_x.second, L_y.second});
+          Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+          // If the cand is a constant, forbid the wiring immediately
+          if (Cand->K == Inst::Const)
             continue;
-          auto const &Cons = CompInstMap[L_y.first];
+          // Otherwise, constrain the wiring with constants as long as
+          // MaxWiringAttempts is not reached. Afterwards, the wiring
+          // will be banned (without constants)
+          if (WI->second < MaxWiringAttempts) {
+            auto CI = ConstValMap.find(L_y.first);
+            if (CI == ConstValMap.end())
+              continue;
+            auto const &Cons = CompInstMap[L_y.first];
+            if (DebugLevel > 2)
+              llvm::outs() << "with constant " << getLocVarStr(L_y.first)
+                << " == " << CI->second << "\n";
+            Eq = IC.getInst(Inst::Eq, 1, {Cons, IC.getConst(CI->second)});
+            Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+          }
+        }
+        LoopPCs.emplace_back(Ante, IC.getConst(APInt(1, false)));
+      } else {
+        // Forbid invalid constant-free wirings explicitly in the future,
+        // so they don't show up in the wiring result
+        for (auto const &Pair : CandWiring) {
+          auto const &L_x = Pair.first;
+          auto const &L_y = Pair.second;
           if (DebugLevel > 2)
-            llvm::outs() << "with constant " << getLocVarStr(L_y.first)
-                         << " == " << CI->second << "\n";
-          Eq = IC.getInst(Inst::Eq, 1, {Cons, IC.getConst(CI->second)});
+            llvm::outs() << "not-working candidate, constraining wiring\n";
+          if (DebugLevel > 3)
+            llvm::outs() << getLocVarStr(L_x.first) << " == "
+                         << getLocVarStr(L_y.first) << "\n";
+          Inst *Eq = IC.getInst(Inst::Eq, 1, {L_x.second, L_y.second});
           Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
         }
+        LoopPCs.emplace_back(Ante, IC.getConst(APInt(1, false)));
       }
-      LoopPCs.emplace_back(Ante, IC.getConst(APInt(1, false)));
     }
   }
 
@@ -1183,7 +1197,7 @@ Inst *InstSynthesis::createJunkFreeInst(Inst::Kind Kind, unsigned Width,
       return IC.getConst(APInt(Width, Ops[0]->Val.getZExtValue()));
     if (Ops[0]->K == Inst::ZExt || Ops[0]->K == Inst::SExt || Ops[0]->K == Inst::Trunc)
       if (Width == Ops[0]->Ops[0]->Width)
-      return Ops[0]->Ops[0];
+        return Ops[0]->Ops[0];
     break;
 
   case Inst::Eq:
