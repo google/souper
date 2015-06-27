@@ -227,10 +227,10 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         if (DebugLevel > 1)
           llvm::outs() << "UNSAT\n";
         break;
-      } else {
-        if (DebugLevel > 1)
-          llvm::outs() << "SAT\n";
       }
+
+      if (DebugLevel > 1)
+        llvm::outs() << "SAT\n";
 
       ProgramWiring CandWiring;
       std::map<LocVar, llvm::APInt> ConstValMap;
@@ -242,6 +242,24 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       if (DebugLevel > 1) {
         llvm::outs() << "candidate:\n";
         PrintReplacementRHS(llvm::outs(), Cand, Context);
+      }
+
+      // The synthesis loop assumes that each component has a cost of one.
+      // However, this is not the case for all components (e.g., bswap).
+      // Moreover, some components can be comprised of two components to meet
+      // the DefaultWidth criteria. For example, if the DefaultWidth is 32
+      // and the engine uses ule during synthesis, the instantiation of ule
+      // would be zext(ule) to 32 and sext(ule) to 32. Therefore, the cost
+      // of such a component would be two and not one. To address this issue,
+      // we forbid candidates that have no cost benefit and continue to search
+      // for others
+      int CandCost = cost(Cand);
+      int Benefit = LHSCost - CandCost;
+      if (!IgnoreCost && Benefit <= 0) {
+        if (DebugLevel > 1)
+          llvm::outs() << "candidate has no benefit\n";
+        forbidInvalidCandWiring(CandWiring, LoopPCs, IC);
+        continue;
       }
 
       // Does the candidate work for all inputs?
@@ -260,8 +278,6 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         if (DebugLevel > 1)
           llvm::outs() << "success:\n";
         if (DebugLevel > 0) {
-          int CandCost = cost(Cand);
-          int Benefit = LHSCost - CandCost;
           PrintReplacementRHS(llvm::outs(), Cand, Context);
           llvm::outs() << "; LHS cost = " << LHSCost
                        << ", RHS cost = " << CandCost
@@ -348,18 +364,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       } else {
         // Forbid invalid constant-free wirings explicitly in the future,
         // so they don't show up in the wiring result
-        for (auto const &Pair : CandWiring) {
-          auto const &L_x = Pair.first;
-          auto const &L_y = Pair.second;
-          if (DebugLevel > 2)
-            llvm::outs() << "not-working candidate, constraining wiring\n";
-          if (DebugLevel > 3)
-            llvm::outs() << getLocVarStr(L_x.first) << " == "
-                         << getLocVarStr(L_y.first) << "\n";
-          Inst *Eq = IC.getInst(Inst::Eq, 1, {L_x.second, L_y.second});
-          Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
-        }
-        LoopPCs.emplace_back(Ante, IC.getConst(APInt(1, false)));
+        forbidInvalidCandWiring(CandWiring, LoopPCs, IC);
       }
     }
   }
@@ -1314,6 +1319,24 @@ std::vector<std::string> InstSynthesis::splitString(const char *S, char Del) {
 bool InstSynthesis::isWiringInvalid(const LocVar &Left, const LocVar &Right) {
   return (InvalidWirings.count(std::make_pair(Left, Right)) ||
           InvalidWirings.count(std::make_pair(Right, Left)));
+}
+
+void InstSynthesis::forbidInvalidCandWiring(const ProgramWiring &CandWiring,
+                                            std::vector<InstMapping> &LoopPCs,
+                                            InstContext &IC) {
+  Inst *Ante = IC.getConst(APInt(1, true));
+  if (DebugLevel > 2)
+    llvm::outs() << "not-working candidate, constraining wiring\n";
+  for (auto const &Pair : CandWiring) {
+    auto const &L_x = Pair.first;
+    auto const &L_y = Pair.second;
+    if (DebugLevel > 3)
+      llvm::outs() << getLocVarStr(L_x.first) << " == "
+                   << getLocVarStr(L_y.first) << "\n";
+    Inst *Eq = IC.getInst(Inst::Eq, 1, {L_x.second, L_y.second});
+    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+  }
+  LoopPCs.emplace_back(Ante, IC.getConst(APInt(1, false)));
 }
 
 int InstSynthesis::costHelper(Inst *I, std::set<Inst *> &Visited) {
