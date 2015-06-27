@@ -282,6 +282,9 @@ private:
   std::vector<LocVar> getOpLocs(const LocVar &Loc);
   std::vector<std::string> splitString(const char *S, char Del=',');
   bool isWiringInvalid(const LocVar &Left, const LocVar &Right);
+  void forbidInvalidCandWiring(const ProgramWiring &CandWiring,
+                               std::vector<InstMapping> &LoopPCs,
+                               InstContext &IC);
   int costHelper(Inst *I, std::set<Inst *> &Visited);
   int cost(Inst *I);
   bool hasConst(Inst *I);
