@@ -1,0 +1,11 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=and -souper-synthesis-ignore-cost %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: result %2
+
+%0:i1 = var
+%1:i1 = var
+%2:i1 = and %0, %1
+infer %2
