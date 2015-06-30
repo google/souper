@@ -1014,7 +1014,8 @@ Inst *InstSynthesis::createInstFromWiring(
                         Context);
   }
 
-  assert(Comp.Width == 1 || Comp.Width == DefaultWidth);
+  assert(Comp.Width == 1 || Comp.Width == DefaultWidth ||
+         Comp.Width == LHS->Width);
   if (Comp.Kind == Inst::Select) {
     Ops[0] = IC.getInst(Inst::Trunc, 1, {Ops[0]});
     return createJunkFreeInst(Comp.Kind, Comp.Width, Ops, IC);

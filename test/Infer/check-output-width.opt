@@ -1,0 +1,11 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: Failed to infer RHS
+
+%0:i64 = var
+%1:i64 = addnw 1:i64, %0
+%2:i32 = trunc %1
+infer %2
