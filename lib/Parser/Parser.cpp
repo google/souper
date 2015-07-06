@@ -39,6 +39,7 @@ struct Token {
     Eq,
     Int,
     UntypedInt,
+    KnownBits,
     Eof,
   };
 
@@ -48,6 +49,7 @@ struct Token {
   APInt Val;
   StringRef Name;
   unsigned Width;
+  std::string PatternString;
 
   StringRef str() const {
     return StringRef(Pos, Len);
@@ -201,6 +203,24 @@ FoundChar:
     return Token{Token::UntypedInt, NumBegin, size_t(Begin - NumBegin),
                  APInt((NumEnd - NumBegin) * 5,
                         StringRef(NumBegin, NumEnd - NumBegin), 10)};
+  }
+
+  if (*Begin == '(') {
+    ++Begin;
+    const char *NumBegin = Begin;
+    while (*Begin == '0' || *Begin == '1' || *Begin == 'x')
+      ++Begin;
+    if (Begin == NumBegin || *Begin != ')') {
+      ErrStr = "invalid knownbits string";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
+    Token T;
+    T.K = Token::KnownBits;
+    T.Pos = NumBegin;
+    T.Len = size_t(Begin - NumBegin);
+    T.PatternString = StringRef(NumBegin, Begin - NumBegin); 
+    ++Begin;
+    return T;
   }
 
   ErrStr = std::string("unexpected '") + *Begin + "'";
@@ -847,7 +867,23 @@ bool Parser::parseLine(std::string &ErrStr) {
       Block *B = 0;
 
       if (IK == Inst::Var) {
-        Inst *I = IC.createVar(InstWidth, InstName);
+        llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
+                    ConstOne(InstWidth, 1, false);
+        if (CurTok.K == Token::KnownBits) {
+          if (InstWidth != CurTok.PatternString.length()) {
+            ErrStr = makeErrStr(TP, "knownbits pattern must be of same length as var width");
+            return false;
+          }
+          for (unsigned i=0; i<InstWidth; ++i) {
+            if (CurTok.PatternString[i] == '0')
+              Zero += ConstOne.shl(CurTok.PatternString.length()-1-i);
+            else if (CurTok.PatternString[i] == '1')
+              One += ConstOne.shl(CurTok.PatternString.length()-1-i);
+          }
+          if (!consumeToken(ErrStr))
+            return false;
+        }
+        Inst *I = IC.createVar(InstWidth, InstName, Zero, One);
         Context.setInst(InstName, I);
         return true;
       }

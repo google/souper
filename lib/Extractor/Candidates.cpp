@@ -35,11 +35,16 @@
 #include <sstream>
 #include <unordered_set>
 #include <tuple>
+#include "llvm/Analysis/ValueTracking.h"
 
 static llvm::cl::opt<bool> ExploitBPCs(
     "souper-exploit-blockpcs",
     llvm::cl::desc("Exploit block path conditions (default=true)"),
     llvm::cl::init(true));
+static llvm::cl::opt<bool> HarvestKnownBits(
+    "souper-harvest-known-bits",
+    llvm::cl::desc("Perform known bits analysis (default=false)"),
+    llvm::cl::init(false));
 
 using namespace llvm;
 using namespace klee;
@@ -151,7 +156,12 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
   if (Opts.NamedArrays)
     Name = V->getName();
   unsigned Width = DL.getTypeSizeInBits(V->getType());
-  return IC.createVar(Width, Name);
+  APInt KnownZero(Width, 0, false), KnownOne(Width, 0, false);
+  if (HarvestKnownBits)
+    if (V->getType()->isIntOrIntVectorTy() ||
+        V->getType()->getScalarType()->isPointerTy())
+      computeKnownBits(V, KnownZero, KnownOne, DL);
+  return IC.createVar(Width, Name, KnownZero, KnownOne);
 }
 
 Inst *ExprBuilder::buildConstant(Constant *c) {

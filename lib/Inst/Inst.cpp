@@ -156,7 +156,14 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
       break;
     default: {
       Out << "%" << InstName << ":i" << I->Width << " = "
-          << Inst::getKindName(I->K) << OpsSS.str();
+          << Inst::getKindName(I->K);
+      if (I->K == Inst::Var && (I->KnownZeros.getBoolValue() ||
+                                I->KnownOnes.getBoolValue())) {
+        Out << " (" << Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes)
+            << ")" << OpsSS.str();
+      } else {
+        Out << OpsSS.str();
+      }
       if (printNames && !I->Name.empty()) {
         Out << " ; " << I->Name;
       }
@@ -239,6 +246,23 @@ Block *ReplacementContext::getBlock(llvm::StringRef Name) {
 void ReplacementContext::setBlock(llvm::StringRef Name, Block *B) {
   NameToBlock[Name] = B;
   BlockNames[B] = Name;
+}
+
+std::string Inst::getKnownBitsString(llvm::APInt Zero, llvm::APInt One) {
+  std::string Str;
+  for (unsigned K=0; K<Zero.getBitWidth(); ++K) {
+    if (Zero[K] && One[K])
+      llvm_unreachable("KnownZero and KnownOnes bit can't be set to 1 together");
+    if (Zero[K]) {
+      Str.append("0");
+    } else {
+      if (One[K])
+        Str.append("1");
+      else
+        Str.append("x");
+    }
+  }
+  return Str;
 }
 
 const char *Inst::getKindName(Kind K) {
@@ -485,7 +509,8 @@ Inst *InstContext::getUntypedConst(const llvm::APInt &Val) {
   return N;
 }
 
-Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
+Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
+                             llvm::APInt Zero, llvm::APInt One) {
   auto &InstList = VarInstsByWidth[Width];
   unsigned Number = InstList.size();
   auto I = new Inst;
@@ -495,6 +520,8 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
   I->Number = Number;
   I->Width = Width;
   I->Name = Name;
+  I->KnownZeros = Zero;
+  I->KnownOnes = One;
   return I;
 }
 
