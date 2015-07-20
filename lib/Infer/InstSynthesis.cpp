@@ -553,7 +553,7 @@ void InstSynthesis::initComponents(InstContext &IC) {
       CompInst = IC.getInst(Comp.Kind, Comp.Width, {C, CompOps[1], CompOps[2]});
     } else {
       CompInst = IC.getInst(Comp.Kind, Comp.Width, CompOps);
-      if (Comp.Width == 1 && Comp.Kind != Inst::Trunc)
+      if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc)
         CompInst = IC.getInst(Inst::ZExt, DefaultWidth, {CompInst});
     }
     // Update CompInstMap map with concrete Inst
@@ -1019,7 +1019,7 @@ Inst *InstSynthesis::createInstFromWiring(
   if (Comp.Kind == Inst::Select) {
     Ops[0] = IC.getInst(Inst::Trunc, 1, {Ops[0]});
     return createJunkFreeInst(Comp.Kind, Comp.Width, Ops, IC);
-  } if (Comp.Width == 1 && Comp.Kind != Inst::Trunc) {
+  } if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc) {
     Inst *Ret = createJunkFreeInst(Comp.Kind, Comp.Width, Ops, IC);
     return IC.getInst(Inst::ZExt, DefaultWidth, {Ret});
   } else
