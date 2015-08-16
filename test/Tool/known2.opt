@@ -1,0 +1,11 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: LGTM
+%0:i16 = var (1x1x1x1x1x1x1x1x)
+%1:i16 = var (x1x1x1x1x1x1x1x1)
+%2:i16 = or %0, %1
+%3:i1 = eq %2, 65535:i16
+cand %3 1:i1

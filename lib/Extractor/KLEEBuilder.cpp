@@ -73,6 +73,8 @@ struct ExprBuilder {
   std::map<Block *, std::vector<ref<Expr>>> BlockPredMap;
   std::map<Inst *, ref<Expr>> ExprMap;
   std::map<Inst *, ref<Expr>> UBExprMap;
+  std::map<Inst *, ref<Expr>> ZeroBitsMap;
+  std::map<Inst *, ref<Expr>> OneBitsMap;
   std::map<Block *, BlockPCPredMap> BlockPCMap;
   std::vector<std::unique_ptr<Array>> &Arrays;
   std::vector<Inst *> &ArrayVars;
@@ -104,6 +106,8 @@ struct ExprBuilder {
   ref<Expr> build(Inst *I);
   ref<Expr> get(Inst *I);
   ref<Expr> getInstMapping(const InstMapping &IM);
+  ref<Expr> getZeroBitsMapping(Inst *I);
+  ref<Expr> getOneBitsMapping(Inst *I);
   std::vector<ref<Expr >> getBlockPredicates(Inst *I);
   ref<Expr> getUBInstCondition();
   ref<Expr> getBlockPCs();
@@ -136,8 +140,19 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
       new Array(ArrayNames.makeName(NameStr), 1, 0, 0, Expr::Int32, Width));
   ArrayVars.push_back(Origin);
 
+  std::vector<unsigned> ZeroBits, OneBits;
   UpdateList UL(Arrays.back().get(), 0);
-  return ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
+  ref<Expr> Var = ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
+  if (Origin && Origin->K == Inst::Var && (Origin->KnownZeros.getBoolValue() ||
+                                           Origin->KnownOnes.getBoolValue())) {
+    ref<Expr> NotZeros = NotExpr::create(klee::ConstantExpr::alloc(Origin->KnownZeros));
+    ref<Expr> VarOrNotZero = OrExpr::create(Var, NotZeros);
+    ZeroBitsMap[Origin] = EqExpr::create(VarOrNotZero, NotZeros);
+    ref<Expr> Ones = klee::ConstantExpr::alloc(Origin->KnownOnes);
+    ref<Expr> VarAndOnes = AndExpr::create(Var, Ones);
+    OneBitsMap[Origin] = EqExpr::create(VarAndOnes, Ones);
+  }
+  return Var;
 }
 
 ref<Expr> ExprBuilder::addnswUB(Inst *I) {
@@ -925,6 +940,14 @@ void ExprBuilder::getBlockPCPhiPaths(
     getBlockPCPhiPaths(Ops[J], Tmp[J], Paths, CachedPhis);
 }
 
+ref<Expr> ExprBuilder::getZeroBitsMapping(Inst *I) {
+  return ZeroBitsMap[I];
+}
+
+ref<Expr> ExprBuilder::getOneBitsMapping(Inst *I) {
+  return OneBitsMap[I];
+}
+
 // Return an expression which must be proven valid for the candidate to apply.
 CandidateExpr souper::GetCandidateExprForReplacement(
     const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
@@ -934,8 +957,14 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   ExprBuilder EB(CE.Arrays, CE.ArrayVars);
   // Build LHS
   ref<Expr> LHS = EB.get(Mapping.LHS);
-  // Build PCs
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
+  for (const auto I : CE.ArrayVars) {
+    if (I && (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())) {
+      Ante = AndExpr::create(Ante, EB.getZeroBitsMapping(I));
+      Ante = AndExpr::create(Ante, EB.getOneBitsMapping(I));
+    }
+  }
+  // Build PCs
   for (const auto &PC : PCs) {
     Ante = AndExpr::create(Ante, EB.getInstMapping(PC));
   }

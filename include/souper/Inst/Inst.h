@@ -111,11 +111,14 @@ struct Inst : llvm::FoldingSetNode {
   void Profile(llvm::FoldingSetNodeID &ID) const;
 
   static const char *getKindName(Kind K);
+  static std::string getKnownBitsString(llvm::APInt Zero, llvm::APInt One);
   static Kind getKind(std::string Name);
 
   static bool isAssociative(Kind K);
   static bool isCommutative(Kind K);
   static int getCost(Kind K);
+  llvm::APInt KnownZeros;
+  llvm::APInt KnownOnes;
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
@@ -176,7 +179,8 @@ public:
   Inst *getConst(const llvm::APInt &I);
   Inst *getUntypedConst(const llvm::APInt &I);
 
-  Inst *createVar(unsigned Width, llvm::StringRef Name);
+  Inst *createVar(unsigned Width, llvm::StringRef Name,
+                  llvm::APInt Zero=llvm::APInt(1, 0, false), llvm::APInt One=llvm::APInt(1, 0, false));
   Block *createBlock(unsigned Preds);
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);

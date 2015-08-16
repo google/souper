@@ -135,6 +135,9 @@ if ($souper) {
     if (exists $ENV{"SOUPER_STATS"}) {
         push @ARGV, ("-mllvm", "-stats");
     }
+    if (exists $ENV{"SOUPER_HARVEST_KNOWN_BITS"}) {
+        push @ARGV, ("-mllvm", "-souper-harvest-known-bits");
+    }
 }
 
 if (exists $ENV{"SOUPER_DYNAMIC_PROFILE"} && linkp()) {
