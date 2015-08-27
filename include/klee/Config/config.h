@@ -13,4 +13,4 @@
 // limitations under the License.
 
 #define LLVM_VERSION_MAJOR 3
-#define LLVM_VERSION_MINOR 7
+#define LLVM_VERSION_MINOR 8
