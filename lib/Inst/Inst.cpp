@@ -250,7 +250,7 @@ void ReplacementContext::setBlock(llvm::StringRef Name, Block *B) {
 
 std::string Inst::getKnownBitsString(llvm::APInt Zero, llvm::APInt One) {
   std::string Str;
-  for (unsigned K=0; K<Zero.getBitWidth(); ++K) {
+  for (int K=Zero.getBitWidth()-1; K>=0; --K) {
     if (Zero[K] && One[K])
       llvm_unreachable("KnownZero and KnownOnes bit can't be set to 1 together");
     if (Zero[K]) {
