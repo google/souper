@@ -1,0 +1,12 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK:      %0:i16 = var (00000000000000xx)
+; CHECK-NEXT: %1:i1 = sle %0, 100:i16
+; CHECK-NEXT: cand %1 1:i1
+
+%0:i16 = var (00000000000000xx)
+%1:i1 = sle %0, 100
+infer %1
