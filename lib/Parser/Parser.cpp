@@ -40,6 +40,7 @@ struct Token {
     Int,
     UntypedInt,
     KnownBits,
+    DemandedBits,
     Eof,
   };
 
@@ -208,14 +209,25 @@ FoundChar:
   if (*Begin == '(') {
     ++Begin;
     const char *NumBegin = Begin;
-    while (*Begin == '0' || *Begin == '1' || *Begin == 'x')
+    bool KnownBitsFlag = false, DemandedBitsFlag = false;
+    while (*Begin == '0' || *Begin == '1' || *Begin == 'x') {
       ++Begin;
-    if (Begin == NumBegin || *Begin != ')') {
-      ErrStr = "invalid knownbits string";
+      KnownBitsFlag = true;
+    }
+    while (*Begin == 'n' || *Begin == 'd') {
+      ++Begin;
+      DemandedBitsFlag = true;
+    }
+    if (Begin == NumBegin || *Begin != ')' ||
+        (KnownBitsFlag && DemandedBitsFlag)) {
+      ErrStr = "invalid knownbits or demandedbits string";
       return Token{Token::Error, Begin, 0, APInt()};
     }
     Token T;
-    T.K = Token::KnownBits;
+    if (KnownBitsFlag)
+      T.K = Token::KnownBits;
+    else if (DemandedBitsFlag)
+      T.K = Token::DemandedBits;
     T.Pos = NumBegin;
     T.Len = size_t(Begin - NumBegin);
     T.PatternString = StringRef(NumBegin, Begin - NumBegin); 
@@ -699,6 +711,25 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!LHS)
           return false;
 
+        if (!consumeToken(ErrStr))
+          return false;
+        llvm::APInt DemandedBitsVal(LHS->Width, 0, false)
+        if (CurTok.K == Token::DemandedBits) {
+          if (LHS->Width != CurTok.PatternString.length()) {
+            ErrStr = makeErrStr(TP, "demandedbits pattern must be of same length as infer operand width");
+            return false;
+          }
+          for (unsigned i=0; i<LHS->Width; ++i) {
+            if (CurTok.PatternString[i] == 'n')
+              //convert to corresponding APInt value
+            else if (CurTok.PatternString[i] == 'd')
+              //convert to corresponding APInt value
+          }
+          if (!consumeToken(ErrStr))
+            return false;
+        }
+        //FIXME: where to save the demanded bits val, may be in LHS->DemandedBitsVal
+        LHS->DemandedBitsVal = DemandedBitsVal;
         if (RK == ReplacementKind::ParseLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0),
                                            std::move(PCs), std::move(BPCs)});

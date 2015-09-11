@@ -265,6 +265,10 @@ std::string Inst::getKnownBitsString(llvm::APInt Zero, llvm::APInt One) {
   return Str;
 }
 
+std::string Inst::getDemandedBitsString(llvm::APInt DBVal) {
+  //TODO: convert APInt val to string of form 'nndd'
+}
+
 const char *Inst::getKindName(Kind K) {
   switch (K) {
   case Const:
@@ -662,7 +666,12 @@ void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
   Context.printPCs(PCs, Out, printNames);
   Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(LHS, Out, printNames);
-  Out << "infer " << SRef << '\n';
+  if (LHS->DemandedBitsVal.getBoolValue())
+    Out << "infer " << SRef << " ("
+        << Inst::getDemandedBitsString(LHS->DemandedBitsVal)
+        << ")" << '\n';
+  else
+    Out << "infer " << SRef << '\n';
 }
 
 std::string souper::GetReplacementLHSString(const BlockPCs &BPCs,
