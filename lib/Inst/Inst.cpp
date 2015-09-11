@@ -266,6 +266,8 @@ std::string Inst::getKnownBitsString(llvm::APInt Zero, llvm::APInt One) {
 }
 
 std::string Inst::getDemandedBitsString(llvm::APInt DBVal) {
+  std::string Str = "dddddddd";
+  return Str;
   //TODO: convert APInt val to string of form 'nndd'
 }
 
@@ -666,11 +668,11 @@ void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
   Context.printPCs(PCs, Out, printNames);
   Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(LHS, Out, printNames);
-  if (LHS->DemandedBitsVal.getBoolValue())
+  if (LHS->DemandedBitsVal.getBoolValue()) {
     Out << "infer " << SRef << " ("
         << Inst::getDemandedBitsString(LHS->DemandedBitsVal)
         << ")" << '\n';
-  else
+  } else
     Out << "infer " << SRef << '\n';
 }
 

@@ -713,10 +713,10 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         if (!consumeToken(ErrStr))
           return false;
-        llvm::APInt DemandedBitsVal(LHS->Width, 0, false)
+        llvm::APInt DemandedBitsVal(LHS->Width, 1, false); //FIXME: val has to be 0 initially
         if (CurTok.K == Token::DemandedBits) {
           if (LHS->Width != CurTok.PatternString.length()) {
-            ErrStr = makeErrStr(TP, "demandedbits pattern must be of same length as infer operand width");
+            ErrStr = makeErrStr("demandedbits pattern must be of same length as infer operand width");
             return false;
           }
           for (unsigned i=0; i<LHS->Width; ++i) {

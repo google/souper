@@ -112,7 +112,7 @@ struct Inst : llvm::FoldingSetNode {
 
   static const char *getKindName(Kind K);
   static std::string getKnownBitsString(llvm::APInt Zero, llvm::APInt One);
-  std::string Inst::getDemandedBitsString(llvm::APInt DBVal);
+  static std::string getDemandedBitsString(llvm::APInt DBVal);
   static Kind getKind(std::string Name);
 
   static bool isAssociative(Kind K);
