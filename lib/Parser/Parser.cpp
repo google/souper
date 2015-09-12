@@ -606,9 +606,21 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     break;
 
   case Inst::ExtractValue:
-    if (Ops[1]->Val.getZExtValue() == 0)
-      ExpectedWidth = Ops[0]->Ops[0]->Width;
-    else if (Ops[1]->Val.getZExtValue() == 1)
+    if (Ops[1]->Val.getZExtValue() == 0) {
+      switch (Ops[0]->K) {
+        case Inst::SAddWithOverflow:
+        case Inst::UAddWithOverflow:
+        case Inst::SSubWithOverflow:
+        case Inst::USubWithOverflow:
+        case Inst::SMulWithOverflow:
+        case Inst::UMulWithOverflow:
+          ExpectedWidth = Ops[0]->Ops[0]->Width;
+          break;
+        default:
+          ErrStr = "extract value expects an aggregate type";
+          return false;
+      }
+    } else if (Ops[1]->Val.getZExtValue() == 1)
       ExpectedWidth = 1;
     else
       ErrStr = "extractvalue inst doesn't expect index value other than 0 or 1";
