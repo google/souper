@@ -711,24 +711,19 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!LHS)
           return false;
 
-        if (!consumeToken(ErrStr))
-          return false;
-        llvm::APInt DemandedBitsVal(LHS->Width, 1, false); //FIXME: val has to be 0 initially
+        llvm::APInt DemandedBitsVal(LHS->Width, 0, false), ConstOne(LHS->Width, 1, false);
         if (CurTok.K == Token::DemandedBits) {
           if (LHS->Width != CurTok.PatternString.length()) {
             ErrStr = makeErrStr("demandedbits pattern must be of same length as infer operand width");
             return false;
           }
           for (unsigned i=0; i<LHS->Width; ++i) {
-            if (CurTok.PatternString[i] == 'n')
-              //convert to corresponding APInt value
-            else if (CurTok.PatternString[i] == 'd')
-              //convert to corresponding APInt value
+            if (CurTok.PatternString[i] == 'd')
+              DemandedBitsVal += ConstOne.shl(CurTok.PatternString.length()-1-i);
           }
           if (!consumeToken(ErrStr))
             return false;
         }
-        //FIXME: where to save the demanded bits val, may be in LHS->DemandedBitsVal
         LHS->DemandedBitsVal = DemandedBitsVal;
         if (RK == ReplacementKind::ParseLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0),

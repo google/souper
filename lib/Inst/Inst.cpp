@@ -266,9 +266,14 @@ std::string Inst::getKnownBitsString(llvm::APInt Zero, llvm::APInt One) {
 }
 
 std::string Inst::getDemandedBitsString(llvm::APInt DBVal) {
-  std::string Str = "dddddddd";
+  std::string Str;
+  for (int K=DBVal.getBitWidth()-1; K>=0; --K) {
+    if (DBVal[K])
+      Str.append("d");
+    else
+      Str.append("n");
+  }
   return Str;
-  //TODO: convert APInt val to string of form 'nndd'
 }
 
 const char *Inst::getKindName(Kind K) {
