@@ -488,7 +488,7 @@ Inst *ExprBuilder::get(Value *V) {
     E = build(V);
   }
   if (HarvestDemandedBits)
-      E->DemandedBitsVal = DB->getDemandedBits((Instruction *)V);
+      E->DemandedBitsVal = DB->getDemandedBits(cast<Instruction>(V));
   return E;
 }
 
