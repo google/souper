@@ -90,6 +90,11 @@ TEST(ParserTest, Errors) {
         "<input>:1:18: invalid knownbits or demandedbits string" },
       { "%0:i4 = var (10\nx0)\n",
         "<input>:1:16: invalid knownbits or demandedbits string" },
+      { "%0:i65 = var ; 0\n%1:i1 = extractvalue %0, 1:i32\n"
+        "%2:i64 = extractvalue %0, 0:i32\n"
+        "%3:i64 = select %1, 18446744073709551615:i64, %2\n"
+        "infer %3\n",
+        "<input>:3:1: extract value expects an aggregate type" },
 
       // type checking
       { "%0 = add 1:i32\n",
