@@ -487,8 +487,19 @@ Inst *ExprBuilder::get(Value *V) {
   if (!E) {
     E = build(V);
   }
-  if (HarvestDemandedBits)
-      E->DemandedBitsVal = DB->getDemandedBits(cast<Instruction>(V));
+  E->DemandedBitsVal = APInt(E->Width, 0, false);
+  if (HarvestDemandedBits) {
+    if (auto ICI = dyn_cast<BinaryOperator>(V))
+      E->DemandedBitsVal = DB->getDemandedBits(ICI);
+    else if (auto BO = dyn_cast<BinaryOperator>(V))
+      E->DemandedBitsVal = DB->getDemandedBits(BO);
+    else if (auto EV = dyn_cast<ExtractValueInst>(V))
+      E->DemandedBitsVal = DB->getDemandedBits(EV);
+    else if (auto Call = dyn_cast<CallInst>(V))
+      if (auto II = dyn_cast<IntrinsicInst>(Call))
+        E->DemandedBitsVal = DB->getDemandedBits(II);
+  }
+
   return E;
 }
 

@@ -673,7 +673,7 @@ void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
   Context.printPCs(PCs, Out, printNames);
   Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(LHS, Out, printNames);
-  if (LHS->DemandedBitsVal.getBoolValue()) {
+  if (LHS->DemandedBitsVal.isStrictlyPositive()) {
     Out << "infer " << SRef << " ("
         << Inst::getDemandedBitsString(LHS->DemandedBitsVal)
         << ")" << '\n';

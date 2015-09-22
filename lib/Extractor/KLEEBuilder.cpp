@@ -958,11 +958,8 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   // Build LHS
   ref<Expr> LHS = EB.get(Mapping.LHS);
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-  if (Mapping.LHS->DemandedBitsVal.getBoolValue()) {
-    std::string NameStr = "arr";
-    CE.Arrays.emplace_back(
-      new Array(EB.ArrayNames.makeName(NameStr), 1, 0, 0, Expr::Int32, Mapping.LHS->Width));
-    UpdateList UL(CE.Arrays.back().get(), 0);
+  if (Mapping.LHS->DemandedBitsVal.isStrictlyPositive()) {
+    UpdateList UL(EB.Arrays.back().get(), 0);
     ref<Expr> Var = ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
     ref<Expr> DB = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBitsVal);
     ref<Expr> DemandedBitsExpr = EqExpr::create(AndExpr::create(Var, DB), DB);
