@@ -958,9 +958,10 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   // Build LHS
   ref<Expr> LHS = EB.get(Mapping.LHS);
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-  if (Mapping.LHS->DemandedBitsVal.isStrictlyPositive()) {
+  if (Mapping.LHS->DemandedBitsVal.getBoolValue()) {
     UpdateList UL(EB.Arrays.back().get(), 0);
-    ref<Expr> Var = ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
+    unsigned i = rand() % (1 << LHS->getWidth());
+    ref<Expr> Var = klee::ConstantExpr::alloc(i, LHS->getWidth());
     ref<Expr> DB = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBitsVal);
     ref<Expr> DemandedBitsExpr = EqExpr::create(AndExpr::create(Var, DB), DB);
     Ante = AndExpr::create(Ante, DemandedBitsExpr);

@@ -214,13 +214,20 @@ FoundChar:
       ++Begin;
       KnownBitsFlag = true;
     }
-    while (*Begin == 'n' || *Begin == 'd') {
+    while (!KnownBitsFlag && (*Begin == 'n' || *Begin == 'd')) {
       ++Begin;
       DemandedBitsFlag = true;
     }
-    if (Begin == NumBegin || *Begin != ')' ||
-        (KnownBitsFlag && DemandedBitsFlag)) {
-      ErrStr = "invalid knownbits or demandedbits string";
+    if (Begin != NumBegin && KnownBitsFlag && *Begin != ')') {
+      ErrStr = "invalid knownbits string";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
+    if (Begin != NumBegin && DemandedBitsFlag && *Begin != ')') {
+      ErrStr = "invalid demandedbits string";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
+    if (Begin == NumBegin) {
+      ErrStr = "invalid bits string, expected [0|1]+ or [n|d]+";
       return Token{Token::Error, Begin, 0, APInt()};
     }
     Token T;

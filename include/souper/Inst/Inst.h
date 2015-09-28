@@ -120,7 +120,7 @@ struct Inst : llvm::FoldingSetNode {
   static int getCost(Kind K);
   llvm::APInt KnownZeros;
   llvm::APInt KnownOnes;
-  llvm::APInt DemandedBitsVal;
+  llvm::APInt DemandedBitsVal = llvm::APInt(1, 0, false);
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
