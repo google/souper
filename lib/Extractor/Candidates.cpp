@@ -40,12 +40,12 @@
 
 static llvm::cl::opt<bool> ExploitBPCs(
     "souper-exploit-blockpcs",
-    llvm::cl::desc("Exploit block path conditions (default=true)"),
-    llvm::cl::init(true));
+    llvm::cl::desc("Exploit block path conditions (default=false)"),
+    llvm::cl::init(false));
 static llvm::cl::opt<bool> HarvestKnownBits(
     "souper-harvest-known-bits",
-    llvm::cl::desc("Perform known bits analysis (default=false)"),
-    llvm::cl::init(false));
+    llvm::cl::desc("Perform known bits analysis (default=true)"),
+    llvm::cl::init(true));
 static llvm::cl::opt<bool> HarvestDemandedBits(
     "souper-harvest-demanded-bits",
     llvm::cl::desc("Perform demanded bits analysis (default=false)"),
@@ -488,12 +488,10 @@ Inst *ExprBuilder::get(Value *V) {
     E = build(V);
   }
   E->DemandedBitsVal = APInt(E->Width, 0, false);
-  if (HarvestDemandedBits) {
-    if (Instruction *I = dyn_cast<Instruction>(V)) {
+  if (HarvestDemandedBits)
+    if (Instruction *I = dyn_cast<Instruction>(V))
       if ((DB->getDemandedBits(I)).getBoolValue())
         E->DemandedBitsVal = DB->getDemandedBits(I);
-    }
-  }
   return E;
 }
 

@@ -196,6 +196,18 @@ TEST(ParserTest, FullReplacementErrors) {
         "<input>:2:1: incomplete replacement, need a 'cand' statement or 'infer'/'result' pair" },
       { "cand 0:i1 0:i1\ncand 0:i1 0:i1\n",
         "<input>:2:1: expected a single replacement" },
+      { "%0:i4 = var ; 0\n%1:i4 = mulnuw %0, 1:i4\ninfer %1 ()\n",
+        "<input>:3:11: invalid bits string, expected [0|1]+ or [n|d]+" },
+      { "%0:i4 = var ; 0\n%1:i4 = mulnuw %0, 1:i4\ninfer %1 (addd)\n",
+        "<input>:3:11: invalid bits string, expected [0|1]+ or [n|d]+" },
+      { "%0:i4 = var ; 0\n%1:i4 = mulnuw %0, 1:i4\ninfer %1 (n1dd)\n",
+        "<input>:3:12: invalid demandedbits string" },
+      { "%0:i4 = var ; 0\n%1:i4 = mulnuw %0, 1:i4\ninfer %1 (dddd\n",
+        "<input>:3:15: invalid demandedbits string" },
+      { "%0:i4 = var ; 0\n%1:i4 = mulnuw %0, 1:i4\ninfer %1 (d\nddd)\n",
+        "<input>:3:12: invalid demandedbits string" },
+      { "%0:i4 = var ; 0\n%1:i4 = mulnuw %0, 1:i4\ninfer %1 (ndn)\n",
+        "<input>:3:11: demandedbits pattern must be of same length as infer operand width" },
 
       // type checking
     };
