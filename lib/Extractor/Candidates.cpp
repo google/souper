@@ -39,12 +39,12 @@
 
 static llvm::cl::opt<bool> ExploitBPCs(
     "souper-exploit-blockpcs",
-    llvm::cl::desc("Exploit block path conditions (default=true)"),
-    llvm::cl::init(true));
+    llvm::cl::desc("Exploit block path conditions (default=false)"),
+    llvm::cl::init(false));
 static llvm::cl::opt<bool> HarvestKnownBits(
     "souper-harvest-known-bits",
-    llvm::cl::desc("Perform known bits analysis (default=false)"),
-    llvm::cl::init(false));
+    llvm::cl::desc("Perform known bits analysis (default=true)"),
+    llvm::cl::init(true));
 
 using namespace llvm;
 using namespace klee;
