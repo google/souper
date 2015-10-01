@@ -215,6 +215,9 @@ if ($souper) {
     if (exists $ENV{"SOUPER_NO_HARVEST_KNOWN_BITS"}) {
         push @ARGV, ("-mllvm", "-souper-harvest-known-bits=false");
     }
+    if (exists $ENV{"SOUPER_HARVEST_DEMANDED_BITS"}) {
+        push @ARGV, ("-mllvm", "-souper-harvest-demanded-bits");
+    }
 }
 
 if ((exists $ENV{"SOUPER_DYNAMIC_PROFILE"} ||

@@ -114,6 +114,7 @@ struct Inst : llvm::FoldingSetNode {
   static std::string getKnownBitsString(llvm::APInt Zero, llvm::APInt One);
   static std::string getMoreKnownBitsString(bool NonZero, bool NonNegative,
                                             bool PowOfTwo);
+  static std::string getDemandedBitsString(llvm::APInt DBVal);
   static Kind getKind(std::string Name);
 
   static bool isAssociative(Kind K);
@@ -124,6 +125,7 @@ struct Inst : llvm::FoldingSetNode {
   bool NonZero;
   bool NonNegative;
   bool PowOfTwo;
+  llvm::APInt DemandedBitsVal;
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a

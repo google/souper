@@ -30,6 +30,7 @@
 #include "souper/Tool/GetSolverFromArgs.h"
 #include "souper/Tool/CandidateMapUtils.h"
 #include "set"
+#include "llvm/Analysis/DemandedBits.h"
 
 using namespace souper;
 using namespace llvm;
@@ -92,6 +93,7 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfoWrapperPass>();
+    Info.addRequired<DemandedBitsWrapperPass>();
   }
 
   void dynamicProfile(Function *F, CandidateReplacement &Cand) {
@@ -166,7 +168,10 @@ public:
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>(*F).getLoopInfo();
     if (!LI)
       report_fatal_error("getLoopInfo() failed");
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, IC, EBC);
+    DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>(*F).getDemandedBits();
+    if (!DB)
+      report_fatal_error("getAnalysis for DemandedBits pass failed");
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, IC, EBC);
 
     std::string FunctionName;
     if (F->hasLocalLinkage()) {
@@ -292,6 +297,7 @@ void initializeSouperPassPass(llvm::PassRegistry &);
 INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 

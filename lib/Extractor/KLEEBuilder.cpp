@@ -988,6 +988,11 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   // Build LHS
   ref<Expr> LHS = EB.get(Mapping.LHS);
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
+  if (Mapping.LHS->DemandedBitsVal.getBoolValue()) {
+    ref<Expr> DB = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBitsVal);
+    ref<Expr> DemandedBitsExpr = EqExpr::create(AndExpr::create(LHS, DB), DB);
+    Ante = AndExpr::create(Ante, DemandedBitsExpr);
+  }
   for (const auto I : CE.ArrayVars) {
     if (I) {
       if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {

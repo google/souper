@@ -1,0 +1,12 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: result 30:i64
+
+%0:i64 = var (0000000000xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)
+%1:i64 = and 33554431:i64, %0
+%2:i1 = ult %1, 30:i64
+%3:i64 = select %2, %1, 30:i64
+infer %3 (nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnddddn)
