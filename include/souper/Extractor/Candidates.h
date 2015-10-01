@@ -21,6 +21,7 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include "llvm/Analysis/DemandedBits.h"
 
 namespace llvm {
 
@@ -113,8 +114,8 @@ struct ExprBuilderContext {
 };
 
 FunctionCandidateSet ExtractCandidatesFromPass(
-    llvm::Function *F, const llvm::LoopInfo *LI, InstContext &IC,
-    ExprBuilderContext &EBC,
+    llvm::Function *F, const llvm::LoopInfo *LI, llvm::DemandedBits *DB,
+    InstContext &IC, ExprBuilderContext &EBC,
     const ExprBuilderOptions &Opts = ExprBuilderOptions());
 
 FunctionCandidateSet ExtractCandidates(

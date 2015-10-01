@@ -40,6 +40,7 @@ struct Token {
     Int,
     UntypedInt,
     KnownBits,
+    DemandedBits,
     Eof,
   };
 
@@ -208,14 +209,32 @@ FoundChar:
   if (*Begin == '(') {
     ++Begin;
     const char *NumBegin = Begin;
-    while (*Begin == '0' || *Begin == '1' || *Begin == 'x')
+    bool KnownBitsFlag = false, DemandedBitsFlag = false;
+    while (*Begin == '0' || *Begin == '1' || *Begin == 'x') {
       ++Begin;
-    if (Begin == NumBegin || *Begin != ')') {
+      KnownBitsFlag = true;
+    }
+    while (!KnownBitsFlag && (*Begin == 'n' || *Begin == 'd')) {
+      ++Begin;
+      DemandedBitsFlag = true;
+    }
+    if (Begin != NumBegin && KnownBitsFlag && *Begin != ')') {
       ErrStr = "invalid knownbits string";
       return Token{Token::Error, Begin, 0, APInt()};
     }
+    if (Begin != NumBegin && DemandedBitsFlag && *Begin != ')') {
+      ErrStr = "invalid demandedbits string";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
+    if (Begin == NumBegin) {
+      ErrStr = "invalid bits string, expected [0|1]+ or [n|d]+";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
     Token T;
-    T.K = Token::KnownBits;
+    if (KnownBitsFlag)
+      T.K = Token::KnownBits;
+    else if (DemandedBitsFlag)
+      T.K = Token::DemandedBits;
     T.Pos = NumBegin;
     T.Len = size_t(Begin - NumBegin);
     T.PatternString = StringRef(NumBegin, Begin - NumBegin); 
@@ -711,6 +730,20 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!LHS)
           return false;
 
+        llvm::APInt DemandedBitsVal(LHS->Width, 0, false), ConstOne(LHS->Width, 1, false);
+        if (CurTok.K == Token::DemandedBits) {
+          if (LHS->Width != CurTok.PatternString.length()) {
+            ErrStr = makeErrStr("demandedbits pattern must be of same length as infer operand width");
+            return false;
+          }
+          for (unsigned i=0; i<LHS->Width; ++i) {
+            if (CurTok.PatternString[i] == 'd')
+              DemandedBitsVal += ConstOne.shl(CurTok.PatternString.length()-1-i);
+          }
+          if (!consumeToken(ErrStr))
+            return false;
+        }
+        LHS->DemandedBitsVal = DemandedBitsVal;
         if (RK == ReplacementKind::ParseLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0),
                                            std::move(PCs), std::move(BPCs)});
