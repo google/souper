@@ -1,0 +1,9 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: result 240:i8
+
+%0:i8 = shl 254:i8, 3:i8
+infer %0 (ddddnnnn)
