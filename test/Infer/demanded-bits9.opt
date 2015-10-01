@@ -1,0 +1,11 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: result 10:i32
+
+%0:i32 = var (00000xxxxxxxxxxxxxxxxxxxxxxxxxxx)
+%1:i32 = and 1:i32, %0
+%2:i32 = shl 5:i32, %1
+infer %2 (nnnnnnnnnnnnnnnnnnnnnnnnnnnndndn)
