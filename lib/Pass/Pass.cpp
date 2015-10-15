@@ -28,6 +28,7 @@
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/GetSolverFromArgs.h"
 #include "souper/Tool/CandidateMapUtils.h"
+#include "llvm/Analysis/DemandedBits.h"
 
 using namespace souper;
 using namespace llvm;
@@ -84,6 +85,7 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfoWrapperPass>();
+    Info.addRequired<DemandedBits>();
   }
 
   void dynamicProfile(LLVMContext &C, Module *M, std::string LHS,
@@ -145,8 +147,9 @@ public:
     CandidateMap CandMap;
 
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+    DemandedBits *DB = &getAnalysis<DemandedBits>();
 
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(&F, LI, IC, EBC);
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(&F, LI, DB, IC, EBC);
 
     std::string FunctionName;
     if (F.hasLocalLinkage()) {
@@ -262,6 +265,7 @@ void initializeSouperPassPass(llvm::PassRegistry &);
 INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(DemandedBits)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 

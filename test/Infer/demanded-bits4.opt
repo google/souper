@@ -1,0 +1,10 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: Failed to infer RHS
+
+%0:i64 = var
+%1:i64 = subnsw 3:i64, %0
+infer %1 (nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnndd)

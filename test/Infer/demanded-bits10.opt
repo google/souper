@@ -1,0 +1,11 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: result 8:i64
+
+%0:i64 = var (00000000000000000000000000000000000000000000000000000000000000xx)
+%1:i64 = shl 18446744073709551615:i64, %0
+%2:i64 = and %1, 8:i64
+infer %2 (nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnndnnn)
