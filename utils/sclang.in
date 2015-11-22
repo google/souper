@@ -83,10 +83,15 @@ $souper = 0 unless compiling();
 if ($souper) {
     push @ARGV, (
         "-Xclang", "-load",
-        "-Xclang", "@SOUPER_PASS@",
         "-mllvm", $solver,
         "-mllvm", "-solver-timeout=15",
     );
+
+    if (exists $ENV{"SOUPER_DYNAMIC_PROFILE_ALL"}) {
+	push @ARGV, ("-Xclang", "@SOUPER_PASS_PROFILE_ALL@");
+    } else {
+	push @ARGV, ("-Xclang", "@SOUPER_PASS@");
+    }
 
     if (exists $ENV{"SOUPER_DEBUG"}) {
         push @ARGV, ("-mllvm", "-souper-debug");
@@ -120,7 +125,8 @@ if ($souper) {
         push @ARGV, ("-mllvm", "-souper-static-profile");
     }
 
-    if (exists $ENV{"SOUPER_DYNAMIC_PROFILE"}) {
+    if (exists $ENV{"SOUPER_DYNAMIC_PROFILE"} ||
+	exists $ENV{"SOUPER_DYNAMIC_PROFILE_ALL"}) {
         push @ARGV, ("-g", "-mllvm", "-souper-dynamic-profile");
     }
 
@@ -140,7 +146,8 @@ if ($souper) {
     }
 }
 
-if (exists $ENV{"SOUPER_DYNAMIC_PROFILE"} && linkp()) {
+if ((exists $ENV{"SOUPER_DYNAMIC_PROFILE"} ||
+     exists $ENV{"SOUPER_DYNAMIC_PROFILE_ALL"}) && linkp()) {
     push @ARGV, ("@PROFILE_LIBRARY@", "@HIREDIS_LIBRARY@");
 }
 
