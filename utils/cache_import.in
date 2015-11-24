@@ -1,0 +1,94 @@
+#!/usr/bin/env perl
+
+# Copyright 2014 The Souper Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+use warnings;
+use strict;
+use Redis;
+use Getopt::Long;
+use File::Temp;
+use Time::HiRes;
+
+my $llvmas = "@LLVM_BINDIR@/llvm-as";
+my $llvmopt = "@LLVM_BINDIR@/opt";
+my $llvmdis = "@LLVM_BINDIR@/llvm-dis";
+my $check = "@CMAKE_BINARY_DIR@/souper-check";
+my $reducer = "@CMAKE_BINARY_DIR@/reduce";
+my $triager = "@CMAKE_BINARY_DIR@/souper2llvm";
+
+sub parse ($) {
+    (my $opt) = @_;
+    (my $fh, my $tmpfn) = File::Temp::tempfile();
+    print $fh $opt;
+    $fh->flush();
+    my $arg = "--parse-lhs-only";
+    open INF, "${check} $arg < $tmpfn 2>/dev/null |";
+    my $output = "";
+    my $success = 0;
+    while (my $line = <INF>) {
+        $success = 1 if ($line =~ /success/);
+        next if ($line =~ /^;/);
+        $output .= $line;
+    }
+    close INF;
+    close $fh;
+    unlink $tmpfn;
+    print "'$opt' does not parse as Souper\n\n" unless $success;
+    return $success;
+}
+
+sub runit ($) {
+    my $cmd = shift;
+    my $res = (system "$cmd");
+    return $? >> 8;
+}
+
+my $r = Redis->new();
+$r->ping || die "no server?";
+
+my $cur;
+my $sprofile;
+my $known;
+my $n=0;
+while (my $line = <STDIN>) {
+    chomp $line;
+    if ($line =~ /\(hits ([0-9]+)\)/) {
+	print "$line\n";
+	$sprofile = $1;
+	die if defined $cur;
+	$cur = "";
+	next;
+    }
+    if ($line =~ /\/\/ \(([x01]+)\)/) {
+	$known = $1;
+	next;
+    }
+    $cur .= "${line}\n" if defined $cur;
+    next unless $line =~ /infer/;
+    die unless defined $cur;
+    if (parse($cur)) {
+	$n++;
+	my $old_profile = $r->hget($cur, "sprofile ");
+	$old_profile = 0 unless defined $old_profile;
+	$r->hset($cur, "sprofile ", $sprofile + $old_profile);
+	$r->hset($cur, "known", $known) if defined $known;
+    }
+    undef $cur;
+    undef $sprofile;
+    undef $known;
+}
+
+$r->save();
+print "imported $n LHSs\n";

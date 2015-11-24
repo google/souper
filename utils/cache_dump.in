@@ -40,12 +40,13 @@ Options:
   -merge       Merge optimizations that differ only in bitwidths and constants
   -noopts      Dump not-optimizations instead of optimizations
   -parse       Ensure that each LHS in the cache parses as Souper
-  -sort=size|sprofile|dprofile
+  -sort=size|sprofile|dprofile|combined
                Sort optimizations by increasing size (default), decreasing
                static profile count, or descreasing dynamic profile count
   -raw         Dump all keys and values and exit, ignoring all other options
   -reduce      Attempt to reduce the size of each optimization
   -triage      Attempt to avoid reporting optimizations that LLVM can do
+  -weaken      Weaken dataflow facts
   -verbose
   -verify      Verify each optimization
 END
@@ -59,6 +60,7 @@ my $REDUCE = 0;
 my $MERGE = 0;
 my $PARSE = 0;
 my $TRIAGE = 0;
+my $WEAKEN = 0;
 my $VERBOSE = 0;
 my $VERIFY = 0;
 GetOptions(
@@ -69,10 +71,12 @@ GetOptions(
     "raw"  => \$RAW,
     "reduce" => \$REDUCE,
     "triage" => \$TRIAGE,
+    "weaken" => \$WEAKEN,
     "verbose" => \$VERBOSE,
     "verify" => \$VERIFY,
     ) or usage();
-usage() unless ($SORT eq "size" || $SORT eq "sprofile" || $SORT eq "dprofile");
+usage() unless ($SORT eq "size" || $SORT eq "sprofile" || $SORT eq "dprofile" ||
+    $SORT eq "combined");
 
 my $noopt_count=0;
 my %values;
@@ -85,6 +89,11 @@ my %toprint;
 my $r = Redis->new();
 $r->ping || die "no server?";
 my @all_keys = $r->keys('*');
+
+foreach my $opt (@all_keys) {
+    $sprofiles{$opt} = 0;
+    $dprofiles{$opt} = 0;
+}
 
 if ($RAW) {
     foreach my $opt (sort @all_keys) {
@@ -131,6 +140,31 @@ sub parse ($$) {
     }
 }
 
+my $need_solver = <<END;
+$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as
+-stp-path=/path/to/stp
+END
+
+sub checkstr ($) {
+    (my $s) = @_;
+    my $solver = $ENV{"SOUPER_SOLVER"};
+    die $need_solver unless $solver;
+    (my $fh, my $tmpfn) = File::Temp::tempfile();
+    print $fh $s;
+    $fh->flush();
+    open INF, "${check} ${solver} < $tmpfn 2>/dev/null |";
+    my $output = "";
+    while (my $line = <INF>) {
+        chomp $line;
+        $output .= $line;
+    }
+    close INF;
+    close $fh;
+    unlink $tmpfn;
+    return 1 if ($output =~ "LGTM");
+    return 0;
+}
+
 sub add_sprofile($$) {
     (my $opt, my $href) = @_;
     my %h = %{$href};
@@ -154,10 +188,17 @@ sub add_dprofile($$) {
 }
 
 my $xcnt = 0;
+my $tagged = 0;
+my $untagged = 0;
 foreach my $opt (@all_keys) {
     # last if $xcnt++ > 2500;
     my %h = $r->hgetall($opt);
     my $result = $h{"result"};
+    if (defined $h{"cache-infer-tag"}) {
+	$tagged++;
+    } else { 
+	$untagged++;
+    }
     if (defined($result)) {
         parse($opt, $result) if $PARSE;
     } else {
@@ -283,6 +324,37 @@ if ($REDUCE) {
     # die unless ($tprofile == total_profile_count());
 }
 
+sub grab_output($) {
+    (my $cmd) = @_;
+    open INF, $cmd or die;
+    my @llvm = ();
+    while (my $line = <INF>) {
+        push @llvm, $line;
+    }
+    close INF;
+    return \@llvm;
+}
+
+sub count_insns($) {
+    (my $lref) = @_;
+    my @l = @{$lref};
+    my $in = 0;
+    my $count = 0;
+    foreach my $line (@l) {
+        if ($line =~ /foo0:/) {
+            $in = 1;
+            next;
+        }
+        if ($line =~ /ret /) {
+            $in = 0;
+            next;
+        }
+        $count++ if $in;
+    }
+    # print "$count lines\n";
+    return $count;
+}
+
 if ($TRIAGE) {
     print "; Triaging\n";
 
@@ -292,22 +364,111 @@ if ($TRIAGE) {
         (my $fh1, my $fn1) = File::Temp::tempfile();
         print $fh1 $opt;
         close $fh1;
-        open INF, "$triager < $fn1 | $llvmas | $llvmopt -O3 | $llvmdis |" or die;
-        my $good = 0;
-        my $bogus = 1;
-        my $llvm = "";
-        while (my $line = <INF>) {
-            $bogus = 0 if ($line =~ /dummy2/);
-            $good = 1 if ($line =~ /dummy2w = atomicrmw/);
-            $llvm .= $line;
-        }
-        close INF;
-        print "oops: '$opt' turned into bogus LLVM: '$llvm'\n\n" if $bogus;
-        remove($opt) unless $good && !$bogus;
+        my @llvm1 = @{grab_output("$triager < $fn1 | $llvmas | $llvmdis |")};
+        my @llvm2 = @{grab_output("$triager < $fn1 | $llvmas | $llvmopt -O3 | $llvmdis |")};
+        #print "\n@llvm1\n\n";
+        #print "\n@llvm2\n\n";
+        remove($opt) unless count_insns(\@llvm1) <= count_insns(\@llvm2);
+        #print "----------------------------\n";
         status() if $VERBOSE;
     }
 
     print "; After triaging there are ".scalar(keys %toprint)." optimizations\n";
+}
+
+my %weaken_insn = (
+    "addnsw" => "add",
+    "addnuw" => "add",
+    "addnw" => "add",
+    "subnsw" => "sub",
+    "subnuw" => "sub",
+    "subnw" => "sub",
+    "mulnsw" => "mul",
+    "mulnuw" => "mul",
+    "mulnw" => "mul",
+    "udivexact" => "udiv",
+    "sdivexact" => "sdiv",
+    "shlnsw" => "shl",
+    "shlnuw" => "shl",
+    "shlnw" => "shl",
+    "lshrexact" => "lshr",
+    "ashrexact" => "ashr",
+    );
+
+sub replace_nth($$) {
+    (my $str, my $n) = @_;
+    my $count = 0;
+    my $in = 0;
+    for (my $pos = 0; $pos < length($str); $pos++) {
+	if (substr($str,$pos,1) eq "(") {
+	    die if $in;
+	    $in = 1;
+	    next;
+	}
+	if (substr($str,$pos,1) eq ")") {
+	    die unless $in;
+	    $in = 0;
+	    next;
+	}
+	if ($in) {
+	    my $c = substr($str,$pos,1);
+	    if ($c eq "0" || $c eq "1") {
+		if ($count == $n) {
+		    # print "found match $n at pos $pos\n";
+		    substr($str,$pos,1) = "x";
+		    return ($str, "bit");
+		}
+		$count++;
+	    }
+	    next;
+	}
+	my $rest = substr($str,$pos);
+	foreach my $k (keys %weaken_insn) {
+	    my $repl = $weaken_insn{$k};
+	    next unless ($rest =~ s/^$k/$repl/);
+	    if ($count == $n) {
+		return (substr($str,0,$pos).$rest,"insn");
+	    }
+	    $count++;
+	}
+    }
+    # print "did not find match $n\n";
+    return (undef, "");
+}
+
+my %weaken_yes = ("insn" => 0, "bit" => "0");
+my %weaken_no = ("insn" => 0, "bit" => "0");
+
+if ($WEAKEN) {
+    print "; Weakening\n";
+    my @keys = keys %toprint;
+    foreach my $opt (@keys) {
+	my $orig = $opt;
+	my $i = 0;
+	while (1) {
+	    (my $new, my $how) = replace_nth($opt, $i);
+	    last unless defined $new;
+	    if (checkstr($new)) {
+		$opt = $new;
+		$weaken_yes{$how}++;
+	    } else {
+		$weaken_no{$how}++;
+		$i++;
+	    }
+	}
+	die unless checkstr($opt);
+	$opt =~ s/ \(x+\)//g;
+	die unless checkstr($opt);
+	replace($orig, $opt) if ($opt ne $orig);
+    }
+    my $yes = $weaken_yes{"bit"};
+    my $no = $weaken_no{"bit"} + $weaken_yes{"bit"};
+    print "; weakening bits worked $yes / $no times\n";
+    $yes = $weaken_yes{"insn"};
+    $no = $weaken_no{"insn"} + $weaken_yes{"insn"};
+    print "; weakening insns worked $yes / $no times\n";
+    print "; After weakening there are ".scalar(keys %toprint)." optimizations\n";
+    # die unless ($tprofile == total_profile_count());
 }
 
 if ($MERGE) {
@@ -325,13 +486,37 @@ if ($MERGE) {
     # die unless ($tprofile == total_profile_count());
 }
 
+my %sprofile_rank;
+my %dprofile_rank;
+
+if ($SORT eq "combined") {
+    my $n=0;
+    foreach my $opt (sort { $sprofiles{$b} <=> $sprofiles{$a} } @all_keys) {
+        $sprofile_rank{$opt} = $n;
+        $n++;
+        # print "$sprofile{$opt} $opt\n\n";
+    }
+    $n=0;
+    foreach my $opt (sort { $dprofiles{$b} <=> $dprofiles{$a} } @all_keys) {
+        $dprofile_rank{$opt} = $n;
+        $n++;
+        # print "$dprofile{$opt} $opt\n\n";
+    }
+}
+
 sub bylen { length $a <=> length $b }
 sub bysprofile { $sprofiles{$b} <=> $sprofiles{$a} }
 sub bydprofile { $dprofiles{$b} <=> $dprofiles{$a} }
+sub byrank {
+    return
+        ($sprofile_rank{$a} + $dprofile_rank{$a}) <=>
+        ($sprofile_rank{$b} + $dprofile_rank{$b});
+}
 
 my $byx = \&bylen;
 $byx = \&bysprofile if ($SORT eq "sprofile");
 $byx = \&bydprofile if ($SORT eq "dprofile");
+$byx = \&byrank if ($SORT eq "combined");
 
 print "\n\n";
 
@@ -352,3 +537,10 @@ foreach my $opt (sort $byx keys %toprint) {
     }
     print "------------------------------------------------------\n\n";
 }
+
+my $cnt = 0;
+foreach my $opt (keys %toprint) {
+    $cnt += $sprofiles{$opt};
+}
+print "; overall total static profile weight = $cnt\n";
+print "; $tagged were tagged by cache_infer, $untagged were not\n";
