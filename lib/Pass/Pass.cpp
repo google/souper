@@ -150,15 +150,13 @@ public:
 
     appendToGlobalCtors(*M, Ctor, 0);
 
-    BasicBlock::iterator BI = I;
+    BasicBlock::iterator BI(I);
     while (isa<PHINode>(*BI))
       ++BI;
     new AtomicRMWInst(AtomicRMWInst::Add, CntVar,
                       ConstantInt::get(C, APInt(64, 1)), Monotonic, CrossThread,
-                      BI);
+                      I);
   }
-
-  std::set <Function *> DoneFuncs;
 
   bool runOnFunction(Function *F) {
     bool Changed = false;
@@ -255,7 +253,7 @@ public:
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
         if (DynamicProfile)
           dynamicProfile(F, Cand);
-        BasicBlock::iterator BI = I;
+        BasicBlock::iterator BI(I);
         ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
         Changed = true;
       } else {
@@ -274,9 +272,8 @@ public:
     bool Changed = false;
     // get the list first since the dynamic profiling adds functions as it goes
     std::vector<Function *> FL;
-    for (auto i = M.getFunctionList().begin(), ie = M.getFunctionList().end();
-         i != ie; ++i)
-      FL.push_back(i);
+    for (auto &I : M)
+      FL.push_back((Function *)&I);
     for (auto *F : FL)
       if (!F->isDeclaration())
         Changed = runOnFunction(F) || Changed;
