@@ -317,7 +317,7 @@ def rewriteRegs(insts):
             assert not cand, "cand must be empty"
             cand = [newregs[reg], width, inst, ops]
             needsResult = True
-            continue
+            break
         elif inst == "result":
             assert needsResult, "infer inst not found"
             assert cand, "cand must not be empty"
@@ -379,13 +379,9 @@ def rewriteOps(inst, newregs, ops):
 def printFuncHeader():
     # global declarations: dummy store, intrinsics
     print "target datalayout = \"e-m:e-i64:64-f80:128-n8:16:32:64-S128\"\n"
-    print "@dummy1 = global i32 0, align 4"
-    print "@dummy2 = global i32 0, align 4"
-    print "@dummy3 = global i32 0, align 4"
-    print
     for decl in intrdecl.values():
         print decl
-    print "\ndefine void @foo(",
+    print "\ndefine " + cand[1] + " @foo(",
     # print args
     for i, reg in enumerate(argmap.values()):
         sys.stdout.write(widths[reg] + " " + reg)
@@ -434,16 +430,19 @@ def printFuncFooter():
         print "  ret void"
     print "}"
 
+def printLHSFuncFooter():
+    print "  ret " + cand[1] + " " + cand[0]
+    print "}"
+
 lines = readOpt()
 insts = parseInsts(lines)
 insts = propagateArgNames(insts)
 insts = groupPhis(insts)
 insts = rewriteRegs(insts)
 
-assert not needsResult, "result inst found"
 assert cand, "cand inst not found"
 
 printFuncHeader()
 printFuncBody(insts)
 printPCs()
-printFuncFooter()
+printLHSFuncFooter()

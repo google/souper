@@ -20,11 +20,14 @@ use Redis;
 use Getopt::Long;
 use File::Temp;
 use Time::HiRes;
+use BSD::Resource;
 
 eval { require Sys::CPU; Sys::CPU->import(); };
 
 my $NPROCS = 4;
 $NPROCS = Sys::CPU::cpu_count() if defined(&Sys::CPU::cpu_count);
+
+my $CPU_LIMIT = 15 * 60;
 
 sub usage() {
     print <<"END";
@@ -53,18 +56,13 @@ my $solver = $ENV{"SOUPER_SOLVER"};
 die $need_solver unless $solver;
 
 my $OPTS = "";
-$OPTS .= "-souper-infer-i1=false " if $ENV{"SOUPER_NO_INFER_I1"};
 $OPTS .= "-souper-infer-iN " if $ENV{"SOUPER_INFER_INT"};
-$OPTS .= "-souper-infer-nop " if $ENV{"SOUPER_INFER_NOP"};
-$OPTS .= "-souper-infer-unary " if $ENV{"SOUPER_INFER_UNARY"};
+
+$OPTS .= "-souper-synthesis-wiring-iterations=30 ";
+$OPTS .= "-souper-infer-inst ";
+$OPTS .= "-souper-synthesis-comps=mul,select,const,const,shl,lshr,ashr,and,or,xor,add,sub,slt,ult,sle,ule,eq,ne";
 
 my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15 ${solver}";
-
-sub runit ($) {
-    my $cmd = shift;
-    my $res = (system "$cmd");
-    return $? >> 8;
-}
 
 my $r = Redis->new();
 $r->ping || die "no server?";
@@ -74,8 +72,11 @@ sub infer($) {
     (my $k) = @_;
     (my $fh, my $tmpfn) = File::Temp::tempfile();
     print $fh $k;
+    my $cmd = "${check} -infer-rhs $OPTS";
+    print STDERR "\n$k\n\n";
+    print STDERR "$cmd\n";
     $fh->flush();
-    open INF, "${check} -infer-rhs $OPTS < $tmpfn |";
+    open INF, "$cmd < $tmpfn |";
     my $ok = 0;
     my $failed = 0;
     my $output = "";
@@ -90,7 +91,7 @@ sub infer($) {
         }
         $output .= $line;
     }
-    exit 1 unless $ok || $failed;
+    # exit 1 unless $ok || $failed;
     my $red = Redis->new();
     $red->ping || die "no server?";
     $red->hset($k, "cache-infer-tag" => $tag);
@@ -141,7 +142,52 @@ my $skip = 0;
 
 reset_status(scalar(@keys)) if $VERBOSE;
 
-foreach my $k (@keys) {
+my %sprofile;
+my %dprofile;
+
+foreach my $opt (@keys) {
+    $sprofile{$opt} = 0;
+    $dprofile{$opt} = 0;
+}
+
+foreach my $opt (@keys) {
+    my %h = $r->hgetall($opt);
+    foreach my $kk (keys %h) {
+        if ($kk =~ /^sprofile (.*)$/) {
+            my $count = $h{$kk};
+            $sprofile{$opt} += $count;
+        }
+        if ($kk =~ /^dprofile (.*)$/) {
+            my $count = $h{$kk};
+            $dprofile{$opt} += $count;
+        }
+    }
+}
+
+my %sprofile_rank;
+my %dprofile_rank;
+
+my $n=0;
+foreach my $opt (sort { $sprofile{$b} <=> $sprofile{$a} } @keys) {
+    $sprofile_rank{$opt} = $n;
+    $n++;
+    # print "$sprofile{$opt} $opt\n\n";
+}
+
+$n=0;
+foreach my $opt (sort { $dprofile{$b} <=> $dprofile{$a} } @keys) {
+    $dprofile_rank{$opt} = $n;
+    $n++;
+    # print "$dprofile{$opt} $opt\n\n";
+}
+
+sub byrank {
+    return
+        ($sprofile_rank{$a} + $dprofile_rank{$a}) <=>
+        ($sprofile_rank{$b} + $dprofile_rank{$b});
+}
+
+foreach my $k (sort byrank @keys) {
     status() if $VERBOSE;
     my $result = $r->hget($k, "cache-infer-tag");
     if (defined $result && $result eq $tag) {
@@ -152,7 +198,11 @@ foreach my $k (@keys) {
     die unless $num_running < $NPROCS;
     my $pid = fork();
     die unless $pid >= 0;
-    infer ($k) if $pid == 0;
+    if ($pid == 0) {
+	die "setrlimit" unless setrlimit(RLIMIT_CPU, $CPU_LIMIT, $CPU_LIMIT);
+	infer ($k);
+	# not reachable
+    }
     # make sure we're in the parent
     die unless $$ == $opid;
     $num_running++;
