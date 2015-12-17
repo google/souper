@@ -41,6 +41,77 @@ if ($0 =~ /clang$/) {
     die "Didn't expect sclang to be invoked as '$0'";
 }
 
+foreach my $arg (@ARGV) {
+    if ($arg eq "-help" || $arg eq "--help") {
+	print <<EOF;
+
+sclang / sclang++ emulate clang / clang++ except that they also invoke
+Souper.
+
+To avoid the need to mess with build systems, communication with these
+programs is via environment variables. Unless noted, the value of the
+environment variable is irrelevant: sclang only checks if it is set.
+
+SOUPER_DEBUG -- Print debugging info.
+
+SOUPER_DYNAMIC_PROFILE -- Instrument the compiled program such that,
+when run, it will communicate with a running Redis instance in order
+to report how many times each optimized code site executes.
+
+SOUPER_DYNAMIC_PROFILE_ALL -- Like SOUPER_DYNAMIC_PROFILE but
+instruments each site that is potentially optimizable by Souper, as
+opposed to sites that actually get optimized. Should be used in
+combination with SOUPER_NO_INFER.
+
+SOUPER_EXPLOIT_BLOCKPCS -- Optimize using blockpcs. Currently unsound
+and not recommended.
+
+SOUPER_FIRST_OPT / SOUPER_LAST_OPT -- Assign a number to each
+optimization found in the current compilation unit and only perform
+those that fall within the range [SOUPER_FIRST_OPT
+.. SOUPER_LAST_OPT], inclusive. Used for debugging Souper
+
+SOUPER_IGNORE_SOLVER_ERRORS -- Keep going when the solver fails, for
+example due to running out of memory or time.
+
+SOUPER_INFER_INT -- Try to synthesize constants.
+
+SOUPER_NO_EXPLOIT_UB -- Do not exploit LLVM-level undefined behavior
+when making inferences.
+
+SOUPER_NO_EXTERNAL_CACHE -- Don't ask the running Redis instance for
+cached inferences.
+
+SOUPER_NO_HARVEST_KNOWN_BITS -- Don't query LLVM's bit-level dataflow
+analyses when harvesting.
+
+SOUPER_NO_INFER -- Don't run inference at all; used for populating the
+cache.
+
+SOUPER_NO_SOUPER -- Don't run Souper at all.
+
+SOUPER_SAVE_BITCODE -- The value of this variable is the name of a
+directory where a copy of the bitcode for the compiled file will be
+stored.
+
+SOUPER_SKIP_FILES -- Do not apply Souper (as if SOUPER_NO_SOUPER were
+set) to any of the comma-separated list of files found in the value of
+this variable.
+
+SOUPER_SOLVER -- The SAT solver for Souper to use, e.g.
+-z3-path=/usr/bin/z3.
+
+SOUPER_STATIC_PROFILE -- During compilation, communicate with a running
+Redis instance in order to record the number of times each optimization
+was performed.
+
+SOUPER_STATS -- Ask LLVM to print statistics.
+
+EOF
+        exit(-1);
+    }
+}
+
 my $bitcodedir = $ENV{"SOUPER_SAVE_BITCODE"};
 if (defined $bitcodedir && -d $bitcodedir && fork() == 0) {
     for (my $i=0; $i<scalar(@ARGV); $i++) {
