@@ -1,0 +1,19 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t 2>&1
+; RUN: FileCheck %s < %t
+; Hex of 2147483648 is 0x80000000
+
+; CHECK:      %0:i32 = var
+; CHECK-NEXT: %1:i32 = var (z)
+; CHECK-NEXT: %2:i32 = shlnw %0, %1
+; CHECK-NEXT: %3:i32 = and 2147483648:i32, %2
+; CHECK-NEXT: %4:i1 = eq 0:i32, %3
+; CHECK-NEXT: cand %4 1:i1
+
+%0:i32 = var
+%1:i32 = var (z)
+%2:i32 = shlnw %0, %1
+%3:i32 = and %2, 2147483648:i32
+%4:i1 = eq %3, 0:i32
+infer %4

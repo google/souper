@@ -1,0 +1,10 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: LGTM
+%0:i64 = var (p)
+%1:i64 = ctpop %0
+%2:i1 = eq %1, 1:i64
+cand %2 1:i1

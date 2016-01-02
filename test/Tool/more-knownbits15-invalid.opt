@@ -1,0 +1,9 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: Invalid
+%0:i8 = var
+%1:i1 = sle 0:i8, %0
+cand %1 1:i1

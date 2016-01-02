@@ -75,6 +75,9 @@ struct ExprBuilder {
   std::map<Inst *, ref<Expr>> UBExprMap;
   std::map<Inst *, ref<Expr>> ZeroBitsMap;
   std::map<Inst *, ref<Expr>> OneBitsMap;
+  std::map<Inst *, ref<Expr>> NonZeroBitsMap;
+  std::map<Inst *, ref<Expr>> NonNegBitsMap;
+  std::map<Inst *, ref<Expr>> PowerTwoBitsMap;
   std::map<Block *, BlockPCPredMap> BlockPCMap;
   std::vector<std::unique_ptr<Array>> &Arrays;
   std::vector<Inst *> &ArrayVars;
@@ -108,6 +111,9 @@ struct ExprBuilder {
   ref<Expr> getInstMapping(const InstMapping &IM);
   ref<Expr> getZeroBitsMapping(Inst *I);
   ref<Expr> getOneBitsMapping(Inst *I);
+  ref<Expr> getNonZeroBitsMapping(Inst *I);
+  ref<Expr> getNonNegBitsMapping(Inst *I);
+  ref<Expr> getPowerTwoBitsMapping(Inst *I);
   std::vector<ref<Expr >> getBlockPredicates(Inst *I);
   ref<Expr> getUBInstCondition();
   ref<Expr> getBlockPCs();
@@ -143,14 +149,26 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
   std::vector<unsigned> ZeroBits, OneBits;
   UpdateList UL(Arrays.back().get(), 0);
   ref<Expr> Var = ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
-  if (Origin && Origin->K == Inst::Var && (Origin->KnownZeros.getBoolValue() ||
-                                           Origin->KnownOnes.getBoolValue())) {
-    ref<Expr> NotZeros = NotExpr::create(klee::ConstantExpr::alloc(Origin->KnownZeros));
-    ref<Expr> VarOrNotZero = OrExpr::create(Var, NotZeros);
-    ZeroBitsMap[Origin] = EqExpr::create(VarOrNotZero, NotZeros);
-    ref<Expr> Ones = klee::ConstantExpr::alloc(Origin->KnownOnes);
-    ref<Expr> VarAndOnes = AndExpr::create(Var, Ones);
-    OneBitsMap[Origin] = EqExpr::create(VarAndOnes, Ones);
+  if (Origin && Origin->K == Inst::Var) {
+    if (Origin->KnownZeros.getBoolValue() || Origin->KnownOnes.getBoolValue()) {
+      ref<Expr> NotZeros = NotExpr::create(klee::ConstantExpr::alloc(Origin->KnownZeros));
+      ref<Expr> VarOrNotZero = OrExpr::create(Var, NotZeros);
+      ZeroBitsMap[Origin] = EqExpr::create(VarOrNotZero, NotZeros);
+      ref<Expr> Ones = klee::ConstantExpr::alloc(Origin->KnownOnes);
+      ref<Expr> VarAndOnes = AndExpr::create(Var, Ones);
+      OneBitsMap[Origin] = EqExpr::create(VarAndOnes, Ones);
+    }
+    if (Origin->NonZero)
+      NonZeroBitsMap[Origin] = NeExpr::create(Var, klee::ConstantExpr::create(0, Width));
+    if (Origin->NonNegative)
+      NonNegBitsMap[Origin] = SleExpr::create(klee::ConstantExpr::create(0, Width), Var);
+    ref<Expr> PowerExpr = klee::ConstantExpr::alloc(0, 1);
+    if (Origin->PowOfTwo) {
+      for (unsigned i=0; i<Width-1; ++i)
+        PowerExpr = OrExpr::create(PowerExpr, EqExpr::create(Var, ShlExpr::create(klee::ConstantExpr::create(1, Width),
+                                                                                  klee::ConstantExpr::create(i, Width))));
+      PowerTwoBitsMap[Origin] = PowerExpr;
+    }
   }
   return Var;
 }
@@ -948,6 +966,18 @@ ref<Expr> ExprBuilder::getOneBitsMapping(Inst *I) {
   return OneBitsMap[I];
 }
 
+ref<Expr> ExprBuilder::getNonZeroBitsMapping(Inst *I) {
+  return NonZeroBitsMap[I];
+}
+
+ref<Expr> ExprBuilder::getNonNegBitsMapping(Inst *I) {
+  return NonNegBitsMap[I];
+}
+
+ref<Expr> ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
+  return PowerTwoBitsMap[I];
+}
+
 // Return an expression which must be proven valid for the candidate to apply.
 CandidateExpr souper::GetCandidateExprForReplacement(
     const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
@@ -959,9 +989,17 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   ref<Expr> LHS = EB.get(Mapping.LHS);
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
   for (const auto I : CE.ArrayVars) {
-    if (I && (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())) {
-      Ante = AndExpr::create(Ante, EB.getZeroBitsMapping(I));
-      Ante = AndExpr::create(Ante, EB.getOneBitsMapping(I));
+    if (I) {
+      if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
+        Ante = AndExpr::create(Ante, EB.getZeroBitsMapping(I));
+        Ante = AndExpr::create(Ante, EB.getOneBitsMapping(I));
+      }
+      if (I->NonZero)
+        Ante = AndExpr::create(Ante, EB.getNonZeroBitsMapping(I));
+      if (I->NonNegative)
+        Ante = AndExpr::create(Ante, EB.getNonNegBitsMapping(I));
+      if (I->PowOfTwo)
+        Ante = AndExpr::create(Ante, EB.getPowerTwoBitsMapping(I));
     }
   }
   // Build PCs

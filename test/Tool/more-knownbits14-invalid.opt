@@ -1,0 +1,16 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: Invalid
+%0:i8 = var
+%1:i8 = var
+%2:i9 = smul.with.overflow %0, %1
+%3:i1 = extractvalue %2, 1:i8
+%4:i1 = eq %3, 0:i1
+pc %4 1:i1
+%5:i8 = extractvalue %2, 0:i8
+%6:i8 = and %5, 128:i8
+%7:i1 = eq %6, 0:i8
+cand %7 1:i1

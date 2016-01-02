@@ -112,6 +112,8 @@ struct Inst : llvm::FoldingSetNode {
 
   static const char *getKindName(Kind K);
   static std::string getKnownBitsString(llvm::APInt Zero, llvm::APInt One);
+  static std::string getMoreKnownBitsString(bool NonZero, bool NonNegative,
+                                            bool PowOfTwo);
   static Kind getKind(std::string Name);
 
   static bool isAssociative(Kind K);
@@ -119,6 +121,9 @@ struct Inst : llvm::FoldingSetNode {
   static int getCost(Kind K);
   llvm::APInt KnownZeros;
   llvm::APInt KnownOnes;
+  bool NonZero;
+  bool NonNegative;
+  bool PowOfTwo;
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
@@ -180,7 +185,9 @@ public:
   Inst *getUntypedConst(const llvm::APInt &I);
 
   Inst *createVar(unsigned Width, llvm::StringRef Name,
-                  llvm::APInt Zero=llvm::APInt(1, 0, false), llvm::APInt One=llvm::APInt(1, 0, false));
+                  llvm::APInt Zero=llvm::APInt(1, 0, false),
+                  llvm::APInt One=llvm::APInt(1, 0, false), bool NonZero=false,
+                  bool NonNegative=false, bool PowOfTwo=false);
   Block *createBlock(unsigned Preds);
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
