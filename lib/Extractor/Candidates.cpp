@@ -157,11 +157,17 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
     Name = V->getName();
   unsigned Width = DL.getTypeSizeInBits(V->getType());
   APInt KnownZero(Width, 0, false), KnownOne(Width, 0, false);
+  bool NonZero = false, NonNegative = false, PowOfTwo = false;
   if (HarvestKnownBits)
     if (V->getType()->isIntOrIntVectorTy() ||
-        V->getType()->getScalarType()->isPointerTy())
+        V->getType()->getScalarType()->isPointerTy()) {
       computeKnownBits(V, KnownZero, KnownOne, DL);
-  return IC.createVar(Width, Name, KnownZero, KnownOne);
+      NonZero = isKnownNonZero(V, DL);
+      NonNegative = isKnownNonNegative(V, DL);
+      PowOfTwo = isKnownToBeAPowerOfTwo(V, DL);
+    }
+  return IC.createVar(Width, Name, KnownZero, KnownOne, NonZero, NonNegative,
+                      PowOfTwo);
 }
 
 Inst *ExprBuilder::buildConstant(Constant *c) {

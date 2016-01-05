@@ -1,0 +1,11 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: Invalid
+%0:i32 = var
+%1:i64 = sext %0
+%2:i64 = zext %0
+%3:i1 = eq %1, %2
+cand %3 1:i1

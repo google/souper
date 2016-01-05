@@ -1,0 +1,26 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: %0:i8 = var (n)
+; CHECK-NEXT: %1:i8 = var (n)
+; CHECK-NEXT: %2:i9 = smul.with.overflow %0, %1
+; CHECK-NEXT: %3:i1 = extractvalue %2, 1:i8
+; CHECK-NEXT: %4:i1 = eq 0:i1, %3
+; CHECK-NEXT: pc %4 1:i1
+; CHECK-NEXT: %5:i8 = extractvalue %2, 0:i8
+; CHECK-NEXT: %6:i8 = and 128:i8, %5
+; CHECK-NEXT: %7:i1 = eq 0:i8, %6
+; CHECK-NEXT: cand %7 1:i1
+
+%0:i8 = var (n)
+%1:i8 = var (n)
+%2:i9 = smul.with.overflow %0, %1
+%3:i1 = extractvalue %2, 1:i8
+%4:i1 = eq %3, 0:i1
+pc %4 1:i1
+%5:i8 = extractvalue %2, 0:i8
+%6:i8 = and %5, 128:i8
+%7:i1 = eq %6, 0:i8
+infer %7

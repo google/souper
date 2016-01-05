@@ -1,0 +1,11 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: LGTM
+%0:i64 = var (z)
+%1:i64 = var
+%2:i64 = sdivexact %0, %1
+%3:i1 = eq %2, 0:i64
+cand %3 0:i1

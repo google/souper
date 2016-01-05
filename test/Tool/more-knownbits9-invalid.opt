@@ -1,0 +1,13 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: Invalid
+%0:i32 = var
+%1:i32 = add %0, %0
+%2:i32 = udiv %1, 2:i32
+%3:i1 = eq %2, %0
+%4:i1 = eq %2, 0:i32
+%5:i1 = xor %3, %4
+cand %5 1:i1

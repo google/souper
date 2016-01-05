@@ -40,6 +40,7 @@ struct Token {
     Int,
     UntypedInt,
     KnownBits,
+    MoreKnownBits,
     Eof,
   };
 
@@ -208,14 +209,32 @@ FoundChar:
   if (*Begin == '(') {
     ++Begin;
     const char *NumBegin = Begin;
-    while (*Begin == '0' || *Begin == '1' || *Begin == 'x')
+    bool KnownBitsFlag = false, MoreKnownBitsFlag = false;
+    while (*Begin == '0' || *Begin == '1' || *Begin == 'x') {
       ++Begin;
-    if (Begin == NumBegin || *Begin != ')') {
+      KnownBitsFlag = true;
+    }
+    while (!KnownBitsFlag && (*Begin == 'n' || *Begin == 'z' || *Begin == 'p')) {
+      ++Begin;
+      MoreKnownBitsFlag = true;
+    }
+    if (Begin != NumBegin && KnownBitsFlag && *Begin != ')') {
       ErrStr = "invalid knownbits string";
       return Token{Token::Error, Begin, 0, APInt()};
     }
+    if (Begin != NumBegin && MoreKnownBitsFlag && *Begin != ')') {
+      ErrStr = "invalid more knownbits string";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
+    if (Begin == NumBegin) {
+      ErrStr = "invalid, expected [0|1|x]+ or [n|z|p]";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
     Token T;
-    T.K = Token::KnownBits;
+    if (KnownBitsFlag)
+      T.K = Token::KnownBits;
+    else if (MoreKnownBitsFlag)
+      T.K = Token::MoreKnownBits;
     T.Pos = NumBegin;
     T.Len = size_t(Begin - NumBegin);
     T.PatternString = StringRef(NumBegin, Begin - NumBegin); 
@@ -881,21 +900,41 @@ bool Parser::parseLine(std::string &ErrStr) {
       if (IK == Inst::Var) {
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
                     ConstOne(InstWidth, 1, false);
-        if (CurTok.K == Token::KnownBits) {
-          if (InstWidth != CurTok.PatternString.length()) {
-            ErrStr = makeErrStr(TP, "knownbits pattern must be of same length as var width");
-            return false;
+        bool NonZero = false, NonNegative = false, PowOfTwo = false;
+        unsigned SignBits = 0;
+        while (CurTok.K != Token::ValName && CurTok.K != Token::Ident && CurTok.K != Token::Eof) {
+          if (CurTok.K == Token::KnownBits) {
+            if (InstWidth != CurTok.PatternString.length()) {
+              ErrStr = makeErrStr(TP, "knownbits pattern must be of same length as var width");
+              return false;
+            }
+            for (unsigned i=0; i<InstWidth; ++i) {
+              if (CurTok.PatternString[i] == '0')
+                Zero += ConstOne.shl(CurTok.PatternString.length()-1-i);
+              else if (CurTok.PatternString[i] == '1')
+                One += ConstOne.shl(CurTok.PatternString.length()-1-i);
+            }
+            if (!consumeToken(ErrStr))
+              return false;
           }
-          for (unsigned i=0; i<InstWidth; ++i) {
-            if (CurTok.PatternString[i] == '0')
-              Zero += ConstOne.shl(CurTok.PatternString.length()-1-i);
-            else if (CurTok.PatternString[i] == '1')
-              One += ConstOne.shl(CurTok.PatternString.length()-1-i);
+          if (CurTok.K == Token::MoreKnownBits) {
+            if (CurTok.PatternString.length() > 3) {
+              ErrStr = makeErrStr(TP, "more knownbits string expects a length upto three without any repetitions of [n|z|p]");
+              return false;
+            }
+            for (unsigned i=0; i<InstWidth; ++i) {
+              if (CurTok.PatternString[i] == 'z')
+                NonZero = true;
+              else if (CurTok.PatternString[i] == 'n')
+                NonNegative = true;
+              else if (CurTok.PatternString[i] == 'p')
+                PowOfTwo = true;
+            }
+            if (!consumeToken(ErrStr))
+              return false;
           }
-          if (!consumeToken(ErrStr))
-            return false;
         }
-        Inst *I = IC.createVar(InstWidth, InstName, Zero, One);
+        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero, NonNegative, PowOfTwo);
         Context.setInst(InstName, I);
         return true;
       }
