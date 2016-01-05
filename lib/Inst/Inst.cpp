@@ -157,23 +157,19 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
     default: {
       Out << "%" << InstName << ":i" << I->Width << " = "
           << Inst::getKindName(I->K);
-      if (I->K == Inst::Var && (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) &&
-          (I->PowOfTwo || I->NonNegative || I->NonZero)) {
-        Out << " (" << Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes)
-            << ")" << " (" << Inst::getMoreKnownBitsString(I->NonZero, I->NonNegative, I->PowOfTwo)
-            << ")" << OpsSS.str();
-      } else if (I->K == Inst::Var && (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())) {
-        Out << " (" << Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes)
-            << ")" << OpsSS.str();
-      } else if (I->K == Inst::Var && (I->NonZero || I->NonNegative || I->PowOfTwo)) {
-        Out << " (" << Inst::getMoreKnownBitsString(I->NonZero, I->NonNegative, I->PowOfTwo)
-            << ")" << OpsSS.str();
-      } else {
-        Out << OpsSS.str();
+      if (I->K == Inst::Var) {
+	if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())
+	  Out << " (" << Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes)
+	      << ")";
+	if (I->NonZero || I->NonNegative || I->PowOfTwo)
+	  Out << " (" << Inst::getMoreKnownBitsString(I->NonZero,
+						      I->NonNegative,
+						      I->PowOfTwo)
+	      << ")";
       }
-      if (printNames && !I->Name.empty()) {
+      Out << OpsSS.str();
+      if (printNames && !I->Name.empty())
         Out << " ; " << I->Name;
-      }
       Out << '\n';
       break;
     }
@@ -276,9 +272,9 @@ std::string Inst::getMoreKnownBitsString(bool NonZero, bool NonNegative, bool Po
   std::string Str;
   if (NonZero)
     Str.append("z");
-  else if (NonNegative)
+  if (NonNegative)
     Str.append("n");
-  else if (PowOfTwo)
+  if (PowOfTwo)
     Str.append("p");
   return Str;
 }
