@@ -1,0 +1,12 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t1 2>&1
+; RUN: FileCheck %s < %t1
+
+; CHECK: %0:i8 = var (znp)
+; CHECK-NEXT: %1:i1 = sle 1:i8, %0
+; CHECK-NEXT: cand %1 1:i1
+
+%0:i8 = var (nzp)
+%1:i1 = sle 1:i8, %0
+infer %1
