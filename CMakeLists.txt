@@ -23,7 +23,7 @@ execute_process(
 set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -fno-exceptions -fno-rtti -DLLVM_ENABLE_STATS=true")
 
 execute_process(
-  COMMAND ${LLVM_CONFIG_EXECUTABLE} --libs bitreader bitwriter instrumentation ipo irreader linker mc mcparser objcarcopts option profiledata scalaropts target transformutils
+  COMMAND ${LLVM_CONFIG_EXECUTABLE} --libs bitreader bitwriter coverage instrumentation ipo irreader linker mc mcparser objcarcopts option profiledata scalaropts target transformutils
   OUTPUT_VARIABLE LLVM_LIBS
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
