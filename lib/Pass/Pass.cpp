@@ -154,7 +154,7 @@ public:
     while (isa<PHINode>(*BI))
       ++BI;
     new AtomicRMWInst(AtomicRMWInst::Add, CntVar,
-                      ConstantInt::get(C, APInt(64, 1)), Monotonic, CrossThread,
+                      ConstantInt::get(C, APInt(64, 1)), AtomicOrdering::Monotonic, CrossThread,
                       I);
   }
 

@@ -28,6 +28,8 @@ using namespace klee;
 using namespace llvm;
 using namespace souper;
 
+LLVMContext C;
+
 struct ExtractorTest : testing::Test {
   std::unique_ptr<Module> M;
 
@@ -37,7 +39,6 @@ struct ExtractorTest : testing::Test {
   std::vector<std::unique_ptr<CandidateExpr>> CandExprs;
 
   bool extractFromIR(const char *IR) {
-    LLVMContext &C = getGlobalContext();
     SMDiagnostic Err;
     M = parseAssemblyString(IR, Err, C);
     if (!M.get()) {

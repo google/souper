@@ -46,8 +46,9 @@ int main(int argc, const char **argv) {
   ExprBuilderContext EBC;
   CandidateMap CandMap;
   std::vector<std::unique_ptr<llvm::Module>> OwnedMods;
+  LLVMContext Context;
   std::unique_ptr<FrontendActionFactory> Factory(CreateExtractorActionFactory(
-      getGlobalContext(), IC, EBC, OwnedMods, CandMap));
+      Context, IC, EBC, OwnedMods, CandMap));
   Tool.run(Factory.get());
 
   KVStore *KV = 0;
