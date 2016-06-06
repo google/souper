@@ -30,10 +30,12 @@ using namespace souper;
 
 extern "C" int boolector_main(int argc, char **argv);
 
+LLVMContext Context;
+
 void SolveIR(std::unique_ptr<MemoryBuffer> MB, Solver *S) {
   SMDiagnostic Err;
   if (std::unique_ptr<Module> M =
-          parseAssembly(MB->getMemBufferRef(), Err, getGlobalContext())) {
+          parseAssembly(MB->getMemBufferRef(), Err, Context)) {
     InstContext IC;
     ExprBuilderContext EBC;
     CandidateMap CandMap;
