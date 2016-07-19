@@ -95,20 +95,6 @@ add_library(kleeExpr STATIC
   ${KLEE_EXPR_FILES}
 )
 
-find_path(HIREDIS_INCLUDE_DIR
-  NAMES
-  hiredis/hiredis.h
-  PATHS
-  third_party/hiredis/install/include)
-
-include_directories(${HIREDIS_INCLUDE_DIR}/hiredis)
-
-find_library(HIREDIS_LIBRARY
-  NAMES
-  hiredis
-  PATHS
-  third_party/hiredis/install/lib)
-
 set(SOUPER_CLANG_TOOL_FILES
   lib/ClangTool/Actions.cpp
   include/souper/ClangTool/Actions.h
@@ -139,6 +125,40 @@ set(SOUPER_KVSTORE_FILES
 add_library(souperKVStore STATIC
   ${SOUPER_KVSTORE_FILES}
 )
+
+SET(USE_REDIS 1 CACHE BOOL "Support Redis for persistent storage")
+if (USE_REDIS)
+  find_path(HIREDIS_INCLUDE_DIR
+    NAMES
+    hiredis/hiredis.h
+    PATHS
+    third_party/hiredis/install/include)
+
+  include_directories(${HIREDIS_INCLUDE_DIR}/hiredis)
+
+  find_library(HIREDIS_LIBRARY
+    NAMES
+    hiredis
+    PATHS
+    third_party/hiredis/install/lib)
+
+  list(APPEND SOUPER_KVSTORE_FILES lib/KVStore/KVImplRedis.cpp)
+  add_definitions(-DWITH_REDIS)
+else()
+  # FIXME: souperPassProfile.c uses hiredis directly, rather than using the
+  # abstracted KVStore interface. Require hiredis until this is refactored.
+  message(FATAL_ERROR "You must build with Redis support" )
+endif()
+
+SET(USE_SQLITE 1 CACHE BOOL "Support SQLite for persistent storage")
+if (USE_SQLITE)
+  find_path(SQLITE3_INCLUDE_DIR NAMES sqlite3.h)
+  include_directories(${SQLITE3_INCLUDE_DIR})
+  find_library(SQLITE3_LIBRARY NAMES sqlite3)
+
+  list(APPEND SOUPER_KVSTORE_FILES lib/KVStore/KVImplSQLite.cpp)
+  add_definitions(-DWITH_SQLITE)
+endif()
 
 set(SOUPER_INFER_FILES
   lib/Infer/InstSynthesis.cpp
@@ -263,17 +283,29 @@ target_link_libraries(souperKVStore ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperParser souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
-target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY})
-target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS} ${HIREDIS_LIBRARY})
-target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY})
+target_link_libraries(souperPass ${PASS_LDFLAGS})
+target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS})
+target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr)
 target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
-target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY})
-target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY})
+target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser)
+target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS})
+
+# Link some targets with the caching libraries (hiredis or SQLite)
+foreach(T souperPass souperPassProfileAll souper souper-check clang-souper souperweb-backend)
+  if (TARGET ${T})
+    if (USE_REDIS)
+      target_link_libraries(${T} ${HIREDIS_LIBRARY})
+    endif()
+    if (USE_SQLITE)
+      target_link_libraries(${T} ${SQLITE3_LIBRARY})
+    endif()
+  endif()
+endforeach()
 
 SET(BUILD_CLANG_TOOL 1 CACHE BOOL "Build the Souper Clang tool")
 if (NOT BUILD_CLANG_TOOL)
@@ -306,7 +338,7 @@ if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
   set_target_properties(souperweb-backend
     PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
 
-  target_link_libraries(souperweb-backend souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
+  target_link_libraries(souperweb-backend souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser souperInst)
 
   add_custom_target(souperweb ALL COMMAND ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/souperweb ${CMAKE_SOURCE_DIR}/tools/souperweb.go
                                   COMMENT "Building souperweb")

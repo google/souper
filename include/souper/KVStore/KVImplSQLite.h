@@ -12,32 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SOUPER_KVSTORE_KVSTORE_H
-#define SOUPER_KVSTORE_KVSTORE_H
+#ifndef SOUPER_KVSTORE_KVIMPLSQLITE_H
+#define SOUPER_KVSTORE_KVIMPLSQLITE_H
 
+#if !WITH_SQLITE
+#error SQLite support is disabled
+#endif
+
+#include "souper/KVStore/KVStore.h"
 #include "llvm/ADT/StringRef.h"
-#include <memory>
+#include <sqlite3.h>
 
 namespace souper {
 
-class KVImpl {
+class KVImplSQLite : public KVImpl {
+  sqlite3 *DB;
 public:
-  virtual void
-  hIncrBy(llvm::StringRef Key, llvm::StringRef Field, int Incr) = 0;
-
-  virtual bool
-  hGet(llvm::StringRef Key, llvm::StringRef Field, std::string &Value) = 0;
-
-  virtual void
-  hSet(llvm::StringRef Key, llvm::StringRef Field, llvm::StringRef Value) = 0;
-};
-
-class KVStore {
-  std::unique_ptr<KVImpl> Impl;
-
-public:
-  KVStore();
-  ~KVStore();
+  KVImplSQLite();
+  ~KVImplSQLite();
   void hIncrBy(llvm::StringRef Key, llvm::StringRef Field, int Incr);
   bool hGet(llvm::StringRef Key, llvm::StringRef Field, std::string &Value);
   void hSet(llvm::StringRef Key, llvm::StringRef Field, llvm::StringRef Value);
@@ -45,4 +37,4 @@ public:
 
 }
 
-#endif  // SOUPER_KVSTORE_KVSTORE_H
+#endif  // SOUPER_KVSTORE_KVIMPLSQLITE_H
