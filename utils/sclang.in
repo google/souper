@@ -224,9 +224,9 @@ if ((exists $ENV{"SOUPER_DYNAMIC_PROFILE"} ||
 
 if (exists $ENV{"SOUPER_DEBUG"}) {
     foreach my $arg (@ARGV) {
-        print "$arg ";
+        print STDERR "$arg ";
     }
-    print "\n";
+    print STDERR "\n";
 }
 
 exec @ARGV;
