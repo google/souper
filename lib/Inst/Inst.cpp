@@ -167,6 +167,8 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
                                                       I->PowOfTwo,
                                                       I->Negative)
               << ")";
+        if (I->NumSignBits > 1)
+          Out << " (s=" << I->NumSignBits << ")";
       }
       Out << OpsSS.str();
       if (printNames && !I->Name.empty())
@@ -529,7 +531,8 @@ Inst *InstContext::getUntypedConst(const llvm::APInt &Val) {
 
 Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
-                             bool NonNegative, bool PowOfTwo, bool Negative) {
+                             bool NonNegative, bool PowOfTwo, bool Negative,
+                             unsigned NumSignBits) {
   auto &InstList = VarInstsByWidth[Width];
   unsigned Number = InstList.size();
   auto I = new Inst;
@@ -545,6 +548,7 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   I->NonNegative = NonNegative;
   I->PowOfTwo = PowOfTwo;
   I->Negative = Negative;
+  I->NumSignBits = NumSignBits;
   return I;
 }
 

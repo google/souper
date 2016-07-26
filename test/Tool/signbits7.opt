@@ -1,0 +1,9 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: LGTM
+%0:i32 = var (xxxxx0xxxxxxxxxxxxxxxxxxxxxxxxxx) (s=32)
+%1:i1 = eq %0, 0:i32
+cand %1 1:i1

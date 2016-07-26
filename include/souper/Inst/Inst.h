@@ -125,6 +125,7 @@ struct Inst : llvm::FoldingSetNode {
   bool NonNegative;
   bool PowOfTwo;
   bool Negative;
+  unsigned NumSignBits;
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
@@ -188,7 +189,8 @@ public:
   Inst *createVar(unsigned Width, llvm::StringRef Name,
                   llvm::APInt Zero=llvm::APInt(1, 0, false),
                   llvm::APInt One=llvm::APInt(1, 0, false), bool NonZero=false,
-                  bool NonNegative=false, bool PowOfTwo=false, bool Negative=false);
+                  bool NonNegative=false, bool PowOfTwo=false, bool Negative=false,
+                  unsigned NumSignBits=1);
   Block *createBlock(unsigned Preds);
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
