@@ -50,6 +50,8 @@ using namespace souper;
 
 namespace {
 
+const unsigned MAX_PHI_DEPTH = 25;
+
 typedef std::unordered_map<Inst *, std::vector<ref<Expr>>> PhiMap;
 typedef std::map<unsigned, ref<Expr>> BlockPCPredMap;
 
@@ -123,9 +125,9 @@ struct ExprBuilder {
   ref<Expr> createPathPred(Inst *CurrentPhi, std::vector<Inst *> &Phis,
                            std::map<Block *, unsigned> &BlockConstraints,
                            PhiMap &CachedPhis);
-  void getUBPhiPaths(Inst *I, PhiPath *Current,
+  bool getUBPhiPaths(Inst *I, PhiPath *Current,
                      std::vector<std::unique_ptr<PhiPath>> &Paths,
-                     PhiMap &CachedPhis);
+                     PhiMap &CachedPhis, unsigned Depth);
   void getBlockPCPhiPaths(Inst *I, BlockPCPhiPath *Current,
                           std::vector<std::unique_ptr<BlockPCPhiPath>> &Paths,
                           PhiMap &CachedPhis);
@@ -759,7 +761,8 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
     std::vector<std::unique_ptr<PhiPath>> PhiPaths;
     PhiPath *Current = new PhiPath;
     PhiPaths.push_back(std::move(std::unique_ptr<PhiPath>(Current)));
-    getUBPhiPaths(I, Current, PhiPaths, CachedPhis);
+    if (!getUBPhiPaths(I, Current, PhiPaths, CachedPhis, 0))
+      return ref<Expr>();
     CachedPhis[I] = {};
     // For each found path
     for (const auto &Path : PhiPaths) {
@@ -785,9 +788,13 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
   return Result;
 }
 
-void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current,
+bool ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current,
                                 std::vector<std::unique_ptr<PhiPath>> &Paths,
-                                PhiMap &CachedPhis) {
+                                PhiMap &CachedPhis, unsigned Depth) {
+
+  if (Depth > MAX_PHI_DEPTH)
+    return false;
+
   switch (I->K) {
     default:
       break;
@@ -824,7 +831,7 @@ void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current,
     // Early terminate because this phi has been processed.
     // We will use its cached predicates.
     if (CachedPhis.count(I))
-      return;
+      return true;
     Current->Phis.push_back(I);
     // Based on the dependency chain, looks like we would never
     // encounter this case.
@@ -843,11 +850,14 @@ void ExprBuilder::getUBPhiPaths(Inst *I, PhiPath *Current,
     Current->BlockConstraints[I->B] = 0;
     // Continue recursively
     for (unsigned J = 0; J < Ops.size(); ++J)
-      getUBPhiPaths(Ops[J], Tmp[J], Paths, CachedPhis);
+      if (!getUBPhiPaths(Ops[J], Tmp[J], Paths, CachedPhis, Depth + 1))
+        return false;
   } else {
     for (unsigned J = 0; J < Ops.size(); ++J)
-      getUBPhiPaths(Ops[J], Current, Paths, CachedPhis);
+      if (!getUBPhiPaths(Ops[J], Current, Paths, CachedPhis, Depth + 1))
+        return false;
   }
+  return true;
 }
 
 void ExprBuilder::setBlockPCMap(const BlockPCs &BPCs) {
@@ -979,7 +989,7 @@ ref<Expr> ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
 }
 
 // Return an expression which must be proven valid for the candidate to apply.
-CandidateExpr souper::GetCandidateExprForReplacement(
+llvm::Optional<CandidateExpr> souper::GetCandidateExprForReplacement(
     const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
     InstMapping Mapping, bool Negate) {
 
@@ -1013,14 +1023,20 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   }
   // Get UB constraints of LHS and (B)PCs
   ref<Expr> LHSPCsUB = klee::ConstantExpr::create(1, Expr::Bool);
-  if (ExploitUB)
+  if (ExploitUB) {
     LHSPCsUB = EB.getUBInstCondition();
+    if (LHSPCsUB.isNull())
+      return llvm::Optional<CandidateExpr>();
+  }
   // Build RHS
   ref<Expr> RHS = EB.get(Mapping.RHS);
   // Get all UB constraints (LHS && (B)PCs && RHS)
   ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
-  if (ExploitUB)
+  if (ExploitUB) {
     UB = EB.getUBInstCondition();
+    if (UB.isNull())
+      return llvm::Optional<CandidateExpr>();
+  }
 
   ref<Expr> Cons;
   if (Negate) // (LHS != RHS)
@@ -1035,7 +1051,7 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   // (LHS UB && (B)PCs && (B)PCs UB) => Cons && UB
   CE.E = Expr::createImplies(Ante, Cons);
 
-  return CE;
+  return llvm::Optional<CandidateExpr>(std::move(CE));
 }
 
 std::string souper::BuildQuery(const BlockPCs &BPCs,
@@ -1045,7 +1061,11 @@ std::string souper::BuildQuery(const BlockPCs &BPCs,
   std::string SMTStr;
   llvm::raw_string_ostream SMTSS(SMTStr);
   ConstraintManager Manager;
-  CandidateExpr CE = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
+  Optional<CandidateExpr> OptionalCE = GetCandidateExprForReplacement(BPCs,
+      PCs, Mapping, Negate);
+  if (!OptionalCE.hasValue())
+    return std::string();
+  CandidateExpr CE = std::move(OptionalCE.getValue());
   Query KQuery(Manager, CE.E);
   ExprSMTLIBPrinter Printer;
   Printer.setOutput(SMTSS);

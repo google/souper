@@ -64,9 +64,9 @@ struct ExtractorTest : testing::Test {
         for (auto I : Guesses) {
           R.Mapping.RHS = I;
           std::unique_ptr<CandidateExpr> CE(
-              new CandidateExpr(GetCandidateExprForReplacement(R.BPCs, R.PCs,
-                                                               R.Mapping, false)));
-          CandExprs.emplace_back(std::move(CE));
+	      new CandidateExpr(GetCandidateExprForReplacement(R.BPCs, R.PCs,
+	          R.Mapping, false).getValue()));
+	  CandExprs.emplace_back(std::move(CE));
         }
       }
     }

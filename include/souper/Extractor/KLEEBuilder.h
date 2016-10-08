@@ -17,6 +17,7 @@
 
 #include "klee/Expr.h"
 #include "klee/util/Ref.h"
+#include "llvm/ADT/Optional.h"
 #include "souper/Extractor/Candidates.h"
 #include <memory>
 #include <vector>
@@ -29,9 +30,9 @@ struct CandidateExpr {
   klee::ref<klee::Expr> E;
 };
 
-CandidateExpr GetCandidateExprForReplacement(const BlockPCs &BPCs,
-                                             const std::vector<InstMapping> &PCs,
-                                             InstMapping Mapping, bool Negate);
+llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
+    const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+    InstMapping Mapping, bool Negate);
 
 std::string BuildQuery(const BlockPCs &BPCs,
                        const std::vector<InstMapping> &PCs, InstMapping Mapping,
