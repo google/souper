@@ -1,0 +1,10 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s -souper-exploit-ub=false | FileCheck %s
+; CHECK: Invalid
+
+%0:i32 = var
+%1:i32 = xor %0, %0
+infer %1
+
+%2:i32 = lshr %0, %0
+result %2

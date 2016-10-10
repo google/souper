@@ -1013,14 +1013,14 @@ CandidateExpr souper::GetCandidateExprForReplacement(
   }
   // Get UB constraints of LHS and (B)PCs
   ref<Expr> LHSPCsUB = klee::ConstantExpr::create(1, Expr::Bool);
+  // Turning-off UB exploitation turns off UB on the LHS only
   if (ExploitUB)
     LHSPCsUB = EB.getUBInstCondition();
   // Build RHS
   ref<Expr> RHS = EB.get(Mapping.RHS);
   // Get all UB constraints (LHS && (B)PCs && RHS)
   ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
-  if (ExploitUB)
-    UB = EB.getUBInstCondition();
+  UB = EB.getUBInstCondition();
 
   ref<Expr> Cons;
   if (Negate) // (LHS != RHS)
