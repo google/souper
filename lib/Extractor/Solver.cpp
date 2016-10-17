@@ -69,9 +69,11 @@ public:
         // TODO: we can trivially synthesize an i1 undef by checking for validity
         // of both guesses
         InstMapping Mapping(LHS, I);
+        std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
+        if (Query.empty())
+          return std::make_error_code(std::errc::value_too_large);
         bool IsSat;
-        EC = SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, Mapping, 0), IsSat, 0, 0,
-                                      Timeout);
+        EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
         if (EC)
           return EC;
         if (!IsSat) {
@@ -87,6 +89,8 @@ public:
       Inst *I = IC.createVar(LHS->Width, "constant");
       InstMapping Mapping(LHS, I);
       std::string Query = BuildQuery(BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
+      if (Query.empty())
+        return std::make_error_code(std::errc::value_too_large);
       bool IsSat;
       EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInsts.size(),
                                     &ModelVals, Timeout);
@@ -104,8 +108,10 @@ public:
         assert(Const && "there must be a model for the constant");
         // Check if the constant is valid for all inputs
         InstMapping ConstMapping(LHS, Const);
-        EC = SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, ConstMapping, 0),
-                                      IsSat, 0, 0, Timeout);
+        std::string Query = BuildQuery(BPCs, PCs, ConstMapping, 0);
+        if (Query.empty())
+          return std::make_error_code(std::errc::value_too_large);
+        EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
         if (EC)
           return EC;
         if (!IsSat) {
@@ -135,6 +141,8 @@ public:
     if (Model && SMTSolver->supportsModels()) {
       std::vector<Inst *> ModelInsts;
       std::string Query = BuildQuery(BPCs, PCs, Mapping, &ModelInsts);
+      if (Query.empty())
+        return std::make_error_code(std::errc::value_too_large);
       bool IsSat;
       std::vector<llvm::APInt> ModelVals;
       std::error_code EC = SMTSolver->isSatisfiable(
@@ -149,10 +157,11 @@ public:
       }
       return EC;
     } else {
+      std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
+      if (Query.empty())
+        return std::make_error_code(std::errc::value_too_large);
       bool IsSat;
-      std::error_code EC =
-        SMTSolver->isSatisfiable(BuildQuery(BPCs, PCs, Mapping, 0),
-                                 IsSat, 0, 0, Timeout);
+      std::error_code EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
       IsValid = !IsSat;
       return EC;
     }

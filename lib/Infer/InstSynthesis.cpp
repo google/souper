@@ -124,6 +124,8 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     // Negate the query to get a SAT model
     std::string QueryStr = BuildQuery(BPCs, InputPCs, Mapping,
                                       &ModelInsts, /*Negate=*/true);
+    if (QueryStr.empty())
+      return std::make_error_code(std::errc::value_too_large);
     bool IsSat;
     EC = SMTSolver->isSatisfiable(QueryStr, IsSat, ModelInsts.size(),
                                   &ModelVals, Timeout);
@@ -214,6 +216,8 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       // Don't use original BPCs/PCs, they are useless
       std::string QueryStr = BuildQuery({}, LoopPCs, Mapping,
                                         &ModelInsts, /*Negate=*/true);
+      if (QueryStr.empty())
+        return std::make_error_code(std::errc::value_too_large);
       bool IsSat;
       if (DebugLevel > 1)
         llvm::outs() << "solving synthesis constraint.. ";
@@ -268,6 +272,8 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       ModelVals.clear();
       InstMapping CandMapping(LHS, Cand);
       QueryStr = BuildQuery(BPCs, PCs, CandMapping, &ModelInsts, /*Negate=*/false);
+      if (QueryStr.empty())
+        return std::make_error_code(std::errc::value_too_large);
       EC = SMTSolver->isSatisfiable(QueryStr, IsSat, ModelInsts.size(),
                                     &ModelVals, Timeout);
       if (EC)
