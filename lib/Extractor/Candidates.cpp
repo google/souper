@@ -80,6 +80,15 @@ void CandidateReplacement::print(llvm::raw_ostream &Out,
 
 namespace {
 
+struct CandidatePC {
+  CandidatePC(Inst *LHS, Inst *RHS, llvm::Instruction *I)
+      : Mapping(LHS, RHS), Origins(std::vector<llvm::Instruction *>(1, I)) {}
+  InstMapping Mapping;
+  std::vector<llvm::Instruction *> Origins;
+};
+
+typedef std::vector<CandidatePC> CandidatePCs;
+
 struct ExprBuilder {
   ExprBuilder(const ExprBuilderOptions &Opts, Module *M, const LoopInfo *LI,
               InstContext &IC, ExprBuilderContext &EBC)
@@ -100,7 +109,7 @@ struct ExprBuilder {
   Inst *buildConstant(Constant *c);
   Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
   Inst *build(Value *V);
-  void addPathConditions(BlockPCs &BPCs, std::vector<InstMapping> &PCs,
+  void getPathConditions(BlockPCs &BPCs, CandidatePCs &PCs,
                          std::unordered_set<Block *> &VisitedBlocks,
                          BasicBlock *BB);
   Inst *get(Value *V);
@@ -490,11 +499,14 @@ Inst *ExprBuilder::get(Value *V) {
   return E;
 }
 
-void emplace_back_dedup(std::vector<InstMapping> &PCs, Inst *LHS, Inst *RHS) {
+void emplace_back_dedup(CandidatePCs &PCs, Inst *LHS, Inst *RHS,
+                        llvm::Instruction *I) {
   for (auto &i : PCs)
-    if (i.LHS == LHS && i.RHS == RHS)
+    if (i.Mapping.LHS == LHS && i.Mapping.RHS == RHS) {
+      i.Origins.push_back(I);
       return;
-  PCs.emplace_back(LHS, RHS);
+    }
+  PCs.emplace_back(LHS, RHS, I);
 }
 
 // Collect path conditions for a basic block. 
@@ -549,30 +561,37 @@ void emplace_back_dedup(std::vector<InstMapping> &PCs, Inst *LHS, Inst *RHS) {
 // blockpc %B9, 1, s4, r4 // B6 -> B8
 // ...
 // cand %i, 1
-void ExprBuilder::addPathConditions(BlockPCs &BPCs,
-                                    std::vector<InstMapping> &PCs,
+void ExprBuilder::getPathConditions(BlockPCs &BPCs, CandidatePCs &PCs,
                                     std::unordered_set<Block *> &VisitedBlocks,
                                     BasicBlock *BB) {
+  for (auto &I : *BB) {
+    if (auto Call = dyn_cast<CallInst>(&I))
+      if (auto II = dyn_cast<IntrinsicInst>(Call))
+        if (II->getIntrinsicID() == Intrinsic::assume)
+          emplace_back_dedup(PCs, get(II->getOperand(0)),
+                             IC.getConst(APInt(1, 1)), &I);
+  }
+
   if (auto Pred = BB->getSinglePredecessor()) {
-    addPathConditions(BPCs, PCs, VisitedBlocks, Pred);
+    getPathConditions(BPCs, PCs, VisitedBlocks, Pred);
     if (auto Branch = dyn_cast<BranchInst>(Pred->getTerminator())) {
       if (Branch->isConditional()) {
         emplace_back_dedup(
             PCs, get(Branch->getCondition()),
-            IC.getConst(APInt(1, Branch->getSuccessor(0) == BB)));
+            IC.getConst(APInt(1, Branch->getSuccessor(0) == BB)), Branch);
       }
     } else if (auto Switch = dyn_cast<SwitchInst>(Pred->getTerminator())) {
       Inst *Cond = get(Switch->getCondition());
       ConstantInt *Case = Switch->findCaseDest(BB);
       if (Case) {
-        emplace_back_dedup(PCs, Cond, get(Case));
+        emplace_back_dedup(PCs, Cond, get(Case), Switch);
       } else {
         // default
         Inst *DI = IC.getConst(APInt(1, true));
         for (auto I = Switch->case_begin(), E = Switch->case_end(); I != E;
              ++I) {
           Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I.getCaseValue())});
-          emplace_back_dedup(PCs, CI, DI);
+          emplace_back_dedup(PCs, CI, DI, Switch);
         }
       }
     }
@@ -602,10 +621,10 @@ void ExprBuilder::addPathConditions(BlockPCs &BPCs,
 
     VisitedBlocks.insert(BI.B);
     for (unsigned i = 0; i < BI.Preds.size(); ++i) {
-      std::vector<InstMapping> PCs;
-      addPathConditions(BPCs, PCs, VisitedBlocks, BI.Preds[i]);
+      CandidatePCs PCs;
+      getPathConditions(BPCs, PCs, VisitedBlocks, BI.Preds[i]);
       for (auto PC : PCs)
-        BPCs.emplace_back(BlockPCMapping(BI.B, i, PC));
+        BPCs.emplace_back(BlockPCMapping(BI.B, i, PC.Mapping));
     }
   }
 }
@@ -639,13 +658,12 @@ InstClasses::member_iterator AddVarSet(InstClasses::member_iterator Leader,
 // Add the variable sets of PCs as equivalence classes to Vars. Return a vector
 // PCSets of the same size as PCs such that PCSets[i] is an arbitrary member of
 // the equivalence class for PCs[i] (not necessarily its leader).
-std::vector<Inst *> AddPCSets(const std::vector<InstMapping> &PCs,
-                              InstClasses &Vars) {
+std::vector<Inst *> AddPCSets(const CandidatePCs &PCs, InstClasses &Vars) {
   std::vector<Inst *> PCSets(PCs.size());
   for (unsigned i = 0; i != PCs.size(); ++i) {
     llvm::DenseSet<Inst *> SeenInsts;
     auto PCLeader =
-        AddVarSet(Vars.member_end(), Vars, SeenInsts, PCs[i].LHS);
+        AddVarSet(Vars.member_end(), Vars, SeenInsts, PCs[i].Mapping.LHS);
     if (PCLeader != Vars.member_end())
       PCSets[i] = *PCLeader;
   }
@@ -666,12 +684,35 @@ std::vector<Inst *> AddBlockPCSets(const BlockPCs &BPCs, InstClasses &Vars) {
   return BPCSets;
 }
 
+bool PCOccursBeforeInst(std::vector<llvm::Instruction *> PCs,
+                        llvm::Instruction *Inst) {
+  bool allInDifferentBlocks = true;
+  for (auto PC : PCs) {
+    if (Inst->getParent() == PC->getParent()) {
+      allInDifferentBlocks = false;
+      break;
+    }
+  }
+
+  if (allInDifferentBlocks)
+    return true;
+
+  for (auto &I : *Inst->getParent()) {
+    if (std::find(PCs.begin(), PCs.end(), &I) != PCs.end())
+      return true;
+    if (&I == Inst)
+      return false;
+  }
+
+  llvm_unreachable("Instruction not found");
+}
+
 // Return vectors of relevant BlockPCs and PCs for a candidate, namely those
 // whose variable sets are in the same equivalence class as the candidate's.
 std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
-    const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+    const BlockPCs &BPCs, const CandidatePCs &PCs,
     const std::vector<Inst *> &BPCSets, const std::vector<Inst *> &PCSets,
-    InstClasses Vars, InstMapping Cand) {
+    InstClasses Vars, InstMapping Cand, InstOrigin Origin) {
 
   llvm::DenseSet<Inst *> SeenInsts;
   auto Leader = AddVarSet(Vars.member_end(), Vars, SeenInsts, Cand.LHS);
@@ -684,10 +725,17 @@ std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
 
   std::vector<InstMapping> RelevantPCs;
   for (unsigned i = 0; i != PCs.size(); ++i) {
-    if (PCSets[i] != 0 && Vars.findLeader(PCSets[i]) == Leader)
-      RelevantPCs.emplace_back(PCs[i]);
+    if (PCSets[i] != 0 && Vars.findLeader(PCSets[i]) == Leader &&
+        PCOccursBeforeInst(PCs[i].Origins, Origin.getInstruction()))
+      RelevantPCs.emplace_back(PCs[i].Mapping);
   }
   return std::make_tuple(RelevantBPCs, RelevantPCs);
+}
+
+void getPCsFromCandidates(CandidatePCs &CandPCs,
+                          std::vector<InstMapping> &PCs) {
+  for (auto &PC : CandPCs)
+    PCs.emplace_back(PC.Mapping.LHS, PC.Mapping.RHS);
 }
 
 void ExtractExprCandidates(Function &F, const LoopInfo *LI,
@@ -704,15 +752,17 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI,
     }
     if (!BCS->Replacements.empty()) {
       std::unordered_set<Block *> VisitedBlocks;
-      EB.addPathConditions(BCS->BPCs, BCS->PCs, VisitedBlocks, &BB);
+      CandidatePCs PCs;
+      EB.getPathConditions(BCS->BPCs, PCs, VisitedBlocks, &BB);
+      getPCsFromCandidates(PCs, BCS->PCs);
 
       InstClasses Vars, BPCVars;
-      auto PCSets = AddPCSets(BCS->PCs, Vars);
+      auto PCSets = AddPCSets(PCs, Vars);
       auto BPCSets = AddBlockPCSets(BCS->BPCs, BPCVars);
 
       for (auto &R : BCS->Replacements) {
-        std::tie(R.BPCs, R.PCs) = 
-          GetRelevantPCs(BCS->BPCs, BCS->PCs, BPCSets, PCSets, Vars, R.Mapping);
+        std::tie(R.BPCs, R.PCs) =
+          GetRelevantPCs(BCS->BPCs, PCs, BPCSets, PCSets, Vars, R.Mapping, R.Origin);
       }
 
       Result.Blocks.emplace_back(std::move(BCS));
