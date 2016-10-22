@@ -41,6 +41,7 @@ struct Token {
     UntypedInt,
     KnownBits,
     MoreKnownBits,
+    DemandedBits,
     Eof,
   };
 
@@ -209,14 +210,31 @@ FoundChar:
   if (*Begin == '(') {
     ++Begin;
     const char *NumBegin = Begin;
-    bool KnownBitsFlag = false, MoreKnownBitsFlag = false;
+    bool KnownBitsFlag = false, MoreKnownBitsFlag = false, DemandedBitsFlag = false;
     while (*Begin == '0' || *Begin == '1' || *Begin == 'x') {
       ++Begin;
       KnownBitsFlag = true;
     }
+    unsigned int visit = 0, count = 0;
     while (!KnownBitsFlag && (*Begin == 'n' || *Begin == 'z' || *Begin == 'p')) {
+      if (count < 3 && !(visit & (1 << (*Begin - 'a')))) {
+        MoreKnownBitsFlag = true;
+        ++count;
+        visit |= 1 << (*Begin - 'a');
+        ++Begin;
+      } else if (count == 1 && *Begin == 'n' && (visit & (1 << (*Begin - 'a')))) {
+        MoreKnownBitsFlag = false;
+        break;
+      } else if (visit & (1 << (*Begin - 'a'))) {
+        ErrStr = "invalid, more knownbits string doesn't expect any repetitions of [n|z|p]";
+        return Token{Token::Error, Begin, 0, APInt()};
+      }
+    }
+    if (MoreKnownBitsFlag && *Begin == 'd' && count == 1)
+      MoreKnownBitsFlag = false;
+    while (!KnownBitsFlag && !MoreKnownBitsFlag && (*Begin == 'n' || *Begin == 'd')) {
       ++Begin;
-      MoreKnownBitsFlag = true;
+      DemandedBitsFlag = true;
     }
     if (Begin != NumBegin && KnownBitsFlag && *Begin != ')') {
       ErrStr = "invalid knownbits string";
@@ -226,8 +244,12 @@ FoundChar:
       ErrStr = "invalid more knownbits string";
       return Token{Token::Error, Begin, 0, APInt()};
     }
+    if (Begin != NumBegin && DemandedBitsFlag && *Begin != ')') {
+      ErrStr = "invalid demandedbits string";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
     if (Begin == NumBegin) {
-      ErrStr = "invalid, expected [0|1|x]+ or [n|z|p]";
+      ErrStr = "invalid, expected [0|1|x]+ or [n|z|p] or [n|d]+";
       return Token{Token::Error, Begin, 0, APInt()};
     }
     Token T;
@@ -235,6 +257,8 @@ FoundChar:
       T.K = Token::KnownBits;
     else if (MoreKnownBitsFlag)
       T.K = Token::MoreKnownBits;
+    else if (DemandedBitsFlag)
+      T.K = Token::DemandedBits;
     T.Pos = NumBegin;
     T.Len = size_t(Begin - NumBegin);
     T.PatternString = StringRef(NumBegin, Begin - NumBegin); 
@@ -730,6 +754,24 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!LHS)
           return false;
 
+        llvm::APInt DemandedBitsVal(LHS->Width, 0, false), ConstOne(LHS->Width, 1, false);
+        if (CurTok.K == Token::DemandedBits) {
+          if (LHS->Width != CurTok.PatternString.length()) {
+            ErrStr = makeErrStr("demandedbits pattern must be of same length as infer operand width");
+            return false;
+          }
+          for (unsigned i=0; i<LHS->Width; ++i) {
+            if (CurTok.PatternString[i] == 'd')
+              DemandedBitsVal += ConstOne.shl(CurTok.PatternString.length()-1-i);
+          }
+          if (!consumeToken(ErrStr))
+            return false;
+        }
+        if (CurTok.K == Token::KnownBits || CurTok.K == Token::MoreKnownBits) {
+          ErrStr = makeErrStr("infer instruction expects demanded bits pattern of type [n|d]+");
+          return false;
+        }
+        LHS->DemandedBitsVal = DemandedBitsVal;
         if (RK == ReplacementKind::ParseLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0),
                                            std::move(PCs), std::move(BPCs)});
@@ -918,10 +960,6 @@ bool Parser::parseLine(std::string &ErrStr) {
               return false;
           }
           if (CurTok.K == Token::MoreKnownBits) {
-            if (CurTok.PatternString.length() > 3) {
-              ErrStr = makeErrStr(TP, "more knownbits string expects a length upto three without any repetitions of [n|z|p]");
-              return false;
-            }
             for (unsigned i=0; i<InstWidth; ++i) {
               if (CurTok.PatternString[i] == 'z')
                 NonZero = true;
@@ -932,6 +970,10 @@ bool Parser::parseLine(std::string &ErrStr) {
             }
             if (!consumeToken(ErrStr))
               return false;
+          }
+          if (CurTok.K == Token::DemandedBits) {
+            ErrStr = makeErrStr(TP, "[n|d]+ not expected in known bits string or more knownbits string for var instruction");
+            return false;
           }
         }
         Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero, NonNegative, PowOfTwo);
