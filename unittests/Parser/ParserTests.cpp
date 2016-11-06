@@ -108,7 +108,9 @@ TEST(ParserTest, Errors) {
       { "%0:i4 = var (znp\n",
         "<input>:1:17: invalid more knownbits string" },
       { "%0:i8 = var (znpp)\n",
-        "<input>:1:1: more knownbits string expects a length upto three without any repetitions of [n|z|p]" },
+        "<input>:1:1: repeated 'p' flag" },
+      { "%0:i8 = var (px)\n",
+        "<input>:1:15: invalid more knownbits string" },
 
       // type checking
       { "%0 = add 1:i32\n",
