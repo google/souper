@@ -918,18 +918,29 @@ bool Parser::parseLine(std::string &ErrStr) {
               return false;
           }
           if (CurTok.K == Token::MoreKnownBits) {
-            if (CurTok.PatternString.length() > 3) {
-              ErrStr = makeErrStr(TP, "more knownbits string expects a length upto three without any repetitions of [n|z|p]");
-              return false;
-            }
-            for (unsigned i=0; i<InstWidth; ++i) {
-              if (CurTok.PatternString[i] == 'z')
+            for (unsigned i=0; i<CurTok.PatternString.length(); ++i) {
+              if (CurTok.PatternString[i] == 'z') {
+		if (NonZero) {
+		  ErrStr = makeErrStr(TP, "repeated 'z' flag");
+		  return false;
+		}
                 NonZero = true;
-              else if (CurTok.PatternString[i] == 'n')
+	      } else if (CurTok.PatternString[i] == 'n') {
+		if (NonNegative) {
+		  ErrStr = makeErrStr(TP, "repeated 'n' flag");
+		  return false;
+		}
                 NonNegative = true;
-              else if (CurTok.PatternString[i] == 'p')
+	      } else if (CurTok.PatternString[i] == 'p') {
+		if (PowOfTwo) {
+		  ErrStr = makeErrStr(TP, "repeated 'p' flag");
+		  return false;
+		}
                 PowOfTwo = true;
-            }
+	      } else {
+		llvm_unreachable("nzp should have been checked earlier");
+	      }
+	    }
             if (!consumeToken(ErrStr))
               return false;
           }
