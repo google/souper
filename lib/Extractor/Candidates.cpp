@@ -602,10 +602,12 @@ void ExprBuilder::addPathConditions(BlockPCs &BPCs,
 
     VisitedBlocks.insert(BI.B);
     for (unsigned i = 0; i < BI.Preds.size(); ++i) {
-      std::vector<InstMapping> PCs;
-      addPathConditions(BPCs, PCs, VisitedBlocks, BI.Preds[i]);
-      for (auto PC : PCs)
-        BPCs.emplace_back(BlockPCMapping(BI.B, i, PC));
+      if (BI.Preds[i]->getSinglePredecessor()) {
+        std::vector<InstMapping> PCs;
+        addPathConditions(BPCs, PCs, VisitedBlocks, BI.Preds[i]);
+        for (auto PC : PCs)
+          BPCs.emplace_back(BlockPCMapping(BI.B, i, PC));
+      }
     }
   }
 }
