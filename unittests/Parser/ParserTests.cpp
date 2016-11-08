@@ -90,6 +90,10 @@ TEST(ParserTest, Errors) {
         "<input>:1:18: invalid knownbits string" },
       { "%0:i4 = var (10\nx0)\n",
         "<input>:1:16: invalid knownbits string" },
+      { "%0:i33 = ssub.with.overflow 0, 1\n"
+        "%1:i1 = extractvalue %0, 1:i32\n"
+        "infer %1\n",
+        "<input>:1:1: at least one operand must be typed" },
       { "%0:i65 = var ; 0\n%1:i1 = extractvalue %0, 1:i32\n"
         "%2:i64 = extractvalue %0, 0:i32\n"
         "%3:i64 = select %1, 18446744073709551615:i64, %2\n"

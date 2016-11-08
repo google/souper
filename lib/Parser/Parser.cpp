@@ -565,25 +565,16 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     return false;
   }
 
-  // NOTE: We don't 'typeCheckOpsMatchingWidths' because the overflow
-  // instructions operands width and the instruction width is different. 
-  // The overflow instruction is a tuple of two elements (i32, i1)
-  // that makes the overall width equals to (32 + 1 = 33). Likewise, for
-  // 64-bit operands, overall width will be (64 + 1 = 65).
-  switch (IK) {
-    case Inst::SAddWithOverflow:
-    case Inst::UAddWithOverflow:
-    case Inst::SSubWithOverflow:
-    case Inst::USubWithOverflow:
-    case Inst::SMulWithOverflow:
-    case Inst::UMulWithOverflow:
-    case Inst::ExtractValue:
-      break;
-    default:
-      if (!typeCheckOpsMatchingWidths(OpsMatchingWidths, ErrStr))
-        return false;
-      break;
-  }
+  // NOTE: We don't 'typeCheckOpsMatchingWidths' for ExtractValue
+  // instruction because its a tuple of {aggregate, index}. The first
+  // element, aggregate is result of overflow instruction. The
+  // aggregate is of 33 and 65 bits for 32 and 64 bit operands of
+  // overflow instruction respectively. The second element of
+  // ExtractValue instruction is an index value. We don't type check
+  // the operands width as the two elements vary in width.
+  if (IK != Inst::ExtractValue)
+    if (!typeCheckOpsMatchingWidths(OpsMatchingWidths, ErrStr))
+      return false;
 
   unsigned ExpectedWidth;
   switch (IK) {
