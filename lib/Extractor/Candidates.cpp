@@ -100,6 +100,7 @@ struct ExprBuilder {
   Inst *buildConstant(Constant *c);
   Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
   Inst *build(Value *V);
+  void addPC(BasicBlock *BB, BasicBlock *Pred, std::vector<InstMapping> &PCs);
   void addPathConditions(BlockPCs &BPCs, std::vector<InstMapping> &PCs,
                          std::unordered_set<Block *> &VisitedBlocks,
                          BasicBlock *BB);
@@ -497,6 +498,31 @@ void emplace_back_dedup(std::vector<InstMapping> &PCs, Inst *LHS, Inst *RHS) {
   PCs.emplace_back(LHS, RHS);
 }
 
+void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
+                        std::vector<InstMapping> &PCs) {
+  if (auto Branch = dyn_cast<BranchInst>(Pred->getTerminator())) {
+    if (Branch->isConditional()) {
+      emplace_back_dedup(
+          PCs, get(Branch->getCondition()),
+          IC.getConst(APInt(1, Branch->getSuccessor(0) == BB)));
+    }
+  } else if (auto Switch = dyn_cast<SwitchInst>(Pred->getTerminator())) {
+    Inst *Cond = get(Switch->getCondition());
+    ConstantInt *Case = Switch->findCaseDest(BB);
+    if (Case) {
+      emplace_back_dedup(PCs, Cond, get(Case));
+    } else {
+      // default
+      Inst *DI = IC.getConst(APInt(1, true));
+      for (auto I = Switch->case_begin(), E = Switch->case_end(); I != E;
+           ++I) {
+        Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I.getCaseValue())});
+        emplace_back_dedup(PCs, CI, DI);
+      }
+    }
+  }
+}
+
 // Collect path conditions for a basic block. 
 // There are two kinds of path conditions, which correspond to
 // two Souper instruction kinds, pc and blockpc, respectively.
@@ -555,27 +581,7 @@ void ExprBuilder::addPathConditions(BlockPCs &BPCs,
                                     BasicBlock *BB) {
   if (auto Pred = BB->getSinglePredecessor()) {
     addPathConditions(BPCs, PCs, VisitedBlocks, Pred);
-    if (auto Branch = dyn_cast<BranchInst>(Pred->getTerminator())) {
-      if (Branch->isConditional()) {
-        emplace_back_dedup(
-            PCs, get(Branch->getCondition()),
-            IC.getConst(APInt(1, Branch->getSuccessor(0) == BB)));
-      }
-    } else if (auto Switch = dyn_cast<SwitchInst>(Pred->getTerminator())) {
-      Inst *Cond = get(Switch->getCondition());
-      ConstantInt *Case = Switch->findCaseDest(BB);
-      if (Case) {
-        emplace_back_dedup(PCs, Cond, get(Case));
-      } else {
-        // default
-        Inst *DI = IC.getConst(APInt(1, true));
-        for (auto I = Switch->case_begin(), E = Switch->case_end(); I != E;
-             ++I) {
-          Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I.getCaseValue())});
-          emplace_back_dedup(PCs, CI, DI);
-        }
-      }
-    }
+    addPC(BB, Pred, PCs);
   } else if (ExploitBPCs) {
     // BB is the entry of the function.
     if (pred_begin(BB) == pred_end(BB))
@@ -602,8 +608,15 @@ void ExprBuilder::addPathConditions(BlockPCs &BPCs,
 
     VisitedBlocks.insert(BI.B);
     for (unsigned i = 0; i < BI.Preds.size(); ++i) {
+      auto Pred = BI.Preds[i];
       std::vector<InstMapping> PCs;
-      addPathConditions(BPCs, PCs, VisitedBlocks, BI.Preds[i]);
+      if (Pred->getSinglePredecessor()) {
+        addPathConditions(BPCs, PCs, VisitedBlocks, Pred);
+      }
+      else {
+        // In case the predecessor is a br or switch instruction.
+        addPC(BB, Pred, PCs);
+      }
       for (auto PC : PCs)
         BPCs.emplace_back(BlockPCMapping(BI.B, i, PC));
     }
