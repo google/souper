@@ -71,7 +71,7 @@ struct BlockPCPhiPath {
 struct ExprBuilder {
   ExprBuilder(std::vector<std::unique_ptr<Array>> &Arrays,
               std::vector<Inst *> &ArrayVars)
-      : Arrays(Arrays), ArrayVars(ArrayVars) {}
+      : Arrays(Arrays), ArrayVars(ArrayVars), IsForBlockPCUBInst(false) {}
 
   std::map<Block *, std::vector<ref<Expr>>> BlockPredMap;
   std::map<Inst *, ref<Expr>> ExprMap;
@@ -88,6 +88,8 @@ struct ExprBuilder {
   UniqueNameSet ArrayNames;
   // Holding the precondition, i.e. blockpc, for the UBInst under process.
   ref<Expr> UBInstPrecondition;
+  // Indicate if the UBInst relates to BlockPC
+  bool IsForBlockPCUBInst;
 
   ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin);
   ref<Expr> addnswUB(Inst *I);
@@ -345,10 +347,17 @@ ref<Expr> ExprBuilder::countOnes(ref<Expr> L) {
 }
 
 void ExprBuilder::recordUBInstruction(Inst *I, ref<Expr> E) {
-  if (UBInstPrecondition.isNull())
+  if (!IsForBlockPCUBInst) {
     UBExprMap[I] = E;
-  else
+  }
+  else if (!UBInstPrecondition.isNull()) {
+    // The current UBInst comes from BlockPC. It's possible
+    // that the precondition is missing at this point (e.g.,
+    // the corresponding Phi is not part of the current
+    // Souper IR because the Phi is not in the equivalence class
+    // of the instruction.
     UBExprMap[I] = Expr::createImplies(UBInstPrecondition, E);
+  }
 }
 
 ref<Expr> ExprBuilder::build(Inst *I) {
@@ -804,7 +813,12 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
       // Aggregate collected UB constraints
       ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
       for (const auto &I : Path->UBInsts) {
-        Ante = AndExpr::create(Ante, UBExprMap[I]);
+        auto Iter = UBExprMap.find(I);
+        // It's possible that the instruction I is not in the map.
+        // For example, it may come from a blockpc which doesn't
+        // have any preconditions.
+        if (Iter != UBExprMap.end())
+          Ante = AndExpr::create(Ante, Iter->second);
         UsedUBInsts.insert(I);
       }
       // Create path predicate
@@ -930,11 +944,13 @@ void ExprBuilder::setBlockPCMap(const BlockPCs &BPCs) {
     //   (1) UBInstExpr collected through blockpc, and;
     //   (2) UBInstExpr collected through pc/lhs/rhs
     // For the first case, UBInst(s) is conditional, i.e.,
-    // they are dependent on the fact that blockpc(s) are true.
+    // they rely on the fact that blockpc(s) are true.
     if (I != PCMap.end()) {
       UBInstPrecondition = I->second;
     }
+    IsForBlockPCUBInst = true;
     ref<Expr> PE = getInstMapping(BPC.PC);
+    IsForBlockPCUBInst = false;
     UBInstPrecondition = nullptr;
     if (I == PCMap.end()) {
       PCMap[BPC.PredIdx] = PE;
@@ -956,7 +972,8 @@ ref<Expr> ExprBuilder::getBlockPCs() {
   ref<Expr> Result = klee::ConstantExpr::create(1, Expr::Bool);
   // For each Phi instruction
   for (const auto &I : UBPathInsts) {
-    assert((CachedPhis.count(I) == 0) && "We cannot revisit a cached Phi");
+    if (CachedPhis.count(I) != 0)
+      continue;
     // Recursively collect BlockPCs
     std::vector<std::unique_ptr<BlockPCPhiPath>> BlockPCPhiPaths;
     BlockPCPhiPath *Current = new BlockPCPhiPath;
@@ -1001,10 +1018,12 @@ void ExprBuilder::getBlockPCPhiPaths(
   if (CachedPhis.count(I))
     return;
   Current->Phis.push_back(I);
-  // Based on the dependency chain, looks like we would never
-  // encounter this case.
-  assert(!Current->BlockConstraints.count(I->B) && 
-         "Basic block has been added into BlockConstraints!");
+
+  // Since we treat a select instruction as a phi instruction, it's
+  // possible that I->B has been added already.
+  if (Current->BlockConstraints.count(I->B))
+    return;
+
   std::vector<BlockPCPhiPath *> Tmp = { Current };
   // Create copies of the current path
   for (unsigned J = 1; J < Ops.size(); ++J) {
