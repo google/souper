@@ -63,8 +63,7 @@ instruments each site that is potentially optimizable by Souper, as
 opposed to sites that actually get optimized. Should be used in
 combination with SOUPER_NO_INFER.
 
-SOUPER_EXPLOIT_BLOCKPCS -- Optimize using blockpcs. Currently unsound
-and not recommended.
+SOUPER_EXPLOIT_BLOCKPCS -- Optimize using blockpcs.
 
 SOUPER_FIRST_OPT / SOUPER_LAST_OPT -- Assign a number to each
 optimization found in the current compilation unit and only perform
