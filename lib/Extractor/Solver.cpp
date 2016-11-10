@@ -48,6 +48,9 @@ static cl::opt<bool> InferInts("souper-infer-iN",
 static cl::opt<bool> InferInsts("souper-infer-inst",
     cl::desc("Infer instructions (default=false)"),
     cl::init(false));
+static cl::opt<int> MaxLHSSize("souper-max-lhs-size",
+    cl::desc("Max size of LHS (in bytes) to put in external cache"),
+    cl::init(1024));
 
 class BaseSolver : public Solver {
   std::unique_ptr<SMTLIBSolver> SMTSolver;
@@ -257,6 +260,8 @@ public:
                         Inst *LHS, Inst *&RHS, InstContext &IC) override {
     ReplacementContext Context;
     std::string LHSStr = GetReplacementLHSString(BPCs, PCs, LHS, Context);
+    if (LHSStr.length() > MaxLHSSize)
+      return std::make_error_code(std::errc::value_too_large);
     std::string S;
     if (KV->hGet(LHSStr, "result", S)) {
       ++ExternalHits;
