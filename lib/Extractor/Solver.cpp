@@ -42,6 +42,9 @@ namespace {
 static cl::opt<bool> NoInfer("souper-no-infer",
     cl::desc("Populate the external cache, but don't infer replacements"),
     cl::init(false));
+static cl::opt<bool> InferNop("souper-infer-nop",
+    cl::desc("Infer that the output is the same as an input value (default=false)"),
+    cl::init(false));
 static cl::opt<bool> InferInts("souper-infer-iN",
     cl::desc("Infer iN integers for N>1 (default=false)"),
     cl::init(false));
@@ -55,6 +58,16 @@ static cl::opt<int> MaxLHSSize("souper-max-lhs-size",
 class BaseSolver : public Solver {
   std::unique_ptr<SMTLIBSolver> SMTSolver;
   unsigned Timeout;
+
+  void findVars(Inst *I, std::set<Inst *> &Visited,
+		std::vector<Inst *> &Guesses) {
+    if (!Visited.insert(I).second)
+      return;
+    if (I->K == Inst::Var)
+      Guesses.emplace_back(I);
+    for (auto Op : I->Ops)
+      findVars(Op, Visited, Guesses);
+  }
 
 public:
   BaseSolver(std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout)
@@ -119,6 +132,26 @@ public:
           return EC;
         if (!IsSat) {
           RHS = Const;
+          return EC;
+        }
+      }
+    }
+
+    if (InferNop) {
+      std::vector<Inst *> Guesses;
+      std::set<Inst *> Visited;
+      findVars(LHS, Visited, Guesses);
+      for (auto I : Guesses) {
+        InstMapping Mapping(LHS, I);
+        std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
+        if (Query.empty())
+          return std::make_error_code(std::errc::value_too_large);
+        bool IsSat;
+        EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
+        if (EC)
+          return EC;
+        if (!IsSat) {
+          RHS = I;
           return EC;
         }
       }
