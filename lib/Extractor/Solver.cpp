@@ -60,13 +60,13 @@ class BaseSolver : public Solver {
   unsigned Timeout;
 
   void findVars(Inst *I, std::set<Inst *> &Visited,
-		std::vector<Inst *> &Guesses) {
+		std::vector<Inst *> &Guesses, unsigned Width) {
     if (!Visited.insert(I).second)
       return;
-    if (I->K == Inst::Var)
+    if (I->K == Inst::Var && I->Width == Width)
       Guesses.emplace_back(I);
     for (auto Op : I->Ops)
-      findVars(Op, Visited, Guesses);
+      findVars(Op, Visited, Guesses, Width);
   }
 
 public:
@@ -140,7 +140,7 @@ public:
     if (InferNop) {
       std::vector<Inst *> Guesses;
       std::set<Inst *> Visited;
-      findVars(LHS, Visited, Guesses);
+      findVars(LHS, Visited, Guesses, LHS->Width);
       for (auto I : Guesses) {
         InstMapping Mapping(LHS, I);
         std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
