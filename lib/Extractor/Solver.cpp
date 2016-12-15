@@ -142,6 +142,8 @@ public:
       std::set<Inst *> Visited;
       findVars(LHS, Visited, Guesses, LHS->Width);
       for (auto I : Guesses) {
+        if (LHS == I)
+          continue;
         InstMapping Mapping(LHS, I);
         std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
         if (Query.empty())
