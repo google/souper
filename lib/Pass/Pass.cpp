@@ -234,11 +234,17 @@ public:
       if (!Cand.Mapping.RHS)
         continue;
       // TODO: add non-const instruction support
-      if (Cand.Mapping.RHS->K != Inst::Const)
+      if (Cand.Mapping.RHS->K != Inst::Const &&
+          Cand.Mapping.RHS->K != Inst::Var)
         continue;
       Instruction *I = Cand.Origin.getInstruction();
 
-      Constant *CI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
+      Value *N;
+      if (Cand.Mapping.RHS->K == Inst::Const) {
+        N = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
+      } else {
+        N = I;
+      }
       if (DebugSouperPass) {
         errs() << "\n";
         errs() << "; Replacing \"";
@@ -246,7 +252,7 @@ public:
         errs() << "\"\n; from \"";
         I->getDebugLoc().print(errs());
         errs() << "\"\n; with \"";
-        CI->print(errs());
+        N->print(errs());
         errs() << "\" in:\n";
         PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
       }
@@ -254,7 +260,7 @@ public:
         if (DynamicProfile)
           dynamicProfile(F, Cand);
         BasicBlock::iterator BI(I);
-        ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
+        ReplaceInstWithValue(I->getParent()->getInstList(), BI, N);
         Changed = true;
       } else {
         if (DebugSouperPass)
