@@ -63,7 +63,7 @@ class BaseSolver : public Solver {
 		std::vector<Inst *> &Guesses, unsigned Width) {
     if (!Visited.insert(I).second)
       return;
-    if (I->K == Inst::Var && I->Width == Width)
+    if (I->Width == Width)
       Guesses.emplace_back(I);
     for (auto Op : I->Ops)
       findVars(Op, Visited, Guesses, Width);
@@ -141,21 +141,28 @@ public:
       std::vector<Inst *> Guesses;
       std::set<Inst *> Visited;
       findVars(LHS, Visited, Guesses, LHS->Width);
+      RHS = 0;
+      unsigned Count = 0, Tried = 0;
       for (auto I : Guesses) {
         if (LHS == I)
           continue;
         InstMapping Mapping(LHS, I);
         std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
         if (Query.empty())
-          return std::make_error_code(std::errc::value_too_large);
+          continue;
         bool IsSat;
         EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
         if (EC)
-          return EC;
+          continue;
         if (!IsSat) {
           RHS = I;
-          return EC;
+          ++Count;
         }
+        ++Tried;
+      }
+      llvm::errs() << "Solution count = " << Count << " out of " << Tried << "\n";
+      if (Count > 0) {
+        return EC;
       }
     }
 
