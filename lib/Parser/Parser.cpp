@@ -333,6 +333,7 @@ struct Parser {
   ParsedReplacement parseReplacement(std::string &ErrStr);
   std::vector<ParsedReplacement> parseReplacements(std::string &ErrStr);
   void nextReplacement();
+  bool parseDemandedBits(std::string &ErrStr, Inst *LHS);
 };
 
 }
@@ -677,6 +678,61 @@ InstMapping Parser::parseInstMapping(std::string &ErrStr) {
   return InstMapping(SrcRep[0], SrcRep[1]);
 }
 
+bool Parser::parseDemandedBits(std::string &ErrStr, Inst *LHS) {
+  if (CurTok.K == Token::OpenParen) {
+    llvm::APInt DemandedBitsVal = APInt(LHS->Width, 0, false);
+    llvm::APInt ConstOne(LHS->Width, 1, false);
+    if (!consumeToken(ErrStr))
+      return false;
+    if (CurTok.K != Token::Ident) {
+      ErrStr = makeErrStr("missing demandedBits string");
+      return false;
+    }
+    if (CurTok.str() != "demandedBits") {
+      ErrStr = makeErrStr("invalid demandedBits data flow fact");
+      return false;
+    }
+    if (!consumeToken(ErrStr))
+      return false;
+    if (CurTok.K != Token::Eq) {
+      ErrStr = makeErrStr("expected '=' for demandedBits");
+      return false;
+    }
+    if (!consumeToken(ErrStr))
+      return false;
+    if (CurTok.K != Token::UntypedInt) {
+      ErrStr = makeErrStr("expected demandedBits pattern of type [0|1]+");
+      return false;
+    }
+    if (LHS->Width != CurTok.Len) {
+      ErrStr = makeErrStr("demandedBits pattern must be of same length as infer operand width");
+      return false;
+    }
+    std::string DemandedBitsPattern = CurTok.str();
+    for (unsigned i = 0; i < LHS->Width; ++i) {
+      if (DemandedBitsPattern[i] == '1') {
+        DemandedBitsVal += ConstOne.shl(DemandedBitsPattern.length() - 1 - i);
+      } else if (DemandedBitsPattern[i] != '0') {
+        ErrStr = makeErrStr("expected demandedBits pattern of type [0|1]+");
+        return false;
+      }
+    }
+    if (!consumeToken(ErrStr))
+      return false;
+    if (CurTok.K != Token::CloseParen) {
+      ErrStr = makeErrStr("expected ')' to complete demandedBits data flow string");
+      return false;
+    }
+    if (!consumeToken(ErrStr))
+      return false;
+    LHS->DemandedBits = DemandedBitsVal;
+    return true;
+  } else {
+    LHS->DemandedBits = APInt::getAllOnesValue(LHS->Width);
+    return true;
+  }
+}
+
 bool Parser::parseLine(std::string &ErrStr) {
   switch (CurTok.K) {
     case Token::Ident:
@@ -692,6 +748,8 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!consumeToken(ErrStr)) return false;
         InstMapping Cand = parseInstMapping(ErrStr);
         if (!ErrStr.empty()) return false;
+        if (!parseDemandedBits(ErrStr, Cand.LHS))
+          return false;
 
         Reps.push_back(ParsedReplacement{Cand, std::move(PCs),
                                          std::move(BPCs)});
@@ -712,6 +770,9 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!LHS)
           return false;
 
+        if (!parseDemandedBits(ErrStr, LHS))
+          return false;
+
         if (RK == ReplacementKind::ParseLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0),
                                            std::move(PCs), std::move(BPCs)});
@@ -729,6 +790,10 @@ bool Parser::parseLine(std::string &ErrStr) {
           return false;
         }
         if (!consumeToken(ErrStr)) return false;
+        if (CurTok.K == Token::UntypedInt) {
+          ErrStr = makeErrStr("expecting width to be specified for int operand in 'result' instruction");
+          return false;
+        }
         Inst *RHS = parseInst(ErrStr);
         if (!RHS)
           return false;

@@ -1,0 +1,14 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: LGTM
+
+%0:i8 = var
+%1:i8 = var
+%2 = addnuw %0, %1
+infer %2 (demandedBits=00000001)
+
+%3 = xor %0, %1
+result %3

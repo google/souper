@@ -1101,6 +1101,9 @@ llvm::Optional<CandidateExpr> souper::GetCandidateExprForReplacement(
   // Build LHS
   ref<Expr> LHS = EB.get(Mapping.LHS);
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
+  ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
+  if (!Mapping.LHS->DemandedBits.isAllOnesValue())
+    LHS = AndExpr::create(LHS, DemandedBits);
   for (const auto I : CE.ArrayVars) {
     if (I) {
       if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
@@ -1137,6 +1140,8 @@ llvm::Optional<CandidateExpr> souper::GetCandidateExprForReplacement(
   }
   // Build RHS
   ref<Expr> RHS = EB.get(Mapping.RHS);
+  if (!Mapping.LHS->DemandedBits.isAllOnesValue())
+    RHS = AndExpr::create(RHS, DemandedBits);
   // Get all UB constraints (LHS && (B)PCs && RHS)
   ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
   if (ExploitUB) {

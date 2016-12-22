@@ -205,6 +205,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         }
         Inst *Copy = getInstCopy(WiringQuery, IC, InputMap);
         Query = IC.getInst(Inst::And, 1, {Query, Copy});
+        Query->DemandedBits = APInt::getAllOnesValue(Query->Width);
       }
       // Solve the synthesis constraint.
       // Each solution corresponds to a syntactically distinct and well-formed
