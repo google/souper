@@ -61,12 +61,39 @@ class BaseSolver : public Solver {
 
   void findVars(Inst *I, std::set<Inst *> &Visited,
 		std::vector<Inst *> &Guesses, unsigned Width) {
-    if (!Visited.insert(I).second)
-      return;
-    if (I->Width == Width)
-      Guesses.emplace_back(I);
-    for (auto Op : I->Ops)
-      findVars(Op, Visited, Guesses, Width);
+    if (Visited.insert(I).second) {
+      if (I->Width == Width) {
+        if (I->K == Inst::SAddO ||
+            I->K == Inst::UAddO ||
+            I->K == Inst::SSubO ||
+            I->K == Inst::USubO ||
+            I->K == Inst::SMulO ||
+            I->K == Inst::UMulO ||
+            I->K == Inst::SAddWithOverflow ||
+            I->K == Inst::UAddWithOverflow ||
+            I->K == Inst::SSubWithOverflow ||
+            I->K == Inst::USubWithOverflow ||
+            I->K == Inst::SMulWithOverflow ||
+            I->K == Inst::UMulWithOverflow) {
+          // don't handle
+        } else {
+          Guesses.emplace_back(I);
+        }
+      }
+      if (I->K == Inst::SAddWithOverflow ||
+          I->K == Inst::UAddWithOverflow ||
+          I->K == Inst::SSubWithOverflow ||
+          I->K == Inst::USubWithOverflow ||
+          I->K == Inst::SMulWithOverflow ||
+          I->K == Inst::UMulWithOverflow) {
+        Inst *J = I->Ops[0];
+        for (auto Op : J->Ops)
+          findVars(Op, Visited, Guesses, Width);
+      } else {
+        for (auto Op : I->Ops)
+          findVars(Op, Visited, Guesses, Width);
+      }
+    }
   }
 
 public:
@@ -78,7 +105,7 @@ public:
                         Inst *LHS, Inst *&RHS, InstContext &IC) override {
     std::error_code EC;
 
-    if (LHS->Width == 1) {
+    if (0 && LHS->Width == 1) {
       std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
                                    IC.getConst(APInt(1, false)) };
       for (auto I : Guesses) {
@@ -140,6 +167,12 @@ public:
     if (InferNop) {
       std::vector<Inst *> Guesses;
       std::set<Inst *> Visited;
+      
+      llvm::errs() << "=============================================\n";
+      ReplacementContext Context;
+      std::string LHSStr = GetReplacementLHSString(BPCs, PCs, LHS, Context);
+      llvm::errs() << "LHS width " << LHS->Width << ": " << LHSStr << "\n";
+      
       findVars(LHS, Visited, Guesses, LHS->Width);
       RHS = 0;
       unsigned Count = 0, Tried = 0;
@@ -148,10 +181,15 @@ public:
           continue;
         InstMapping Mapping(LHS, I);
         std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
+        llvm::errs() << "query for ";
+        llvm::errs() << I->getKindName(I->K);
+        //Context.printInst(I, llvm::errs(), true);
+        llvm::errs() << ": " << Query << "\n";
         if (Query.empty())
           continue;
         bool IsSat;
         EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
+        llvm::errs() << "Works? " << !IsSat << "\n";
         if (EC)
           continue;
         if (!IsSat) {
@@ -160,7 +198,7 @@ public:
         }
         ++Tried;
       }
-      llvm::errs() << "Solution count = " << Count << " out of " << Tried << "\n";
+      llvm::errs() << "Solution count = " << Count << " out of " << Tried << "\n\n";
       if (Count > 0) {
         return EC;
       }
