@@ -28,6 +28,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/KnownBits.h"
 #include "souper/Inst/Inst.h"
 #include "souper/Util/UniqueNameSet.h"
 #include <map>
@@ -157,20 +158,20 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
   if (Opts.NamedArrays)
     Name = V->getName();
   unsigned Width = DL.getTypeSizeInBits(V->getType());
-  APInt KnownZero(Width, 0, false), KnownOne(Width, 0, false);
+  KnownBits Known(Width);
   bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
   unsigned NumSignBits = 1;
   if (HarvestDataFlowFacts)
     if (V->getType()->isIntOrIntVectorTy() ||
         V->getType()->getScalarType()->isPointerTy()) {
-      computeKnownBits(V, KnownZero, KnownOne, DL);
+      computeKnownBits(V, Known, DL);
       NonZero = isKnownNonZero(V, DL);
       NonNegative = isKnownNonNegative(V, DL);
       PowOfTwo = isKnownToBeAPowerOfTwo(V, DL);
       Negative = isKnownNegative(V, DL);
       NumSignBits = ComputeNumSignBits(V, DL);
     }
-  return IC.createVar(Width, Name, KnownZero, KnownOne, NonZero, NonNegative,
+  return IC.createVar(Width, Name, Known.Zero, Known.One, NonZero, NonNegative,
                       PowOfTwo, Negative, NumSignBits);
 }
 
@@ -519,7 +520,7 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
       Inst *DI = IC.getConst(APInt(1, true));
       for (auto I = Switch->case_begin(), E = Switch->case_end(); I != E;
            ++I) {
-        Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I.getCaseValue())});
+        Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I->getCaseValue())});
         emplace_back_dedup(PCs, CI, DI);
       }
     }
