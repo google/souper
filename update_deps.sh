@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-llvm_revision=280312
 klee_commit=a743d7072d9ccf11f96e3df45f25ad07da6ad9d6
 hiredis_commit=8f60ee65327445ed8384290b4040685329eb03c5
 
@@ -27,10 +26,9 @@ fi
 llvmdir=third_party/llvm
 llvm_builddir=$llvmdir/$llvm_build_type
 
-svn co -r $llvm_revision https://llvm.org/svn/llvm-project/llvm/trunk $llvmdir
-svn co -r $llvm_revision https://llvm.org/svn/llvm-project/cfe/trunk $llvmdir/tools/clang
-svn co -r $llvm_revision https://llvm.org/svn/llvm-project/compiler-rt/trunk $llvmdir/projects/compiler-rt
-
+svn co https://llvm.org/svn/llvm-project/llvm/branches/release_40 $llvmdir
+svn co https://llvm.org/svn/llvm-project/cfe/branches/release_40 $llvmdir/tools/clang
+svn co https://llvm.org/svn/llvm-project/compiler-rt/branches/release_40 $llvmdir/projects/compiler-rt
 mkdir -p $llvm_builddir
 
 cmake_flags=".. -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DCMAKE_CXX_FLAGS=-DLLVM_ENABLE_STATS=true"
