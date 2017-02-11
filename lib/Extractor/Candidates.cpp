@@ -189,7 +189,7 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
                             gep_type_iterator end) {
   unsigned PSize = DL.getPointerSizeInBits();
   for (auto i = begin; i != end; ++i) {
-    if (StructType *ST = dyn_cast<StructType>(*i)) {
+    if (StructType *ST = i.getStructTypeOrNull()) {
       const StructLayout *SL = DL.getStructLayout(ST);
       ConstantInt *CI = cast<ConstantInt>(i.getOperand());
       uint64_t Addend = SL->getElementOffset((unsigned) CI->getZExtValue());
@@ -198,7 +198,7 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
                          {Ptr, IC.getConst(APInt(PSize, Addend))});
       }
     } else {
-      SequentialType *SET = cast<SequentialType>(*i);
+      SequentialType *SET = cast<SequentialType>(i.getIndexedType());
       uint64_t ElementSize =
         DL.getTypeStoreSize(SET->getElementType());
       Value *Operand = i.getOperand();
