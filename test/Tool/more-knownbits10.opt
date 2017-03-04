@@ -4,7 +4,7 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i32 = var (p)
+%0:i32 = var (2)
 %1:i32 = var
 %2:i32 = shlnw %0, %1
 %3:i32 = ctpop %2

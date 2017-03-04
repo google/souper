@@ -275,7 +275,7 @@ std::string Inst::getMoreKnownBitsString(bool NonZero, bool NonNegative, bool Po
   if (NonNegative)
     Str.append("n");
   if (PowOfTwo)
-    Str.append("p");
+    Str.append("2");
   return Str;
 }
 
