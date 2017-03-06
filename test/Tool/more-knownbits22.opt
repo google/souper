@@ -1,0 +1,11 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: LGTM
+%0:i16 = var (-)
+%1:i16 = var (-)
+%2:i16 = mulnsw %0, %1
+%3:i1 = slt 0:i16, %2
+cand %3 1:i1

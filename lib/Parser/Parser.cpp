@@ -214,7 +214,8 @@ FoundChar:
       ++Begin;
       KnownBitsFlag = true;
     }
-    while (!KnownBitsFlag && (*Begin == 'n' || *Begin == 'z' || *Begin == '2')) {
+    while (!KnownBitsFlag && (*Begin == 'n' || *Begin == 'z' || *Begin == '2' ||
+           *Begin == '-')) {
       ++Begin;
       MoreKnownBitsFlag = true;
     }
@@ -227,7 +228,7 @@ FoundChar:
       return Token{Token::Error, Begin, 0, APInt()};
     }
     if (Begin == NumBegin) {
-      ErrStr = "invalid, expected [0|1|x]+ or [n|z|2]";
+      ErrStr = "invalid, expected [0|1|x]+ or [n|z|2|-]";
       return Token{Token::Error, Begin, 0, APInt()};
     }
     Token T;
@@ -900,7 +901,7 @@ bool Parser::parseLine(std::string &ErrStr) {
       if (IK == Inst::Var) {
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
                     ConstOne(InstWidth, 1, false);
-        bool NonZero = false, NonNegative = false, PowOfTwo = false;
+        bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
         unsigned SignBits = 0;
         while (CurTok.K != Token::ValName && CurTok.K != Token::Ident && CurTok.K != Token::Eof) {
           if (CurTok.K == Token::KnownBits) {
@@ -920,32 +921,38 @@ bool Parser::parseLine(std::string &ErrStr) {
           if (CurTok.K == Token::MoreKnownBits) {
             for (unsigned i=0; i<CurTok.PatternString.length(); ++i) {
               if (CurTok.PatternString[i] == 'z') {
-		if (NonZero) {
-		  ErrStr = makeErrStr(TP, "repeated 'z' flag");
-		  return false;
-		}
+                if (NonZero) {
+                  ErrStr = makeErrStr(TP, "repeated 'z' flag");
+                  return false;
+                }
                 NonZero = true;
-	      } else if (CurTok.PatternString[i] == 'n') {
-		if (NonNegative) {
-		  ErrStr = makeErrStr(TP, "repeated 'n' flag");
-		  return false;
-		}
+              } else if (CurTok.PatternString[i] == 'n') {
+                if (NonNegative) {
+                  ErrStr = makeErrStr(TP, "repeated 'n' flag");
+                  return false;
+                }
                 NonNegative = true;
-	      } else if (CurTok.PatternString[i] == '2') {
-		if (PowOfTwo) {
-		  ErrStr = makeErrStr(TP, "repeated '2' flag");
-		  return false;
-		}
+              } else if (CurTok.PatternString[i] == '2') {
+                if (PowOfTwo) {
+                  ErrStr = makeErrStr(TP, "repeated '2' flag");
+                  return false;
+                }
                 PowOfTwo = true;
-	      } else {
-		llvm_unreachable("nzp should have been checked earlier");
-	      }
-	    }
+              } else if (CurTok.PatternString[i] == '-') {
+                if (Negative) {
+                  ErrStr = makeErrStr(TP, "repeated '-' flag");
+                  return false;
+                }
+                Negative = true;
+              } else {
+                llvm_unreachable("nzp should have been checked earlier");
+              }
+            }
             if (!consumeToken(ErrStr))
               return false;
           }
         }
-        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero, NonNegative, PowOfTwo);
+        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero, NonNegative, PowOfTwo, Negative);
         Context.setInst(InstName, I);
         return true;
       }

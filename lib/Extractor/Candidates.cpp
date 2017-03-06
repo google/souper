@@ -158,7 +158,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
     Name = V->getName();
   unsigned Width = DL.getTypeSizeInBits(V->getType());
   APInt KnownZero(Width, 0, false), KnownOne(Width, 0, false);
-  bool NonZero = false, NonNegative = false, PowOfTwo = false;
+  bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
   if (HarvestKnownBits)
     if (V->getType()->isIntOrIntVectorTy() ||
         V->getType()->getScalarType()->isPointerTy()) {
@@ -166,9 +166,10 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
       NonZero = isKnownNonZero(V, DL);
       NonNegative = isKnownNonNegative(V, DL);
       PowOfTwo = isKnownToBeAPowerOfTwo(V, DL);
+      Negative = isKnownNegative(V, DL);
     }
   return IC.createVar(Width, Name, KnownZero, KnownOne, NonZero, NonNegative,
-                      PowOfTwo);
+                      PowOfTwo, Negative);
 }
 
 Inst *ExprBuilder::buildConstant(Constant *c) {
