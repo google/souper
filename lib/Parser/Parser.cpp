@@ -214,7 +214,7 @@ FoundChar:
       ++Begin;
       KnownBitsFlag = true;
     }
-    while (!KnownBitsFlag && (*Begin == 'n' || *Begin == 'z' || *Begin == 'p')) {
+    while (!KnownBitsFlag && (*Begin == 'n' || *Begin == 'z' || *Begin == '2')) {
       ++Begin;
       MoreKnownBitsFlag = true;
     }
@@ -227,7 +227,7 @@ FoundChar:
       return Token{Token::Error, Begin, 0, APInt()};
     }
     if (Begin == NumBegin) {
-      ErrStr = "invalid, expected [0|1|x]+ or [n|z|p]";
+      ErrStr = "invalid, expected [0|1|x]+ or [n|z|2]";
       return Token{Token::Error, Begin, 0, APInt()};
     }
     Token T;
@@ -931,9 +931,9 @@ bool Parser::parseLine(std::string &ErrStr) {
 		  return false;
 		}
                 NonNegative = true;
-	      } else if (CurTok.PatternString[i] == 'p') {
+	      } else if (CurTok.PatternString[i] == '2') {
 		if (PowOfTwo) {
-		  ErrStr = makeErrStr(TP, "repeated 'p' flag");
+		  ErrStr = makeErrStr(TP, "repeated '2' flag");
 		  return false;
 		}
                 PowOfTwo = true;

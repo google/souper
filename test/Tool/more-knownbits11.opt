@@ -4,7 +4,7 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i8 = var (p)
+%0:i8 = var (2)
 %1:i8 = var
 %2:i8 = udivexact %0, %1
 %3:i8 = ctpop %2
