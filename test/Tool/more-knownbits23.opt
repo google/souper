@@ -1,0 +1,15 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t 2>&1
+; RUN: FileCheck %s < %t
+; CHECK:      %0:i16 = var (-)
+; CHECK-NEXT: %1:i32 = sext %0
+; CHECK-NEXT: %2:i32 = ctpop %1
+; CHECK-NEXT: %3:i1 = ule 17:i32, %2
+; CHECK-NEXT: cand %3 1:i1
+
+%0:i16 = var (-)
+%1:i32 = sext %0
+%2:i32 = ctpop %1
+%3:i1 = ule 17:i32, %2
+infer %3

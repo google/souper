@@ -1,0 +1,11 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: Invalid
+%0:i32 = var (-)
+%1:i32 = var (n)
+%2:i32 = mulnsw %0, %1
+%3:i1 = slt %2, 0:i32
+cand %3 1:i1

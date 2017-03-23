@@ -81,6 +81,7 @@ struct ExprBuilder {
   std::map<Inst *, ref<Expr>> NonZeroBitsMap;
   std::map<Inst *, ref<Expr>> NonNegBitsMap;
   std::map<Inst *, ref<Expr>> PowerTwoBitsMap;
+  std::map<Inst *, ref<Expr>> NegBitsMap;
   std::map<Block *, BlockPCPredMap> BlockPCMap;
   std::vector<std::unique_ptr<Array>> &Arrays;
   std::vector<Inst *> &ArrayVars;
@@ -119,6 +120,7 @@ struct ExprBuilder {
   ref<Expr> getNonZeroBitsMapping(Inst *I);
   ref<Expr> getNonNegBitsMapping(Inst *I);
   ref<Expr> getPowerTwoBitsMapping(Inst *I);
+  ref<Expr> getNegBitsMapping(Inst *I);
   std::vector<ref<Expr >> getBlockPredicates(Inst *I);
   ref<Expr> getUBInstCondition();
   ref<Expr> getBlockPCs();
@@ -177,6 +179,8 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
                                                                                   klee::ConstantExpr::create(i, Width))));
       PowerTwoBitsMap[Origin] = PowerExpr;
     }
+    if (Origin->Negative)
+      NegBitsMap[Origin] = SltExpr::create(Var, klee::ConstantExpr::create(0, Width));
   }
   return Var;
 }
@@ -1065,6 +1069,10 @@ ref<Expr> ExprBuilder::getNonNegBitsMapping(Inst *I) {
   return NonNegBitsMap[I];
 }
 
+ref<Expr> ExprBuilder::getNegBitsMapping(Inst *I) {
+  return NegBitsMap[I];
+}
+
 ref<Expr> ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
   return PowerTwoBitsMap[I];
 }
@@ -1091,6 +1099,8 @@ llvm::Optional<CandidateExpr> souper::GetCandidateExprForReplacement(
         Ante = AndExpr::create(Ante, EB.getNonNegBitsMapping(I));
       if (I->PowOfTwo)
         Ante = AndExpr::create(Ante, EB.getPowerTwoBitsMapping(I));
+      if (I->Negative)
+        Ante = AndExpr::create(Ante, EB.getNegBitsMapping(I));
     }
   }
   // Build PCs
