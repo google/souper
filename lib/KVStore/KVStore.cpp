@@ -14,96 +14,56 @@
 
 #include "souper/KVStore/KVStore.h"
 
+#if WITH_REDIS
+#include "souper/KVStore/KVImplRedis.h"
+#endif
+#if WITH_SQLITE
+#include "souper/KVStore/KVImplSQLite.h"
+#endif
+
 #include "llvm/Support/CommandLine.h"
-#include "hiredis.h"
 
 using namespace llvm;
 using namespace souper;
 
-static cl::opt<unsigned> RedisPort("souper-redis-port", cl::init(6379),
-    cl::desc("Redis server port (default=6379)"));
+enum StoreKinds {
+#if WITH_REDIS
+  SKRedis,
+#endif
+#if WITH_SQLITE
+  SKSQLite
+#endif
+};
+
+cl::opt<StoreKinds> StoreKind("store-kind",
+    cl::desc("Persistent storage provider"),
+    cl::values(
+#if WITH_REDIS
+       clEnumValN(SKRedis, "redis", "use Redis"),
+#endif
+#if WITH_SQLITE
+       clEnumValN(SKSQLite, "sqlite", "use SQLite"),
+#endif
+      clEnumValEnd));
 
 namespace souper {
 
-class KVStore::KVImpl {
-  redisContext *Ctx;
-public:
-  KVImpl();
-  ~KVImpl();
-  void hIncrBy(llvm::StringRef Key, llvm::StringRef Field, int Incr);
-  bool hGet(llvm::StringRef Key, llvm::StringRef Field, std::string &Value);
-  void hSet(llvm::StringRef Key, llvm::StringRef Field, llvm::StringRef Value);
-};
-
-KVStore::KVImpl::KVImpl() {
-  const char *hostname = "127.0.0.1";
-  struct timeval Timeout = { 1, 500000 }; // 1.5 seconds
-  Ctx = redisConnectWithTimeout(hostname, RedisPort, Timeout);
-  if (!Ctx) {
-    llvm::report_fatal_error("Can't allocate redis context\n");
-  }
-  if (Ctx->err) {
-    llvm::report_fatal_error((llvm::StringRef)"Redis connection error: " +
-                             Ctx->errstr + "\n");
+KVStore::KVStore() {
+  switch (StoreKind) {
+#if WITH_REDIS
+  SKRedis:
+    Impl = std::unique_ptr<KVImpl>(new KVImplRedis());
+    break;
+#endif
+#if WITH_SQLITE
+  SKSQLite:
+    Impl = std::unique_ptr<KVImpl>(new KVImplSQLite());
+    break;
+#endif
+  default:
+    llvm::report_fatal_error("unsupported persistent storage provider");
   }
 }
-
-KVStore::KVImpl::~KVImpl() {
-  redisFree(Ctx);
-}
-
-void KVStore::KVImpl::hIncrBy(llvm::StringRef Key, llvm::StringRef Field,
-                              int Incr) {
-  redisReply *reply = (redisReply *)redisCommand(Ctx, "HINCRBY %s %s 1",
-                                                 Key.data(), Field.data());
-  if (!reply || Ctx->err) {
-    llvm::report_fatal_error((llvm::StringRef)"Redis error: " + Ctx->errstr);
-  }
-  if (reply->type != REDIS_REPLY_INTEGER) {
-    llvm::report_fatal_error(
-        "Redis protocol error for static profile, didn't expect reply type "
-        + std::to_string(reply->type));
-  }
-  freeReplyObject(reply);
-}
-
-bool KVStore::KVImpl::hGet(llvm::StringRef Key, llvm::StringRef Field,
-                           std::string &Value) {
-  redisReply *reply = (redisReply *)redisCommand(Ctx, "HGET %s %s", Key.data(),
-                                                 Field.data());
-  if (!reply || Ctx->err) {
-    llvm::report_fatal_error((llvm::StringRef)"Redis error: " + Ctx->errstr);
-  }
-  if (reply->type == REDIS_REPLY_NIL) {
-    freeReplyObject(reply);
-    return false;
-  } else if (reply->type == REDIS_REPLY_STRING) {
-    Value = reply->str;
-    freeReplyObject(reply);
-    return true;
-  } else {
-    llvm::report_fatal_error(
-        "Redis protocol error for cache lookup, didn't expect reply type " +
-        std::to_string(reply->type));
-  }
-}
-
-void KVStore::KVImpl::hSet(llvm::StringRef Key, llvm::StringRef Field,
-                              llvm::StringRef Value) {
-  redisReply *reply = (redisReply *)redisCommand(Ctx, "HSET %s %s %s",
-      Key.data(), Field.data(), Value.data());
-  if (!reply || Ctx->err) {
-    llvm::report_fatal_error((llvm::StringRef)"Redis error: " + Ctx->errstr);
-  }
-  if (reply->type != REDIS_REPLY_INTEGER) {
-    llvm::report_fatal_error(
-        "Redis protocol error for cache fill, didn't expect reply type " +
-        std::to_string(reply->type));
-  }
-  freeReplyObject(reply);
-}
-
-KVStore::KVStore() : Impl (new KVImpl) {}
 
 KVStore::~KVStore() {}
 
