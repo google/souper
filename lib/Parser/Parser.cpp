@@ -41,6 +41,7 @@ struct Token {
     UntypedInt,
     KnownBits,
     MoreKnownBits,
+    NumSignBits,
     Eof,
   };
 
@@ -50,6 +51,7 @@ struct Token {
   APInt Val;
   StringRef Name;
   unsigned Width;
+  unsigned SignBits;
   std::string PatternString;
 
   StringRef str() const {
@@ -209,7 +211,8 @@ FoundChar:
   if (*Begin == '(') {
     ++Begin;
     const char *NumBegin = Begin;
-    bool KnownBitsFlag = false, MoreKnownBitsFlag = false;
+    bool KnownBitsFlag = false, MoreKnownBitsFlag = false, NumSignBitsFlag = false;
+    unsigned SignBits = 0;
     while (*Begin == '0' || *Begin == '1' || *Begin == 'x') {
       ++Begin;
       KnownBitsFlag = true;
@@ -219,6 +222,28 @@ FoundChar:
       ++Begin;
       MoreKnownBitsFlag = true;
     }
+    while (!KnownBitsFlag && !MoreKnownBitsFlag && *Begin == 's') {
+      NumSignBitsFlag = true;
+      ++Begin;
+      if (NumSignBitsFlag && *Begin != '=') {
+        ErrStr = "expected '=' for number of sign bits";
+        return Token{Token::Error, Begin, 0, APInt()};
+      }
+      ++Begin;
+      const char *SignBegin = Begin;
+      while (*Begin >= '0' && *Begin <= '9') {
+        SignBits = SignBits*10 + (*Begin - '0');
+        ++Begin;
+      }
+      if (Begin == SignBegin) {
+        ErrStr = "expected integer value for number of sign bits";
+        return Token{Token::Error, Begin, 0, APInt()};
+      }
+      if (SignBits == 0) {
+        ErrStr = "number of sign bits must be more than 0";
+        return Token{Token::Error, SignBegin, 0, APInt()};
+      }
+    }
     if (Begin != NumBegin && KnownBitsFlag && *Begin != ')') {
       ErrStr = "invalid knownbits string";
       return Token{Token::Error, Begin, 0, APInt()};
@@ -227,8 +252,12 @@ FoundChar:
       ErrStr = "invalid more knownbits string";
       return Token{Token::Error, Begin, 0, APInt()};
     }
+    if (Begin != NumBegin && NumSignBitsFlag && *Begin != ')') {
+      ErrStr = "invalid number of sign bits string";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
     if (Begin == NumBegin) {
-      ErrStr = "invalid, expected [0|1|x]+ or [n|z|2|-]";
+      ErrStr = "invalid, expected [0|1|x]+ or [n|z|2|-] or s=[0-9]+";
       return Token{Token::Error, Begin, 0, APInt()};
     }
     Token T;
@@ -236,6 +265,10 @@ FoundChar:
       T.K = Token::KnownBits;
     else if (MoreKnownBitsFlag)
       T.K = Token::MoreKnownBits;
+    else if (NumSignBitsFlag) {
+      T.K = Token::NumSignBits;
+      T.SignBits = SignBits;
+    }
     T.Pos = NumBegin;
     T.Len = size_t(Begin - NumBegin);
     T.PatternString = StringRef(NumBegin, Begin - NumBegin); 
@@ -942,8 +975,18 @@ bool Parser::parseLine(std::string &ErrStr) {
             if (!consumeToken(ErrStr))
               return false;
           }
+          if (CurTok.K == Token::NumSignBits) {
+            if (CurTok.SignBits > InstWidth) {
+              ErrStr = makeErrStr(TP, "number of sign bits can't exceed instruction width");
+              return false;
+            }
+            SignBits = CurTok.SignBits;
+            if (!consumeToken(ErrStr))
+              return false;
+          }
         }
-        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero, NonNegative, PowOfTwo, Negative);
+        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero,
+                               NonNegative, PowOfTwo, Negative, SignBits);
         Context.setInst(InstName, I);
         return true;
       }

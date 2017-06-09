@@ -1,0 +1,15 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; If total number of sign bits of operand is equal to bitwidth+1, it doesn't overflow.
+; However, it might overflow if both operands are negative. The safe side is to have
+; atleast one operand as non-negative.
+
+; CHECK: LGTM
+%0:i16 = var (n) (s=8)
+%1:i16 = var (s=9)
+%2:i17 = smul.with.overflow %0, %1
+%3:i1 = extractvalue %2, 1:i16
+cand %3 0:i1
