@@ -15,9 +15,9 @@
 # limitations under the License.
 
 hiredis_commit=8f60ee65327445ed8384290b4040685329eb03c5
-llvm_branch=branches/release_40
+llvm_branch=branches/release_50
 klee_repo=https://github.com/rsas/klee
-klee_branch=pure-bv-qf-llvm-4.0-patch
+klee_branch=pure-bv-qf-llvm-5.0-patch
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then

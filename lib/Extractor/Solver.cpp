@@ -60,7 +60,7 @@ class BaseSolver : public Solver {
   unsigned Timeout;
 
   void findVars(Inst *I, std::set<Inst *> &Visited,
-		std::vector<Inst *> &Guesses, unsigned Width) {
+                std::vector<Inst *> &Guesses, unsigned Width) {
     if (!Visited.insert(I).second)
       return;
     if (I->K == Inst::Var && I->Width == Width)
