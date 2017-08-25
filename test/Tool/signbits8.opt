@@ -4,8 +4,8 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i32 = var (0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx) (s=31)
-%1:i32 = var (xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0)
+%0:i32 = var (knownBits=0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx) (signBits=31)
+%1:i32 = var (knownBits=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0)
 %2:i32 = and %0, %1
 %3:i1 = eq %2, 0:i32
 cand %3 1:i1

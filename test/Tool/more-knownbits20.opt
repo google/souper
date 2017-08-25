@@ -4,7 +4,7 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i32 = var (-)
-%1:i32 = var (2)
+%0:i32 = var (negative)
+%1:i32 = var (powerOfTwo)
 %2:i1 = eq %0, %1
 cand %2 0:i1

@@ -4,7 +4,7 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i32 = var (n)
+%0:i32 = var (nonNegative)
 %1:i64 = sext %0
 %2:i64 = zext %0
 %3:i1 = eq %1, %2

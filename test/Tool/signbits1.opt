@@ -4,8 +4,8 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i32 = var (s=2)
-%1:i32 = var (s=2)
+%0:i32 = var (signBits=2)
+%1:i32 = var (signBits=2)
 %2:i33 = ssub.with.overflow %0, %1
 %3:i1 = extractvalue %2, 1:i32
 cand %3 0:i1

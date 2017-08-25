@@ -5,7 +5,7 @@
 
 ; CHECK: LGTM
 %0:i32 = var
-%1:i32 = var (z)
+%1:i32 = var (nonZero)
 %2:i32 = shlnw %0, %1
 %3:i32 = and %2, 2147483648:i32
 cand %3 0:i32
