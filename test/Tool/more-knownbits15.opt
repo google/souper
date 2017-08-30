@@ -4,6 +4,6 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i8 = var (n)
+%0:i8 = var (nonNegative)
 %1:i1 = sle 0:i8, %0
 cand %1 1:i1

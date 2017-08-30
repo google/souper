@@ -4,7 +4,7 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: Invalid
-%0:i16 = var (-)
+%0:i16 = var (negative)
 %1:i16 = var
 %2:i16 = mulnsw %0, %1
 %3:i1 = slt 0:i16, %2

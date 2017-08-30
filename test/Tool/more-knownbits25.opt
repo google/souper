@@ -4,8 +4,8 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i32 = var (-)
-%1:i32 = var (-)
+%0:i32 = var (negative)
+%1:i32 = var (negative)
 %2:i32 = sdivexact %0, %1
 %3:i1 = ne 0:i32, %2
 cand %3 1:i1

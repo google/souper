@@ -4,6 +4,6 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: Invalid
-%0:i32 = var (s=32)
+%0:i32 = var (signBits=32)
 %2:i1 = eq %0, 0:i32
 cand %2 1:i1
