@@ -3,14 +3,14 @@
 ; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t 2>&1
 ; RUN: FileCheck %s < %t
 
-; CHECK: %0:i16 = var (p)
+; CHECK: %0:i16 = var (powerOfTwo)
 ; CHECK-NEXT: %1:i16 = var
 ; CHECK-NEXT: %2:i16 = udivexact %0, %1
 ; CHECK-NEXT: %3:i16 = ctpop %2
 ; CHECK-NEXT: %4:i1 = eq 1:i16, %3
 ; CHECK-NEXT: cand %4 1:i1
 
-%0:i16 = var (p)
+%0:i16 = var (powerOfTwo)
 %1:i16 = var
 %2:i16 = udivexact %0, %1
 %3:i16 = ctpop %2

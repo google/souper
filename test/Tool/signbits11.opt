@@ -4,8 +4,8 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i64 = var (nonZero)
-%1:i64 = var
-%2:i64 = sdivexact %0, %1
-%3:i1 = eq %2, 0:i64
-cand %3 0:i1
+%0:i32 = var (signBits=32)
+%2:i1 = eq %0, -1:i32
+%3:i1 = eq %0, 0:i32
+%4:i1 = or %2, %3
+cand %4 1:i1

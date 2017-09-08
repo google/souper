@@ -40,7 +40,8 @@ struct Token {
     Int,
     UntypedInt,
     KnownBits,
-    MoreKnownBits,
+    OpenParen,
+    CloseParen,
     Eof,
   };
 
@@ -119,8 +120,7 @@ FoundChar:
       const char *NameBegin = Begin;
       while (Begin != End && ((*Begin >= '0' && *Begin <= '9') ||
                               (*Begin >= 'A' && *Begin <= 'Z') ||
-                              (*Begin >= 'a' && *Begin <= 'z') ||
-                              (*Begin == '.'))) {
+                              (*Begin >= 'a' && *Begin <= 'z'))) {
         ++Begin;
       }
       if (Begin == NameBegin) {
@@ -161,13 +161,31 @@ FoundChar:
     }
   }
 
-  if ((*Begin >= 'a' && *Begin <= 'z') || (*Begin == '.')) {
+  if ((*Begin >= 'a' && *Begin <= 'z') ||
+      (*Begin >= 'A' && *Begin <= 'Z')) {
     const char *TokenBegin = Begin;
     do {
       ++Begin;
     } while (Begin != End && ((*Begin >= 'a' && *Begin <= 'z') ||
-             (*Begin == '.')));
-    return Token{Token::Ident, TokenBegin, size_t(Begin - TokenBegin), APInt()};
+             (*Begin == '.') || (*Begin >= 'A' && *Begin <= 'Z')));
+    std::string DataFlowFact = StringRef(TokenBegin, Begin - TokenBegin);
+    if (DataFlowFact == "knownBits") {
+      if (*Begin != '=') {
+        ErrStr = "expected '=' for knownBits";
+        return Token{Token::Error, Begin, 0, APInt()};
+      }
+      ++Begin;
+      const char *PatternBegin = Begin;
+      while (*Begin == '0' || *Begin == '1' || *Begin == 'x')
+        ++Begin;
+      if (Begin == PatternBegin) {
+        ErrStr = "expected [0|1|x]+ for knownBits";
+        return Token{Token::Error, Begin, 0, APInt()};
+      }
+      return Token{Token::KnownBits, TokenBegin, size_t(Begin - TokenBegin), APInt(),
+                   "", 0, StringRef(PatternBegin, Begin - PatternBegin)};
+    } else
+      return Token{Token::Ident, TokenBegin, size_t(Begin - TokenBegin), APInt()};
   }
 
   if (*Begin == '-' || (*Begin >= '0' && *Begin <= '9')) {
@@ -208,38 +226,11 @@ FoundChar:
 
   if (*Begin == '(') {
     ++Begin;
-    const char *NumBegin = Begin;
-    bool KnownBitsFlag = false, MoreKnownBitsFlag = false;
-    while (*Begin == '0' || *Begin == '1' || *Begin == 'x') {
-      ++Begin;
-      KnownBitsFlag = true;
-    }
-    while (!KnownBitsFlag && (*Begin == 'n' || *Begin == 'z' || *Begin == 'p')) {
-      ++Begin;
-      MoreKnownBitsFlag = true;
-    }
-    if (Begin != NumBegin && KnownBitsFlag && *Begin != ')') {
-      ErrStr = "invalid knownbits string";
-      return Token{Token::Error, Begin, 0, APInt()};
-    }
-    if (Begin != NumBegin && MoreKnownBitsFlag && *Begin != ')') {
-      ErrStr = "invalid more knownbits string";
-      return Token{Token::Error, Begin, 0, APInt()};
-    }
-    if (Begin == NumBegin) {
-      ErrStr = "invalid, expected [0|1|x]+ or [n|z|p]";
-      return Token{Token::Error, Begin, 0, APInt()};
-    }
-    Token T;
-    if (KnownBitsFlag)
-      T.K = Token::KnownBits;
-    else if (MoreKnownBitsFlag)
-      T.K = Token::MoreKnownBits;
-    T.Pos = NumBegin;
-    T.Len = size_t(Begin - NumBegin);
-    T.PatternString = StringRef(NumBegin, Begin - NumBegin); 
+    return Token{Token::OpenParen, Begin-1, 1, APInt()};
+  }
+  if (*Begin == ')') {
     ++Begin;
-    return T;
+    return Token{Token::CloseParen, Begin-1, 1, APInt()};
   }
 
   ErrStr = std::string("unexpected '") + *Begin + "'";
@@ -565,25 +556,16 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     return false;
   }
 
-  // NOTE: We don't 'typeCheckOpsMatchingWidths' because the overflow
-  // instructions operands width and the instruction width is different. 
-  // The overflow instruction is a tuple of two elements (i32, i1)
-  // that makes the overall width equals to (32 + 1 = 33). Likewise, for
-  // 64-bit operands, overall width will be (64 + 1 = 65).
-  switch (IK) {
-    case Inst::SAddWithOverflow:
-    case Inst::UAddWithOverflow:
-    case Inst::SSubWithOverflow:
-    case Inst::USubWithOverflow:
-    case Inst::SMulWithOverflow:
-    case Inst::UMulWithOverflow:
-    case Inst::ExtractValue:
-      break;
-    default:
-      if (!typeCheckOpsMatchingWidths(OpsMatchingWidths, ErrStr))
-        return false;
-      break;
-  }
+  // NOTE: We don't 'typeCheckOpsMatchingWidths' for ExtractValue
+  // instruction because its a tuple of {aggregate, index}. The first
+  // element, aggregate is result of overflow instruction. The
+  // aggregate is of 33 and 65 bits for 32 and 64 bit operands of
+  // overflow instruction respectively. The second element of
+  // ExtractValue instruction is an index value. We don't type check
+  // the operands width as the two elements vary in width.
+  if (IK != Inst::ExtractValue)
+    if (!typeCheckOpsMatchingWidths(OpsMatchingWidths, ErrStr))
+      return false;
 
   unsigned ExpectedWidth;
   switch (IK) {
@@ -900,52 +882,93 @@ bool Parser::parseLine(std::string &ErrStr) {
       if (IK == Inst::Var) {
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
                     ConstOne(InstWidth, 1, false);
-        bool NonZero = false, NonNegative = false, PowOfTwo = false;
+        bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
         unsigned SignBits = 0;
         while (CurTok.K != Token::ValName && CurTok.K != Token::Ident && CurTok.K != Token::Eof) {
-          if (CurTok.K == Token::KnownBits) {
-            if (InstWidth != CurTok.PatternString.length()) {
-              ErrStr = makeErrStr(TP, "knownbits pattern must be of same length as var width");
-              return false;
-            }
-            for (unsigned i=0; i<InstWidth; ++i) {
-              if (CurTok.PatternString[i] == '0')
-                Zero += ConstOne.shl(CurTok.PatternString.length()-1-i);
-              else if (CurTok.PatternString[i] == '1')
-                One += ConstOne.shl(CurTok.PatternString.length()-1-i);
-            }
+          if (CurTok.K == Token::OpenParen) {
             if (!consumeToken(ErrStr))
               return false;
-          }
-          if (CurTok.K == Token::MoreKnownBits) {
-            for (unsigned i=0; i<CurTok.PatternString.length(); ++i) {
-              if (CurTok.PatternString[i] == 'z') {
-		if (NonZero) {
-		  ErrStr = makeErrStr(TP, "repeated 'z' flag");
-		  return false;
-		}
-                NonZero = true;
-	      } else if (CurTok.PatternString[i] == 'n') {
-		if (NonNegative) {
-		  ErrStr = makeErrStr(TP, "repeated 'n' flag");
-		  return false;
-		}
-                NonNegative = true;
-	      } else if (CurTok.PatternString[i] == 'p') {
-		if (PowOfTwo) {
-		  ErrStr = makeErrStr(TP, "repeated 'p' flag");
-		  return false;
-		}
-                PowOfTwo = true;
-	      } else {
-		llvm_unreachable("nzp should have been checked earlier");
-	      }
-	    }
+            switch (CurTok.K) {
+              case Token::KnownBits:
+                for (unsigned i=0; i<InstWidth; ++i) {
+                  if (CurTok.PatternString[i] == '0')
+                    Zero += ConstOne.shl(CurTok.PatternString.length()-1-i);
+                  else if (CurTok.PatternString[i] == '1')
+                    One += ConstOne.shl(CurTok.PatternString.length()-1-i);
+                  else if (CurTok.PatternString[i] == 'x') ;
+                  else {
+                    ErrStr = makeErrStr(TP, "invalid knownBits string");
+                    return false;
+                  }
+                }
+                if (InstWidth != CurTok.PatternString.length()) {
+                  ErrStr = makeErrStr(TP, "knownbits pattern must be of same length as var width");
+                  return false;
+                }
+                if (!consumeToken(ErrStr))
+                  return false;
+                break;
+              case Token::Ident:
+                if (CurTok.str() == "powerOfTwo") {
+                  PowOfTwo = true;
+                  if (!consumeToken(ErrStr))
+                    return false;
+                } else if (CurTok.str() == "negative") {
+                  Negative = true;
+                  if (!consumeToken(ErrStr))
+                    return false;
+                } else if (CurTok.str() == "nonNegative") {
+                  NonNegative = true;
+                  if (!consumeToken(ErrStr))
+                    return false;
+                } else if (CurTok.str() == "nonZero") {
+                  NonZero = true;
+                  if (!consumeToken(ErrStr))
+                    return false;
+                } else if (CurTok.str() == "signBits") {
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::Eq) {
+                    ErrStr = makeErrStr(TP, "expected '=' for number of signBits");
+                    return false;
+                  }
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::UntypedInt) {
+                    ErrStr = makeErrStr(TP, "expected positive integer value for number of sign bits");
+                    return false;
+                  }
+                  SignBits = CurTok.Val.getLimitedValue();
+                  if (SignBits == 0) {
+                    ErrStr = makeErrStr(TP, "expected positive integer value for number of sign bits");
+                    return false;
+                  }
+                  if (SignBits > InstWidth) {
+                    ErrStr = makeErrStr(TP, "number of sign bits can't exceed instruction width and expects positive integer value");
+                    return false;
+                  }
+                  if (!consumeToken(ErrStr))
+                    return false;
+                } else {
+                  ErrStr = makeErrStr(TP, "invalid data flow fact type");
+                  return false;
+                }
+                break;
+              default:
+                ErrStr = makeErrStr(TP, "invalid data flow fact type");
+                return false;
+                break;
+            }
+            if (CurTok.K != Token::CloseParen) {
+              ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact string");
+              return false;
+            }
             if (!consumeToken(ErrStr))
               return false;
           }
         }
-        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero, NonNegative, PowOfTwo);
+        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero,
+                               NonNegative, PowOfTwo, Negative, SignBits);
         Context.setInst(InstName, I);
         return true;
       }

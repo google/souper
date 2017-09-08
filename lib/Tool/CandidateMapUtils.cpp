@@ -143,7 +143,8 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
       llvm::MDNode *ExpectedMD = Inst->getMetadata(ExpectedID);
       if (!ExpectedMD) {
         llvm::errs() << "instruction:\n";
-        Inst->dump();
+        Inst->print(llvm::errs(), /*IsForDebug=*/true);
+        llvm::errs() << "\n";
         llvm::errs() << "unexpected simplification:\n";
         Cand.printFunction(llvm::errs());
         Cand.print(llvm::errs());
@@ -153,7 +154,8 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
       if (ExpectedMD->getNumOperands() != 1 ||
           !mdconst::hasa<ConstantInt>(ExpectedMD->getOperand(0))) {
         llvm::errs() << "instruction:\n";
-        Inst->dump();
+        Inst->print(llvm::errs(), /*IsForDebug=*/true);
+        llvm::errs() << "\n";
         llvm::errs() << "invalid metadata\n";
         OK = false;
         continue;
@@ -163,7 +165,8 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
       Inst->setMetadata(ExpectedID, 0);
       if (ExpectedVal != ActualVal) {
         llvm::errs() << "instruction:\n";
-        Inst->dump();
+        Inst->print(llvm::errs(), /*IsForDebug=*/true);
+        llvm::errs() << "\n";
         llvm::errs() << "unexpected simplification, wanted " << ExpectedVal
                      << ":\n";
         Cand.printFunction(llvm::errs());
@@ -180,7 +183,8 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
         llvm::MDNode *ExpectedMD = Inst.getMetadata(ExpectedID);
         if (ExpectedMD) {
           llvm::errs() << "instruction:\n";
-          Inst.dump();
+          Inst.print(llvm::errs(), /*IsForDebug=*/true);
+          llvm::errs() << "\n";
           llvm::errs() << "expected simplification, none found\n";
           OK = false;
           continue;

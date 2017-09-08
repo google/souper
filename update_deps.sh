@@ -14,9 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-llvm_revision=280312
-klee_commit=a743d7072d9ccf11f96e3df45f25ad07da6ad9d6
 hiredis_commit=8f60ee65327445ed8384290b4040685329eb03c5
+llvm_branch=branches/release_50
+klee_repo=https://github.com/rsas/klee
+klee_branch=pure-bv-qf-llvm-5.0-patch
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
@@ -27,10 +28,9 @@ fi
 llvmdir=third_party/llvm
 llvm_builddir=$llvmdir/$llvm_build_type
 
-svn co -r $llvm_revision https://llvm.org/svn/llvm-project/llvm/trunk $llvmdir
-svn co -r $llvm_revision https://llvm.org/svn/llvm-project/cfe/trunk $llvmdir/tools/clang
-svn co -r $llvm_revision https://llvm.org/svn/llvm-project/compiler-rt/trunk $llvmdir/projects/compiler-rt
-
+svn co https://llvm.org/svn/llvm-project/llvm/${llvm_branch} $llvmdir
+svn co https://llvm.org/svn/llvm-project/cfe/${llvm_branch} $llvmdir/tools/clang
+svn co https://llvm.org/svn/llvm-project/compiler-rt/${llvm_branch} $llvmdir/projects/compiler-rt
 mkdir -p $llvm_builddir
 
 cmake_flags=".. -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DCMAKE_CXX_FLAGS=-DLLVM_ENABLE_STATS=true"
@@ -48,10 +48,8 @@ kleedir=third_party/klee
 if [ -d third_party/klee/.git ] ; then
   (cd $kleedir && git fetch)
 else
-  git clone https://github.com/klee/klee $kleedir
+  git clone -b $klee_branch $klee_repo $kleedir
 fi
-
-(cd $kleedir && git checkout $klee_commit)
 
 hiredisdir=third_party/hiredis
 

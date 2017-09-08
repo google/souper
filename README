@@ -38,7 +38,7 @@ Building Souper
 3. Run 'make' from the build directory.
 
 4. Optionally run 'make check' to run Souper's test suite. To run the test suite
-   under Valgrid, run 'make check LIT_ARGS="-v --vg --vg-leak"' instead. By
+   under Valgrind, run 'make check LIT_ARGS="-v --vg --vg-leak"' instead. By
    default the solver is also run under Valgrind. This can be disable by
    by adding -vg-arg=--trace-children-skip=/usr/local/bin/stp to LIT_ARGS,
    where /usr/local/bin/stp should be replaced by the appropriate solver path.

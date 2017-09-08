@@ -4,8 +4,8 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK: Invalid
-%0:i8 = var (knownBits=xxxx0000)
-%1:i8 = var (knownBits=0000xxxx)
-%2:i8 = and %0, %1
-%3:i1 = eq %2, 0:i8
-cand %3 0:i1
+%0:i32 = var (negative)
+%1:i32 = var (nonNegative)
+%2:i32 = mulnsw %0, %1
+%3:i1 = slt %2, 0:i32
+cand %3 1:i1

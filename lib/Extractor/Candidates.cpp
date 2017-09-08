@@ -28,6 +28,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/KnownBits.h"
 #include "souper/Inst/Inst.h"
 #include "souper/Util/UniqueNameSet.h"
 #include <map>
@@ -41,9 +42,9 @@ static llvm::cl::opt<bool> ExploitBPCs(
     "souper-exploit-blockpcs",
     llvm::cl::desc("Exploit block path conditions (default=false)"),
     llvm::cl::init(false));
-static llvm::cl::opt<bool> HarvestKnownBits(
-    "souper-harvest-known-bits",
-    llvm::cl::desc("Perform known bits analysis (default=true)"),
+static llvm::cl::opt<bool> HarvestDataFlowFacts(
+    "souper-harvest-dataflow-facts",
+    llvm::cl::desc("Perform data flow analysis (default=true)"),
     llvm::cl::init(true));
 
 using namespace llvm;
@@ -157,18 +158,21 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
   if (Opts.NamedArrays)
     Name = V->getName();
   unsigned Width = DL.getTypeSizeInBits(V->getType());
-  APInt KnownZero(Width, 0, false), KnownOne(Width, 0, false);
-  bool NonZero = false, NonNegative = false, PowOfTwo = false;
-  if (HarvestKnownBits)
+  KnownBits Known(Width);
+  bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
+  unsigned NumSignBits = 1;
+  if (HarvestDataFlowFacts)
     if (V->getType()->isIntOrIntVectorTy() ||
         V->getType()->getScalarType()->isPointerTy()) {
-      computeKnownBits(V, KnownZero, KnownOne, DL);
+      computeKnownBits(V, Known, DL);
       NonZero = isKnownNonZero(V, DL);
       NonNegative = isKnownNonNegative(V, DL);
       PowOfTwo = isKnownToBeAPowerOfTwo(V, DL);
+      Negative = isKnownNegative(V, DL);
+      NumSignBits = ComputeNumSignBits(V, DL);
     }
-  return IC.createVar(Width, Name, KnownZero, KnownOne, NonZero, NonNegative,
-                      PowOfTwo);
+  return IC.createVar(Width, Name, Known.Zero, Known.One, NonZero, NonNegative,
+                      PowOfTwo, Negative, NumSignBits);
 }
 
 Inst *ExprBuilder::buildConstant(Constant *c) {
@@ -189,7 +193,7 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
                             gep_type_iterator end) {
   unsigned PSize = DL.getPointerSizeInBits();
   for (auto i = begin; i != end; ++i) {
-    if (StructType *ST = dyn_cast<StructType>(*i)) {
+    if (StructType *ST = i.getStructTypeOrNull()) {
       const StructLayout *SL = DL.getStructLayout(ST);
       ConstantInt *CI = cast<ConstantInt>(i.getOperand());
       uint64_t Addend = SL->getElementOffset((unsigned) CI->getZExtValue());
@@ -198,7 +202,7 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
                          {Ptr, IC.getConst(APInt(PSize, Addend))});
       }
     } else {
-      SequentialType *SET = cast<SequentialType>(*i);
+      SequentialType *SET = cast<SequentialType>(i.getIndexedType());
       uint64_t ElementSize =
         DL.getTypeStoreSize(SET->getElementType());
       Value *Operand = i.getOperand();
@@ -517,7 +521,7 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
       Inst *DI = IC.getConst(APInt(1, true));
       for (auto I = Switch->case_begin(), E = Switch->case_end(); I != E;
            ++I) {
-        Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I.getCaseValue())});
+        Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I->getCaseValue())});
         emplace_back_dedup(PCs, CI, DI);
       }
     }

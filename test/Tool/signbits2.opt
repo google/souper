@@ -1,0 +1,13 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: LGTM
+%0:i16 = var (knownBits=xxxxxxxxx0000000) (signBits=9)
+%1:i1 = slt %0, 0:i16
+pc %1 1:i1
+%2:i8 = var (knownBits=10000000)
+%3:i16 = sext %2
+%4:i1 = eq %0, %3
+cand %4 1:i1

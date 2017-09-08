@@ -159,13 +159,18 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
           << Inst::getKindName(I->K);
       if (I->K == Inst::Var) {
         if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())
-          Out << " (" << Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes)
+          Out << " (knownBits=" << Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes)
               << ")";
-        if (I->NonZero || I->NonNegative || I->PowOfTwo)
-          Out << " (" << Inst::getMoreKnownBitsString(I->NonZero,
-                                                      I->NonNegative,
-                                                      I->PowOfTwo)
-              << ")";
+        if (I->NonNegative)
+          Out << " (nonNegative)";
+        if (I->Negative)
+          Out << " (negative)";
+        if (I->NonZero)
+          Out << " (nonZero)";
+        if (I->PowOfTwo)
+          Out << " (powerOfTwo)";
+        if (I->NumSignBits > 1)
+          Out << " (signBits=" << I->NumSignBits << ")";
       }
       Out << OpsSS.str();
       if (printNames && !I->Name.empty())
@@ -265,17 +270,6 @@ std::string Inst::getKnownBitsString(llvm::APInt Zero, llvm::APInt One) {
         Str.append("x");
     }
   }
-  return Str;
-}
-
-std::string Inst::getMoreKnownBitsString(bool NonZero, bool NonNegative, bool PowOfTwo) {
-  std::string Str;
-  if (NonZero)
-    Str.append("z");
-  if (NonNegative)
-    Str.append("n");
-  if (PowOfTwo)
-    Str.append("p");
   return Str;
 }
 
@@ -525,7 +519,8 @@ Inst *InstContext::getUntypedConst(const llvm::APInt &Val) {
 
 Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
-                             bool NonNegative, bool PowOfTwo) {
+                             bool NonNegative, bool PowOfTwo, bool Negative,
+                             unsigned NumSignBits) {
   auto &InstList = VarInstsByWidth[Width];
   unsigned Number = InstList.size();
   auto I = new Inst;
@@ -540,6 +535,8 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   I->NonZero = NonZero;
   I->NonNegative = NonNegative;
   I->PowOfTwo = PowOfTwo;
+  I->Negative = Negative;
+  I->NumSignBits = NumSignBits;
   return I;
 }
 

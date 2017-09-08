@@ -1,0 +1,14 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: %0:i16 = var (knownBits=xxxxx0xxxxxxxxxx) (signBits=8)
+; CHECK-NEXT: %1:i16 = ashr %0, 8:i16
+; CHECK-NEXT: %2:i1 = eq 0:i16, %1
+; CHECK-NEXT: cand %2 1:i1
+
+%0:i16 = var (knownBits=xxxxx0xxxxxxxxxx) (signBits=8)
+%1:i16 = ashr %0, 8:i16
+%2:i1 = eq %1, 0:i16
+infer %2

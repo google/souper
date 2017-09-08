@@ -81,6 +81,8 @@ struct ExprBuilder {
   std::map<Inst *, ref<Expr>> NonZeroBitsMap;
   std::map<Inst *, ref<Expr>> NonNegBitsMap;
   std::map<Inst *, ref<Expr>> PowerTwoBitsMap;
+  std::map<Inst *, ref<Expr>> NegBitsMap;
+  std::map<Inst *, ref<Expr>> SignBitsMap;
   std::map<Block *, BlockPCPredMap> BlockPCMap;
   std::vector<std::unique_ptr<Array>> &Arrays;
   std::vector<Inst *> &ArrayVars;
@@ -119,6 +121,8 @@ struct ExprBuilder {
   ref<Expr> getNonZeroBitsMapping(Inst *I);
   ref<Expr> getNonNegBitsMapping(Inst *I);
   ref<Expr> getPowerTwoBitsMapping(Inst *I);
+  ref<Expr> getNegBitsMapping(Inst *I);
+  ref<Expr> getSignBitsMapping(Inst *I);
   std::vector<ref<Expr >> getBlockPredicates(Inst *I);
   ref<Expr> getUBInstCondition();
   ref<Expr> getBlockPCs();
@@ -176,6 +180,16 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
         PowerExpr = OrExpr::create(PowerExpr, EqExpr::create(Var, ShlExpr::create(klee::ConstantExpr::create(1, Width),
                                                                                   klee::ConstantExpr::create(i, Width))));
       PowerTwoBitsMap[Origin] = PowerExpr;
+    }
+    if (Origin->Negative)
+      NegBitsMap[Origin] = SltExpr::create(Var, klee::ConstantExpr::create(0, Width));
+    if (Origin->NumSignBits > 1) {
+      ref<Expr> Res = AShrExpr::create(Var, klee::ConstantExpr::create(Width - Origin->NumSignBits, Width));
+      ref<Expr> TestOnes = AShrExpr::create(ShlExpr::create(klee::ConstantExpr::create(1, Width),
+                                                            klee::ConstantExpr::create(Width - 1, Width)),
+                                            klee::ConstantExpr::create(Width - 1, Width));
+      SignBitsMap[Origin] = OrExpr::create(EqExpr::create(Res, TestOnes),
+                                           EqExpr::create(Res, klee::ConstantExpr::create(0, Width)));
     }
   }
   return Var;
@@ -1065,8 +1079,16 @@ ref<Expr> ExprBuilder::getNonNegBitsMapping(Inst *I) {
   return NonNegBitsMap[I];
 }
 
+ref<Expr> ExprBuilder::getNegBitsMapping(Inst *I) {
+  return NegBitsMap[I];
+}
+
 ref<Expr> ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
   return PowerTwoBitsMap[I];
+}
+
+ref<Expr> ExprBuilder::getSignBitsMapping(Inst *I) {
+  return SignBitsMap[I];
 }
 
 // Return an expression which must be proven valid for the candidate to apply.
@@ -1091,6 +1113,10 @@ llvm::Optional<CandidateExpr> souper::GetCandidateExprForReplacement(
         Ante = AndExpr::create(Ante, EB.getNonNegBitsMapping(I));
       if (I->PowOfTwo)
         Ante = AndExpr::create(Ante, EB.getPowerTwoBitsMapping(I));
+      if (I->Negative)
+        Ante = AndExpr::create(Ante, EB.getNegBitsMapping(I));
+      if (I->NumSignBits > 1)
+        Ante = AndExpr::create(Ante, EB.getSignBitsMapping(I));
     }
   }
   // Build PCs

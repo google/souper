@@ -14,12 +14,11 @@
 
 #include "klee/Solver.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/DataStream.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -50,6 +49,19 @@ static cl::opt<bool>
 Check("check", cl::desc("Check input for expected results"),
     cl::init(false));
 
+static ExitOnError ExitOnErr;
+
+// adapted from llvm-dis.cpp
+static std::unique_ptr<Module> openInputFile(LLVMContext &Context) {
+  std::unique_ptr<MemoryBuffer> MB =
+      ExitOnErr(errorOrToExpected(MemoryBuffer::getFileOrSTDIN(InputFilename)));
+  std::unique_ptr<Module> M =
+      ExitOnErr(getOwningLazyBitcodeModule(std::move(MB), Context,
+                                           /*ShouldLazyLoadMetadata=*/true));
+  ExitOnErr(M->materializeAll());
+  return M;
+}
+
 int main(int argc, char **argv) {
   sys::PrintStackTraceOnErrorSignal(argv[0]);
   llvm::PrettyStackTraceProgram X(argc, argv);
@@ -69,17 +81,7 @@ int main(int argc, char **argv) {
     DisplayFilename = InputFilename;
 
   std::string ErrorMessage;
-  std::unique_ptr<Module> M;
-
-  // Use the bitcode streaming interface
-  if (auto streamer = getDataFileStreamer(InputFilename, &ErrorMessage)) {
-    auto ModOrError = getStreamedBitcodeModule(DisplayFilename,
-                                               std::move(streamer), Context);
-    if (auto EC = ModOrError.getError())
-      ErrorMessage = EC.message();
-    else
-      M = std::move(ModOrError.get());
-  }
+  std::unique_ptr<Module> M = openInputFile(Context);
 
   if (M.get() == 0) {
     if (ErrorMessage.size())

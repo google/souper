@@ -1,0 +1,19 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; Addition can have at most one carry bit. The result is known to have at least
+; one less than the minimum of sign bits of two operands.
+
+; CHECK: %0:i8 = var (signBits=6)
+; CHECK-NEXT: %1:i8 = var (signBits=4)
+; CHECK-NEXT: %2:i8 = add %0, %1
+; CHECK-NEXT: %3:i1 = slt %2, 31:i8
+; CHECK-NEXT: cand %3 1:i1
+
+%0:i8 = var (signBits=6)
+%1:i8 = var (signBits=4)
+%2:i8 = add %0, %1
+%3:i1 = slt %2, 31:i8
+infer %3
