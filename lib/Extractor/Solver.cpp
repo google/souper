@@ -105,7 +105,7 @@ public:
                         Inst *LHS, Inst *&RHS, InstContext &IC) override {
     std::error_code EC;
 
-    if (0 && LHS->Width == 1) {
+    if (LHS->Width == 1) {
       std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
                                    IC.getConst(APInt(1, false)) };
       for (auto I : Guesses) {
@@ -168,10 +168,10 @@ public:
       std::vector<Inst *> Guesses;
       std::set<Inst *> Visited;
       
-      llvm::errs() << "=============================================\n";
+      //llvm::errs() << "=============================================\n";
       ReplacementContext Context;
       std::string LHSStr = GetReplacementLHSString(BPCs, PCs, LHS, Context);
-      llvm::errs() << "LHS width " << LHS->Width << ": " << LHSStr << "\n";
+      //llvm::errs() << "LHS width " << LHS->Width << ": " << LHSStr << "\n";
       
       findVars(LHS, Visited, Guesses, LHS->Width);
       RHS = 0;
@@ -181,15 +181,15 @@ public:
           continue;
         InstMapping Mapping(LHS, I);
         std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
-        llvm::errs() << "query for ";
-        llvm::errs() << I->getKindName(I->K);
+        //llvm::errs() << "query for ";
+        //llvm::errs() << I->getKindName(I->K);
         //Context.printInst(I, llvm::errs(), true);
-        llvm::errs() << ": " << Query << "\n";
+        //llvm::errs() << ": " << Query << "\n";
         if (Query.empty())
           continue;
         bool IsSat;
         EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
-        llvm::errs() << "Works? " << !IsSat << "\n";
+        //llvm::errs() << "Works? " << !IsSat << "\n";
         if (EC)
           continue;
         if (!IsSat) {
@@ -198,7 +198,7 @@ public:
         }
         ++Tried;
       }
-      llvm::errs() << "Solution count = " << Count << " out of " << Tried << "\n\n";
+      //llvm::errs() << "Solution count = " << Count << " out of " << Tried << "\n\n";
       if (Count > 0) {
         return EC;
       }
