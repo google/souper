@@ -1,0 +1,13 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: LGTM
+
+%0:i32 = var
+%1:i32 = add -1:i32, %0
+%2:i32 = and %0, %1
+infer %2 (demandedBits=00000000000000000000000000000001)
+
+result 32:i32

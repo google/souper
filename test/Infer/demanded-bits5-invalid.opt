@@ -1,0 +1,10 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-iN %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: Failed to infer RHS
+
+%0:i8 = var
+%1 = shl %0, 3
+infer %1 (demandedBits=00001111)

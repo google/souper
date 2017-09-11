@@ -16,6 +16,7 @@
 #define SOUPER_EXTRACTOR_CANDIDATES_H
 
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Analysis/DemandedBits.h"
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Inst/Inst.h"
 #include <map>
@@ -113,8 +114,8 @@ struct ExprBuilderContext {
 };
 
 FunctionCandidateSet ExtractCandidatesFromPass(
-    llvm::Function *F, const llvm::LoopInfo *LI, InstContext &IC,
-    ExprBuilderContext &EBC,
+    llvm::Function *F, const llvm::LoopInfo *LI, llvm::DemandedBits *DB,
+    InstContext &IC, ExprBuilderContext &EBC,
     const ExprBuilderOptions &Opts = ExprBuilderOptions());
 
 FunctionCandidateSet ExtractCandidates(

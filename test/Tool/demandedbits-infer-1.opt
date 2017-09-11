@@ -1,0 +1,12 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement -souper-infer-iN %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: %0:i64 = var
+; CHECK-NEXT: %1:i64 = lshr %0, 2:i64 
+; CHECK-NEXT: cand %1 0:i64 (demandedBits=1100000000000000000000000000000000000000000000000000000000000000)
+
+%0:i64 = var
+%1:i64 = lshr %0, 2:i64
+infer %1 (demandedBits=1100000000000000000000000000000000000000000000000000000000000000)
