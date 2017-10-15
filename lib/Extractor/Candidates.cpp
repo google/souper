@@ -627,10 +627,8 @@ void ExprBuilder::addPathConditions(BlockPCs &BPCs,
       if (Pred->getSinglePredecessor()) {
         addPathConditions(BPCs, PCs, VisitedBlocks, Pred);
       }
-      else {
-        // In case the predecessor is a br or switch instruction.
-        addPC(BB, Pred, PCs);
-      }
+      // In case the predecessor is a br or switch instruction.
+      addPC(BB, Pred, PCs);
       for (auto PC : PCs)
         BPCs.emplace_back(BlockPCMapping(BI.B, i, PC));
     }
