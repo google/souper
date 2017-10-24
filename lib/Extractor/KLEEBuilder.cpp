@@ -174,12 +174,12 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
       NonZeroBitsMap[Origin] = NeExpr::create(Var, klee::ConstantExpr::create(0, Width));
     if (Origin->NonNegative)
       NonNegBitsMap[Origin] = SleExpr::create(klee::ConstantExpr::create(0, Width), Var);
-    ref<Expr> PowerExpr = klee::ConstantExpr::alloc(0, 1);
     if (Origin->PowOfTwo) {
-      for (unsigned i=0; i<Width-1; ++i)
-        PowerExpr = OrExpr::create(PowerExpr, EqExpr::create(Var, ShlExpr::create(klee::ConstantExpr::create(1, Width),
-                                                                                  klee::ConstantExpr::create(i, Width))));
-      PowerTwoBitsMap[Origin] = PowerExpr;
+      ref<Expr> Zero = klee::ConstantExpr::create(0, Width);
+      PowerTwoBitsMap[Origin] = AndExpr::create(NeExpr::create(Var, Zero),
+                                                EqExpr::create(AndExpr::create(Var,
+                                                SubExpr::create(Var, klee::ConstantExpr::create(1, Width))),
+                                                Zero));
     }
     if (Origin->Negative)
       NegBitsMap[Origin] = SltExpr::create(Var, klee::ConstantExpr::create(0, Width));
