@@ -59,8 +59,16 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                           Inst *TargetLHS, Inst *&RHS,
                                           InstContext &IC, unsigned Timeout) {
   std::error_code EC;
-  Inst *TrueConst = IC.getConst(APInt(1, true));
-  Inst *FalseConst = IC.getConst(APInt(1, false));
+
+  // init local refs
+  LSMTSolver = SMTSolver;
+  LBPCs = &BPCs;
+  LPCs = &PCs;
+  LIC = &IC;
+  LTimeout = Timeout;
+
+  TrueConst = IC.getConst(APInt(1, true));
+  FalseConst = IC.getConst(APInt(1, false));
   LHS = TargetLHS;
   RHS = 0;
 
@@ -105,6 +113,12 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   // we'll have to copy WiringQuery and replace its inputs with the new
   // concrete values from S
   std::vector<std::map<Inst *, Inst *>> S;
+  // Ask the solver for four initial concrete inputs.
+  // The number 4 was derived experimentally giving a good overall speed-up
+  // for both small and big synthesis queries
+  EC = getInitialConcreteInputs(S, 4);
+  if (EC)
+    return EC;
 
   // Not-working candidate programs that contain constants must be forbidden
   // explicitly because constants are not constrainted by the inputs. Still, it
@@ -112,41 +126,6 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   // of attempts per such a candidate wiring via cmd flag MaxWiringAttempts
   // (default value: 10)
   std::map<ProgramWiring, unsigned> NotWorkingConstWirings;
-
-  // Ask the solver for four initial concrete inputs.
-  // This number was derived experimentally giving a good overall speed-up
-  // for both small and big synthesis queries
-  auto InputPCs = PCs;
-  for (unsigned J = 0; J < 4; ++J) {
-    std::vector<Inst *> ModelInsts;
-    std::vector<llvm::APInt> ModelVals;
-    InstMapping Mapping(LHS, IC.createVar(LHS->Width, "output"));
-    // Negate the query to get a SAT model
-    std::string QueryStr = BuildQuery(BPCs, InputPCs, Mapping,
-                                      &ModelInsts, /*Negate=*/true);
-    if (QueryStr.empty())
-      return std::make_error_code(std::errc::value_too_large);
-    bool IsSat;
-    EC = SMTSolver->isSatisfiable(QueryStr, IsSat, ModelInsts.size(),
-                                  &ModelVals, Timeout);
-    if (EC)
-      return EC;
-
-    if (!IsSat)
-      break;
-
-    std::map<Inst *, Inst *> ConcreteInputs;
-    for (unsigned K = 0; K < ModelInsts.size(); ++K) {
-      auto Name = ModelInsts[K]->Name;
-      if (Name.find(INPUT_PREFIX) != std::string::npos) {
-        auto Input = ModelInsts[K];
-        ConcreteInputs[Input] = IC.getConst(ModelVals[K]);
-        Inst *Ne = IC.getInst(Inst::Ne, 1, {Input, IC.getConst(ModelVals[K])});
-        InputPCs.emplace_back(Ne, TrueConst);
-      }
-    }
-    S.push_back(ConcreteInputs);
-  }
 
   // Set the maximum number of components
   int MaxCompNum;
@@ -182,32 +161,9 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     while (true) {
       Inst *Query = TrueConst;
       // Put each set of concrete inputs into a separate copy of the WiringQuery
-      for (unsigned K = 0; K < S.size(); ++K) {
-        auto InputMap = S[K];
-        if (DebugLevel > 2) {
-          for (auto const &Input : InputMap) {
-            if (Input.first->Name.find(COMP_INPUT_PREFIX) != std::string::npos)
-              continue;
-            llvm::outs() << "setting input " << Input.first->Name
-                         << " to " << Input.second->Val << "\n";
-          }
-        }
-        if (K > 0) {
-          // Starting with the second concrete input set,
-          // copy component input variables for query separation
-          for (auto const &E : LocInstMap) {
-            if (E.first.find(COMP_INPUT_PREFIX) != std::string::npos) {
-              auto In = E.second.second;
-              std::string Name = E.first + LOC_SEP + std::to_string(Refinements);
-              InputMap[In] = IC.createVar(In->Width, Name);
-            }
-          }
-        }
-        Inst *Copy = getInstCopy(WiringQuery, IC, InputMap);
-        Query = IC.getInst(Inst::And, 1, {Query, Copy});
-        Query->DemandedBits = APInt::getAllOnesValue(Query->Width);
-      }
       // Solve the synthesis constraint.
+      Query = initConcreteInputWirings(Query, WiringQuery, Refinements, S);
+
       // Each solution corresponds to a syntactically distinct and well-formed
       // straight-line program obtained by composition of given components
       std::vector<Inst *> ModelInsts;
@@ -326,48 +282,9 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       // Constants are not constrained by the inputs, thus, we must explicitly
       // constrain the not-working cand wiring incl. the constants and forbid
       // the wiring completely after MaxWiringAttempts is reached
-      Inst *Ante = TrueConst;
       if (hasConst(Cand)) {
-        auto WI = NotWorkingConstWirings.find(CandWiring);
-        if (WI == NotWorkingConstWirings.end()) {
-          NotWorkingConstWirings[CandWiring] = 0;
-          continue;
-        }
-        WI->second++;
-        if (DebugLevel > 2) {
-          llvm::outs() << "cand with constants, constraining wiring\n";
-          if (WI->second == MaxWiringAttempts)
-            llvm::outs() << "cand reached MaxWiringAttempts "
-              << "(" << MaxWiringAttempts << "), forbidding\n";
-        }
-        for (auto const &Pair : CandWiring) {
-          auto const &L_x = Pair.first;
-          auto const &L_y = Pair.second;
-          if (DebugLevel > 3)
-            llvm::outs() << getLocVarStr(L_x.first) << " == "
-              << getLocVarStr(L_y.first) << "\n";
-          // Constrain the wiring
-          Inst *Eq = IC.getInst(Inst::Eq, 1, {L_x.second, L_y.second});
-          Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
-          // If the cand is a constant, forbid the wiring immediately
-          if (Cand->K == Inst::Const)
-            continue;
-          // Otherwise, constrain the wiring with constants as long as
-          // MaxWiringAttempts is not reached. Afterwards, the wiring
-          // will be banned (without constants)
-          if (WI->second < MaxWiringAttempts) {
-            auto CI = ConstValMap.find(L_y.first);
-            if (CI == ConstValMap.end())
-              continue;
-            auto const &Cons = CompInstMap[L_y.first];
-            if (DebugLevel > 2)
-              llvm::outs() << "with constant " << getLocVarStr(L_y.first)
-                << " == " << CI->second << "\n";
-            Eq = IC.getInst(Inst::Eq, 1, {Cons, IC.getConst(CI->second)});
-            Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
-          }
-        }
-        LoopPCs.emplace_back(Ante, IC.getConst(APInt(1, false)));
+        constrainConstWiring(Cand, CandWiring, NotWorkingConstWirings,
+                             ConstValMap, LoopPCs);
       } else {
         // Forbid invalid constant-free wirings explicitly in the future,
         // so they don't show up in the wiring result
@@ -1368,6 +1285,126 @@ bool InstSynthesis::hasConst(Inst *I) {
   for (auto Iz : I->orderedOps())
     Res |= hasConst(Iz);
   return Res;
+}
+
+std::error_code InstSynthesis::getInitialConcreteInputs(std::vector<std::map<Inst *, Inst *>> &S,
+                                         unsigned NumInputs) {
+  std::error_code EC;
+
+  auto InputPCs = *LPCs;
+  for (unsigned J = 0; J < NumInputs; ++J) {
+    std::vector<Inst *> ModelInsts;
+    std::vector<llvm::APInt> ModelVals;
+    InstMapping Mapping(LHS, LIC->createVar(LHS->Width, "output"));
+    // Negate the query to get a SAT model
+    std::string QueryStr = BuildQuery(*LBPCs, InputPCs, Mapping,
+                                      &ModelInsts, /*Negate=*/true);
+    if (QueryStr.empty())
+      return std::make_error_code(std::errc::value_too_large);
+    bool IsSat;
+    EC = LSMTSolver->isSatisfiable(QueryStr, IsSat, ModelInsts.size(),
+                                   &ModelVals, LTimeout);
+    if (EC)
+      return EC;
+
+    if (!IsSat)
+      break;
+
+    std::map<Inst *, Inst *> ConcreteInputs;
+    for (unsigned K = 0; K < ModelInsts.size(); ++K) {
+      auto Name = ModelInsts[K]->Name;
+      if (Name.find(INPUT_PREFIX) != std::string::npos) {
+        auto Input = ModelInsts[K];
+        ConcreteInputs[Input] = LIC->getConst(ModelVals[K]);
+        Inst *Ne = LIC->getInst(Inst::Ne, 1, {Input, LIC->getConst(ModelVals[K])});
+        InputPCs.emplace_back(Ne, TrueConst);
+      }
+    }
+    S.push_back(ConcreteInputs);
+  }
+
+  return EC;
+}
+
+Inst *InstSynthesis::initConcreteInputWirings(Inst *Query, Inst *WiringQuery,
+                                              unsigned Refinements,
+                                              std::vector<std::map<Inst *, Inst *>> &S) {
+  for (unsigned K = 0; K < S.size(); ++K) {
+    auto InputMap = S[K];
+    if (DebugLevel > 2) {
+      for (auto const &Input : InputMap) {
+        if (Input.first->Name.find(COMP_INPUT_PREFIX) != std::string::npos)
+          continue;
+        llvm::outs() << "setting input " << Input.first->Name
+                     << " to " << Input.second->Val << "\n";
+      }
+    }
+    if (K > 0) {
+      // Starting with the second concrete input set,
+      // copy component input variables for query separation
+      for (auto const &E : LocInstMap) {
+        if (E.first.find(COMP_INPUT_PREFIX) != std::string::npos) {
+          auto In = E.second.second;
+          std::string Name = E.first + LOC_SEP + std::to_string(Refinements);
+          InputMap[In] = LIC->createVar(In->Width, Name);
+        }
+      }
+    }
+    Inst *Copy = getInstCopy(WiringQuery, *LIC, InputMap);
+    Query = LIC->getInst(Inst::And, 1, {Query, Copy});
+    Query->DemandedBits = APInt::getAllOnesValue(Query->Width);
+  }
+
+  return Query;
+}
+
+void InstSynthesis::constrainConstWiring(const Inst *Cand,
+                                         const ProgramWiring &CandWiring,
+                                         std::map<ProgramWiring, unsigned> &NotWorkingConstWirings,
+                                         const std::map<LocVar, llvm::APInt> &ConstValMap,
+                                         std::vector<InstMapping> &LoopPCs) {
+  Inst *Ante = TrueConst;
+
+  auto WI = NotWorkingConstWirings.find(CandWiring);
+  if (WI == NotWorkingConstWirings.end()) {
+    NotWorkingConstWirings[CandWiring] = 0;
+    return;
+  }
+  WI->second++;
+  if (DebugLevel > 2) {
+    llvm::outs() << "cand with constants, constraining wiring\n";
+    if (WI->second == MaxWiringAttempts)
+      llvm::outs() << "cand reached MaxWiringAttempts "
+        << "(" << MaxWiringAttempts << "), forbidding\n";
+  }
+  for (auto const &Pair : CandWiring) {
+    auto const &L_x = Pair.first;
+    auto const &L_y = Pair.second;
+    if (DebugLevel > 3)
+      llvm::outs() << getLocVarStr(L_x.first) << " == "
+        << getLocVarStr(L_y.first) << "\n";
+    // Constrain the wiring
+    Inst *Eq = LIC->getInst(Inst::Eq, 1, {L_x.second, L_y.second});
+    Ante = LIC->getInst(Inst::And, 1, {Ante, Eq});
+    // If the cand is a constant, forbid the wiring immediately
+    if (Cand->K == Inst::Const)
+      continue;
+    // Otherwise, constrain the wiring with constants as long as
+    // MaxWiringAttempts is not reached. Afterwards, the wiring
+    // will be banned (without constants)
+    if (WI->second < MaxWiringAttempts) {
+      auto CI = ConstValMap.find(L_y.first);
+      if (CI == ConstValMap.end())
+        continue;
+      auto const &Cons = CompInstMap[L_y.first];
+      if (DebugLevel > 2)
+        llvm::outs() << "with constant " << getLocVarStr(L_y.first)
+          << " == " << CI->second << "\n";
+      Eq = LIC->getInst(Inst::Eq, 1, {Cons, LIC->getConst(CI->second)});
+      Ante = LIC->getInst(Inst::And, 1, {Ante, Eq});
+    }
+  }
+  LoopPCs.emplace_back(Ante, LIC->getConst(APInt(1, false)));
 }
 
 }

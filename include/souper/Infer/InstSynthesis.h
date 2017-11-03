@@ -135,6 +135,16 @@ public:
                              InstContext &IC, unsigned Timeout);
 
 private:
+  /// Local references
+  SMTLIBSolver *LSMTSolver;
+  const BlockPCs *LBPCs;
+  const std::vector<InstMapping> *LPCs;
+  InstContext *LIC;
+  unsigned LTimeout;
+
+  Inst *TrueConst;
+  Inst *FalseConst;
+
   /// LHS to synthesize
   Inst *LHS;
   /// Replacement context for inst printing
@@ -288,6 +298,16 @@ private:
   int costHelper(Inst *I, std::set<Inst *> &Visited);
   int cost(Inst *I);
   bool hasConst(Inst *I);
+  std::error_code getInitialConcreteInputs(std::vector<std::map<Inst *, Inst *>> &S,
+                                           unsigned NumInputs);
+  Inst *initConcreteInputWirings(Inst *Query, Inst *WiringQuery,
+                                 unsigned Refinements,
+                                 std::vector<std::map<Inst *, Inst *>> &S);
+  void constrainConstWiring(const Inst *Cand,
+                            const ProgramWiring &CandWiring,
+                            std::map<ProgramWiring, unsigned> &NotWorkingConstWirings,
+                            const std::map<LocVar, llvm::APInt> &ConstValMap,
+                            std::vector<InstMapping> &LoopPCs);
 
 };
 
