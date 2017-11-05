@@ -747,7 +747,6 @@ Inst *InstSynthesis::getInputDefinednessConstraint(InstContext &IC) {
   if (DebugLevel > 2)
     llvm::outs() << "input-definedness constraints:\n";
   for (auto const &L_x : P) {
-    unsigned Width = CompInstMap[L_x.first]->Width;
     Inst *Ante = IC.getConst(APInt(1, false));
     // Inputs
     for (auto const &In : I) {
@@ -787,7 +786,6 @@ Inst *InstSynthesis::getOutputDefinednessConstraint(InstContext &IC) {
 
   if (DebugLevel > 2)
     llvm::outs() << "output-definedness constraints:\n";
-  unsigned Width = CompInstMap[O.first]->Width;
   // Inputs
   for (auto const &In : I) {
     if (isWiringInvalid(In.first, O.first))
