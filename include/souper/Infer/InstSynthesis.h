@@ -294,6 +294,7 @@ private:
   bool isWiringInvalid(const LocVar &Left, const LocVar &Right);
   void forbidInvalidCandWiring(const ProgramWiring &CandWiring,
                                std::vector<InstMapping> &LoopPCs,
+                               std::vector<InstMapping> &WiringPCs,
                                InstContext &IC);
   int costHelper(Inst *I, std::set<Inst *> &Visited);
   int cost(Inst *I);
@@ -307,7 +308,8 @@ private:
                             const ProgramWiring &CandWiring,
                             std::map<ProgramWiring, unsigned> &NotWorkingConstWirings,
                             const std::map<LocVar, llvm::APInt> &ConstValMap,
-                            std::vector<InstMapping> &LoopPCs);
+                            std::vector<InstMapping> &LoopPCs,
+                            std::vector<InstMapping> &WiringPCs);
 
 };
 

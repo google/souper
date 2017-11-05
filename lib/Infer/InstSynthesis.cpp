@@ -219,7 +219,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       if (!IgnoreCost && Benefit <= 0) {
         if (DebugLevel > 1)
           llvm::outs() << "candidate has no benefit\n";
-        forbidInvalidCandWiring(CandWiring, LoopPCs, IC);
+        forbidInvalidCandWiring(CandWiring, LoopPCs, WiringPCs, IC);
         continue;
       }
 
@@ -284,11 +284,11 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       // the wiring completely after MaxWiringAttempts is reached
       if (hasConst(Cand)) {
         constrainConstWiring(Cand, CandWiring, NotWorkingConstWirings,
-                             ConstValMap, LoopPCs);
+                             ConstValMap, LoopPCs, WiringPCs);
       } else {
         // Forbid invalid constant-free wirings explicitly in the future,
         // so they don't show up in the wiring result
-        forbidInvalidCandWiring(CandWiring, LoopPCs, IC);
+        forbidInvalidCandWiring(CandWiring, LoopPCs, WiringPCs, IC);
       }
     }
   }
@@ -1246,6 +1246,7 @@ bool InstSynthesis::isWiringInvalid(const LocVar &Left, const LocVar &Right) {
 
 void InstSynthesis::forbidInvalidCandWiring(const ProgramWiring &CandWiring,
                                             std::vector<InstMapping> &LoopPCs,
+                                            std::vector<InstMapping> &WiringPCs,
                                             InstContext &IC) {
   Inst *Ante = IC.getConst(APInt(1, true));
   if (DebugLevel > 2)
@@ -1260,6 +1261,7 @@ void InstSynthesis::forbidInvalidCandWiring(const ProgramWiring &CandWiring,
     Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
   }
   LoopPCs.emplace_back(Ante, IC.getConst(APInt(1, false)));
+  WiringPCs.emplace_back(Ante, IC.getConst(APInt(1, false)));
 }
 
 int InstSynthesis::costHelper(Inst *I, std::set<Inst *> &Visited) {
@@ -1360,15 +1362,18 @@ void InstSynthesis::constrainConstWiring(const Inst *Cand,
                                          const ProgramWiring &CandWiring,
                                          std::map<ProgramWiring, unsigned> &NotWorkingConstWirings,
                                          const std::map<LocVar, llvm::APInt> &ConstValMap,
-                                         std::vector<InstMapping> &LoopPCs) {
+                                         std::vector<InstMapping> &LoopPCs,
+                                         std::vector<InstMapping> &WiringPCs) {
   Inst *Ante = TrueConst;
 
+  unsigned Cnt = 1;
   auto WI = NotWorkingConstWirings.find(CandWiring);
   if (WI == NotWorkingConstWirings.end()) {
-    NotWorkingConstWirings[CandWiring] = 0;
-    return;
+    NotWorkingConstWirings[CandWiring] = Cnt;
+  } else {
+    WI->second++;
+    Cnt = WI->second;
   }
-  WI->second++;
   if (DebugLevel > 2) {
     llvm::outs() << "cand with constants, constraining wiring\n";
     if (WI->second == MaxWiringAttempts)
@@ -1390,7 +1395,7 @@ void InstSynthesis::constrainConstWiring(const Inst *Cand,
     // Otherwise, constrain the wiring with constants as long as
     // MaxWiringAttempts is not reached. Afterwards, the wiring
     // will be banned (without constants)
-    if (WI->second < MaxWiringAttempts) {
+    if (Cnt < MaxWiringAttempts) {
       auto CI = ConstValMap.find(L_y.first);
       if (CI == ConstValMap.end())
         continue;
@@ -1403,6 +1408,7 @@ void InstSynthesis::constrainConstWiring(const Inst *Cand,
     }
   }
   LoopPCs.emplace_back(Ante, LIC->getConst(APInt(1, false)));
+  WiringPCs.emplace_back(Ante, LIC->getConst(APInt(1, false)));
 }
 
 }
