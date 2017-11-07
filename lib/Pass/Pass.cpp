@@ -258,8 +258,7 @@ public:
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
         if (DynamicProfile)
           dynamicProfile(F, Cand);
-        BasicBlock::iterator BI(I);
-        ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
+        I->replaceAllUsesWith(CI);
         Changed = true;
       } else {
         if (DebugSouperPass)
