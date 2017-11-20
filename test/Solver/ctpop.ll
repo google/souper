@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper %solver -check -souper-infer-iN=false %t
 ; This test case input in hex is 0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
 declare i256 @llvm.ctpop.i256(i256) nounwind readnone

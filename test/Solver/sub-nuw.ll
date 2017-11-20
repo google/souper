@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper %solver -check -souper-infer-iN=false %t
 
 define i256 @foo(i256 %a, i256 %b) #0 {
 entry:
