@@ -258,7 +258,7 @@ void ReplacementContext::setBlock(llvm::StringRef Name, Block *B) {
 
 std::string Inst::getKnownBitsString(llvm::APInt Zero, llvm::APInt One) {
   std::string Str;
-  for (int K=Zero.getBitWidth()-1; K>=0; --K) {
+  for (int K = Zero.getBitWidth() - 1; K >= 0; --K) {
     if (Zero[K] && One[K])
       llvm_unreachable("KnownZero and KnownOnes bit can't be set to 1 together");
     if (Zero[K]) {
@@ -269,6 +269,17 @@ std::string Inst::getKnownBitsString(llvm::APInt Zero, llvm::APInt One) {
       else
         Str.append("x");
     }
+  }
+  return Str;
+}
+
+std::string Inst::getDemandedBitsString(llvm::APInt DBVal) {
+  std::string Str;
+  for (int K = DBVal.getBitWidth() - 1; K >= 0; --K) {
+    if (DBVal[K])
+      Str.append("1");
+    else
+      Str.append("0");
   }
   return Str;
 }
@@ -654,7 +665,13 @@ void souper::PrintReplacement(llvm::raw_ostream &Out,
   Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(Mapping.LHS, Out, printNames);
   std::string RRef = Context.printInst(Mapping.RHS, Out, printNames);
-  Out << "cand " << SRef << " " << RRef << '\n';
+  if (!Mapping.LHS->DemandedBits.isAllOnesValue()) {
+    Out << "cand " << SRef << " " << RRef << " (" << "demandedBits="
+        << Inst::getDemandedBitsString(Mapping.LHS->DemandedBits)
+        << ")" << '\n';
+  } else {
+    Out << "cand " << SRef << " " << RRef << '\n';
+  }
 }
 
 std::string souper::GetReplacementString(const BlockPCs &BPCs,
@@ -677,7 +694,13 @@ void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
   Context.printPCs(PCs, Out, printNames);
   Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(LHS, Out, printNames);
-  Out << "infer " << SRef << '\n';
+  if (!LHS->DemandedBits.isAllOnesValue()) {
+    Out << "infer " << SRef << " (" << "demandedBits="
+        << Inst::getDemandedBitsString(LHS->DemandedBits)
+        << ")" << '\n';
+  } else {
+    Out << "infer " << SRef << '\n';
+  }
 }
 
 std::string souper::GetReplacementLHSString(const BlockPCs &BPCs,

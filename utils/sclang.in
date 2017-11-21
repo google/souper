@@ -88,6 +88,9 @@ cached inferences.
 SOUPER_NO_HARVEST_DATAFLOW_FACTS -- Don't query LLVM's bit-level dataflow
 analyses when harvesting.
 
+SOUPER_HARVEST_DEMANDED_BITS -- Query LLVM's demanded bits dataflow
+analysis when harvesting.
+
 SOUPER_NO_INFER -- Don't run inference at all; used for populating the
 cache.
 
@@ -221,6 +224,9 @@ if ($souper) {
     }
     if (exists $ENV{"SOUPER_NO_HARVEST_DATAFLOW_FACTS"}) {
         push @ARGV, ("-mllvm", "-souper-harvest-dataflow-facts=false");
+    }
+    if (exists $ENV{"SOUPER_HARVEST_DEMANDED_BITS"}) {
+        push @ARGV, ("-mllvm", "-souper-harvest-demanded-bits");
     }
 }
 

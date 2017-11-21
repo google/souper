@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: llvm-as -o %t %s
-; RUN: %souper %solver -souper-exploit-blockpcs=false -check %t
+; RUN: %souper %solver -souper-exploit-blockpcs=false -check -souper-infer-iN=false %t
 
 define i32 @foo(i32 %x) {
 entry:

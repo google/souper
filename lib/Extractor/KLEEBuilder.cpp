@@ -174,12 +174,12 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
       NonZeroBitsMap[Origin] = NeExpr::create(Var, klee::ConstantExpr::create(0, Width));
     if (Origin->NonNegative)
       NonNegBitsMap[Origin] = SleExpr::create(klee::ConstantExpr::create(0, Width), Var);
-    ref<Expr> PowerExpr = klee::ConstantExpr::alloc(0, 1);
     if (Origin->PowOfTwo) {
-      for (unsigned i=0; i<Width-1; ++i)
-        PowerExpr = OrExpr::create(PowerExpr, EqExpr::create(Var, ShlExpr::create(klee::ConstantExpr::create(1, Width),
-                                                                                  klee::ConstantExpr::create(i, Width))));
-      PowerTwoBitsMap[Origin] = PowerExpr;
+      ref<Expr> Zero = klee::ConstantExpr::create(0, Width);
+      PowerTwoBitsMap[Origin] = AndExpr::create(NeExpr::create(Var, Zero),
+                                                EqExpr::create(AndExpr::create(Var,
+                                                SubExpr::create(Var, klee::ConstantExpr::create(1, Width))),
+                                                Zero));
     }
     if (Origin->Negative)
       NegBitsMap[Origin] = SltExpr::create(Var, klee::ConstantExpr::create(0, Width));
@@ -1101,6 +1101,9 @@ llvm::Optional<CandidateExpr> souper::GetCandidateExprForReplacement(
   // Build LHS
   ref<Expr> LHS = EB.get(Mapping.LHS);
   ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
+  ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
+  if (!Mapping.LHS->DemandedBits.isAllOnesValue())
+    LHS = AndExpr::create(LHS, DemandedBits);
   for (const auto I : CE.ArrayVars) {
     if (I) {
       if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
@@ -1137,6 +1140,8 @@ llvm::Optional<CandidateExpr> souper::GetCandidateExprForReplacement(
   }
   // Build RHS
   ref<Expr> RHS = EB.get(Mapping.RHS);
+  if (!Mapping.LHS->DemandedBits.isAllOnesValue())
+    RHS = AndExpr::create(RHS, DemandedBits);
   // Get all UB constraints (LHS && (B)PCs && RHS)
   ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
   if (ExploitUB) {

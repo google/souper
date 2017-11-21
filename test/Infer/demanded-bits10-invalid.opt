@@ -1,0 +1,10 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: FileCheck %s < %t
+
+; CHECK: Invalid
+
+%0:i8 = var
+%1:i8 = and %0, 10:i8
+cand %1 5:i8 (demandedBits=00000001)

@@ -2,7 +2,7 @@
 ; REQUIRES: solver
 
 ; RUN: llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper %solver -check -souper-infer-iN=false %t
 
 ; Function Attrs: nounwind
 define i32 @fn1() #0 {

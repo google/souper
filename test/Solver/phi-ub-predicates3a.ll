@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper %solver -check -souper-infer-iN=false %t
 
 define i1 @foo(i32 %a, i32 %b, i32 %c) {
   switch i32 %a, label %9 [

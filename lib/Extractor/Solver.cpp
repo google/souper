@@ -46,8 +46,8 @@ static cl::opt<bool> InferNop("souper-infer-nop",
     cl::desc("Infer that the output is the same as an input value (default=false)"),
     cl::init(false));
 static cl::opt<bool> InferInts("souper-infer-iN",
-    cl::desc("Infer iN integers for N>1 (default=false)"),
-    cl::init(false));
+    cl::desc("Infer iN integers for N>1 (default=true)"),
+    cl::init(true));
 static cl::opt<bool> InferInsts("souper-infer-inst",
     cl::desc("Infer instructions (default=false)"),
     cl::init(false));
@@ -105,12 +105,22 @@ public:
                         Inst *LHS, Inst *&RHS, InstContext &IC) override {
     std::error_code EC;
 
-    if (LHS->Width == 1) {
-      std::vector<Inst *>Guesses { IC.getConst(APInt(1, true)),
-                                   IC.getConst(APInt(1, false)) };
+    /*
+     * TODO: try to synthesize undef before synthesizing a concrete
+     * integer
+     */
+
+    /*
+     * Even though we have real integer synthesis below, first try to
+     * guess a few constants that are likely to be cheap for the
+     * backend to make
+     */
+    if (InferInts || LHS->Width == 1) {
+      std::vector<Inst *>Guesses { IC.getConst(APInt(LHS->Width, 0)),
+                                   IC.getConst(APInt(LHS->Width, 1)) };
+      if (LHS->Width > 1)
+        Guesses.emplace_back(IC.getConst(APInt(LHS->Width, -1)));
       for (auto I : Guesses) {
-        // TODO: we can trivially synthesize an i1 undef by checking for validity
-        // of both guesses
         InstMapping Mapping(LHS, I);
         std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
         if (Query.empty())

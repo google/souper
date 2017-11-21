@@ -46,6 +46,10 @@ static llvm::cl::opt<bool> HarvestDataFlowFacts(
     "souper-harvest-dataflow-facts",
     llvm::cl::desc("Perform data flow analysis (default=true)"),
     llvm::cl::init(true));
+static llvm::cl::opt<bool> HarvestDemandedBits(
+    "souper-harvest-demanded-bits",
+    llvm::cl::desc("Perform demanded bits analysis (default=false)"),
+    llvm::cl::init(false));
 
 using namespace llvm;
 using namespace klee;
@@ -83,12 +87,13 @@ namespace {
 
 struct ExprBuilder {
   ExprBuilder(const ExprBuilderOptions &Opts, Module *M, const LoopInfo *LI,
-              InstContext &IC, ExprBuilderContext &EBC)
-      : Opts(Opts), DL(M->getDataLayout()), LI(LI), IC(IC), EBC(EBC) {}
+              DemandedBits *DB, InstContext &IC, ExprBuilderContext &EBC)
+      : Opts(Opts), DL(M->getDataLayout()), LI(LI), DB(DB), IC(IC), EBC(EBC) {}
 
   const ExprBuilderOptions &Opts;
   const DataLayout &DL;
   const LoopInfo *LI;
+  DemandedBits *DB;
   InstContext &IC;
   ExprBuilderContext &EBC;
 
@@ -493,6 +498,11 @@ Inst *ExprBuilder::get(Value *V) {
     E = build(V);
   }
   EBC.Origins.insert(std::pair<Inst *, Value *>(E, V));
+  E->DemandedBits = APInt::getAllOnesValue(E->Width);
+  if (HarvestDemandedBits) {
+    if (Instruction *I = dyn_cast<Instruction>(V))
+      E->DemandedBits = DB->getDemandedBits(I);
+  }
   return E;
 }
 
@@ -618,10 +628,8 @@ void ExprBuilder::addPathConditions(BlockPCs &BPCs,
       if (Pred->getSinglePredecessor()) {
         addPathConditions(BPCs, PCs, VisitedBlocks, Pred);
       }
-      else {
-        // In case the predecessor is a br or switch instruction.
-        addPC(BB, Pred, PCs);
-      }
+      // In case the predecessor is a br or switch instruction.
+      addPC(BB, Pred, PCs);
       for (auto PC : PCs)
         BPCs.emplace_back(BlockPCMapping(BI.B, i, PC));
     }
@@ -708,11 +716,11 @@ std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
   return std::make_tuple(RelevantBPCs, RelevantPCs);
 }
 
-void ExtractExprCandidates(Function &F, const LoopInfo *LI,
+void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
                            const ExprBuilderOptions &Opts, InstContext &IC,
                            ExprBuilderContext &EBC,
                            FunctionCandidateSet &Result) {
-  ExprBuilder EB(Opts, F.getParent(), LI, IC, EBC);
+  ExprBuilder EB(Opts, F.getParent(), LI, DB, IC, EBC);
 
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
@@ -753,12 +761,18 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfoWrapperPass>();
+    Info.addRequired<DemandedBitsWrapperPass>();
     Info.setPreservesAll();
   }
 
   bool runOnFunction(Function &F) {
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-    ExtractExprCandidates(F, LI, Opts, IC, EBC, Result);
+    if (!LI)
+      report_fatal_error("getLoopInfo() failed");
+    DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>().getDemandedBits();
+    if (!DB)
+      report_fatal_error("getDemandedBits() failed");
+    ExtractExprCandidates(F, LI, DB, Opts, IC, EBC, Result);
     return false;
   }
 };
@@ -768,10 +782,10 @@ char ExtractExprCandidatesPass::ID = 0;
 }
 
 FunctionCandidateSet souper::ExtractCandidatesFromPass(
-    Function *F, const LoopInfo *LI, InstContext &IC, ExprBuilderContext &EBC,
-    const ExprBuilderOptions &Opts) {
+    Function *F, const LoopInfo *LI, DemandedBits *DB, InstContext &IC,
+    ExprBuilderContext &EBC, const ExprBuilderOptions &Opts) {
   FunctionCandidateSet Result;
-  ExtractExprCandidates(*F, LI, Opts, IC, EBC, Result);
+  ExtractExprCandidates(*F, LI, DB, Opts, IC, EBC, Result);
   return Result;
 }
 

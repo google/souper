@@ -1,7 +1,7 @@
 ; REQUIRES: solver, solver-model
 
 ; RUN: llvm-as -o %t1 %s
-; RUN: %souper %solver -souper-infer-inst %t1 -souper-synthesis-comp-num=0 > %t2
+; RUN: %souper %solver -souper-infer-inst %t1 -souper-synthesis-comp-num=0 -souper-infer-iN=false > %t2
 ; RUN: FileCheck %s -check-prefix=SUCCESS < %t2
 
 ; SUCCESS: cand %12 %0

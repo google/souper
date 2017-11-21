@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper %solver -check -souper-infer-iN=false %t
 
 ; Function Attrs: nounwind readnone
 declare i32 @llvm.bswap.i32(i32) #0
