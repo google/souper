@@ -96,11 +96,23 @@ TEST(ParserTest, Errors) {
         "%1:i1 = extractvalue %0, 1:i32\n"
         "infer %1\n",
         "<input>:1:1: at least one operand must be typed" },
-      { "%0:i65 = var ; 0\n%1:i1 = extractvalue %0, 1:i32\n"
-        "%2:i64 = extractvalue %0, 0:i32\n"
+      { "%0:i65 = var ; 0\n%1:i1 = extractvalue %0, 1\n"
+        "%2:i64 = extractvalue %0, 0\n"
         "%3:i64 = select %1, 18446744073709551615:i64, %2\n"
         "infer %3\n",
-        "<input>:3:1: extract value expects an aggregate type" },
+        "<input>:2:1: extract value expects an aggregate type" },
+      { "%0:i65 = var ; 0\n"
+        "%1:i64 = extractvalue %0, 0\n"
+        "infer %1\n",
+        "<input>:2:1: extract value expects an aggregate type" },
+      { "%0:i65 = var ; 0\n"
+        "%1:i1 = extractvalue %0, 1\n"
+        "infer %1\n",
+        "<input>:2:1: extract value expects an aggregate type" },
+      { "%0:i64 = var ; 0\n"
+        "%1:i1 = extractvalue 42, 1\n"
+        "infer %1\n",
+        "<input>:2:1: extract value expects an aggregate type" },
       { "%0:i4 = var (knownBits=001x) (nonZero\n",
         "<input>:1:1: expected ')' to complete data flow fact string" },
       { "%0:i4 = var (nonZero\n",
