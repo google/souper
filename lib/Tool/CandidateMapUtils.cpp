@@ -163,6 +163,11 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
       llvm::APInt ExpectedVal =
         mdconst::extract<ConstantInt>(ExpectedMD->getOperand(0))->getValue();
       Inst->setMetadata(ExpectedID, 0);
+      if (ExpectedVal.getBitWidth() != ActualVal.getBitWidth()) {
+        llvm::errs() << "metadata width doesn't match value width\n";
+        OK = false;
+        continue;
+      }
       if (ExpectedVal != ActualVal) {
         llvm::errs() << "instruction:\n";
         Inst->print(llvm::errs(), /*IsForDebug=*/true);
