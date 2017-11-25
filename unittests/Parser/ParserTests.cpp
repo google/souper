@@ -241,10 +241,13 @@ TEST(ParserTest, FullReplacementErrors) {
   } Tests[] = {
       // lexing
       { "cand 0:i1 0:i1 ; this is a comment\n", "" },
-      { "infer 0:i1\nresult 0:i1 ; this is a comment\n", "" },
+      { "infer 0:i1\nresult 0:i1 ; this is a comment\n", "<input>:1:7: unexpected infer operand type" },
 
       // parsing
-      { "infer 0:i1\ninfer 0:i1", "<input>:2:7: Not expecting a second 'infer'" },
+      { "infer 0:i1\ninfer 0:i1", "<input>:1:7: unexpected infer operand type" },
+      { "infer 11111111", "<input>:1:7: unexpected infer operand type" },
+      { "infer %0\ninfer %0", "<input>:1:7: %0 is not an inst" },
+      { "%0:i32 = var\n%1:i32 = var\ninfer %0 %1", "<input>:3:10: %1 already declared as an inst" },
       { "cand 0:i1 ; this is a comment\n", "<input>:2:1: unexpected token" },
       { "%0:i1 = var\n",
         "<input>:2:1: incomplete replacement, need a 'cand' statement or 'infer'/'result' pair" },
@@ -303,14 +306,14 @@ TEST(ParserTest, ReplacementLHSErrors) {
     std::string Test, WantError;
   } Tests[] = {
       // lexing
-      { "infer 0:i1 ; this is a comment\n", "" },
+      { "infer 0:i1 ; this is a comment\n", "<input>:1:7: unexpected infer operand type" },
 
       // parsing
       { "%0:i1 = var\n",
         "<input>:2:1: incomplete replacement, need an 'infer' statement" },
-      { "infer 0:i1 0:i1 ; this is a comment\n", "<input>:1:12: expected a single replacement" },
+      { "infer 0:i1 0:i1 ; this is a comment\n", "<input>:1:7: unexpected infer operand type" },
       { "cand 0:i1 0:i1", "<input>:1:1: Not expecting 'cand' when parsing LHS" },
-      { "infer 0:i1\ninfer 0:i1", "<input>:2:1: expected a single replacement" },
+      { "infer 0:i1\ninfer 0:i1", "<input>:1:7: unexpected infer operand type" },
 
       // type checking
     };
@@ -354,7 +357,9 @@ TEST(ParserTest, ReplacementRHSErrors) {
 
 TEST(ParserTest, RoundTrip) {
   std::string Tests[] = {
-      "cand 0:i1 0:i1\n",
+      R"i(%0:i1 = var ; 0
+cand %0 0:i1
+)i",
       R"i(%0 = block 2
 %1:i32 = var ; 1
 %2:i32 = lshr %1, 31:i32

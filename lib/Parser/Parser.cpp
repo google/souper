@@ -774,6 +774,10 @@ bool Parser::parseLine(std::string &ErrStr) {
           return false;
         }
         if (!consumeToken(ErrStr)) return false;
+        if (CurTok.K != Token::ValName) {
+          ErrStr = makeErrStr("unexpected infer operand type");
+          return false;
+        }
         if (LHS) {
           ErrStr = makeErrStr("Not expecting a second 'infer'");
           return false;
