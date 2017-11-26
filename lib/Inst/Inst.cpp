@@ -395,20 +395,14 @@ const char *Inst::getKindName(Kind K) {
   case UMulWithOverflow:
     return "umul.with.overflow";
   case SAddO:
-    break;
   case UAddO:
-    break;
   case SSubO:
-    break;
   case USubO:
-    break;
   case SMulO:
-    break;
   case UMulO:
-    break;
+  default:
+    llvm_unreachable("all cases covered");
   }
-
-  llvm_unreachable("all cases covered");
 }
 
 Inst::Kind Inst::getKind(std::string Name) {
@@ -465,7 +459,7 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("smul.with.overflow", Inst::SMulWithOverflow)
                    .Case("umul.with.overflow", Inst::UMulWithOverflow)
                    .Case("extractvalue", Inst::ExtractValue)
-                   .Default(Inst::Kind(~0));
+                   .Default(Inst::None);
 }
 
 void Inst::Profile(llvm::FoldingSetNodeID &ID) const {

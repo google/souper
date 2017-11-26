@@ -351,7 +351,7 @@ ref<Expr> ExprBuilder::buildAssoc(
 
 ref<Expr> ExprBuilder::countOnes(ref<Expr> L) {
    Expr::Width Width = L->getWidth();
-   ref<Expr> Count =  klee::ConstantExpr::create(0, Width);
+   ref<Expr> Count =  klee::ConstantExpr::alloc(llvm::APInt(Width, 0));
    for (unsigned i=0; i<Width; i++) {
      ref<Expr> Bit = ExtractExpr::create(L, i, Expr::Bool);
      ref<Expr> BitExt = ZExtExpr::create(Bit, Width);
@@ -644,6 +644,7 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   case Inst::USubWithOverflow:
   case Inst::SMulWithOverflow:
   case Inst::UMulWithOverflow:
+  default:
     break;
   }
   llvm_unreachable("unknown kind");

@@ -537,6 +537,9 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   case Inst::Ctlz:
     MaxOps = MinOps = 1;
     break;
+
+  default:
+    llvm::report_fatal_error("unhandled");
   }
 
   if (MinOps == MaxOps && Ops.size() != MinOps) {
@@ -927,7 +930,7 @@ bool Parser::parseLine(std::string &ErrStr) {
           return false;
         }
       }
-      if (IK == Inst::Kind(~0)) {
+      if (IK == Inst::None) {
         if (CurTok.str() == "block") {
           if (InstWidth != 0) {
             ErrStr = makeErrStr(TP, "blocks may not have a width");
