@@ -94,7 +94,9 @@ struct Inst : llvm::FoldingSetNode {
     SMulO,
     UMulWithOverflow,
     UMulO,
-  } Kind;
+
+    None,
+} Kind;
 
   Kind K;
   unsigned Number;

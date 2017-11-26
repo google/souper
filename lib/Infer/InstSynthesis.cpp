@@ -322,7 +322,7 @@ void InstSynthesis::setCompLibrary() {
         InitConstComps.push_back(Component{Inst::Const, 0, {}});
       else if (K == Inst::ZExt || K == Inst::SExt || K == Inst::Trunc)
         report_fatal_error("don't use zext/sext/trunc explicitly");
-      else if (K == Inst::Kind(~0))
+      else if (K == Inst::None)
         report_fatal_error("unknown instruction: " + KindStr);
       else if (UnsupportedCompKinds.count(K))
         report_fatal_error("unsupported instruction: " + KindStr);
