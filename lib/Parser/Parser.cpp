@@ -194,6 +194,10 @@ FoundChar:
       ++Begin;
     } while (Begin != End && *Begin >= '0' && *Begin <= '9');
     const char *NumEnd = Begin;
+    if ((NumEnd - NumBegin) == 1 && *NumBegin == '-') {
+      ErrStr = "unexpected character following a negative sign";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
     if (Begin != End && *Begin == ':') {
       ++Begin;
       if (Begin == End || *Begin != 'i') {
