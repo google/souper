@@ -31,6 +31,9 @@ TEST(ParserTest, Errors) {
       { "0:ix", "<input>:1:4: expected integer" },
       { "0:i0", "<input>:1:4: width must be at least 1" },
       { "?", "<input>:1:1: unexpected '?'" },
+      { "%0:i32 = var-check", "<input>:1:14: unexpected character following a negative sign" },
+      { "%0:i32 = add -2, -a", "<input>:1:19: unexpected character following a negative sign" },
+      { "%0:i32 = -", "<input>:1:11: unexpected character following a negative sign" },
 
       // parsing
       { "%0:i32 = var\n%1:i1 = eq %0:i32, %0:i32\n",
