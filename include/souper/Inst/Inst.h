@@ -25,6 +25,8 @@
 
 namespace souper {
 
+const unsigned MaxPreds = 100000;
+
 struct Block {
   std::string Name;
   unsigned Preds;

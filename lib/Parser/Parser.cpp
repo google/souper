@@ -953,7 +953,11 @@ bool Parser::parseLine(std::string &ErrStr) {
             return false;
           }
           unsigned Preds = CurTok.Val.getLimitedValue();
-
+          if (Preds > MaxPreds) {
+            ErrStr = makeErrStr(std::string(std::to_string(Preds) +
+                                            " is too many block predecessors"));
+            return false;
+          }
           Context.setBlock(InstName, IC.createBlock(Preds));
           return consumeToken(ErrStr);
         } else {
