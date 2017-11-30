@@ -219,6 +219,11 @@ FoundChar:
         ErrStr = "width must be at least 1";
         return Token{Token::Error, WidthBegin, 0, APInt()};
       }
+      // this calculation is from an assertion in APInt::fromString()
+      if ((((NumEnd - NumBegin) - 1) * 64) / 22 > Width) {
+        ErrStr = "integer too large for its width";
+        return Token{Token::Error, Begin, 0, APInt()};
+      }
       return Token{Token::Int, NumBegin, size_t(Begin - NumBegin),
                    APInt(Width, StringRef(NumBegin, NumEnd - NumBegin), 10)};
     }
