@@ -775,6 +775,19 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!parseDemandedBits(ErrStr, Cand.LHS))
           return false;
 
+        switch(Cand.LHS->K) {
+          case Inst::SAddWithOverflow:
+          case Inst::UAddWithOverflow:
+          case Inst::SSubWithOverflow:
+          case Inst::USubWithOverflow:
+          case Inst::SMulWithOverflow:
+          case Inst::UMulWithOverflow:
+            ErrStr = makeErrStr("unexpected instruction kind in cand");
+            return false;
+          default:
+            break;
+        }
+
         Reps.push_back(ParsedReplacement{Cand, std::move(PCs),
                                          std::move(BPCs)});
         nextReplacement();
@@ -800,6 +813,19 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         if (!parseDemandedBits(ErrStr, LHS))
           return false;
+
+        switch (LHS->K) {
+          case Inst::SAddWithOverflow:
+          case Inst::UAddWithOverflow:
+          case Inst::SSubWithOverflow:
+          case Inst::USubWithOverflow:
+          case Inst::SMulWithOverflow:
+          case Inst::UMulWithOverflow:
+            ErrStr = makeErrStr("unexpected instruction kind in infer");
+            return false;
+          default:
+            break;
+        }
 
         if (RK == ReplacementKind::ParseLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0),
