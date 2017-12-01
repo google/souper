@@ -987,20 +987,19 @@ bool Parser::parseLine(std::string &ErrStr) {
               return false;
             switch (CurTok.K) {
               case Token::KnownBits:
-                for (unsigned i=0; i<InstWidth; ++i) {
-                  if (CurTok.PatternString[i] == '0')
-                    Zero += ConstOne.shl(CurTok.PatternString.length()-1-i);
-                  else if (CurTok.PatternString[i] == '1')
-                    One += ConstOne.shl(CurTok.PatternString.length()-1-i);
-                  else if (CurTok.PatternString[i] == 'x') ;
-                  else {
-                    ErrStr = makeErrStr(TP, "invalid knownBits string");
-                    return false;
-                  }
-                }
                 if (InstWidth != CurTok.PatternString.length()) {
                   ErrStr = makeErrStr(TP, "knownbits pattern must be of same length as var width");
                   return false;
+                }
+                for (unsigned i = 0; i < InstWidth; ++i) {
+                  if (CurTok.PatternString[i] == '0')
+                    Zero += ConstOne.shl(CurTok.PatternString.length() - 1 - i);
+                  else if (CurTok.PatternString[i] == '1')
+                    One += ConstOne.shl(CurTok.PatternString.length() - 1 - i);
+                  else if (CurTok.PatternString[i] != 'x') {
+                    ErrStr = makeErrStr(TP, "invalid knownBits string");
+                    return false;
+                  }
                 }
                 if (!consumeToken(ErrStr))
                   return false;
