@@ -112,6 +112,11 @@ TEST(ParserTest, Errors) {
         "%3:i64 = select %1, 18446744073709551615:i64, %2\n"
         "infer %3\n",
         "<input>:2:1: extract value expects an aggregate type" },
+      { "%0:i8 = var\n"
+        "%1:i8 = var\n"
+         "%2:i9 = smul.with.overflow %0, %1\n"
+        "%3 = extractvalue %2, 999999999999999999999999999999999999999999999999999999999999999999999999999",
+      "<input>:4:1: extractvalue inst doesn't expect index value other than 0 or 1" },
       { "%0:i65 = var ; 0\n"
         "%1:i64 = extractvalue %0, 0\n"
         "infer %1\n",
