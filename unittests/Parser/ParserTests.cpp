@@ -300,6 +300,18 @@ TEST(ParserTest, FullReplacementErrors) {
         "<input>:3:1: expected ')' to complete demandedBits data flow string" },
       { "%0:i4 = var ; 0\ncand %0 7:i4 (demandedBits=2111)\n",
         "<input>:2:28: expected demandedBits pattern of type [0|1]+" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = and %0, 1\n"
+        "%2 = sadd.with.overflow %0, 1\n"
+        "%3 = extractvalue %2, 1\n"
+        "infer %2\n",
+        "<input>:6:1: unexpected instruction kind in infer" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = and %0, 1\n"
+        "%2 = sadd.with.overflow %0, 1\n"
+        "%3 = extractvalue %2, 1\n"
+        "cand %2 1\n",
+        "<input>:6:1: unexpected instruction kind in cand" },
 
       // type checking
     };
