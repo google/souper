@@ -5,6 +5,6 @@
 
 ; CHECK: LGTM
 %0:i32 = var (powerOfTwo) (signBits=31)
-%1:i32 = cttz %0
-%2:i1 = eq %1, 0:i32
+%1 = cttz %0
+%2 = eq %1, 0:i32
 cand %2 1:i1
