@@ -310,15 +310,56 @@ TEST(ParserTest, FullReplacementErrors) {
         "%2 = sadd.with.overflow %0, 1\n"
         "%3 = extractvalue %2, 1\n"
         "infer %2\n",
-        "<input>:6:1: unexpected instruction kind in infer" },
+        "<input>:6:1: overflow intrinsic cannot be an operand of infer instruction" },
       { "%0:i64 = var ; 0\n"
         "%1 = and %0, 1\n"
         "%2 = sadd.with.overflow %0, 1\n"
         "%3 = extractvalue %2, 1\n"
         "cand %2 1\n",
-        "<input>:6:1: unexpected instruction kind in cand" },
+        "<input>:6:1: overflow intrinsic cannot be an operand of cand instruction" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = and %0, 1\n"
+        "%2 = sadd.with.overflow %0, 1\n"
+        "%3 = extractvalue %2, 1\n"
+        "cand 1 %2\n",
+        "<input>:6:1: overflow intrinsic cannot be an operand of cand instruction" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = uadd.with.overflow %0, 1\n"
+        "pc %1 1\n"
+        "infer %1\n",
+        "<input>:4:1: overflow intrinsic cannot be an operand of pc instruction" },
+      { "%0 = block 2\n"
+        "%1:i32 = var ; 0\n"
+        "%2 = smul.with.overflow %1, 2\n"
+        "%3 = ne 1, %1\n"
+        "%4:i33 = zext %3\n"
+        "blockpc %0 0 %2 1\n"
+        "blockpc %0 1 %4 0\n"
+        "%5:i32 = phi %0, 1, 0\n"
+        "infer %5\n",
+        "<input>:7:1: overflow intrinsic cannot be an operand of blockpc instruction" },
 
       // type checking
+      { "%0:i64 = var ; 0\n"
+        "%1 = uadd.with.overflow %0, 1\n"
+        "%2 = eq %1, 1\n"
+        "infer %2\n",
+        "<input>:3:1: overflow intrinsic cannot be an operand of eq instruction" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = uadd.with.overflow %0, 1\n"
+        "%2 = mul %1, 10\n"
+        "infer %2\n",
+        "<input>:3:1: overflow intrinsic cannot be an operand of mul instruction" },
+      { "%0 = block 2\n"
+        "%1:i32 = var ; 0\n"
+        "%2:i32 = var ; 1\n"
+        "%3 = smul.with.overflow %1, 2\n"
+        "blockpc %0 0 %1 0\n"
+        "blockpc %0 1 %1 1\n"
+        "%4:i33 = phi %0, %3, 0:i33\n"
+        "%5:i16 = trunc %4\n"
+        "infer %5\n",
+        "<input>:7:1: overflow intrinsic cannot be an operand of phi instruction" },
     };
 
   InstContext IC;

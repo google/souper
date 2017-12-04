@@ -343,6 +343,7 @@ struct Parser {
   std::vector<ParsedReplacement> parseReplacements(std::string &ErrStr);
   void nextReplacement();
   bool parseDemandedBits(std::string &ErrStr, Inst *LHS);
+  bool isOverflow(Inst::Kind IK);
 };
 
 }
@@ -384,6 +385,12 @@ Inst *Parser::parseInst(std::string &ErrStr) {
       return 0;
     }
   }
+}
+
+bool Parser::isOverflow(Inst::Kind IK) {
+  return (IK == Inst::SAddWithOverflow || IK == Inst::UAddWithOverflow ||
+          IK == Inst::SSubWithOverflow || IK == Inst::USubWithOverflow ||
+          IK == Inst::SMulWithOverflow || IK == Inst::UMulWithOverflow);
 }
 
 bool Parser::typeCheckOpsMatchingWidths(llvm::MutableArrayRef<Inst *> Ops,
@@ -432,6 +439,13 @@ bool Parser::typeCheckPhi(unsigned Width, Block *B,
     ErrStr = "inst must have width of " + utostr(Ops[0]->Width) +
                          ", has width " + utostr(Width);
     return false;
+  }
+
+  for (auto Op : Ops) {
+    if (isOverflow(Op->K)) {
+      ErrStr = "overflow intrinsic cannot be an operand of phi instruction";
+      return false;
+    }
   }
 
   return true;
@@ -576,9 +590,18 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   // overflow instruction respectively. The second element of
   // ExtractValue instruction is an index value. We don't type check
   // the operands width as the two elements vary in width.
-  if (IK != Inst::ExtractValue)
+  if (IK != Inst::ExtractValue) {
     if (!typeCheckOpsMatchingWidths(OpsMatchingWidths, ErrStr))
       return false;
+
+    for (auto Op : Ops) {
+      if (isOverflow(Op->K)) {
+        ErrStr = std::string("overflow intrinsic cannot be an operand of ") + Inst::getKindName(IK) +
+                 std::string(" instruction");
+        return false;
+      }
+    }
+  }
 
   unsigned ExpectedWidth;
   switch (IK) {
@@ -798,17 +821,9 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!parseDemandedBits(ErrStr, Cand.LHS))
           return false;
 
-        switch(Cand.LHS->K) {
-          case Inst::SAddWithOverflow:
-          case Inst::UAddWithOverflow:
-          case Inst::SSubWithOverflow:
-          case Inst::USubWithOverflow:
-          case Inst::SMulWithOverflow:
-          case Inst::UMulWithOverflow:
-            ErrStr = makeErrStr("unexpected instruction kind in cand");
-            return false;
-          default:
-            break;
+        if (isOverflow(Cand.LHS->K) || isOverflow(Cand.RHS->K)) {
+          ErrStr = makeErrStr("overflow intrinsic cannot be an operand of cand instruction");
+          return false;
         }
 
         Reps.push_back(ParsedReplacement{Cand, std::move(PCs),
@@ -837,17 +852,9 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!parseDemandedBits(ErrStr, LHS))
           return false;
 
-        switch (LHS->K) {
-          case Inst::SAddWithOverflow:
-          case Inst::UAddWithOverflow:
-          case Inst::SSubWithOverflow:
-          case Inst::USubWithOverflow:
-          case Inst::SMulWithOverflow:
-          case Inst::UMulWithOverflow:
-            ErrStr = makeErrStr("unexpected instruction kind in infer");
-            return false;
-          default:
-            break;
+        if (isOverflow(LHS->K)) {
+          ErrStr = makeErrStr("overflow intrinsic cannot be an operand of infer instruction");
+          return false;
         }
 
         if (RK == ReplacementKind::ParseLHS) {
@@ -886,6 +893,11 @@ bool Parser::parseLine(std::string &ErrStr) {
         InstMapping PC = parseInstMapping(ErrStr);
         if (!ErrStr.empty()) return false;
 
+        if (isOverflow(PC.LHS->K)) {
+          ErrStr = makeErrStr("overflow intrinsic cannot be an operand of pc instruction");
+          return false;
+        }
+
         PCs.push_back(PC);
 
         return true;
@@ -923,6 +935,11 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         InstMapping PC = parseInstMapping(ErrStr);
         if (!ErrStr.empty()) return false;
+
+        if (isOverflow(PC.LHS->K)) {
+          ErrStr = makeErrStr("overflow intrinsic cannot be an operand of blockpc instruction");
+          return false;
+        }
 
         std::map<Block *, unsigned>::iterator IdxIt = BlockPCIdxMap.find(B);
         if (IdxIt == BlockPCIdxMap.end()) {
