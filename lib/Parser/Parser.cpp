@@ -671,6 +671,27 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     return false;
   }
 
+  switch (IK) {
+  case Inst::BSwap:
+    if (Width != 16 && Width != 32 && Width != 64) {
+      ErrStr = "bswap doesn't support " + std::to_string(Width) + " bits";
+      return false;
+    }
+    break;
+  case Inst::CtPop:
+  case Inst::Ctlz:
+  case Inst::Cttz:
+    if (Width !=8 && Width != 16 && Width != 32 &&
+        Width != 64 && Width != 256) {
+      ErrStr = std::string(Inst::getKindName(IK)) + " doesn't support " +
+        std::to_string(Width) + " bits";
+      return false;
+    }
+    break;
+  default:
+    break;
+  }
+
   return true;
 }
 
@@ -952,21 +973,6 @@ bool Parser::parseLine(std::string &ErrStr) {
 
       Inst::Kind IK = Inst::getKind(CurTok.str());
 
-      if (IK == Inst::BSwap) {
-        if (InstWidth != 16 && InstWidth != 32 && InstWidth != 64) {
-          ErrStr = makeErrStr(TP, CurTok.str().str() + " doesn't support " +
-                              std::to_string(InstWidth) + " bits");
-          return false;
-        }
-      }
-      if ((IK == Inst::CtPop) || (IK == Inst::Ctlz) || (IK == Inst::Cttz)) {
-        if (InstWidth !=8 && InstWidth != 16 && InstWidth != 32 &&
-            InstWidth != 64 && InstWidth != 256) {
-          ErrStr = makeErrStr(TP, CurTok.str().str() + " doesn't support " +
-                              std::to_string(InstWidth) + " bits");
-          return false;
-        }
-      }
       if (IK == Inst::None) {
         if (CurTok.str() == "block") {
           if (InstWidth != 0) {
