@@ -338,6 +338,13 @@ TEST(ParserTest, FullReplacementErrors) {
         "%5:i32 = phi %0, 1, 0\n"
         "infer %5\n",
         "<input>:7:1: overflow intrinsic cannot be an operand of blockpc instruction" },
+      { "%0:i32 = var ; 0\n"
+        "%1:i32 = ashr-1:i32, %0\n"
+        "%2:i32 = and %0, %1\n"
+        "%3 = ne 1, %1\n"
+        "infer %2 (demandedBits=00000000000000000000000000000001)\n"
+        "result 32:i332\n",
+        "<input>:7:1: width of result and infer operands mismatch" },
 
       // type checking
       { "%0:i64 = var ; 0\n"
