@@ -881,6 +881,10 @@ bool Parser::parseLine(std::string &ErrStr) {
         Inst *RHS = parseInst(ErrStr);
         if (!RHS)
           return false;
+        if (LHS && (LHS->Width != RHS->Width)) {
+          ErrStr = makeErrStr("width of result and infer operands mismatch");
+          return false;
+        }
         InstMapping Cand = InstMapping(LHS, RHS);
 
         Reps.push_back(ParsedReplacement{Cand, std::move(PCs),
