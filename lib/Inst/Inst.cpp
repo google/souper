@@ -606,6 +606,7 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   N->K = K;
   N->Width = Width;
   N->Ops = *InstOps;
+  N->DemandedBits = llvm::APInt::getAllOnesValue(Width);
   InstSet.InsertNode(N, IP);
   return N;
 }
