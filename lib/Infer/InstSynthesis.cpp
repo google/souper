@@ -102,8 +102,9 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   WiringPCs.emplace_back(getConsistencyConstraint(IC), TrueConst);
   WiringPCs.emplace_back(getAcyclicityConstraint(IC), TrueConst);
   WiringPCs.emplace_back(getLocVarConstraint(IC), TrueConst);
-  WiringPCs.emplace_back(getInputDefinednessConstraint(IC), TrueConst);
-  WiringPCs.emplace_back(getOutputDefinednessConstraint(IC), TrueConst);
+  WiringPCs.emplace_back(getComponentInputConstraint(IC), TrueConst);
+  WiringPCs.emplace_back(getComponentConstInputConstraint(IC), TrueConst);
+  WiringPCs.emplace_back(getComponentOutputConstraint(IC), TrueConst);
 
   // Create the main wiring query (aka connectivity contraint)
   Inst *WiringQuery = getConnectivityConstraint(IC);
@@ -439,6 +440,7 @@ void InstSynthesis::initComponents(InstContext &IC) {
     std::string LocVarStr;
     // First, init component inputs
     std::vector<Inst *> CompOps;
+    std::vector<LocVar> OpsLocVar;
     for (unsigned K = 0; K < Comp.OpWidths.size(); ++K) {
       LocVar In = std::make_pair(J+1, K+1);
       LocVarStr = getLocVarStr(In, LOC_PREFIX);
@@ -459,7 +461,10 @@ void InstSynthesis::initComponents(InstContext &IC) {
       // Update CompInstMap map with concrete Inst
       CompInstMap[In] = OpInst;
       CompOps.push_back(OpInst);
+      OpsLocVar.push_back(In);
     }
+    // Store all input locations
+    CompOpLocVars.push_back(OpsLocVar);
 
     // Second, init component output
     LocVar Out = std::make_pair(J+1, 0);
@@ -741,11 +746,11 @@ Inst *InstSynthesis::getConnectivityConstraint(InstContext &IC) {
   return Ret;
 }
 
-Inst *InstSynthesis::getInputDefinednessConstraint(InstContext &IC) {
+Inst *InstSynthesis::getComponentInputConstraint(InstContext &IC) {
   Inst *Ret = IC.getConst(APInt(1, true));
 
   if (DebugLevel > 2)
-    llvm::outs() << "input-definedness constraints:\n";
+    llvm::outs() << "component input constraints:\n";
   for (auto const &L_x : P) {
     Inst *Ante = IC.getConst(APInt(1, false));
     // Inputs
@@ -774,18 +779,19 @@ Inst *InstSynthesis::getInputDefinednessConstraint(InstContext &IC) {
     if (DebugLevel > 2)
       llvm::outs() << "false\n";
     if (Ante == IC.getConst(APInt(1, false)))
-      report_fatal_error("no input-definedness for " + getLocVarStr(L_x.first));
+      report_fatal_error("no input available for " + getLocVarStr(L_x.first));
     Ret = IC.getInst(Inst::And, 1, {Ret, Ante});
   }
 
   return Ret;
 }
 
-Inst *InstSynthesis::getOutputDefinednessConstraint(InstContext &IC) {
+
+Inst *InstSynthesis::getComponentOutputConstraint(InstContext &IC) {
   Inst *Ret = IC.getConst(APInt(1, false));
 
   if (DebugLevel > 2)
-    llvm::outs() << "output-definedness constraints:\n";
+    llvm::outs() << "component output constraints:\n";
   // Inputs
   for (auto const &In : I) {
     if (isWiringInvalid(In.first, O.first))
@@ -808,6 +814,46 @@ Inst *InstSynthesis::getOutputDefinednessConstraint(InstContext &IC) {
   }
   if (DebugLevel > 2)
     llvm::outs() << "false\n";
+
+  return Ret;
+}
+
+Inst *InstSynthesis::getComponentConstInputConstraint(InstContext &IC) {
+  Inst *Ret = TrueConst;
+
+  if (DebugLevel > 2)
+    llvm::outs() << "component const input constraints:\n";
+
+  // Forbid a component's operands to be constants only.
+  // An exemplary query that must hold true for a single component
+  // with two inputs and two constants:
+  // true && (false || (compin_1 == const_1) || (compin_1 == const_2))
+  //      && (false || (compin_2 == const_1) || (compin_2 == const_2)) == false
+  for (auto const &E : CompOpLocVars) {
+    Inst *CompAnte = IC.getConst(APInt(1, true));
+    for (auto const &CompIn : E) {
+      Inst *Ante = FalseConst;
+      auto LocVarStr = getLocVarStr(CompIn, LOC_PREFIX);
+      for (auto const &In : I) {
+        if (!isInputConst(In.first))
+          continue;
+        if (isWiringInvalid(CompIn, In.first))
+          continue;
+        Inst *Eq = IC.getInst(Inst::Eq, 1, {LocInstMap[LocVarStr].second, In.second});
+        Ante = IC.getInst(Inst::Or, 1, {Ante, Eq});
+        if (DebugLevel > 2)
+          llvm::outs() << getLocVarStr(CompIn) << " == "
+                       << getLocVarStr(In.first) << " || ";
+      }
+      if (DebugLevel > 2)
+        llvm::outs() << "false\n";
+      CompAnte = IC.getInst(Inst::And, 1, {CompAnte, Ante});
+    }
+    if (DebugLevel > 2)
+      llvm::outs() << "false\n";
+    Inst *Ne = IC.getInst(Inst::Eq, 1, {CompAnte, IC.getConst(APInt(1, false))});
+    Ret = IC.getInst(Inst::And, 1, {Ret, Ne});
+  }
 
   return Ret;
 }
@@ -935,17 +981,20 @@ Inst *InstSynthesis::createInstFromWiring(
     PrintReplacementRHS(llvm::outs(), IC.getInst(Comp.Kind, Comp.Width, Ops),
                         Context);
   }
-
+  // Sanity checks
+  if (Ops.size() == 2 && Ops[0]->K == Inst::Const && Ops[1]->K == Inst::Const)
+    report_fatal_error("inst operands are constants!");
   assert(Comp.Width == 1 || Comp.Width == DefaultWidth ||
          Comp.Width == LHS->Width);
+  // Create instruction
   if (Comp.Kind == Inst::Select) {
     Ops[0] = IC.getInst(Inst::Trunc, 1, {Ops[0]});
-    return createJunkFreeInst(Comp.Kind, Comp.Width, Ops, IC);
+    return createCleanInst(Comp.Kind, Comp.Width, Ops, IC);
   } if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc) {
-    Inst *Ret = createJunkFreeInst(Comp.Kind, Comp.Width, Ops, IC);
+    Inst *Ret = createCleanInst(Comp.Kind, Comp.Width, Ops, IC);
     return IC.getInst(Inst::ZExt, DefaultWidth, {Ret});
   } else
-    return createJunkFreeInst(Comp.Kind, Comp.Width, Ops, IC);
+    return createCleanInst(Comp.Kind, Comp.Width, Ops, IC);
 }
 
 LocVar InstSynthesis::parseWiringModel(const SolverSolution &Solution,
@@ -1039,9 +1088,9 @@ LocVar InstSynthesis::getWiringLocVar(const LocVar &OpLoc,
   return Match;
 }
 
-Inst *InstSynthesis::createJunkFreeInst(Inst::Kind Kind, unsigned Width,
-                                        std::vector<Inst *> &Ops,
-                                        InstContext &IC) {
+Inst *InstSynthesis::createCleanInst(Inst::Kind Kind, unsigned Width,
+                                     std::vector<Inst *> &Ops,
+                                     InstContext &IC) {
   switch (Kind) {
   case Inst::Add:
   case Inst::AddNSW:
@@ -1242,6 +1291,13 @@ std::vector<std::string> InstSynthesis::splitString(const char *S, char Del) {
 bool InstSynthesis::isWiringInvalid(const LocVar &Left, const LocVar &Right) {
   return (InvalidWirings.count(std::make_pair(Left, Right)) ||
           InvalidWirings.count(std::make_pair(Right, Left)));
+}
+
+bool InstSynthesis::isInputConst(const LocVar &Loc) {
+  if (Loc.first != 0)
+    return false;
+
+  return LocInstMap.count(getLocVarStr(Loc, CONST_PREFIX)) != 0;
 }
 
 void InstSynthesis::forbidInvalidCandWiring(const ProgramWiring &CandWiring,
