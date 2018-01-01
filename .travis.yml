@@ -1,0 +1,16 @@
+dist: xenial
+
+language: cpp
+
+addons:
+  apt:
+    packages:
+      - z3
+
+install:
+ - ./update_deps.sh Release
+ - mkdir build
+ - cd build
+ - cmake -G Ninja -DTEST_SOLVER=${SOUPER_SOLVER} -DTEST_SYNTHESIS=ON -DCMAKE_BUILD_TYPE=Release ..
+ - ninja
+ - ninja check
