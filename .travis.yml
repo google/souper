@@ -1,0 +1,10 @@
+sudo: required
+language: cpp
+services:
+ - docker
+install:
+ - printenv | grep '^TRAVIS_' > my_env
+ - docker pull regehr/souperweb:latest
+ - docker run --env-file my_env -it -d --name souperweb regehr/souperweb bash
+script:
+ - docker exec souperweb /usr/src/souper/clone_and_test.sh
