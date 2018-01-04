@@ -4,4 +4,4 @@ user souper
 volume /data
 workdir /data
 expose 8080
-cmd redis-server & (sleep 1; souperweb -cvc4-path=/usr/local/bin/cvc4) & wait
+cmd redis-server & (sleep 1; souperweb -z3-path=/usr/bin/z3) & wait

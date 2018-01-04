@@ -26,22 +26,31 @@ if [ -n "$1" ] ; then
 fi
 
 llvmdir=third_party/llvm
-llvm_builddir=$llvmdir/$llvm_build_type
+llvm_installdir=$(pwd)/$llvmdir/$llvm_build_type
+llvm_builddir=$(pwd)/$llvmdir/${llvm_build_type}-build
 
 svn co https://llvm.org/svn/llvm-project/llvm/${llvm_branch} $llvmdir
 svn co https://llvm.org/svn/llvm-project/cfe/${llvm_branch} $llvmdir/tools/clang
 svn co https://llvm.org/svn/llvm-project/compiler-rt/${llvm_branch} $llvmdir/projects/compiler-rt
 mkdir -p $llvm_builddir
 
-cmake_flags=".. -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DCMAKE_CXX_FLAGS=-DLLVM_ENABLE_STATS=true"
+cmake_flags=".. -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DCMAKE_CXX_FLAGS=-DLLVM_ENABLE_STATS=true"
 
 if [ -n "`which ninja`" ] ; then
   (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")
   ninja -C $llvm_builddir
+  ninja -C $llvm_builddir install
 else
   (cd $llvm_builddir && cmake $cmake_flags "$@")
   make -C $llvm_builddir -j4
+  make -C $llvm_builddir -j4 install
 fi
+
+# we want these but they don't get installed by default
+cp $llvm_builddir/bin/llvm-lit $llvm_installdir/bin
+cp $llvm_builddir/bin/FileCheck $llvm_installdir/bin
+cp $llvm_builddir/lib/libgtest_main.a $llvm_installdir/lib
+cp $llvm_builddir/lib/libgtest.a $llvm_installdir/lib
 
 kleedir=third_party/klee
 
