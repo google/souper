@@ -1,0 +1,66 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+%Z:i32 = var
+%RHS:i32 = var
+%Y = or %Z, 4042322160 ; 0xf0f0f0f0
+%X = xor %Y, 252645135 ; 0x0f0f0f0f
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+infer %r
+%and = and %Z, 252645135
+%r2 = sub %RHS, %and
+result %r2
+
+%Z:i64 = var
+%RHS:i64 = var
+%Y = and %Z, 25029374298723009
+%X = xor %Y, 25029374298723009
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+infer %r
+%or = or %Z, -25029374298723010
+%r2 = sub %RHS, %or
+result %r2
+
+%Z:i16 = var
+%RHS:i16 = var
+%Y = and %Z, 9998
+%LHS = xor %Y, 9999
+%r = add %LHS, %RHS
+infer %r
+%or = or %Z, -9999
+%r2 = sub %RHS, %or
+result %r2
+
+%x:i16 = var
+%a = add %x, 65536
+infer %x
+%r2 = xor %x, 65536
+result %r2
+
+%a:i1 = var
+%b:i64 = var
+%ax:i64 = zext %a
+%c = add %ax, %b
+infer %c
+%b1 = add %b, 1
+%c2 = select %a, %b1, %b
+result %c2
+
+%Y:i32 = var
+%pre1 = and %Y, -8192
+%pre2 = eq %pre1, 0
+pc %pre2 1
+%LHS = xor %Y, -4096
+%r = add %LHS, 4096
+infer %r
+%shl = shl %Y, 19
+%r2 = ashr %shl, 19
+result %r2

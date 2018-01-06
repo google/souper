@@ -51,13 +51,13 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
   std::string ErrStr;
 
-  ParsedReplacement Rep;
-  ReplacementContext Context;
+  std::vector<ParsedReplacement> Reps;
+  std::vector<ReplacementContext> Contexts;
   if (InferRHS || ParseLHSOnly) {
-    Rep = ParseReplacementLHS(IC, MB.getBufferIdentifier(), MB.getBuffer(),
-                              Context, ErrStr);
+    Reps = ParseReplacementLHSs(IC, MB.getBufferIdentifier(), MB.getBuffer(),
+                                Contexts, ErrStr);
   } else {
-    Rep = ParseReplacement(IC, MB.getBufferIdentifier(), MB.getBuffer(), ErrStr);
+    Reps = ParseReplacements(IC, MB.getBufferIdentifier(), MB.getBuffer(), ErrStr);
   }
   if (!ErrStr.empty()) {
     llvm::errs() << ErrStr << '\n';
@@ -69,67 +69,71 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
     return 0;
   }
 
-  if (InferRHS) {
-    if (std::error_code EC = S->infer(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
-                                      Rep.Mapping.RHS, IC)) {
-      llvm::errs() << EC.message() << '\n';
-      return 1;
-    }
-    if (Rep.Mapping.RHS) {
-      llvm::outs() << "; RHS inferred successfully\n";
-      if (PrintRepl) {
-        PrintReplacement(llvm::outs(), Rep.BPCs, Rep.PCs, Rep.Mapping);
-      } else if (PrintReplSplit) {
-        ReplacementContext Context;
-        PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
-                            Rep.Mapping.LHS, Context);
-        PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
-      } else {
-        PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
+  unsigned Index = 0;
+  for (auto Rep : Reps) {
+    if (InferRHS) {
+      if (std::error_code EC = S->infer(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
+                                        Rep.Mapping.RHS, IC)) {
+        llvm::errs() << EC.message() << '\n';
+        return 1;
       }
-    } else {
-      llvm::outs() << "; Failed to infer RHS\n";
-      if (PrintRepl || PrintReplSplit) {
-        ReplacementContext Context;
-        PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
-                            Rep.Mapping.LHS, Context);
-      }
-    }
-  } else {
-    bool Valid;
-    std::vector<std::pair<Inst *, APInt>> Models;
-    if (std::error_code EC = S->isValid(Rep.BPCs, Rep.PCs,
-                                        Rep.Mapping, Valid, &Models)) {
-      llvm::errs() << EC.message() << '\n';
-      return 1;
-    }
-
-    if (Valid) {
-      llvm::outs() << "; LGTM\n";
-      if (PrintRepl)
-        PrintReplacement(llvm::outs(), Rep.BPCs, Rep.PCs, Rep.Mapping);
-      if (PrintReplSplit) {
-        ReplacementContext Context;
-        PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
-                            Rep.Mapping.LHS, Context);
-        PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
-      }
-    } else {
-      llvm::outs() << "Invalid";
-      if (PrintCounterExample && !Models.empty()) {
-        llvm::outs() << ", e.g.\n\n";
-        std::sort(Models.begin(), Models.end(),
-                  [](const std::pair<Inst *, APInt> &A,
-                     const std::pair<Inst *, APInt> &B) {
-                    return A.first->Name < B.first->Name;
-                  });
-        for (const auto &M : Models) {
-          llvm::outs() << '%' << M.first->Name << " = " << M.second << '\n';
+      if (Rep.Mapping.RHS) {
+        llvm::outs() << "; RHS inferred successfully\n";
+        if (PrintRepl) {
+          PrintReplacement(llvm::outs(), Rep.BPCs, Rep.PCs, Rep.Mapping);
+        } else if (PrintReplSplit) {
+          ReplacementContext Context;
+          PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
+                              Rep.Mapping.LHS, Context);
+          PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
+        } else {
+          PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Contexts[Index]);
         }
       } else {
-        llvm::outs() << "\n";
+        llvm::outs() << "; Failed to infer RHS\n";
+        if (PrintRepl || PrintReplSplit) {
+          ReplacementContext Context;
+          PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
+                              Rep.Mapping.LHS, Context);
+        }
+      }
+    } else {
+      bool Valid;
+      std::vector<std::pair<Inst *, APInt>> Models;
+      if (std::error_code EC = S->isValid(Rep.BPCs, Rep.PCs,
+                                          Rep.Mapping, Valid, &Models)) {
+        llvm::errs() << EC.message() << '\n';
+        return 1;
+      }
+
+      if (Valid) {
+        llvm::outs() << "; LGTM\n";
+        if (PrintRepl)
+          PrintReplacement(llvm::outs(), Rep.BPCs, Rep.PCs, Rep.Mapping);
+        if (PrintReplSplit) {
+          ReplacementContext Context;
+          PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
+                              Rep.Mapping.LHS, Context);
+          PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
+        }
+      } else {
+        llvm::outs() << "Invalid";
+        if (PrintCounterExample && !Models.empty()) {
+          llvm::outs() << ", e.g.\n\n";
+          std::sort(Models.begin(), Models.end(),
+                    [](const std::pair<Inst *, APInt> &A,
+                       const std::pair<Inst *, APInt> &B) {
+                      return A.first->Name < B.first->Name;
+                    });
+          for (const auto &M : Models) {
+            llvm::outs() << '%' << M.first->Name << " = " << M.second << '\n';
+          }
+        } else {
+          llvm::outs() << "\n";
+        }
       }
     }
+    ++Index;
   }
   return 0;
 }
