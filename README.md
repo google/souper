@@ -3,6 +3,8 @@ missing peephole optimizations in LLVM's midend optimizers.
 
 # Requirements
 
+Souper should work on any reasonably modern Linux or OS X machine.
+
 You will need a reasonably modern compiler toolchain. LLVM has instructions
 on how to get one for Linux:
 http://llvm.org/docs/GettingStarted.html#getting-a-modern-host-c-toolchain
@@ -72,7 +74,7 @@ flags to tell Souper where the SMT solver executable is:
 
 For example:
 ```
-$ /path/to/souper -z3-path=/usr/bin/stp /path/to/file.bc
+$ /path/to/souper -z3-path=/usr/bin/z3 /path/to/file.bc
 ```
 
 Souper will extract SMT queries from the bitcode file and pass them to
@@ -89,19 +91,19 @@ LLVM's regular peephole optimizations.
 For example:
 ```
 $ /path/to/clang -Xclang -load -Xclang /path/to/libsouperPass.so \
-                 -mllvm -z3-path=/path/to/z3-build/z3 /path/to/file.c
-```                 
+                 -mllvm -z3-path=/usr/bin/z3 /path/to/file.c
+```
 
 Or to run the pass on its own:
 ```
 $ /path/to/opt -load /path/to/libsouperPass.so -souper \
-               -z3-path=/path/to/z3-build/z3 -o /path/to/file.opt.bc \
+               -z3-path=/usr/bin/z3 -o /path/to/file.opt.bc \
                /path/to/file.bc
-```               
+```
 
 Or use the drop-in compiler replacements sclang and sclang++:
 ```
-$ export SOUPER_SOLVER=-z3-path=/usr/bin/stp
+$ export SOUPER_SOLVER=-z3-path=/usr/bin/z3
 $ /path/to/configure CC=/path/to/sclang CXX=/path/to/sclang++
 $ make
 ```
@@ -117,21 +119,6 @@ speedup for large compilations. This behavior may be disabled by setting the
 SOUPER_NO_EXTERNAL_CACHE environment variable. Souper's Redis cache does not yet
 have any support for versioning; you should stop Redis and delete its dump file
 any time Souper is upgraded.
-
-Souper uses KLEE's Expr library to construct SMT queries in SMT-LIBv2 format
-and pass them to a solver. KLEE's default encoding for symbolic inputs
-is based on Theory of Arrays (QF_AUFBV). We experienced significant performance
-boost in solvers by using pure BitVector encoding (QF_BV) instead. You can
-use this workaround by pulling the following KLEE branch and recompiling
-Souper:
-
-```
-$ cd /path/to/souper
-$ rm -rf third_party/klee
-$ git clone -b pure-bv-qf-llvm-5.0-patch https://github.com/rsas/klee third_party/klee
-$ cd build
-$ make
-```
 
 # Disclaimer
 
