@@ -23,7 +23,7 @@ $ go get github.com/garyburd/redigo/redis
 
 1. Download and build dependencies:
 ```
-$ ./update_deps.sh $buildtype $extra_cmake_flags
+$ ./build_deps.sh $buildtype $extra_cmake_flags
 ```
    $buildtype is optional; it defaults to Release and may be set to any LLVM
    build type.

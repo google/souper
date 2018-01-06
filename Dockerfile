@@ -4,7 +4,7 @@ run set -x; \
         apt-get update -qq \
         && apt-get remove -y -qq clang llvm llvm-runtime \
 	&& apt-get install libgmp10 \
-	&& echo 'ca-certificates gcc g++ valgrind libc6-dev libgmp-dev cmake ninja-build make autoconf automake libtool golang-go python subversion git' > /usr/src/build-deps \
+	&& echo 'ca-certificates gcc g++ valgrind libc6-dev libgmp-dev cmake patch ninja-build make autoconf automake libtool golang-go python subversion git' > /usr/src/build-deps \
 	&& apt-get install -y $(cat /usr/src/build-deps) --no-install-recommends \
 	&& git clone https://github.com/Z3Prover/z3.git /usr/src/z3 \
 	&& git clone https://github.com/antirez/redis /usr/src/redis
@@ -17,20 +17,20 @@ run cd /usr/src/z3 \
 	&& make install
 
 run cd /usr/src/redis \
-	&& git checkout 4.0.6 \
+	&& git checkout 4.0.8 \
 	&& make -j4 \
 	&& make install
 
 run export GOPATH=/usr/src/go \
 	&& go get github.com/garyburd/redigo/redis
 
-add update_deps.sh /usr/src/souper/update_deps.sh
+add build_deps.sh /usr/src/souper/build_deps.sh
 add clone_and_test.sh /usr/src/souper/clone_and_test.sh
 
 run cd /usr/src/souper \
-#	&& ./update_deps.sh Debug \
+#	&& ./build_deps.sh Debug \
 #       && rm -rf third_party/llvm/Debug-build \
-	&& ./update_deps.sh Release \
+	&& ./build_deps.sh Release \
         && rm -rf third_party/llvm/Release-build \
 	&& rm -rf third_party/hiredis/install/lib/libhiredis.so*
 
