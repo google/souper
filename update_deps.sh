@@ -14,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hiredis_commit=8f60ee65327445ed8384290b4040685329eb03c5
+# hiredis version 0.13.3
+hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
 llvm_branch=branches/release_60
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-5.0-patch
@@ -72,5 +73,5 @@ mkdir -p $hiredisdir/install/include/hiredis
 mkdir -p $hiredisdir/install/lib
 
 (cd $hiredisdir && git checkout $hiredis_commit && make libhiredis.a &&
- cp -r hiredis.h async.h adapters install/include/hiredis &&
+ cp -r hiredis.h async.h read.h sds.h adapters install/include/hiredis &&
  cp libhiredis.a install/lib)

@@ -322,7 +322,7 @@ SolverProgram souper::makeExternalSolverProgram(StringRef Path) {
                    [](const std::string &Arg) { return Arg.c_str(); });
     ArgPtrs.push_back(0);
 
-    const StringRef *Redirects[] = {&RedirectIn, &RedirectOut, &RedirectErr};
+    Optional<StringRef> Redirects[] = {RedirectIn, RedirectOut, RedirectErr};
     return sys::ExecuteAndWait(PathStr, ArgPtrs.data(), 0, Redirects, Timeout);
   };
 }
