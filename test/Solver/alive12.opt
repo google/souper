@@ -1,0 +1,206 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:1140-1
+; Pre: MaskedValueIsZero(%op0LHS, ~C)
+; %op0 = xor %op0LHS, %op0RHS
+; %r = and %op0, C
+;   =>
+; %newRHS = and %op0RHS, C
+; %r = xor %op0LHS, %newRHS
+
+%op0LHS:i32 = var
+%op0RHS:i32 = var
+%C:i32 = var
+%notC = xor %C, -1
+%mask = and %notC, %op0LHS
+%cmp = eq %mask, 0
+pc %cmp 1
+%op0 = xor %op0LHS, %op0RHS
+%r = and %op0, %C
+infer %r
+%newRHS = and %op0RHS, %C
+%r2 = xor %op0LHS, %newRHS
+result %r2
+
+; Name: AndOrXor:1140-2
+; Pre: MaskedValueIsZero(%op0LHS, ~C)
+; %op0 = or %op0LHS, %op0RHS
+; %r = and %op0, C
+;   =>
+; %newRHS = and %op0RHS, C
+; %r = or %op0LHS, %newRHS
+
+%op0LHS:i32 = var
+%op0RHS:i32 = var
+%C:i32 = var
+%notC = xor %C, -1
+%mask = and %notC, %op0LHS
+%cmp = eq %mask, 0
+pc %cmp 1
+%op0 = or %op0LHS, %op0RHS
+%r = and %op0, %C
+infer %r
+%newRHS = and %op0RHS, %C
+%r2 = or %op0LHS, %newRHS
+result %r2
+
+; Name: AndOrXor:1146-1
+; Pre: MaskedValueIsZero(%op0RHS, ~C)
+; %op0 = xor %op0LHS, %op0RHS
+; %r = and %op0, C
+;   =>
+; %newLHS = and %op0LHS, C
+; %r = xor %newLHS, %op0RHS
+
+%op0LHS:i32 = var
+%op0RHS:i32 = var
+%C:i32 = var
+%notC = xor %C, -1
+%mask = and %notC, %op0RHS
+%cmp = eq %mask, 0
+pc %cmp 1
+%op0 = xor %op0LHS, %op0RHS
+%r = and %op0, %C
+infer %r
+%newLHS = and %op0LHS, %C
+%r2 = xor %newLHS, %op0RHS
+result %r2
+
+; Name: AndOrXor:1146-2
+; Pre: MaskedValueIsZero(%op0RHS, ~C)
+; %op0 = or %op0LHS, %op0RHS
+; %r = and %op0, C
+;   =>
+; %newLHS = and %op0LHS, C
+; %r = or %newLHS, %op0RHS
+
+%op0LHS:i32 = var
+%op0RHS:i32 = var
+%C:i32 = var
+%notC = xor %C, -1
+%mask = and %notC, %op0RHS
+%cmp = eq %mask, 0
+pc %cmp 1
+%op0 = or %op0LHS, %op0RHS
+%r = and %op0, %C
+infer %r
+%newLHS = and %op0LHS, %C
+%r2 = or %newLHS, %op0RHS
+result %r2
+
+; Name: AndOrXor:1175
+; Pre: MaskedValueIsZero(%A, lshr(-1, countLeadingZeros(C)))
+; %lhs = sub %A, %B
+; %r = and %lhs, C
+;   =>
+; %neg = sub 0, %B
+; %r = and %neg, C
+
+%A:i32 = var
+%B:i32 = var
+%C:i32 = var
+%lz = ctlz %C
+%sh = lshr -1, %lz
+%res = and %A, %sh
+%cmp = eq 0, %res
+pc %cmp 1
+%lhs = sub %A, %B
+%r = and %lhs, %C
+infer %r
+%neg = sub 0, %B
+%r2 = and %neg, %C
+result %r2
+
+; Name: AndOrXor:1191-1
+; %op0 = shl 1, %op0RHS
+; %r = and %op0, 1
+;   =>
+; %newICMP = icmp eq %op0RHS, 0
+; %r = zext %newICMP
+
+%op0RHS:i32 = var
+%op0 = shl 1, %op0RHS
+%r = and %op0, 1
+infer %r
+%newICMP = eq %op0RHS, 0
+%r2:i32 = zext %newICMP
+result %r2
+
+; Name: AndOrXor:1191-2
+; %op0 = lshr 1, %op0RHS
+; %r = and %op0, 1
+;   =>
+; %newICMP = icmp eq %op0RHS, 0
+; %r = zext %newICMP
+
+%op0RHS:i64 = var
+%op0 = lshr 1, %op0RHS
+%r = and %op0, 1
+infer %r
+%newICMP = eq %op0RHS, 0
+%r2:i64 = zext %newICMP
+result %r2
+
+; Name: AndOrXor:1207
+; %a = and %x, C1
+; %op0 = trunc %a
+; %r = and %op0, C2
+;   =>
+; %newcast = trunc %x
+; %r = and %newcast, trunc(C1) & C2
+
+%x:i32 = var
+%a = and %x, 345234534
+%op0:i8 = trunc %a
+%r = and %op0, 6795033293
+infer %r
+%newcast:i8 = trunc %x
+%r2 = and %newcast, 68
+result %r2
+
+; Name: AndOrXor:1230  ~A & ~B -> ~(A | B)
+; %op0 = xor %notOp0, -1
+; %op1 = xor %notOp1, -1
+; %r = and %op0, %op1
+;   =>
+; %or = or %notOp0, %notOp1
+; %r = xor %or, -1
+
+%notOp0:i64 = var
+%notOp1:i64 = var
+%op0 = xor %notOp0, -1
+%op1 = xor %notOp1, -1
+%r = and %op0, %op1
+infer %r
+%or = or %notOp0, %notOp1
+%r2 = xor %or, -1
+result %r2
+
+; Name: AndOrXor:1241 (A|B) & ~(A&B) => A^B
+; %op0 = or %A, %B
+; %notOp1 = and %A, %B
+; %op1 = xor %notOp1, -1
+; %r = and %op0, %op1
+;   =>
+; %r = xor %A, %B
+
+%A:i64 = var
+%B:i64 = var
+%op0 = or %A, %B
+%notOp1 = and %A, %B
+%op1 = xor %notOp1, -1
+%r = and %op0, %op1
+infer %r
+%r2 = xor %A, %B
+result %r2

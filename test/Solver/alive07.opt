@@ -1,0 +1,173 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:226
+; Pre: C2 & lshr(-1, C1) == lshr(-1, C1)
+; %op = lshr %X, C1
+; %r = and %op, C2
+;   =>
+; %r = %op
+
+%X:i16 = var
+%op = lshr %X, 12
+%r = and %op, 3215
+infer %r
+result %op
+
+; Name: AndOrXor:230
+; Pre: C2 & lshr(-1, C1) != lshr(-1, C1)
+; %op = lshr %X, C1
+; %r = and %op, C2
+;   =>
+; %r = and %op, C2 & lshr(-1, C1)
+
+%X:i16 = var
+%op = lshr %X, 8
+%r = and %op, 39167
+infer %r
+%r2 = and %op, 255
+result %r2
+
+; Name: AndOrXor:246
+; Pre: hasOneUse(%op) && C2 & lshr(-1, C1) == C2
+; %op = ashr %X, C1
+; %r = and %op, C2
+;   =>
+; %op  = lshr %X, C1
+; %r = and %op, C2
+
+%X:i16 = var
+%op = ashr %X, 1
+%r = and %op, 7575
+infer %r
+%op2 = lshr %X, 1
+%r2 = and %op2, 7575
+result %r2
+
+; Name: AndOrXor:270
+; Pre: C1 <= C2 && C1 == C2
+; %c1 = icmp sge %X, C1
+; %c2 = icmp slt %X, C2
+; %r = and %c1, %c2
+;   =>
+; %r = false
+
+%X:i64 = var
+%Y:i64 = var
+%c1 = slt 3333, %X
+%c2 = slt %X, 3333
+%r = and %c1, %c2
+infer %r
+result 0:i1
+
+; Name: AndOrXor:273
+; Pre: C1 <= C2 && C1 == 1 << (width(C1)-1)
+; %c1 = icmp sge %X, C1
+; %c2 = icmp slt %X, C2
+; %r = and %c1, %c2
+;   =>
+; %r = icmp slt %X, C2
+
+%X:i8 = var
+%z1 = sle -128, %X
+%z2 = slt %X, 77
+%r = and %z1, %z2
+infer %r
+%r2 = slt %X, 77
+result %r2
+
+; Name: AndOrXor:280
+; Pre: C1 <= C2
+; %c1 = icmp sge %X, C1
+; %c2 = icmp slt %X, C2
+; %r = and %c1, %c2
+;   =>
+; %a = add %X, -C1
+; %r = icmp ult %a, -C1+C2
+
+%X:i32 = var
+%c1 = sle 1000000000, %X
+%c2 = slt %X, 1000050000
+%r = and %c1, %c2
+infer %r
+%a = add %X, -1000000000
+%r2 = ult %a, 50000
+result %r2
+
+; Name: AndOrXor:287
+; Pre: C1 <= C2 && C1 == C2
+; %c1 = icmp slt %X, C1
+; %c2 = icmp sge %X, C2
+; %r = or %c1, %c2
+;   =>
+; %r = true
+
+%X:i64 = var
+%c1 = slt %X, 3453452345
+%c2 = sle 3453452345, %X
+%r = or %c1, %c2
+infer %r
+result 1:i1
+
+; Name: AndOrXor:290
+; Pre: C1 <= C2 && C1 != C2 && C1 == 1<< (width(C1)-1)
+; %c1 = icmp slt %X, C1
+; %c2 = icmp sge %X, C2
+; %r = or %c1, %c2
+;   =>
+; %r = icmp sgt %X, (C2-1)
+
+%X:i16 = var
+%c1 = slt %X, 32768
+%c2 = sle -1234, %X
+%r = or %c1, %c2
+infer %r
+%r2 = slt -1235, %X
+result %r2
+
+; Name: AndOrXor:298
+; Pre: C1 <= C2 && C1 != C2
+; %c1 = icmp slt %X, C1
+; %c2 = icmp sge %X, C2
+; %r = or %c1, %c2
+;   =>
+; %a = add %X, -C1
+; %r = icmp ugt %a, -C1+(C2-1)
+
+%X:i16 = var
+%c1 = slt %X, -1000
+%c2 = sle 2000, %X
+%r = or %c1, %c2
+infer %r
+%a = add %X, 1000
+%r2 = ult 2999, %a
+result %r2
+
+; Name: AndOrXor:343
+; Pre: C1 & C2 == C2 && (isPowerOf2OrZero(C2+1) || (isShiftedMask(C2) && MaskedValueIsZero(%B, (1 << (width(C2) - countLeadingZeros((C2 - 1) ^ C2)))-1)))
+; %lhs = and %A, C1
+; %Op = add %lhs, %B
+; %r = and %Op, C2
+;   =>
+; %op = add %A, %B
+; %r = and %op, C2
+
+%A:i16 = var
+%B:i16 = var
+%lhs = and %A, 4095
+%Op = add %lhs, %B
+%r = and %Op, 1023
+infer %r
+%op = add %A, %B
+%r2 = and %op, 1023
+result %r2

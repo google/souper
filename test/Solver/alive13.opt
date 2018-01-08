@@ -1,0 +1,185 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:1247 ~(A&B) & (A|B) => A^B
+; %notOp0 = and %A, %B
+; %op0 = xor %notOp0, -1
+; %op1 = or %A, %B
+; %r = and %op0, %op1
+;   =>
+; %r = xor %A, %B
+
+%A:i64 = var
+%B:i64 = var
+%notOp0 = and %A, %B
+%op0 = xor %notOp0, -1
+%op1 = or %A, %B
+%r = and %op0, %op1
+infer %r
+%r2 = xor %A, %B
+result %r2
+
+; Name: AndOrXor:1253 A & (A^B) -> A & ~B
+; %op0 = xor %A, %B
+; %r = and %op0, %A
+;   =>
+; %notB = xor %B, -1
+; %r = and %A, %notB
+
+%A:i128 = var
+%B:i128 = var
+%op0 = xor %A, %B
+%r = and %op0, %A
+infer %r
+%notB = xor %B, -1
+%r2 = and %A, %notB
+result %r2
+
+; Name: AndOrXor:1280 (~A|B)&A -> A&B
+; %nA = xor %A, -1
+; %op0 = or %nA, %B
+; %r = and %op0, %A
+;   =>
+; %r = and %A, %B
+
+%A:i256 = var
+%B:i256 = var
+%nA = xor %A, -1
+%op0 = or %nA, %B
+%r = and %op0, %A
+infer %r
+%r2 = and %A, %B
+result %r2
+
+; Name: AndOrXor:1288 (A ^ B) & ((B ^ C) ^ A) -> (A ^ B) & ~C
+; %op0 = xor %A, %B
+; %x = xor %B, %C
+; %op1 = xor %x, %A
+; %r = and %op0, %op1
+;   =>
+; %negC = xor %C, -1
+; %r = and %op0, %negC
+
+%A:i100 = var
+%B:i100 = var
+%C:i100 = var
+%op0 = xor %A, %B
+%x = xor %B, %C
+%op1 = xor %x, %A
+%r = and %op0, %op1
+infer %r
+%negC = xor %C, -1
+%r2 = and %op0, %negC
+result %r2
+
+; Name: AndOrXor:1294 (A | B) & ((~A) ^ B) -> (A & B)
+; %op0 = or %A, %B
+; %x = xor %A, -1
+; %op1 = xor %x, %B
+; %r = and %op0, %op1
+;   =>
+; %r = and %A, %B
+
+%A:i355 = var
+%B:i355 = var
+%op0 = or %A, %B
+%x = xor %A, -1
+%op1 = xor %x, %B
+%r = and %op0, %op1
+infer %r
+%r2 = and %A, %B
+result %r2
+
+; Name: AndOrXor:1346 (sext)
+; %op0 = sext %x
+; %op1 = sext %y
+; %r = and %op0, %op1
+;   =>
+; %0 = and %x, %y
+; %r = sext %0
+
+%x:i64 = var
+%y:i64 = var
+%op0:i80 = sext %x
+%op1:i80 = sext %y
+%r = and %op0, %op1
+infer %r
+%0 = and %x, %y
+%r2:i80 = sext %0
+result %r2
+
+; Name: AndOrXor:1346 (zext)
+; %op0 = zext %x
+; %op1 = zext %y
+; %r = and %op0, %op1
+;   =>
+; %0 = and %x, %y
+; %r = zext %0
+
+%x:i8 = var
+%y:i8 = var
+%op0:i32 = zext %x
+%op1:i32 = zext %y
+%r = and %op0, %op1
+infer %r
+%0 = and %x, %y
+%r2:i32 = zext %0
+result %r2
+
+; Name: AndOrXor:1346 (trunc)
+; %op0 = trunc %x
+; %op1 = trunc %y
+; %r = and %op0, %op1
+;   =>
+; %0 = and %x, %y
+; %r = trunc %0
+
+%x:i32 = var
+%y:i32 = var
+%op0:i4 = trunc %x
+%op1:i4 = trunc %y
+%r = and %op0, %op1
+infer %r
+%0 = and %x, %y
+%r2:i4 = trunc %0
+result %r2
+
+; Name: AndOrXor:1388
+; %op0 = sext i1 %a
+; %r = and %op0, %b
+;   =>
+; %r = select %a, %b, 0
+
+%a:i1 = var
+%b:i32 = var
+%op0:i32 = sext %a
+%r = and %op0, %b
+infer %r
+%r2 = select %a, %b, 0
+result %r2
+
+; Name: AndOrXor:1395
+; %nop0 = sext i1 %a
+; %op0 = xor %nop0, -1
+; %r = and %op0, %b
+;   =>
+; %r = select %a, 0, %b
+
+%a:i1 = var
+%b:i32 = var
+%nop0:i32 = sext %a
+%op0 = xor %nop0, -1
+%r = and %op0, %b
+infer %r
+%r2 = select %a, 0, %b
+result %r2
