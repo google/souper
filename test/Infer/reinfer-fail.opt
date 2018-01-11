@@ -1,0 +1,30 @@
+; REQUIRES: solver, solver-model, synthesis
+
+; RUN: %souper-check %solver -reinfer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=ctpop,ctpop,or,const,const,eq,eq %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: cost regressed
+
+%x:i8 = var
+%b1 = eq %x, 1
+%b2 = eq %x, 2
+%b3 = eq %x, 4
+%b4 = eq %x, 8
+%b5 = eq %x, 16
+%b6 = eq %x, 32
+%b7 = eq %x, 64
+%b8 = eq %x, 128
+%ba = or %b1, %b2
+%bb = or %b3, %b4
+%bc = or %b5, %b6
+%bd = or %b7, %b8
+%be = or %ba, %bb
+%bf = or %bc, %bd
+%bg = or %be, %bf
+%bh = eq %x, 0
+%res = or %bg, %bh
+infer %res
+%z1 = sub 0, %x
+%z2 = and %x, %z1
+%z3 = eq %x, %z2
+result %z3

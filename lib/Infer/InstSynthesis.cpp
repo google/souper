@@ -1320,20 +1320,6 @@ void InstSynthesis::forbidInvalidCandWiring(const ProgramWiring &CandWiring,
   WiringPCs.emplace_back(Ante, IC.getConst(APInt(1, false)));
 }
 
-int InstSynthesis::costHelper(Inst *I, std::set<Inst *> &Visited) {
-  if (!Visited.insert(I).second)
-    return 0;
-  int Cost = Inst::getCost(I->K);
-  for (auto Op : I->Ops)
-    Cost += costHelper(Op, Visited);
-  return Cost;
-}
-
-int InstSynthesis::cost(Inst *I) {
-  std::set<Inst *> Visited;
-  return costHelper(I, Visited);
-}
-
 bool InstSynthesis::hasConst(Inst *I) {
   if (I->K == Inst::Const)
     return true;
