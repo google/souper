@@ -1,0 +1,168 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AddSub:1672
+; Pre: hasOneUse(%Op1)
+; %neg = sub 0, %B
+; %Op1 = mul %A, %neg ; TODO: commute
+; %r = sub %X, %Op1
+;   =>
+; %m = mul %A, %B
+; %r = add %X, %m
+
+%A:i32 = var
+%B:i32 = var
+%X:i32 = var
+%neg = sub 0, %B
+%Op1 = mul %A, %neg
+%r = sub %X, %Op1
+infer %r
+%m = mul %A, %B
+%r2 = add %X, %m
+result %r2
+
+; Name: AddSub:1678
+; Pre: hasOneUse(%Op1)
+; %Op1 = mul %A, C ; TODO: commute
+; %r = sub %X, %Op1
+;   =>
+; %m = mul %A, -C
+; %r = add %X, %m
+
+%A:i32 = var
+%X:i32 = var
+%Op1 = mul %A, 11111
+%r = sub %X, %Op1
+infer %r
+%m = mul %A, -11111
+%r2 = add %X, %m
+result %r2
+
+; Name: AddSub:1693
+; Pre: WillNotOverflowSignedSub(%A, %B)
+; %r = sub %A, %B
+;   =>
+; %r = sub nsw %A, %B
+
+%A:i32 = var
+%B:i32 = var
+%z = ssub.with.overflow %A, %B
+%ov = extractvalue %z, 1
+pc %ov 0:i1
+%r = sub %A, %B
+infer %r
+%r2 = subnsw %A, %B
+result %r2
+
+; Name: AndOrXor:135
+; %op = xor %X, C1
+; %r = and %op, C2
+;   =>
+; %a = and %X, C2
+; %r = xor %a, C1&C2
+
+%X:i64 = var
+%op = xor %X, 234324
+%r = and %op, 19729823
+infer %r
+%a = and %X, 19729823
+%r2 = xor %a, 65812
+result %r2
+
+; Name: AndOrXor:144
+; %op = or %X, C1
+; %r = and %op, C2
+;   =>
+; %o = or %X, C1&C2
+; %r = and %o, C2
+
+%X:i128 = var
+%op = or %X, 894356
+%r = and %op, 23433
+infer %r
+%o = or %X, 384
+%r2 = and %o, 23433
+result %r2
+
+; Name: AndOrXor:151
+; Pre: (C1 & C2) == C1
+; %op = or %X, C1
+; %r = and %op, C2
+;   =>
+; %a = and %X, C2^(C1&C2)
+; %r = or %a, C1
+
+%X:i8 = var
+%op = or %X, 1
+%r = and %op, 99
+infer %r
+%a = and %X, 98
+%r2 = or %a, 1
+result %r2
+
+; Name: AndOrXor:185
+; Pre: isPowerOf2(C2) && C1 & (C2-1) == 0 && C2 & C1 == 0
+; %op = add %X, C1
+; %r = and %op, C2
+;   =>
+; %r = and %X, C2
+
+%X:i16 = var
+%op = add %X, 64000
+%r = and %op, 256
+infer %r
+%r2 = and %X, 256
+result %r2
+
+; Name: AndOrXor:190
+; Pre: isPowerOf2(C2) && C1 & (C2-1) == 0 && C2 & C1 != 0
+; %op = add %X, C1
+; %r = and %op, C2
+;   =>
+; %a = and %X, C2
+; %r = xor %a, C2
+
+%X:i8 = var
+%op = add %X, 96
+%r = and %op, 32
+infer %r
+%a = and %X, 32
+%r2 = xor %a, 32
+result %r2
+
+; Name: AndOrXor:206
+; Pre: C2 & (-1 << C1) == (-1 << C1)
+; %op = shl %X, C1
+; %r = and %op, C2
+;   =>
+; %r = %op
+
+%X:i16 = var
+%op = shl %X, 14
+%r = and %op, 62094
+infer %r
+result %op
+
+; Name: AndOrXor:210
+; Pre: C2 & (-1 << C1) != (-1 << C1) && C2 & (-1 << C1) != C2
+; %op = shl %X, C1
+; %r = and %op, C2
+;   =>
+; %r = and %op, C2 & (-1 << C1)
+
+%X:i16 = var
+%op = shl %X, 8
+%r = and %op, 42319
+infer %r
+%r2 = and %op, 42240
+result %r2

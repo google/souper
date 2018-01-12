@@ -1,0 +1,195 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AddSub:1040
+; Pre: C2 == ~C1
+; %Y = or %Z, C2
+; %X = xor %Y, C1
+; %LHS = add %X, 1
+; %r = add %LHS, %RHS
+;   =>
+; %and = and %Z, C1
+; %r = sub %RHS, %and
+
+%Z:i32 = var
+%RHS:i32 = var
+%Y = or %Z, 4042322160 ; 0xf0f0f0f0
+%X = xor %Y, 252645135 ; 0x0f0f0f0f
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+infer %r
+%and = and %Z, 252645135
+%r2 = sub %RHS, %and
+result %r2
+
+; Name: AddSub:1043
+; %Y = and %Z, C1
+; %X = xor %Y, C1
+; %LHS = add %X, 1
+; %r = add %LHS, %RHS
+;   =>
+; %or = or %Z, ~C1
+; %r = sub %RHS, %or
+
+%Z:i64 = var
+%RHS:i64 = var
+%Y = and %Z, 25029374298723009
+%X = xor %Y, 25029374298723009
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+infer %r
+%or = or %Z, -25029374298723010
+%r2 = sub %RHS, %or
+result %r2
+
+; Name: AddSub:1063
+; Pre: countTrailingZeros(C1) == 0 && C1 == C2+1
+; %Y = and %Z, C2
+; %LHS = xor %Y, C1
+; %r = add %LHS, %RHS
+;   =>
+; %or = or %Z, ~C2
+; %r = sub %RHS, %or
+
+%Z:i16 = var
+%RHS:i16 = var
+%Y = and %Z, 9998
+%LHS = xor %Y, 9999
+%r = add %LHS, %RHS
+infer %r
+%or = or %Z, -9999
+%r2 = sub %RHS, %or
+result %r2
+
+; Name: AddSub:1088
+; Pre: isSignBit(C)
+; %a = add %x, C
+;   =>
+; %a = xor %x, C
+
+%x:i16 = var
+%a = add %x, 65536
+infer %x
+%r2 = xor %x, 65536
+result %r2
+
+; Name: AddSub:1098
+; %ax = zext i1 %a
+; %c = add %ax, %b
+;   =>
+; %b1 = add %b, 1
+; %c = select %a, %b1, %b
+
+%a:i1 = var
+%b:i64 = var
+%ax:i64 = zext %a
+%c = add %ax, %b
+infer %c
+%b1 = add %b, 1
+%c2 = select %a, %b1, %b
+result %c2
+
+; Name: AddSub:1111
+; Pre: C1 == -C2 && isPowerOf2(C2) && !MaskedValueIsZero(C2, -1 << (width(C1)-(width(C1) - log2(C2) - 1)))
+; %LHS = xor %Y, C2
+; %r = add %LHS, C1
+;   =>
+; %ShAmt = width(C1) - (width(C1) - log2(C2) - 1)
+; %shl = shl %Y, %ShAmt
+; %r = ashr %shl, %ShAmt
+
+;; JDR: DaveM says precondition is unsatisfiable
+
+; Name: AddSub:1126-1
+; Pre: C2 == -C1 && isPowerOf2(C1) && MaskedValueIsZero(%Y, -1 << (log2(C1) + 1))
+; %LHS = xor %Y, C2
+; %r = add %LHS, C1
+;   =>
+; %ShAmt = width(C1) - log2(C1) - 1
+; %shl = shl %Y, %ShAmt
+; %r = ashr %shl, %ShAmt
+
+%Y:i32 = var
+%pre1 = and %Y, -8192
+%pre2 = eq %pre1, 0
+pc %pre2 1
+%LHS = xor %Y, -4096
+%r = add %LHS, 4096
+infer %r
+%shl = shl %Y, 19
+%r2 = ashr %shl, 19
+result %r2
+
+; Name: AddSub:1126-2
+; Pre: C2 == -C1 && isPowerOf2(C2) && MaskedValueIsZero(%Y, -1 << (log2(C2) + 1))
+; %LHS = xor %Y, C2
+; %r = add %LHS, C1
+;   =>
+; %ShAmt = width(C2) - log2(C2) - 1
+; %shl = shl %Y, %ShAmt
+; %r = ashr %shl, %ShAmt
+
+%Y:i32 = var
+%pre1 = and %Y, -8192
+%pre2 = eq %pre1, 0
+pc %pre2 1
+%LHS = xor %Y, 4096
+%r = add %LHS, -4096
+infer %r
+%shl = shl %Y, 19
+%r2 = ashr %shl, 19
+result %r2
+
+; Name: AddSub:1131
+; Pre: hasOneUse(%LHS) && isPowerOf2(C2+1) && (C2 | computeKnownZeroBits(%Y)) == -1
+; %LHS = xor %Y, C2
+; %r = add %LHS, C1
+;   =>
+; %r = sub C1+C2, %Y
+
+%Y:i16 = var
+%notY = xor -1, %Y
+%pre1 = or %notY, 65535
+%pre2 = eq %pre1, 0
+pc %pre2 1
+%LHS = xor %Y, 170 ; 0xaa
+%r = add %LHS, 4
+infer %r
+%r2 = sub 174, %Y
+result %r2
+
+; Name: AddSub:1142
+; Pre: isSignBit(C1)
+; %b = xor %a, C1
+; %d = add %b, C2
+;   =>
+; %d = add %a, C1^C2
+
+%a:i32 = var
+%b = xor %a, -2147483648
+%d = add %b, 9340291
+infer %d
+%r2 = add %a, 2156823939
+result %r2
+
+; Name: AddSub:1152
+; %r = add i1 %x, %y
+;   =>
+; %r = xor %x, %y
+
+%x:i1 = var
+%y:i1 = var
+%r = add %x, %y
+infer %r
+%r2 = xor %x, %y
+result %r2

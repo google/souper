@@ -1,0 +1,164 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:966
+; Pre: C1 u< C2
+; %op0 = icmp ult %a, C1
+; %op1 = icmp ne %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = %op0
+
+%a:i32 = var
+%op0 = ult %a, 3346
+%op1 = ne %a, 3347
+%r = and %op0, %op1
+infer %r
+result %op0
+
+; Name: AndOrXor:967
+; Pre: C1 u< C2
+; %op0 = icmp ult %a, C1
+; %op1 = icmp ult %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = %op0
+
+%a:i32 = var
+%op0 = ult %a, 3452345
+%op1 = ult %a, -1
+%r = and %op0, %op1
+infer %r
+result %op0
+
+; Name: AndOrXor:978
+; Pre: C1 < C2
+; %op0 = icmp slt %a, C1
+; %op1 = icmp ne %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = %op0
+
+%a:i32 = var
+%op0 = slt %a, -1
+%op1 = ne %a, 1
+%r = and %op0, %op1
+infer %r
+result %op0
+
+; Name: AndOrXor:979
+; Pre: C1 < C2
+; %op0 = icmp slt %a, C1
+; %op1 = icmp slt %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = %op0
+
+%a:i8 = var
+%op0 = slt %a, -53
+%op1 = slt %a, 65
+%r = and %op0, %op1
+infer %r
+result %op0
+
+; Name: AndOrXor:988
+; Pre: C1 u< C2
+; %op0 = icmp ugt %a, C1
+; %op1 = icmp eq %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = %op1
+
+%a:i16 = var
+%op0 = ult 345, %a
+%op1 = eq %a, 40599
+%r = and %op0, %op1
+infer %r
+result %op1
+
+; Name: AndOrXor:989
+; Pre: C1 u< C2
+; %op0 = icmp ugt %a, C1
+; %op1 = icmp ugt %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = %op1
+
+%a:i32 = var
+%op0 = ult 63, %a
+%op1 = ult 3000000000, %a
+%r = and %op0, %op1
+infer %r
+result %op1
+
+; Name: AndOrXor:994
+; Pre: C1 u< C2 && C2 == C1+1
+; %op0 = icmp ugt %a, C1
+; %op1 = icmp ne %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = ugt %a, C2
+
+%a:i16 = var
+%op0 = ult 45344, %a
+%op1 = ne %a, 45345
+%r = and %op0, %op1
+infer %r
+%r2 = ult 45345, %a
+result %r2
+
+; Name: AndOrXor:1006
+; Pre: C1 < C2
+; %op0 = icmp sgt %a, C1
+; %op1 = icmp eq %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = %op1
+
+%a:i16 = var
+%op0 = slt 633, %a
+%op1 = eq %a, 8322
+%r = and %op0, %op1
+infer %r
+result %op1
+
+; Name: AndOrXor:1007
+; Pre: C1 < C2
+; %op0 = icmp sgt %a, C1
+; %op1 = icmp sgt %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = %op1
+
+%a:i32 = var
+%op0 = slt 435345, %a
+%op1 = slt 657567, %a
+%r = and %op0, %op1
+infer %r
+result %op1
+
+; Name: AndOrXor:1012
+; Pre: C1 < C2 && C2 == C1+1
+; %op0 = icmp sgt %a, C1
+; %op1 = icmp ne %a, C2
+; %r = and %op0, %op1
+;   =>
+; %r = icmp sgt %a, C2
+
+%a:i32 = var
+%op0 = slt 563456, %a
+%op1 = ne %a, 563457
+%r = and %op0, %op1
+infer %r
+%r2 = slt 563457, %a
+result %r2
