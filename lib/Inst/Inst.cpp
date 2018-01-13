@@ -579,7 +579,8 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
 }
 
 Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
-                           const std::vector<Inst *> &Ops) {
+                           const std::vector<Inst *> &Ops,
+                           bool Available) {
   std::vector<Inst *> OrderedOps;
 
   const std::vector<Inst *> *InstOps;
@@ -607,6 +608,7 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   N->Width = Width;
   N->Ops = *InstOps;
   N->DemandedBits = llvm::APInt::getAllOnesValue(Width);
+  N->Available = Available;
   InstSet.InsertNode(N, IP);
   return N;
 }
