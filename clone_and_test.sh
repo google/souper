@@ -47,6 +47,16 @@ LIT_ARGS="-v -vv" ./run_lit
 LIT_ARGS="-v -vv --vg --vg-arg=--trace-children-skip=$Z3 --vg-arg=--suppressions=$SRCDIR/valgrind.supp" ./run_lit
 cd ..
 
+# TODO: turn on ASan as well, which requires LLVM to be built with it
+# in order to get our pass to work
+
+mkdir build-release-sanitize
+cd build-release-sanitize
+PATH=/usr/src/souper/third_party/llvm/Release/bin:$PATH cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS='-fsanitize=undefined -fno-sanitize-recover=all' -DTEST_SOLVER=-z3-path=$Z3 -DTEST_SYNTHESIS=ON -DCMAKE_BUILD_TYPE=Release ..
+ninja
+LIT_ARGS="-v -vv" ./run_lit
+cd ..
+
 #mkdir build-debug
 #cd build-debug
 #cmake -G Ninja -DTEST_SOLVER=-z3-path=$Z3 -DTEST_SYNTHESIS=ON -DCMAKE_BUILD_TYPE=Debug ..

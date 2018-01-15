@@ -1,7 +1,8 @@
 from ubuntu:16.04
 
 run set -x; \
-        apt-get update \
+        apt-get update -qq \
+        && apt-get remove -y -qq clang llvm llvm-runtime \
 	&& apt-get install libgmp10 \
 	&& echo 'ca-certificates gcc g++ valgrind libc6-dev libgmp-dev cmake ninja-build make autoconf automake libtool golang-go python subversion git' > /usr/src/build-deps \
 	&& apt-get install -y $(cat /usr/src/build-deps) --no-install-recommends \

@@ -1,0 +1,138 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AddSub:1539-2
+; %r = sub %x, C
+;   =>
+; %r = add %x, -C
+
+%x:i32 = var
+%r = sub %x, 234652
+infer %r
+%r2 = add %x, -234652
+result %r2
+
+; Name: AddSub:1546
+; %na = sub nsw 0, %a
+; %r = sub nsw %x, %na
+;   =>
+; %r = add nsw %x, %a
+
+%a:i64 = var
+%x:i64 = var
+%na = subnsw 0, %a
+%r = subnsw %x, %na
+infer %r
+%r2 = addnsw %x, %a
+result %r2
+
+; Name: AddSub:1549
+; Pre: C != 1 << (width(C)-1)
+; %r = sub nsw %x, C
+;   =>
+; %r = add nsw %x, -C
+
+%x:i8 = var
+%r = subnsw %x, 33
+infer %r
+%r2 = addnsw %x, -33
+result %r2
+
+; Name: AddSub:1556
+; %r = sub i1 %x, %y
+;   =>
+; %r = xor %x, %y
+
+%x:i1 = var
+%y:i1 = var
+%r = sub %x, %y
+infer %r
+%r2 = xor %x, %y
+result %r2
+
+; Name: AddSub:1560
+; %r = sub -1, %a
+;   =>
+; %r = xor %a, -1
+
+%a:i64 = var
+%r = sub -1, %a
+infer %r
+%r2 = xor %a, -1
+result %r2
+
+; Name: AddSub:1564
+; %nx = xor %x, -1
+; %r = sub C, %nx
+;   =>
+; %r = add %x, C+1
+
+%x:i32 = var
+%nx = xor %x, -1
+%r = sub 33333, %nx
+infer %r
+%r2 = add %x, 33334
+result %r2
+
+; Name: AddSub:1574
+; %rhs = add %X, C2
+; %r = sub C, %rhs
+;   =>
+; %r = sub C-C2, %X
+
+%X:i10 = var
+%rhs = add %X, 400
+%r = sub 500, %rhs
+infer %r
+%r2 = sub 100, %X
+result %r2
+
+; Name: AddSub:1582
+; %rhs = zext i1 %X
+; %r = sub 0, %rhs
+;   =>
+; %r = sext %X
+
+%X:i1 = var
+%rhs:i128 = zext %X
+%r = sub 0, %rhs
+infer %r
+%r2:i128 = sext %X
+result %r2
+
+; Name: AddSub:1587
+; %rhs = sext i1 %X
+; %r = sub 0, %rhs
+;   =>
+; %r = zext %X
+
+%X:i1 = var
+%rhs:i16 = sext %X
+%r = sub 0, %rhs
+infer %r
+%r2:i16 = zext %X
+result %r2
+
+; Name: AddSub:1599
+; Pre: C == width(%a) - 1
+; %a = lshr %x, C
+; %r = sub 0, %a
+;   =>
+; %r = ashr %x, C
+
+%x:i32 = var
+%a = lshr %x, 31
+%r = sub 0, %a
+infer %r
+%r2 = ashr %x, 31
+result %r2

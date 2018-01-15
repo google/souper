@@ -1,0 +1,181 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AddSub:1255
+; Pre: hasOneUse(%s)
+; %na = sub %n, %a
+; %s = select %x, %na, 0
+; %r = add %s, %a
+;   =>
+; %r = select %x, %n, %a
+
+%n:i32 = var
+%a:i32 = var
+%x:i1 = var
+%na = sub %n, %a
+%s = select %x, %na, 0
+%r = add %s, %a
+infer %r
+%r2 = select %x, %n, %a
+result %r2
+
+; Name: AddSub:1265
+; Pre: hasOneUse(%sx) && WillNotOverflowSignedAdd(%x,trunc(C)) && (C & (-1 << (width(%x) - 1))) == 0
+; %sx = sext %x
+; %c = add %sx, C
+;   =>
+; %xy = add nsw %x, trunc(C)
+; %c = sext %xy
+
+%x:i16 = var
+%z = sadd.with.overflow %x, 67
+%ov = extractvalue %z, 1
+pc %ov 0:i1
+%sx:i32 = sext %x
+%r = add %sx, 67
+infer %r
+%xy = addnsw %x, 67
+%r2:i32 = sext %xy
+result %r2
+
+; Name: AddSub:1278
+; Pre: (hasOneUse(%sx) || hasOneUse(%sy)) && WillNotOverflowSignedAdd(%x,%y)
+; %sx = sext %x
+; %sy = sext %y
+; %c = add %sx, %sy
+;   =>
+; %xy = add nsw %x, %y
+; %c = sext %xy
+
+%x:i16 = var
+%y:i16 = var
+%z = sadd.with.overflow %x, %y
+%ov = extractvalue %z, 1
+pc %ov 0:i1
+%sx:i32 = sext %x
+%sy:i32 = sext %y
+%r = add %sx, %sy
+infer %r
+%xy = addnsw %x, %y
+%r2:i32 = sext %xy
+result %r2
+
+; Name: AddSub:1295
+; %aab = and %a, %b
+; %aob = xor %a, %b
+; %c = add %aab, %aob
+;   =>
+; %c = or %a, %b
+
+%a:i64 = var
+%b:i64 = var
+%aab = and %a, %b
+%aob = xor %a, %b
+%r = add %aab, %aob
+infer %r
+%r2 = or %a, %b
+result %r2
+
+; Name: AddSub:1309
+; %lhs = and %a, %b
+; %rhs = or %a, %b
+; %c = add %lhs, %rhs
+;   =>
+; %c = add %a, %b
+
+%a:i100 = var
+%b:i100 = var
+%lhs = and %a, %b
+%rhs = or %a, %b
+%r = add %lhs, %rhs
+infer %r
+%r2 = add %a, %b
+result %r2
+
+; Name: AddSub:1309-2
+; %lhs = and %a, %b
+; %rhs = or %a, %b
+; %c = add nsw %lhs, %rhs
+;   =>
+; %c = add nsw %a, %b
+
+%a:i4 = var
+%b:i4 = var
+%lhs = and %a, %b
+%rhs = or %a, %b
+%r = addnsw %lhs, %rhs
+infer %r
+%r2 = addnsw %a, %b
+result %r2
+
+; Name: AddSub:1309-3
+; %lhs = and %a, %b
+; %rhs = or %a, %b
+; %c = add nuw %lhs, %rhs
+;   =>
+; %c = add nuw %a, %b
+
+%a:i32 = var
+%b:i32 = var
+%lhs = and %a, %b
+%rhs = or %a, %b
+%r = addnuw %lhs, %rhs
+infer %r
+%r2 = addnuw %a, %b
+result %r2
+
+; Name: AddSub:1334
+; Pre: WillNotOverflowSignedAdd(%lhs, %rhs)
+; %r = add %lhs, %rhs
+;   =>
+; %r = add nsw %lhs, %rhs
+
+%x:i25 = var
+%y:i25 = var
+%z = sadd.with.overflow %x, %y
+%ov = extractvalue %z, 1
+pc %ov 0:i1
+%r = extractvalue %z, 0
+infer %r
+%r2 = addnsw %x, %y
+result %r2
+
+; Name: AddSub:1338
+; Pre: WillNotOverflowUnsignedAdd(%lhs, %rhs)
+; %r = add %lhs, %rhs
+;   =>
+; %r = add nuw %lhs, %rhs
+
+%x:i64 = var
+%y:i64 = var
+%z = uadd.with.overflow %x, %y
+%ov = extractvalue %z, 1
+pc %ov 0:i1
+%r = extractvalue %z, 0
+infer %r
+%r2 = addnuw %x, %y
+result %r2
+
+; Name: AddSub:1539
+; %na = sub 0, %a
+; %r = sub %x, %na
+;   =>
+; %r = add %x, %a
+
+%a:i32 = var
+%x:i32 = var
+%na = sub 0, %a
+%r = sub %x, %na
+infer %r
+%r2 = add %x, %a
+result %r2

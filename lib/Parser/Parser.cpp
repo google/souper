@@ -381,7 +381,8 @@ Inst *Parser::parseInst(std::string &ErrStr) {
     }
 
     default: {
-      ErrStr = makeErrStr("unexpected token");
+      ErrStr = makeErrStr("unexpected token: '" +
+                          std::string(CurTok.str()) + "'");
       return 0;
     }
   }

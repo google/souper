@@ -1,0 +1,154 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AddSub:1156
+; %a = add %b, %b
+;   =>
+; %a = shl %b, 1
+
+%b:i64 = var
+%a = add %b, %b
+infer %a
+%r2 = shl %b, 1
+result %r2
+
+; Name: AddSub:1156-2
+; %a = add nsw %b, %b
+;   =>
+; %a = shl nsw %b, 1
+
+%b:i64 = var
+%a = addnsw %b, %b
+infer %a
+%r2 = shlnsw %b, 1
+result %r2
+
+; Name: AddSub:1156-3
+; %a = add nuw %b, %b
+;   =>
+; %a = shl nuw %b, 1
+
+%b:i64 = var
+%a = addnuw %b, %b
+infer %a
+%r2 = shlnuw %b, 1
+result %r2
+
+; Name: AddSub:1164
+; %na = sub 0, %a
+; %c = add %na, %b
+;   =>
+; %c = sub %b, %a
+
+%a:i64 = var
+%b:i64 = var
+%na = sub 0, %a
+%c = add %na, %b
+infer %c
+%r2 = sub %b, %a
+result %r2
+
+; Name: AddSub:1165
+; %na = sub 0, %a
+; %nb = sub 0, %b
+; %c = add %na, %nb
+;   =>
+; %ab = add %a, %b
+; %c = sub 0, %ab
+
+%a:i128 = var
+%b:i128 = var
+%na = sub 0, %a
+%nb = sub 0, %b
+%c = add %na, %nb
+infer %c
+%ab = add %a, %b
+%r2 = sub 0, %ab
+result %r2
+
+; Name: AddSub:1176
+; %nb = sub 0, %b
+; %c = add %a, %nb
+;   =>
+; %c = sub %a, %b
+
+%a:i60 = var
+%b:i60 = var
+%nb = sub 0, %b
+%c = add %a, %nb
+infer %c
+%r2 = sub %a, %b
+result %r2
+
+; Name: AddSub:1184
+; Pre: (computeKnownZeroBits(%x) | computeKnownZeroBits(%y)) == -1
+; %r = add %x, %y
+;   =>
+; %r = or %x, %y
+
+%x:i99 = var
+%y:i99 = var
+%pre1 = and %x, %y
+%pre2 = eq %pre1, 0
+pc %pre2 1
+%r = add %x, %y
+infer %r
+%r2 = or %x, %y
+result %r2
+
+; Name: AddSub:1202
+; %nx = xor %x, -1
+; %r = add %nx, C
+;   =>
+; %r = sub C-1, %x
+
+%x:i111 = var
+%nx = xor %x, -1
+%r = add %nx, 34123123846189236741892374687
+infer %r
+%r2 = sub 34123123846189236741892374686, %x
+result %r2
+
+; Name: AddSub:1206
+; Pre: hasOneUse(%xc2) && ~((C1 & -C1)-1) == ~((C1 & -C1)-1) & C2
+; %xc2 = and %x, C2
+; %r = add %xc2, C1
+;   =>
+; %xc1 = add %x, C1
+; %r = and %xc1, C2
+
+%x:i16 = var
+%xc2 = and %x, 65534
+%r = add %xc2, 57500
+infer %r
+%xc1 = add %x, 57500
+%r2 = and %xc1, 65534
+result %r2
+
+; Name: AddSub:1251
+; Pre: hasOneUse(%s)
+; %na = sub %n, %a
+; %s = select %x, 0, %na
+; %r = add %s, %a
+;   =>
+; %r = select %x, %a, %n
+
+%n:i64 = var
+%a:i64 = var
+%x:i1 = var
+%na = sub %n, %a
+%s = select %x, 0, %na
+%r = add %s, %a
+infer %r
+%r2 = select %x, %a, %n
+result %r2
