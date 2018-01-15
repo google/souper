@@ -1,0 +1,167 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AddSub:1604
+; Pre: C == width(%a) - 1
+; %a = ashr %x, C
+; %r = sub 0, %a
+;   =>
+; %r = lshr %x, C
+
+%x:i64 = var
+%a = ashr %x, 63
+%r = sub 0, %a
+infer %r
+%r2 = lshr %x, 63
+result %r2
+
+; Name: AddSub:1614
+; %Op1 = add %X, %Y
+; %r = sub %X, %Op1
+;   =>
+; %r = sub 0, %Y
+
+%X:i16 = var
+%Y:i16 = var
+%Op1 = add %X, %Y
+%r = sub %X, %Op1
+infer %r
+%r2 = sub 0, %Y
+result %r2
+
+; Name: AddSub:1619
+; %Op0 = sub %X, %Y
+; %r = sub %Op0, %X
+;   =>
+; %r = sub 0, %Y
+
+%X:i8 = var
+%Y:i8 = var
+%Op0 = sub %X, %Y
+%r = sub %Op0, %X
+infer %r
+%r2 = sub 0, %Y
+result %r2
+
+; Name: AddSub:1624
+; %Op0 = or %A, %B
+; %Op1 = xor %A, %B
+; %r = sub %Op0, %Op1
+;   =>
+; %r = and %A, %B
+
+%A:i32 = var
+%B:i32 = var
+%Op0 = or %A, %B
+%Op1 = xor %A, %B
+%r = sub %Op0, %Op1
+infer %r
+%r2 = and %A, %B
+result %r2
+
+; Name: AddSub:1633
+; Pre: hasOneUse(%Op0)
+; %Op0 = or %Y, %Op1 ; TODO: commute
+; %r = sub %Op0, %Op1
+;   =>
+; %not = xor %Op1, -1
+; %r = and %not, %Y
+
+%Y:i64 = var
+%Op1:i64 = var
+%Op0 = or %Y, %Op1
+%r = sub %Op0, %Op1
+infer %r
+%not = xor %Op1, -1
+%r2 = and %not, %Y
+result %r2
+
+; Name: AddSub:1648
+; Pre: hasOneUse(%Op1)
+; %Op1 = sub %Y, %Z
+; %r = sub %X, %Op1
+;   =>
+; %s = sub %Z, %Y
+; %r = add %X, %s
+
+%Y:i32 = var
+%Z:i32 = var
+%X:i32 = var
+%Op1 = sub %Y, %Z
+%r = sub %X, %Op1
+infer %r
+%s = sub %Z, %Y
+%r2 = add %X, %s
+result %r2
+
+; Name: AddSub:1654
+; Pre: hasOneUse(%Op1)
+; %Op1 = and %X, %Y ; TODO: commute
+; %r = sub %X, %Op1
+;   =>
+; %not = xor %Y, -1
+; %r = and %X, %not
+
+%X:i32 = var
+%Y:i32 = var
+%Op1 = and %X, %Y
+%r = sub %X, %Op1
+infer %r
+%not = xor %Y, -1
+%r2 = and %X, %not
+result %r2
+
+; Name: AddSub:1660
+; Pre: hasOneUse(%Op1) && C != 1 && C != 1 << (width(C)-1)
+; %Op1 = sdiv i9 %X, C
+; %r = sub 0, %Op1
+;   =>
+; %r = sdiv %X, -C
+
+%X:i16 = var
+%Op1 = sdiv %X, 333
+%r = sub 0, %Op1
+infer %r
+%r2 = sdiv %X, -333
+result %r2
+
+; Name: AddSub:1665
+; Pre: hasOneUse(%Op1)
+; %Op1 = shl C, %Y
+; %r = sub 0, %Op1
+;   =>
+; %r = shl -C, %Y
+
+%Y:i32 = var
+%Op1 = shl 77777, %Y
+%r = sub 0, %Op1
+infer %r
+%r2 = shl -77777, %Y
+result %r2
+
+; Name: AddSub:1665-2
+; Pre: hasOneUse(%Op1)
+; %neg = sub 0, %X
+; %Op1 = shl %neg, %Y
+; %r = sub 0, %Op1
+;   =>
+; %r = shl %X, %Y
+
+%X:i32 = var
+%Y:i32 = var
+%neg = sub 0, %X
+%Op1 = shl %neg, %Y
+%r = sub 0, %Op1
+infer %r
+%r2 = shl %X, %Y
+result %r2

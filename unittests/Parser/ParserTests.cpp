@@ -31,12 +31,19 @@ TEST(ParserTest, Errors) {
       { "0:ix", "<input>:1:4: expected integer" },
       { "0:i0", "<input>:1:4: width must be at least 1" },
       { "?", "<input>:1:1: unexpected '?'" },
+      { "%0:i32 = var-check", "<input>:1:14: unexpected character following a negative sign" },
+      { "%0:i32 = add -2, -a", "<input>:1:19: unexpected character following a negative sign" },
+      { "%0:i32 = -", "<input>:1:11: unexpected character following a negative sign" },
 
       // parsing
+      { "%2 = block 111111111111111111111\n",
+        "<input>:1:12: 4294967295 is too many block predecessors" },
+      { "pc 55555550:i5\n",
+        "<input>:1:15: integer too large for its width" },
       { "%0:i32 = var\n%1:i1 = eq %0:i32, %0:i32\n",
         "<input>:2:12: inst reference may not have a width" },
       { "%0:i1 = eq %1, %1\n", "<input>:1:12: %1 is not an inst" },
-      { "%0:i1 = eq foo\n", "<input>:1:12: unexpected token" },
+      { "%0:i1 = eq foo\n", "<input>:1:12: unexpected token: 'foo'" },
       { "%0:i1 = var\n%0:i1 = var\n",
         "<input>:2:1: %0 already declared as an inst" },
       { "%0 = block 33\n%0:i1 = var\n",
@@ -75,13 +82,13 @@ TEST(ParserTest, Errors) {
       { "%0:i4 = var (knownBits=1xx00)\n",
         "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i4 = var (knownBits=xx1)\n",
-        "<input>:1:1: invalid knownBits string" },
+        "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i4 = var (knownBits=0012)\n",
-        "<input>:1:1: invalid knownBits string" },
+        "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i4 = var (knownBits=2345)\n",
         "<input>:1:24: expected [0|1|x]+ for knownBits" },
       { "%0:i4 = var (knownBits=01xa)\n",
-        "<input>:1:1: invalid knownBits string" },
+        "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i4 = var (knownBit=xxxx)\n",
         "<input>:1:1: invalid data flow fact type" },
       { "%0:i4 = var ()\n",
@@ -89,18 +96,39 @@ TEST(ParserTest, Errors) {
       { "%0:i4 = var (knownBits=10x0\n",
         "<input>:1:1: expected ')' to complete data flow fact string" },
       { "%0:i4 = var (knownBits=10\nx0)\n",
-        "<input>:1:1: invalid knownBits string" },
+        "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i4 = var (knownBits10x0)\n",
         "<input>:1:23: expected '=' for knownBits" },
+      { "%0:i128 = var (knownBits=11111111111111000000000000000111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111)",
+        "<input>:1:1: knownbits pattern must be of same length as var width" },
+      { "%1:i128 = var (knownBits=000000000000000000000000000000000000000000000000000000000�000000000000000000000000000000000000000000000000000000000000000000000)",
+        "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i33 = ssub.with.overflow 0, 1\n"
         "%1:i1 = extractvalue %0, 1:i32\n"
         "infer %1\n",
         "<input>:1:1: at least one operand must be typed" },
-      { "%0:i65 = var ; 0\n%1:i1 = extractvalue %0, 1:i32\n"
-        "%2:i64 = extractvalue %0, 0:i32\n"
+      { "%0:i65 = var ; 0\n%1:i1 = extractvalue %0, 1\n"
+        "%2:i64 = extractvalue %0, 0\n"
         "%3:i64 = select %1, 18446744073709551615:i64, %2\n"
         "infer %3\n",
-        "<input>:3:1: extract value expects an aggregate type" },
+        "<input>:2:1: extract value expects an aggregate type" },
+      { "%0:i8 = var\n"
+        "%1:i8 = var\n"
+         "%2:i9 = smul.with.overflow %0, %1\n"
+        "%3 = extractvalue %2, 999999999999999999999999999999999999999999999999999999999999999999999999999",
+      "<input>:4:1: extractvalue inst doesn't expect index value other than 0 or 1" },
+      { "%0:i65 = var ; 0\n"
+        "%1:i64 = extractvalue %0, 0\n"
+        "infer %1\n",
+        "<input>:2:1: extract value expects an aggregate type" },
+      { "%0:i65 = var ; 0\n"
+        "%1:i1 = extractvalue %0, 1\n"
+        "infer %1\n",
+        "<input>:2:1: extract value expects an aggregate type" },
+      { "%0:i64 = var ; 0\n"
+        "%1:i1 = extractvalue 42, 1\n"
+        "infer %1\n",
+        "<input>:2:1: extract value expects an aggregate type" },
       { "%0:i4 = var (knownBits=001x) (nonZero\n",
         "<input>:1:1: expected ')' to complete data flow fact string" },
       { "%0:i4 = var (nonZero\n",
@@ -108,7 +136,7 @@ TEST(ParserTest, Errors) {
       { "%0:i4 = var (nonNegative (nonZero)\n",
         "<input>:1:1: expected ')' to complete data flow fact string" },
       { "%0:i4 = var (knownBits=0012) (nonZero)\n",
-        "<input>:1:1: invalid knownBits string" },
+        "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i4 = var (knownBits=0011 (nonZero) (nonNegative)\n",
         "<input>:1:1: expected ')' to complete data flow fact string" },
       { "%0:i4 = var (a)\n",
@@ -229,11 +257,14 @@ TEST(ParserTest, FullReplacementErrors) {
   } Tests[] = {
       // lexing
       { "cand 0:i1 0:i1 ; this is a comment\n", "" },
-      { "infer 0:i1\nresult 0:i1 ; this is a comment\n", "" },
+      { "infer 0:i1\nresult 0:i1 ; this is a comment\n", "<input>:1:7: unexpected infer operand type" },
 
       // parsing
-      { "infer 0:i1\ninfer 0:i1", "<input>:2:7: Not expecting a second 'infer'" },
-      { "cand 0:i1 ; this is a comment\n", "<input>:2:1: unexpected token" },
+      { "infer 0:i1\ninfer 0:i1", "<input>:1:7: unexpected infer operand type" },
+      { "infer 11111111", "<input>:1:7: unexpected infer operand type" },
+      { "infer %0\ninfer %0", "<input>:1:7: %0 is not an inst" },
+      { "%0:i32 = var\n%1:i32 = var\ninfer %0 %1", "<input>:3:10: %1 already declared as an inst" },
+      { "cand 0:i1 ; this is a comment\n", "<input>:2:1: unexpected token: ''" },
       { "%0:i1 = var\n",
         "<input>:2:1: incomplete replacement, need a 'cand' statement or 'infer'/'result' pair" },
       { "cand 0:i1 0:i1\ncand 0:i1 0:i1\n",
@@ -274,8 +305,68 @@ TEST(ParserTest, FullReplacementErrors) {
         "<input>:3:1: expected ')' to complete demandedBits data flow string" },
       { "%0:i4 = var ; 0\ncand %0 7:i4 (demandedBits=2111)\n",
         "<input>:2:28: expected demandedBits pattern of type [0|1]+" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = and %0, 1\n"
+        "%2 = sadd.with.overflow %0, 1\n"
+        "%3 = extractvalue %2, 1\n"
+        "infer %2\n",
+        "<input>:6:1: overflow intrinsic cannot be an operand of infer instruction" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = and %0, 1\n"
+        "%2 = sadd.with.overflow %0, 1\n"
+        "%3 = extractvalue %2, 1\n"
+        "cand %2 1\n",
+        "<input>:6:1: overflow intrinsic cannot be an operand of cand instruction" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = and %0, 1\n"
+        "%2 = sadd.with.overflow %0, 1\n"
+        "%3 = extractvalue %2, 1\n"
+        "cand 1 %2\n",
+        "<input>:6:1: overflow intrinsic cannot be an operand of cand instruction" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = uadd.with.overflow %0, 1\n"
+        "pc %1 1\n"
+        "infer %1\n",
+        "<input>:4:1: overflow intrinsic cannot be an operand of pc instruction" },
+      { "%0 = block 2\n"
+        "%1:i32 = var ; 0\n"
+        "%2 = smul.with.overflow %1, 2\n"
+        "%3 = ne 1, %1\n"
+        "%4:i33 = zext %3\n"
+        "blockpc %0 0 %2 1\n"
+        "blockpc %0 1 %4 0\n"
+        "%5:i32 = phi %0, 1, 0\n"
+        "infer %5\n",
+        "<input>:7:1: overflow intrinsic cannot be an operand of blockpc instruction" },
+      { "%0:i32 = var ; 0\n"
+        "%1:i32 = ashr-1:i32, %0\n"
+        "%2:i32 = and %0, %1\n"
+        "%3 = ne 1, %1\n"
+        "infer %2 (demandedBits=00000000000000000000000000000001)\n"
+        "result 32:i332\n",
+        "<input>:7:1: width of result and infer operands mismatch" },
 
       // type checking
+      { "%0:i64 = var ; 0\n"
+        "%1 = uadd.with.overflow %0, 1\n"
+        "%2 = eq %1, 1\n"
+        "infer %2\n",
+        "<input>:3:1: overflow intrinsic cannot be an operand of eq instruction" },
+      { "%0:i64 = var ; 0\n"
+        "%1 = uadd.with.overflow %0, 1\n"
+        "%2 = mul %1, 10\n"
+        "infer %2\n",
+        "<input>:3:1: overflow intrinsic cannot be an operand of mul instruction" },
+      { "%0 = block 2\n"
+        "%1:i32 = var ; 0\n"
+        "%2:i32 = var ; 1\n"
+        "%3 = smul.with.overflow %1, 2\n"
+        "blockpc %0 0 %1 0\n"
+        "blockpc %0 1 %1 1\n"
+        "%4:i33 = phi %0, %3, 0:i33\n"
+        "%5:i16 = trunc %4\n"
+        "infer %5\n",
+        "<input>:7:1: overflow intrinsic cannot be an operand of phi instruction" },
     };
 
   InstContext IC;
@@ -291,14 +382,14 @@ TEST(ParserTest, ReplacementLHSErrors) {
     std::string Test, WantError;
   } Tests[] = {
       // lexing
-      { "infer 0:i1 ; this is a comment\n", "" },
+      { "infer 0:i1 ; this is a comment\n", "<input>:1:7: unexpected infer operand type" },
 
       // parsing
       { "%0:i1 = var\n",
         "<input>:2:1: incomplete replacement, need an 'infer' statement" },
-      { "infer 0:i1 0:i1 ; this is a comment\n", "<input>:1:12: expected a single replacement" },
+      { "infer 0:i1 0:i1 ; this is a comment\n", "<input>:1:7: unexpected infer operand type" },
       { "cand 0:i1 0:i1", "<input>:1:1: Not expecting 'cand' when parsing LHS" },
-      { "infer 0:i1\ninfer 0:i1", "<input>:2:1: expected a single replacement" },
+      { "infer 0:i1\ninfer 0:i1", "<input>:1:7: unexpected infer operand type" },
 
       // type checking
     };
@@ -342,7 +433,9 @@ TEST(ParserTest, ReplacementRHSErrors) {
 
 TEST(ParserTest, RoundTrip) {
   std::string Tests[] = {
-      "cand 0:i1 0:i1\n",
+      R"i(%0:i1 = var ; 0
+cand %0 0:i1
+)i",
       R"i(%0 = block 2
 %1:i32 = var ; 1
 %2:i32 = lshr %1, 31:i32

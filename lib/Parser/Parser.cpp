@@ -194,6 +194,10 @@ FoundChar:
       ++Begin;
     } while (Begin != End && *Begin >= '0' && *Begin <= '9');
     const char *NumEnd = Begin;
+    if ((NumEnd - NumBegin) == 1 && *NumBegin == '-') {
+      ErrStr = "unexpected character following a negative sign";
+      return Token{Token::Error, Begin, 0, APInt()};
+    }
     if (Begin != End && *Begin == ':') {
       ++Begin;
       if (Begin == End || *Begin != 'i') {
@@ -214,6 +218,11 @@ FoundChar:
       if (Width == 0) {
         ErrStr = "width must be at least 1";
         return Token{Token::Error, WidthBegin, 0, APInt()};
+      }
+      // this calculation is from an assertion in APInt::fromString()
+      if ((((NumEnd - NumBegin) - 1) * 64) / 22 > Width) {
+        ErrStr = "integer too large for its width";
+        return Token{Token::Error, Begin, 0, APInt()};
       }
       return Token{Token::Int, NumBegin, size_t(Begin - NumBegin),
                    APInt(Width, StringRef(NumBegin, NumEnd - NumBegin), 10)};
@@ -334,6 +343,7 @@ struct Parser {
   std::vector<ParsedReplacement> parseReplacements(std::string &ErrStr);
   void nextReplacement();
   bool parseDemandedBits(std::string &ErrStr, Inst *LHS);
+  bool isOverflow(Inst::Kind IK);
 };
 
 }
@@ -371,10 +381,17 @@ Inst *Parser::parseInst(std::string &ErrStr) {
     }
 
     default: {
-      ErrStr = makeErrStr("unexpected token");
+      ErrStr = makeErrStr("unexpected token: '" +
+                          std::string(CurTok.str()) + "'");
       return 0;
     }
   }
+}
+
+bool Parser::isOverflow(Inst::Kind IK) {
+  return (IK == Inst::SAddWithOverflow || IK == Inst::UAddWithOverflow ||
+          IK == Inst::SSubWithOverflow || IK == Inst::USubWithOverflow ||
+          IK == Inst::SMulWithOverflow || IK == Inst::UMulWithOverflow);
 }
 
 bool Parser::typeCheckOpsMatchingWidths(llvm::MutableArrayRef<Inst *> Ops,
@@ -423,6 +440,13 @@ bool Parser::typeCheckPhi(unsigned Width, Block *B,
     ErrStr = "inst must have width of " + utostr(Ops[0]->Width) +
                          ", has width " + utostr(Width);
     return false;
+  }
+
+  for (auto Op : Ops) {
+    if (isOverflow(Op->K)) {
+      ErrStr = "overflow intrinsic cannot be an operand of phi instruction";
+      return false;
+    }
   }
 
   return true;
@@ -537,6 +561,9 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   case Inst::Ctlz:
     MaxOps = MinOps = 1;
     break;
+
+  default:
+    llvm::report_fatal_error("unhandled");
   }
 
   if (MinOps == MaxOps && Ops.size() != MinOps) {
@@ -564,9 +591,18 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   // overflow instruction respectively. The second element of
   // ExtractValue instruction is an index value. We don't type check
   // the operands width as the two elements vary in width.
-  if (IK != Inst::ExtractValue)
+  if (IK != Inst::ExtractValue) {
     if (!typeCheckOpsMatchingWidths(OpsMatchingWidths, ErrStr))
       return false;
+
+    for (auto Op : Ops) {
+      if (isOverflow(Op->K)) {
+        ErrStr = std::string("overflow intrinsic cannot be an operand of ") + Inst::getKindName(IK) +
+                 std::string(" instruction");
+        return false;
+      }
+    }
+  }
 
   unsigned ExpectedWidth;
   switch (IK) {
@@ -608,7 +644,7 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     break;
 
   case Inst::ExtractValue:
-    if (Ops[1]->Val.getZExtValue() == 0) {
+    if (Ops[1]->Val == 0) {
       switch (Ops[0]->K) {
         case Inst::SAddWithOverflow:
         case Inst::UAddWithOverflow:
@@ -622,10 +658,24 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
           ErrStr = "extract value expects an aggregate type";
           return false;
       }
-    } else if (Ops[1]->Val.getZExtValue() == 1)
-      ExpectedWidth = 1;
-    else
+    } else if (Ops[1]->Val == 1) {
+      switch (Ops[0]->K) {
+        case Inst::SAddWithOverflow:
+        case Inst::UAddWithOverflow:
+        case Inst::SSubWithOverflow:
+        case Inst::USubWithOverflow:
+        case Inst::SMulWithOverflow:
+        case Inst::UMulWithOverflow:
+          ExpectedWidth = 1;
+          break;
+        default:
+          ErrStr = "extract value expects an aggregate type";
+          return false;
+      }
+    } else {
       ErrStr = "extractvalue inst doesn't expect index value other than 0 or 1";
+      return false;
+    }
     break;
 
   default:
@@ -643,6 +693,27 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     ErrStr = std::string("inst must have width of ") + utostr(ExpectedWidth) +
              ", has width " + utostr(Width);
     return false;
+  }
+
+  switch (IK) {
+  case Inst::BSwap:
+    if (Width != 16 && Width != 32 && Width != 64) {
+      ErrStr = "bswap doesn't support " + std::to_string(Width) + " bits";
+      return false;
+    }
+    break;
+  case Inst::CtPop:
+  case Inst::Ctlz:
+  case Inst::Cttz:
+    if (Width !=8 && Width != 16 && Width != 32 &&
+        Width != 64 && Width != 256) {
+      ErrStr = std::string(Inst::getKindName(IK)) + " doesn't support " +
+        std::to_string(Width) + " bits";
+      return false;
+    }
+    break;
+  default:
+    break;
   }
 
   return true;
@@ -751,6 +822,11 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!parseDemandedBits(ErrStr, Cand.LHS))
           return false;
 
+        if (isOverflow(Cand.LHS->K) || isOverflow(Cand.RHS->K)) {
+          ErrStr = makeErrStr("overflow intrinsic cannot be an operand of cand instruction");
+          return false;
+        }
+
         Reps.push_back(ParsedReplacement{Cand, std::move(PCs),
                                          std::move(BPCs)});
         nextReplacement();
@@ -762,6 +838,10 @@ bool Parser::parseLine(std::string &ErrStr) {
           return false;
         }
         if (!consumeToken(ErrStr)) return false;
+        if (CurTok.K != Token::ValName) {
+          ErrStr = makeErrStr("unexpected infer operand type");
+          return false;
+        }
         if (LHS) {
           ErrStr = makeErrStr("Not expecting a second 'infer'");
           return false;
@@ -772,6 +852,11 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         if (!parseDemandedBits(ErrStr, LHS))
           return false;
+
+        if (isOverflow(LHS->K)) {
+          ErrStr = makeErrStr("overflow intrinsic cannot be an operand of infer instruction");
+          return false;
+        }
 
         if (RK == ReplacementKind::ParseLHS) {
           Reps.push_back(ParsedReplacement{InstMapping(LHS, 0),
@@ -797,6 +882,10 @@ bool Parser::parseLine(std::string &ErrStr) {
         Inst *RHS = parseInst(ErrStr);
         if (!RHS)
           return false;
+        if (LHS && (LHS->Width != RHS->Width)) {
+          ErrStr = makeErrStr("width of result and infer operands mismatch");
+          return false;
+        }
         InstMapping Cand = InstMapping(LHS, RHS);
 
         Reps.push_back(ParsedReplacement{Cand, std::move(PCs),
@@ -808,6 +897,11 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (!consumeToken(ErrStr)) return false;
         InstMapping PC = parseInstMapping(ErrStr);
         if (!ErrStr.empty()) return false;
+
+        if (isOverflow(PC.LHS->K)) {
+          ErrStr = makeErrStr("overflow intrinsic cannot be an operand of pc instruction");
+          return false;
+        }
 
         PCs.push_back(PC);
 
@@ -846,6 +940,11 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         InstMapping PC = parseInstMapping(ErrStr);
         if (!ErrStr.empty()) return false;
+
+        if (isOverflow(PC.LHS->K)) {
+          ErrStr = makeErrStr("overflow intrinsic cannot be an operand of blockpc instruction");
+          return false;
+        }
 
         std::map<Block *, unsigned>::iterator IdxIt = BlockPCIdxMap.find(B);
         if (IdxIt == BlockPCIdxMap.end()) {
@@ -896,22 +995,7 @@ bool Parser::parseLine(std::string &ErrStr) {
 
       Inst::Kind IK = Inst::getKind(CurTok.str());
 
-      if (IK == Inst::BSwap) {
-        if (InstWidth != 16 && InstWidth != 32 && InstWidth != 64) {
-          ErrStr = makeErrStr(TP, CurTok.str().str() + " doesn't support " +
-                              std::to_string(InstWidth) + " bits");
-          return false;
-        }
-      }
-      if ((IK == Inst::CtPop) || (IK == Inst::Ctlz) || (IK == Inst::Cttz)) {
-        if (InstWidth !=8 && InstWidth != 16 && InstWidth != 32 &&
-            InstWidth != 64 && InstWidth != 256) {
-          ErrStr = makeErrStr(TP, CurTok.str().str() + " doesn't support " +
-                              std::to_string(InstWidth) + " bits");
-          return false;
-        }
-      }
-      if (IK == Inst::Kind(~0)) {
+      if (IK == Inst::None) {
         if (CurTok.str() == "block") {
           if (InstWidth != 0) {
             ErrStr = makeErrStr(TP, "blocks may not have a width");
@@ -925,7 +1009,11 @@ bool Parser::parseLine(std::string &ErrStr) {
             return false;
           }
           unsigned Preds = CurTok.Val.getLimitedValue();
-
+          if (Preds > MaxPreds) {
+            ErrStr = makeErrStr(std::string(std::to_string(Preds) +
+                                            " is too many block predecessors"));
+            return false;
+          }
           Context.setBlock(InstName, IC.createBlock(Preds));
           return consumeToken(ErrStr);
         } else {
@@ -955,20 +1043,19 @@ bool Parser::parseLine(std::string &ErrStr) {
               return false;
             switch (CurTok.K) {
               case Token::KnownBits:
-                for (unsigned i=0; i<InstWidth; ++i) {
-                  if (CurTok.PatternString[i] == '0')
-                    Zero += ConstOne.shl(CurTok.PatternString.length()-1-i);
-                  else if (CurTok.PatternString[i] == '1')
-                    One += ConstOne.shl(CurTok.PatternString.length()-1-i);
-                  else if (CurTok.PatternString[i] == 'x') ;
-                  else {
-                    ErrStr = makeErrStr(TP, "invalid knownBits string");
-                    return false;
-                  }
-                }
                 if (InstWidth != CurTok.PatternString.length()) {
                   ErrStr = makeErrStr(TP, "knownbits pattern must be of same length as var width");
                   return false;
+                }
+                for (unsigned i = 0; i < InstWidth; ++i) {
+                  if (CurTok.PatternString[i] == '0')
+                    Zero += ConstOne.shl(CurTok.PatternString.length() - 1 - i);
+                  else if (CurTok.PatternString[i] == '1')
+                    One += ConstOne.shl(CurTok.PatternString.length() - 1 - i);
+                  else if (CurTok.PatternString[i] != 'x') {
+                    ErrStr = makeErrStr(TP, "invalid knownBits string");
+                    return false;
+                  }
                 }
                 if (!consumeToken(ErrStr))
                   return false;

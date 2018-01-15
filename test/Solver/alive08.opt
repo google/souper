@@ -1,0 +1,200 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:363
+; Pre: isPowerOf2OrZero(C2+1) && C1 & C2 == 0
+; %lhs = or %A, C1
+; %Op = add %lhs, %B
+; %r = and %Op, C2
+;   =>
+; %op = add %A, %B
+; %r = and %op, C2
+
+%A:i32 = var
+%B:i32 = var
+%lhs = or %A, 3721396224
+%Op = add %lhs, %B
+%r = and %Op, 4095
+infer %r
+%op = add %A, %B
+%r2 = and %op, 4095
+result %r2
+
+; Name: AndOrXor:364
+; Pre: isPowerOf2OrZero(C2+1) && C1 & C2 == 0
+; %lhs = xor %A, C1
+; %Op = sub %lhs, %B
+; %r = and %Op, C2
+;   =>
+; %op = sub %A, %B
+; %r = and %op, C2
+
+%A:i32 = var
+%B:i32 = var
+%lhs = xor %A, 3735879680
+%Op = sub %lhs, %B
+%r = and %Op, 65535
+infer %r
+%op = sub %A, %B
+%r2 = and %op, 65535
+result %r2
+
+; Name: AndOrXor:516
+; %r = icmp slt %X, 0
+;   =>
+; %a = and %X, 1 << (width(%X)-1)
+; %r = icmp ne %a, 0
+
+%X:i8 = var
+%r = slt %X, 0
+infer %r
+%a = and %X, 128
+%r2 = ne %a, 0
+result %r2
+
+; Name: AndOrXor:523
+; %r = icmp sgt %X, -1
+;   =>
+; %a = and %X, 1 << (width(%X)-1)
+; %r = icmp eq %a, 0
+
+%X:i48 = var
+%r = slt -1, %X
+infer %r
+%a = and %X, -140737488355328
+%r2 = eq %a, 0
+result %r2
+
+; Name: AndOrXor:530
+; Pre: isPowerOf2(C)
+; %r = icmp ult %X, C
+;   =>
+; %a = and %X, -C
+; %r = icmp eq %a, 0
+
+%X:i32 = var
+%r = ult %X, 65536
+infer %r
+%a = and %X, -65536
+%r2 = eq %a, 0
+result %r2
+
+; Name: AndOrXor:537
+; Pre: isPowerOf2(C+1)
+; %r = icmp ugt %X, C
+;   =>
+; %a = and %X, ~C
+; %r = icmp ne %a, 0
+
+%X:i32 = var
+%r = ult 63, %X
+infer %r
+%a = and %X, -64
+%r2 = ne %a, 0
+result %r2
+
+; Name: AndOrXor:698
+; %a1 = and %a, %b
+; %a2 = and %a, %d
+; %op0 = icmp eq %a1, 0
+; %op1 = icmp eq %a2, 0
+; %r = and %op0, %op1
+;   =>
+; %or = or %b, %d
+; %a3 = and %a, %or
+; %r = icmp eq %a3, 0
+
+%a:i64 = var
+%b:i64 = var
+%d:i64 = var
+%a1 = and %a, %b
+%a2 = and %a, %d
+%op0 = eq %a1, 0
+%op1 = eq %a2, 0
+%r = and %op0, %op1
+infer %r
+%or = or %b, %d
+%a3 = and %a, %or
+%r2 = eq %a3, 0
+result %r2
+
+; Name: AndOrXor:709
+; %a1 = and %a, %b
+; %a2 = and %a, %d
+; %op0 = icmp eq %a1, %b
+; %op1 = icmp eq %a2, %d
+; %r = and %op0, %op1
+;   =>
+; %or = or %b, %d
+; %a3 = and %a, %or
+; %r = icmp eq %a3, %or
+
+%a:i32 = var
+%b:i32 = var
+%d:i32 = var
+%a1 = and %a, %b
+%a2 = and %a, %d
+%op0 = eq %a1, %b
+%op1 = eq %a2, %d
+%r = and %op0, %op1
+infer %r
+%or = or %b, %d
+%a3 = and %a, %or
+%r2 = eq %a3, %or
+result %r2
+
+; Name: AndOrXor:716
+; %a1 = and %a, %b
+; %a2 = and %a, %d
+; %op0 = icmp eq %a1, %a
+; %op1 = icmp eq %a2, %a
+; %r = and %op0, %op1
+;   =>
+; %a4 = and %b, %d
+; %a3 = and %a, %a4
+; %r = icmp eq %a3, %a
+
+%a:i32 = var
+%b:i32 = var
+%d:i32 = var
+%a1 = and %a, %b
+%a2 = and %a, %d
+%op0 = eq %a1, %a
+%op1 = eq %a2, %a
+%r = and %op0, %op1
+infer %r
+%a4 = and %b, %d
+%a3 = and %a, %a4
+%r2 = eq %a3, %a
+result %r2
+
+; Name: AndOrXor:732-1
+; Pre: C1 & C2 == C1
+; %a1 = and %a, C1
+; %a2 = and %a, C2
+; %op0 = icmp ne %a1, 0
+; %op1 = icmp ne %a2, 0
+; %r = and %op0, %op1
+;   =>
+; %r = icmp ne %a1, 0
+
+%a:i32 = var
+%b:i32 = var
+%a1 = and %a, 1234
+%a2 = and %a, 4095
+%op0 = ne %a1, 0
+%op1 = ne %a2, 0
+%r = and %op0, %op1
+infer %r
+%r2 = ne %a1, 0
+result %r2

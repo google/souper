@@ -174,6 +174,8 @@ private:
   /// A mapping from a location variable to a concrete component instance,
   /// namely created instruction
   std::map<LocVar, Inst *> CompInstMap;
+  /// Components' operand locations
+  std::vector<std::vector<LocVar>> CompOpLocVars;
   /// Location variable's width (increase for support of >256 comps+inputs)
   const unsigned LocInstWidth = 8;
   /// A mapping from a location variable's string representation to its location.
@@ -231,10 +233,13 @@ private:
 
   /// Each component's input should be wired either to an input
   /// or to a component's output
-  Inst *getInputDefinednessConstraint(InstContext &IC);
+  Inst *getComponentInputConstraint(InstContext &IC);
+
+  /// Each component's inputs shall not be constants only
+  Inst *getComponentConstInputConstraint(InstContext &IC);
 
   /// Output must be wired to either a component's output or input(s)
-  Inst *getOutputDefinednessConstraint(InstContext &IC);
+  Inst *getComponentOutputConstraint(InstContext &IC);
 
   /// phi_conn := Forall x,y \in P \cup R \cup I \cup {O}: (l_x = l_y) => x = y.
   /// Given an interconnection among components specified by values of location
@@ -280,9 +285,9 @@ private:
   /// The result is either an input, a constant, or a component output
   LocVar getWiringLocVar(const LocVar &Loc, const LineLocVarMap &LineWiring);
 
-  /// Create a junk-free inst. E.g., return %0 if inst is of type and %0, %0
-  Inst *createJunkFreeInst(Inst::Kind Kind, unsigned Width,
-                           std::vector<Inst *> &Ops, InstContext &IC);
+  /// Create a clean Inst. E.g., return %0 if Inst is of type and %0, %0
+  Inst *createCleanInst(Inst::Kind Kind, unsigned Width,
+                        std::vector<Inst *> &Ops, InstContext &IC);
 
   /// Helper functions
   void filterFixedWidthIntrinsicComps();
@@ -292,6 +297,7 @@ private:
   std::vector<LocVar> getOpLocs(const LocVar &Loc);
   std::vector<std::string> splitString(const char *S, char Del=',');
   bool isWiringInvalid(const LocVar &Left, const LocVar &Right);
+  bool isInputConst(const LocVar &Loc);
   void forbidInvalidCandWiring(const ProgramWiring &CandWiring,
                                std::vector<InstMapping> &LoopPCs,
                                std::vector<InstMapping> &WiringPCs,

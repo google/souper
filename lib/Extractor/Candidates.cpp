@@ -167,8 +167,8 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
   bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
   unsigned NumSignBits = 1;
   if (HarvestDataFlowFacts)
-    if (V->getType()->isIntOrIntVectorTy() ||
-        V->getType()->getScalarType()->isPointerTy()) {
+    if (V->getType()->isIntOrIntVectorTy(Width) ||
+        V->getType()->isPtrOrPtrVectorTy()) {
       computeKnownBits(V, Known, DL);
       NonZero = isKnownNonZero(V, DL);
       NonNegative = isKnownNonNegative(V, DL);

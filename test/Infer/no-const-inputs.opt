@@ -1,0 +1,21 @@
+; REQUIRES: solver
+; RUN: %souper-check -infer-rhs %solver -souper-infer-inst -souper-synthesis-comps=add,const %s | FileCheck %s
+; CHECK: Failed to infer RHS
+
+%0 = block 3
+%1:i8 = var
+%2:i8 = and 1:i8, %1
+%3:i1 = eq 0:i8, %2
+blockpc %0 0 %3 1:i1
+blockpc %0 1 %3 0:i1
+%4:i8 = and 2:i8, %1
+%5:i1 = eq 0:i8, %4
+blockpc %0 1 %5 1:i1
+blockpc %0 2 %3 0:i1
+blockpc %0 2 %5 0:i1
+%6:i8 = or 1:i8, %1
+%7:i8 = and -4:i8, %1
+%8:i8 = or 2:i8, %7
+%9:i8 = phi %0, %6, %8, 0:i8
+%10:i8 = and 3:i8, %9
+infer %10
