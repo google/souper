@@ -24,6 +24,7 @@
 #include "souper/KVStore/KVStore.h"
 #include "souper/Parser/Parser.h"
 
+#include <queue>
 #include <sstream>
 #include <unordered_map>
 
@@ -38,6 +39,8 @@ using namespace souper;
 using namespace llvm;
 
 namespace {
+
+const int MAX_NOPS = 20;
 
 static cl::opt<bool> NoInfer("souper-no-infer",
     cl::desc("Populate the external cache, but don't infer replacements"),
@@ -59,39 +62,35 @@ class BaseSolver : public Solver {
   std::unique_ptr<SMTLIBSolver> SMTSolver;
   unsigned Timeout;
 
-  void findVars(Inst *I, std::set<Inst *> &Visited,
-		std::vector<Inst *> &Guesses, unsigned Width) {
-    if (Visited.insert(I).second) {
-      if (I->Width == Width) {
-        if (I->K == Inst::SAddO ||
-            I->K == Inst::UAddO ||
-            I->K == Inst::SSubO ||
-            I->K == Inst::USubO ||
-            I->K == Inst::SMulO ||
-            I->K == Inst::UMulO ||
-            I->K == Inst::SAddWithOverflow ||
-            I->K == Inst::UAddWithOverflow ||
-            I->K == Inst::SSubWithOverflow ||
-            I->K == Inst::USubWithOverflow ||
-            I->K == Inst::SMulWithOverflow ||
-            I->K == Inst::UMulWithOverflow) {
-          // don't handle
-        } else {
-          Guesses.emplace_back(I);
-        }
-      }
-      if (I->K == Inst::SAddWithOverflow ||
-          I->K == Inst::UAddWithOverflow ||
-          I->K == Inst::SSubWithOverflow ||
-          I->K == Inst::USubWithOverflow ||
-          I->K == Inst::SMulWithOverflow ||
-          I->K == Inst::UMulWithOverflow) {
-        Inst *J = I->Ops[0];
-        for (auto Op : J->Ops)
-          findVars(Op, Visited, Guesses, Width);
-      } else {
+  void findCands(Inst *Root, std::vector<Inst *> &Guesses,
+                 InstContext &IC) {
+    // breadth-first search
+    std::set<Inst *> Visited;
+    std::queue<std::tuple<Inst *,int>> Q;
+    Q.push(std::make_tuple(Root, 0));
+    while (!Q.empty()) {
+      Inst *I;
+      int Benefit;
+      std::tie(I, Benefit) = Q.front();
+      Q.pop();
+      if (I->K != Inst::Phi)
+        ++Benefit;
+      if (Visited.insert(I).second) {
         for (auto Op : I->Ops)
-          findVars(Op, Visited, Guesses, Width);
+          Q.push(std::make_tuple(Op, Benefit));
+        if (Benefit > 1 && I->Width == Root->Width)
+          Guesses.emplace_back(I);
+        // TODO: run experiments and see if it's worth doing these
+        if (0) {
+          if (Benefit > 2 && I->Width > Root->Width)
+            Guesses.emplace_back(IC.getInst(Inst::Trunc, Root->Width, {I}));
+          if (Benefit > 2 && I->Width < Root->Width) {
+            Guesses.emplace_back(IC.getInst(Inst::SExt, Root->Width, {I}));
+            Guesses.emplace_back(IC.getInst(Inst::ZExt, Root->Width, {I}));
+          }
+        }
+        if (Guesses.size() >= MAX_NOPS)
+          return;
       }
     }
   }
@@ -176,19 +175,8 @@ public:
 
     if (InferNop) {
       std::vector<Inst *> Guesses;
-      std::set<Inst *> Visited;
-      
-      //llvm::errs() << "=============================================\n";
-      ReplacementContext Context;
-      std::string LHSStr = GetReplacementLHSString(BPCs, PCs, LHS, Context);
-      //llvm::errs() << "LHS width " << LHS->Width << ": " << LHSStr << "\n";
-      
-      findVars(LHS, Visited, Guesses, LHS->Width);
-      RHS = 0;
-      unsigned Count = 0, Tried = 0;
+      findCands(LHS, Guesses, IC);
       for (auto I : Guesses) {
-        if (LHS == I)
-          continue;
         InstMapping Mapping(LHS, I);
         std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
         //llvm::errs() << "query for ";
