@@ -648,6 +648,20 @@ int Inst::getCost(Inst::Kind K) {
   }
 }
 
+static int costHelper(Inst *I, std::set<Inst *> &Visited) {
+  if (!Visited.insert(I).second)
+    return 0;
+  int Cost = Inst::getCost(I->K);
+  for (auto Op : I->Ops)
+    Cost += costHelper(Op, Visited);
+  return Cost;
+}
+
+int souper::cost(Inst *I) {
+  std::set<Inst *> Visited;
+  return costHelper(I, Visited);
+}
+
 void souper::PrintReplacement(llvm::raw_ostream &Out,
                               const BlockPCs &BPCs,
                               const std::vector<InstMapping> &PCs,

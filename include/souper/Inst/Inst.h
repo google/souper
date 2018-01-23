@@ -18,10 +18,11 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
-#include <map>
 
 namespace souper {
 
@@ -203,6 +204,8 @@ public:
 
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops);
 };
+
+int cost(Inst *I);
 
 void PrintReplacement(llvm::raw_ostream &Out, const BlockPCs &BPCs,
                       const std::vector<InstMapping> &PCs, InstMapping Mapping,
