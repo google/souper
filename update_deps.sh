@@ -18,7 +18,7 @@
 hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
 llvm_branch=branches/release_60
 klee_repo=https://github.com/rsas/klee
-klee_branch=pure-bv-qf-llvm-5.0-patch
+klee_branch=pure-bv-qf-llvm-6.0-patch
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
