@@ -40,9 +40,9 @@ infer %r
 result %r2
 
 %x:i16 = var
-%a = add %x, 65536
-infer %x
-%r2 = xor %x, 65536
+%a = add %x, -32768
+infer %a
+%r2 = xor %x, -32768
 result %r2
 
 %a:i1 = var

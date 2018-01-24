@@ -302,8 +302,6 @@ private:
                                std::vector<InstMapping> &LoopPCs,
                                std::vector<InstMapping> &WiringPCs,
                                InstContext &IC);
-  int costHelper(Inst *I, std::set<Inst *> &Visited);
-  int cost(Inst *I);
   bool hasConst(Inst *I);
   std::error_code getInitialConcreteInputs(std::vector<std::map<Inst *, Inst *>> &S,
                                            unsigned NumInputs);

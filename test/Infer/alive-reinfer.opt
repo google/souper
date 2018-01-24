@@ -1,0 +1,29 @@
+; REQUIRES: solver, solver-model, synthesis
+
+; RUN: %souper-check %solver -reinfer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,and,sub,or %s > %t1
+; RUN: FileCheck %s < %t1
+
+; CHECK: no cost regression
+; CHECK: no cost regression
+
+%Z:i32 = var
+%RHS:i32 = var
+%Y = or %Z, 4042322160 ; 0xf0f0f0f0
+%X = xor %Y, 252645135 ; 0x0f0f0f0f
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+infer %r
+%and = and %Z, 252645135
+%r2 = sub %RHS, %and
+result %r2
+
+%Z:i64 = var
+%RHS:i64 = var
+%Y = and %Z, 25029374298723009
+%X = xor %Y, 25029374298723009
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+infer %r
+%or = or %Z, -25029374298723010
+%r2 = sub %RHS, %or
+result %r2

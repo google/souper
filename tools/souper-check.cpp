@@ -39,6 +39,10 @@ static cl::opt<bool> InferRHS("infer-rhs",
     cl::desc("Try to infer a RHS for a Souper LHS (default=false)"),
     cl::init(false));
 
+static cl::opt<bool> ReInferRHS("reinfer-rhs",
+    cl::desc("Try to infer a new RHS and compare its cost with the existing RHS (default=false)"),
+    cl::init(false));
+
 static cl::opt<bool> ParseOnly("parse-only",
     cl::desc("Only parse the replacement, don't call isValid() (default=false)"),
     cl::init(false));
@@ -70,15 +74,35 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   }
 
   unsigned Index = 0;
+  int Ret = 0;
+  int Success = 0, Fail = 0, Error = 0;
   for (auto Rep : Reps) {
-    if (InferRHS) {
+    if (InferRHS || ReInferRHS) {
+      int OldCost;
+      if (ReInferRHS) {
+        OldCost = cost(Rep.Mapping.RHS);
+        Rep.Mapping.RHS = 0;
+      }
       if (std::error_code EC = S->infer(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
                                         Rep.Mapping.RHS, IC)) {
         llvm::errs() << EC.message() << '\n';
-        return 1;
+        Ret = 1;
+        ++Error;
       }
       if (Rep.Mapping.RHS) {
-        llvm::outs() << "; RHS inferred successfully\n";
+        ++Success;
+        if (ReInferRHS) {
+          int NewCost = cost(Rep.Mapping.RHS);
+          int LHSCost = cost(Rep.Mapping.LHS);
+          if (NewCost <= OldCost)
+            llvm::outs() << "; RHS inferred successfully, no cost regression";
+          else
+            llvm::outs() << "; RHS inferred successfully, but cost regressed";
+          llvm::outs() << " (Old= " << OldCost << ", New= " << NewCost <<
+            ", LHS= " << LHSCost << ")\n";
+        } else {
+          llvm::outs() << "; RHS inferred successfully\n";
+        }
         if (PrintRepl) {
           PrintReplacement(llvm::outs(), Rep.BPCs, Rep.PCs, Rep.Mapping);
         } else if (PrintReplSplit) {
@@ -87,9 +111,12 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
                               Rep.Mapping.LHS, Context);
           PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
         } else {
-          PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Contexts[Index]);
+          ReplacementContext Context;
+          PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS,
+                              ReInferRHS ? Context : Contexts[Index]);
         }
       } else {
+        ++Fail;
         llvm::outs() << "; Failed to infer RHS\n";
         if (PrintRepl || PrintReplSplit) {
           ReplacementContext Context;
@@ -103,10 +130,12 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
       if (std::error_code EC = S->isValid(Rep.BPCs, Rep.PCs,
                                           Rep.Mapping, Valid, &Models)) {
         llvm::errs() << EC.message() << '\n';
-        return 1;
+        Ret = 1;
+        ++Error;
       }
 
       if (Valid) {
+        ++Success;
         llvm::outs() << "; LGTM\n";
         if (PrintRepl)
           PrintReplacement(llvm::outs(), Rep.BPCs, Rep.PCs, Rep.Mapping);
@@ -117,6 +146,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
           PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
         }
       } else {
+        ++Fail;
         llvm::outs() << "Invalid";
         if (PrintCounterExample && !Models.empty()) {
           llvm::outs() << ", e.g.\n\n";
@@ -134,8 +164,13 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
       }
     }
     ++Index;
+    if (PrintRepl || PrintReplSplit)
+      llvm::outs() << "\n";
   }
-  return 0;
+  if ((Success + Fail + Error) > 1)
+    llvm::outs() << "successes = " << Success << ", failures = " << Fail <<
+      ", errors = " << Error << "\n";
+  return Ret;
 }
 
 int main(int argc, char **argv) {
