@@ -1,0 +1,199 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:2063  (X ^ C1) | C2 --> (X | C2) ^ (C1 & ~C2)
+; %op0 = xor %x, C1
+; %r = or %op0, C
+;   =>
+; %or = or %x, C
+; %r = xor %or, (C1 & ~C)
+
+%x:i64 = var
+%op0 = xor %x, -5547767298382354215
+%r = or %op0, -5077384224027117296
+infer %r
+%or = or %x, -5077384224027117296
+%r2 = xor %or, 144781526771695817
+result %r2
+
+; Name: AndOrXor:2095   (X^C)|Y -> (X|Y)^C iff Y&C == 0
+; Pre: MaskedValueIsZero(%op1, C1)
+; %op0 = xor %A, C1
+; %r = or %op0, %op1
+;   =>
+; %or = or %A, %op1
+; %r = xor %or, C1
+
+%A:i32 = var
+%op1:i32 = var
+%m = and %op1, -1646543167
+%b = eq %m, 0
+pc %b 1
+%op0 = xor %A, -1646543167
+%r = or %op0, %op1
+infer %r
+%or = or %A, %op1
+%r2 = xor %or, -1646543167
+result %r2
+
+; Name: AndOrXor:2113   ((~A & B) | A) -> (A | B)
+; %negA = xor %A, -1
+; %op0 = and %negA, %B
+; %r = or %op0, %A
+;   =>
+; %r = or %A, %B
+
+%A:i64 = var
+%B:i64 = var
+%negA = xor %A, -1
+%op0 = and %negA, %B
+%r = or %op0, %A
+infer %r
+%r2 = or %A, %B
+result %r2
+
+; Name: AndOrXor:2118   ((A & B) | ~A) -> (~A | B)
+; %negA = xor %A, -1
+; %op0 = and %A, %B
+; %r = or %op0, %negA
+;   =>
+; %r = or %negA, %B
+
+%A:i64 = var
+%B:i64 = var
+%negA = xor %A, -1
+%op0 = and %A, %B
+%r = or %op0, %negA
+infer %r
+%r2 = or %negA, %B
+result %r2
+
+; Name: AndOrXor:2123   (A & (~B)) | (A ^ B) -> (A ^ B)
+; %negB = xor %B, -1
+; %op0 = and %A, %negB
+; %op1 = xor %A, %B
+; %r = or %op0, %op1
+;   =>
+; %r = xor %A, %B
+
+%A:i64 = var
+%B:i64 = var
+%negB = xor %B, -1
+%op0 = and %A, %negB
+%op1 = xor %A, %B
+%r = or %op0, %op1
+infer %r
+%r2 = xor %A, %B
+result %r2
+
+; Name: AndOrXor:2142
+; Pre: C1 & C2 == 0 && MaskedValueIsZero(%V2, ~C1)
+; %A = or %B, %V2
+; %op0 = and %A, C1
+; %op1 = and %B, C2
+; %r = or %op0, %op1
+;   =>
+; %r = and %A, (C1 | C2)
+
+%B:i18 = var
+%V2:i18 = var
+%mask = and %V2, -37434
+%cmp = eq %mask, 0
+pc %cmp 1
+%A = or %B, %V2
+%op0 = and %A, 37433
+%op1 = and %B, 3142
+%r = or %op0, %op1
+infer %r
+%r2 = and %A, 40575
+result %r2
+
+; Name: AndOrXor:2160
+; Pre: C1 & C2 == 0 && C3 & ~C1 == 0 && C4 & ~C2 == 0
+; %A = or %V1, C3
+; %B = or %V1, C4
+; %op0 = and %A, C1
+; %op1 = and %B, C2
+; %r = or %op0, %op1
+;   =>
+; %V2 = or %V1, (C3 | C4)
+; %r = and %V2, (C1 | C2)
+
+%V1:i8 = var
+%A = or %V1, 0
+%B = or %V1, 174
+%op0 = and %A, 64
+%op1 = and %B, 191
+%r = or %op0, %op1
+infer %r
+%V2 = or %V1, 174
+%r2 = and %V2, 255
+result %r2
+
+; Name: AndOrXor:2188
+; %C = xor %D, -1
+; %B = xor %A, -1
+; %op0 = and %A, %C
+; %op1 = and %B, %D
+; %r = or %op0, %op1
+;   =>
+; %r = xor %A, %D
+
+%A:i64 = var
+%D:i64 = var
+%C = xor %D, -1
+%B = xor %A, -1
+%op0 = and %A, %C
+%op1 = and %B, %D
+%r = or %op0, %op1
+infer %r
+%r2 = xor %A, %D
+result %r2
+
+; Name: AndOrXor:2231  (A ^ B) | ((B ^ C) ^ A) -> (A ^ B) | C
+; %op0 = xor %A, %B
+; %x = xor %B, %C
+; %op1 = xor %x, %A
+; %r = or %op0, %op1
+;   =>
+; %r = or %op0, %C
+
+%A:i32 = var
+%B:i32 = var
+%C:i32 = var
+%op0 = xor %A, %B
+%x = xor %B, %C
+%op1 = xor %x, %A
+%r = or %op0, %op1
+infer %r
+%r2 = or %op0, %C
+result %r2
+
+; Name: AndOrXor:2243  ((B | C) & A) | B -> B | (A & C)
+; %o = or %B, %C
+; %op0 = and %o, %A
+; %r = or %op0, %B
+;   =>
+; %a = and %A, %C
+; %r = or %B, %a
+
+%A:i32 = var
+%B:i32 = var
+%C:i32 = var
+%o = or %B, %C
+%op0 = and %o, %A
+%r = or %op0, %B
+infer %r
+%a = and %A, %C
+%r2 = or %B, %a
+result %r2

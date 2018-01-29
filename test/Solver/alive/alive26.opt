@@ -1,0 +1,152 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: 735
+; Pre: WillNotOverflowUnsignedMul(C1, C2)
+; %Op0 = udiv i7 %X, C1
+; %r = udiv %Op0, C2
+;   =>
+; %r = udiv %X, C1*C2
+
+%X:i8 = var
+%Op0 = udiv %X, 13
+%r = udiv %Op0, 14
+infer %r
+%r2 = udiv %X, 182
+result %r2
+
+; Name: 748
+; Pre: C2 % C1 == 0
+; %m = mul nsw i7 %X, C1
+; %r = sdiv %m, C2
+;   =>
+; %r = sdiv %X, C2/C1
+
+%X:i8 = var
+%m = mulnsw %X, 9
+%r = sdiv %m, 81
+infer %r
+%r2 = sdiv %X, 9
+result %r2
+
+; Name: 748
+; Pre: C2 % C1 == 0
+; %m = mul nsw i7 %X, C1
+; %r = sdiv exact %m, C2
+;   =>
+; %r = sdiv exact %X, C2/C1
+
+%X:i8 = var
+%m = mulnsw %X, 25
+%r = sdivexact %m, 100
+infer %r
+%r2 = sdivexact %X, 4
+result %r2
+
+; Name: 748
+; Pre: C2 %u C1 == 0
+; %m = mul nuw i7 %X, C1
+; %r = udiv %m, C2
+;   =>
+; %r = udiv %X, C2 /u C1
+
+%X:i16 = var
+%m = mulnuw %X, 100
+%r = udiv %m, 15000
+infer %r
+%r2 = udiv %X, 150
+result %r2
+
+; Name: 748
+; Pre: C2 %u C1 == 0
+; %m = mul nuw i7 %X, C1
+; %r = udiv exact %m, C2
+;   =>
+; %r = udiv exact %X, C2 /u C1
+
+%X:i16 = var
+%m = mulnuw %X, 333
+%r = udivexact %m, 59274
+infer %r
+%r2 = udivexact %X, 178
+result %r2
+
+; Name: 756
+; Pre: C1 % C2 == 0
+; %m = mul nsw i7 %X, C1
+; %r = sdiv %m, C2
+;   =>
+; %r = mul nsw %X, C1/C2
+
+%X:i16 = var
+%m = mulnsw %X, 22365
+%r = sdiv %m, -21
+infer %r
+%r2 = mulnsw %X, -1065
+result %r2
+
+; Name: 756
+; Pre: C1 %u C2 == 0
+; %m = mul nuw i7 %X, C1
+; %r = udiv %m, C2
+;   =>
+; %r = mul nuw %X, C1/u C2
+
+%X:i16 = var
+%m = mulnuw %X, 42282
+%r = udiv %m, 243
+infer %r
+%r2 = mulnuw %X, 174
+result %r2
+
+; Name: 756
+; Pre: C1 %u C2 == 0
+; %m = mul nuw nsw i7 %X, C1
+; %r = udiv %m, C2
+;   =>
+; %r = mul nuw nsw %X, C1/u C2
+
+%X:i16 = var
+%m = mulnw %X, 12156
+%r = udiv %m, 2026
+infer %r
+%r2 = mulnw %X, 6
+result %r2
+
+; Name: 764
+; Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1
+; %s = shl nsw i9 %X, C1
+; %r = sdiv %s, C2
+;   =>
+; %r = sdiv %X, C2/(1<<C1)
+
+%X:i16 = var
+%s = shlnsw %X, 1
+%r = sdiv %s, 5150
+infer %r
+%r2 = sdiv %X, 2575
+result %r2
+
+; Name: 764
+; Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1
+; %s = shl nsw i7 %X, C1
+; %r = sdiv exact %s, C2
+;   =>
+; %r = sdiv exact %X, C2/(1<<C1)
+
+%X:i16 = var
+%s = shlnsw %X, 1
+%r = sdivexact %s, 30196
+infer %r
+%r2 = sdivexact %X, 15098
+result %r2

@@ -1,0 +1,172 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:2459-2
+; %cmp = icmp slt %x, %y
+; %op0 = sext %cmp to i11
+; %r = xor %op0, -1
+;   =>
+; %ncmp = icmp sge %x, %y
+; %r = sext %ncmp
+
+%x:i32 = var
+%y:i32 = var
+%cmp = slt %x, %y
+%op0:i32 = sext %cmp
+%r = xor %op0, -1
+infer %r
+%ncmp = sle %y, %x
+%r2:i32 = sext %ncmp
+result %r2
+
+; Name: AndOrXor:2475
+; %op0 = sub C, %x
+; %r = xor %op0, -1
+;   =>
+; %r = add %x, -1-C  ; LLVM has -C-1, which prevents testing i1
+
+%x:i32 = var
+%op0 = sub 2112559987, %x
+%r = xor %op0, -1
+infer %r
+%r2 = add %x, -2112559988
+result %r2
+
+; Name: AndOrXor:2486
+; %op0 = add %x, C
+; %r = xor %op0, -1
+;   =>
+; %r = sub -1-C, %x
+
+%x:i32 = var
+%op0 = add %x, -37064550
+%r = xor %op0, -1
+infer %r
+%r2 = sub 37064549, %x
+result %r2
+
+; Name: AndOrXor:2494
+; Pre: isSignBit(C1)
+; %op0 = add %x, C
+; %r = xor %op0, C1
+;   =>
+; %r = add %x, C + C1
+
+%x:i16 = var
+%op0 = add %x, 2053
+%r = xor %op0, -32768
+infer %r
+%r2 = add %x, -30715
+result %r2
+
+; Name: AndOrXor:2500
+; Pre: MaskedValueIsZero(%x,C1)
+; %op0 = or %x, C1
+; %r = xor %op0, C2
+;   =>
+; %r = xor %x, C1^C2
+
+%x:i32 = var
+%mask = and %x, 458598034
+%c = eq %mask, 0
+pc %c 1
+%op0 = or %x, 458598034
+%r = xor %op0, -171399904
+infer %r
+%r2 = xor %x, -291699790
+result %r2
+
+; Name: AndOrXor:2515   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3)
+; %e1  = xor %x, C1
+; %op0 = lshr %e1, C2
+; %r   = xor %op0, C3
+;   =>
+; %0 = lshr %x, C2
+; %r = xor %0, lshr(C1,C2)^C3
+
+%x:i32 = var
+%e1  = xor %x, 1963265562
+%op0 = lshr %e1, 10
+%r   = xor %op0, 993940190
+infer %r
+%0 = lshr %x, 10
+%r2 = xor %0, 992154525
+result %r2
+
+; Name: AndOrXor:2581  (B|A)^B -> A & ~B
+; %op0 = or %a, %op1
+; %r = xor %op0, %op1
+;   =>
+; %nop1 = xor %op1, -1
+; %r = and %a, %nop1
+
+%a:i64 = var
+%op1:i64 = var
+%op0 = or %a, %op1
+%r = xor %op0, %op1
+infer %r
+%nop1 = xor %op1, -1
+%r2 = and %a, %nop1
+result %r2
+
+; Name: AndOrXor:2587  (B&A)^A -> ~B & A
+; %op0 = and %a, %op1
+; %r = xor %op0, %op1
+;   =>
+; %na = xor %a, -1
+; %r = and %na, %op1
+
+%a:i12 = var
+%op1:i12 = var
+%op0 = and %a, %op1
+%r = xor %op0, %op1
+infer %r
+%na = xor %a, -1
+%r2 = and %na, %op1
+result %r2
+
+; Name: AndOrXor:2595
+; %op0 = and %a, %b
+; %op1 = or %a, %b
+; %r = xor %op0, %op1
+;   =>
+; %r = xor %a, %b
+
+%a:i23 = var
+%b:i23 = var
+%op0 = and %a, %b
+%op1 = or %a, %b
+%r = xor %op0, %op1
+infer %r
+%r2 = xor %a, %b
+result %r2
+
+; Name: AndOrXor:2607
+; %na = xor %a, -1
+; %nb = xor %b, -1
+; %op0 = or %a, %nb
+; %op1 = or %na, %b
+; %r = xor %op0, %op1
+;   =>
+; %r = xor %a, %b
+
+%a:i32 = var
+%b:i32 = var
+%na = xor %a, -1
+%nb = xor %b, -1
+%op0 = or %a, %nb
+%op1 = or %na, %b
+%r = xor %op0, %op1
+infer %r
+%r2 = xor %a, %b
+result %r2

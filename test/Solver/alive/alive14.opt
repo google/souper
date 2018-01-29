@@ -1,0 +1,229 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:1574
+; %A = sext %Cond
+; %D = xor %A, -1
+; %a1 = and %A, %C
+; %a2 = and %B, %D
+; %r = or %a1, %a2
+;   =>
+; %r = select %Cond, %C, %B
+
+%Cond:i1 = var
+%A:i32 = sext %Cond
+%B:i32 = var
+%C:i32 = var
+%D = xor %A, -1
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+infer %r
+%r2 = select %Cond, %C, %B
+result %r2
+
+; Name: AndOrXor:1577
+; %A = sext %Cond
+; %n = xor %Cond, -1
+; %D = sext %n
+; %a1 = and %A, %C
+; %a2 = and %B, %D
+; %r = or %a1, %a2
+;   =>
+; %r = select %Cond, %C, %B
+
+%Cond:i1 = var
+%A:i128 = sext %Cond
+%B:i128 = var
+%C:i128 = var
+%n = xor %Cond, -1
+%D:i128 = sext %n
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+infer %r
+%r2 = select %Cond, %C, %B
+result %r2
+
+; Name: AndOrXor:1581
+; %A = sext %Cond
+; %B = xor %A, -1
+; %a1 = and %A, %C
+; %a2 = and %B, %D
+; %r = or %a1, %a2
+;   =>
+; %r = select %Cond, %C, %D
+
+%Cond:i1 = var
+%C:i32 = var
+%D:i32 = var
+%A:i32 = sext %Cond
+%B = xor %A, -1
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+infer %r
+%r2 = select %Cond, %C, %D
+result %r2
+
+; Name: AndOrXor:1583
+; %A = sext %Cond
+; %n = xor %Cond, -1
+; %B = sext %n
+; %a1 = and %A, %C
+; %a2 = and %B, %D
+; %r = or %a1, %a2
+;   =>
+; %r = select %Cond, %C, %D
+
+%Cond:i1 = var
+%A:i64 = sext %Cond
+%n = xor %Cond, -1
+%B:i64 = sext %n
+%C:i64 = var
+%D:i64 = var
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+infer %r
+%r2 = select %Cond, %C, %D
+result %r2
+
+; Name: AndOrXor:1593
+; Pre: isPowerOf2(%K1) && isPowerOf2(%K2)
+; %a1 = and %A, %K1
+; %a2 = and %A, %K2
+; %cmp1 = icmp eq %a1, 0
+; %cmp2 = icmp eq %a2, 0
+; %r = or %cmp1, %cmp2
+;   =>
+; %mask = or %K1, %K2
+; %masked = and %A, %mask
+; %r = icmp ne %masked, %mask
+
+%A:i16 = var
+%K1:i16 = var
+%K2:i16 = var
+%p1 = ctpop %K1
+pc %p1 1
+%p2 = ctpop %K2
+pc %p2 1
+%a1 = and %A, %K1
+%a2 = and %A, %K2
+%cmp1 = eq %a1, 0
+%cmp2 = eq %a2, 0
+%r = or %cmp1, %cmp2
+infer %r
+%mask = or %K1, %K2
+%masked = and %A, %mask
+%r2 = ne %masked, %mask
+result %r2
+
+; Name: AndOrXor:1628-1
+; Pre: C1 u> C3 && C2 u> C3 && isPowerOf2(C1 ^ C2) && isPowerOf2(-C2 ^ -C1) && -C2 ^ -C1 == (C3-C2) ^ (C3-C1) && abs(C1-C2) u> C3
+; %a1 = add i29 %A, C1
+; %a2 = add %A, C2
+; %cmp1 = icmp ult %a1, C3
+; %cmp2 = icmp ult %a2, C3
+; %r = or %cmp1, %cmp2
+;   =>
+; %newand = and %A, ~(C1^C2)
+; %newadd = add %newand, umax(C1, C2)
+; %r = icmp ult %newadd, C3
+
+%A:i8 = var
+%a1 = add %A, 96
+%a2 = add %A, 224
+%cmp1 = ult %a1, 58
+%cmp2 = ult %a2, 58
+%r = or %cmp1, %cmp2
+infer %r
+%newand = and %A, 127
+%newadd = add %newand, 224
+%r2 = ult %newadd, 58
+result %r2
+
+; Name: AndOrXor:1628-2
+; Pre: C1 u> C3 && C2 u> C3 && isPowerOf2(C1 ^ C2) && isPowerOf2(-C2 ^ -C1) && -C2 ^ -C1 == (C3-C2) ^ (C3-C1) && abs(C1-C2) u> C3
+; %a1 = add i29 %A, C1
+; %a2 = add %A, C2
+; %cmp1 = icmp ule %a1, C3
+; %cmp2 = icmp ule %a2, C3
+; %r = or %cmp1, %cmp2
+;   =>
+; %newand = and %A, ~(C1^C2)
+; %newadd = add %newand, umax(C1, C2)
+; %r = icmp ule %newadd, C3
+
+;  C1 = 121, C2 = 249, C3 = 44, C4 = 234
+
+%A:i8 = var
+%a1 = add %A, 121
+%a2 = add %A, 249
+%cmp1 = ule %a1, 44
+%cmp2 = ule %a2, 44
+%r = or %cmp1, %cmp2
+infer %r
+%newand = and %A, 127
+%newadd = add %newand, 249
+%r2 = ule %newadd, 44
+result %r2
+
+; Name: AndOrXor:1683-1
+; %op0 = icmp ugt %a, %b
+; %op1 = icmp eq %a, %b
+; %r = or %op0, %op1
+;   =>
+; %r = icmp uge %a, %b
+
+%a:i32 = var
+%b:i32 = var
+%op0 = ult %b, %a
+%op1 = eq %a, %b
+%r = or %op0, %op1
+infer %r
+%r2 = ule %b, %a
+result %r2
+
+; Name: AndOrXor:1683-2
+; %op0 = icmp uge %a, %b
+; %op1 = icmp ne %a, %b
+; %r = or %op0, %op1
+;   =>
+; %r = true
+
+%a:i32 = var
+%b:i32 = var
+%op0 = ule %b, %a
+%op1 = ne %a, %b
+%r = or %op0, %op1
+infer %r
+result 1:i1
+
+; Name: AndOrXor:1704
+; %cmp1 = icmp eq %B, 0
+; %cmp2 = icmp ult %A, %B
+; %r = or %cmp1, %cmp2
+;   =>
+; %b1 = add %B, -1
+; %r = icmp uge %b1, %A
+
+%A:i64 = var
+%B:i64 = var
+%cmp1 = eq %B, 0
+%cmp2 = ult %A, %B
+%r = or %cmp1, %cmp2
+infer %r
+%b1 = add %B, -1
+%r2 = ule %A, %b1
+result %r2
