@@ -1,0 +1,187 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: Select:637
+; %c = icmp eq %X, C
+; %r = select %c, %X, %Y
+;   =>
+; %r = select %c, C, %Y
+
+%X:i64 = var
+%Y:i64 = var
+%c = eq %X, 3876296254720595195
+%r = select %c, %X, %Y
+infer %r
+%r2 = select %c, 3876296254720595195, %Y
+result %r2
+
+; Name: Select:641
+; %c = icmp ne %X, C
+; %r = select %c, %Y, %X
+;   =>
+; %r = select %c, %Y, C
+
+%X:i32 = var
+%Y:i32 = var
+%c = ne %X, 779230617
+%r = select %c, %Y, %X
+infer %r
+%r2 = select %c, %Y, 779230617
+result %r2
+
+; Name: Select:699
+; %c = icmp uge %A, %B
+; %umax = select %c, %A, %B
+; %c2 = icmp uge %umax, %B
+; %umax2 = select %c2, %umax, %B
+;   =>
+; %umax2 = select %c, %A, %B
+
+%A:i32 = var
+%B:i32 = var
+%c = ule %B, %A
+%umax = select %c, %A, %B
+%c2 = ule %B, %umax
+%r = select %c2, %umax, %B
+infer %r
+%r2 = select %c, %A, %B
+result %r2
+
+; Name: Select:700
+; %c = icmp slt %A, %B
+; %smin = select %c, %A, %B
+; %c2 = icmp slt %smin, %B
+; %smin2 = select %c2, %smin, %B
+;   =>
+; %smin2 = select %c, %A, %B
+
+%A:i32 = var
+%B:i32 = var
+%c = slt %A, %B
+%smin = select %c, %A, %B
+%c2 = slt %smin, %B
+%r = select %c2, %smin, %B
+infer %r
+%r2 = select %c, %A, %B
+result %r2
+
+; Name: Select:704
+; %c = icmp slt %A, %B
+; %smin = select %c, %A, %B
+; %c2 = icmp sge %smin, %A
+; %smax = select %c2, %smin, %A
+;   =>
+; %smax = %A
+
+%A:i20 = var
+%B:i20 = var
+%c = slt %A, %B
+%smin = select %c, %A, %B
+%c2 = sle %A, %smin
+%r = select %c2, %smin, %A
+infer %r
+result %A
+
+; Name: Select:705
+; %c = icmp sge %A, %B
+; %umax = select %c, %A, %B
+; %c2 = icmp slt %umax, %A
+; %umin = select %c2, %umax, %A
+;   =>
+; %umin = %A
+
+%A:i100 = var
+%B:i100 = var
+%c = sle %B, %A
+%umax = select %c, %A, %B
+%c2 = slt %umax, %A
+%r = select %c2, %umax, %A
+infer %r
+result %A
+
+; Name: Select:719
+; Pre: C1 < C2
+; %c = icmp slt %A, C1
+; %smin = select %c, %A, C1
+; %c2 = icmp slt %smin, C2
+; %smin2 = select %c2, %smin, C2
+;   =>
+; %smin2 = select %c, %A, C1
+
+%A:i8 = var
+%B:i8 = var
+%c = slt %A, -5
+%smin = select %c, %A, -5
+%c2 = slt %smin, 103
+%r = select %c2, %smin, 103
+infer %r
+%r2 = select %c, %A, -5
+result %r2
+
+; Name: Select:720
+; Pre: C1 u> C2
+; %c = icmp uge %A, C1
+; %umax = select %c, %A, C1
+; %c2 = icmp uge %umax, C2
+; %umax2 = select %c2, %umax, C2
+;   =>
+; %umax2 = select %c, %A, C1
+
+%A:i16 = var
+%c = ule 26715, %A
+%umax = select %c, %A, 26715
+%c2 = ule 19597, %umax
+%r = select %c2, %umax, 19597
+infer %r
+%r2 = select %c, %A, 26715
+result %r2
+
+; Name: Select:727
+; Pre: C1 > C2
+; %c = icmp slt %A, C1
+; %smin = select %c, %A, C1
+; %c2 = icmp slt %smin, C2
+; %smin2 = select %c2, %smin, C2
+;   =>
+; %c3 = icmp slt %A, C2
+; %smin2 = select %c3, %A, C2
+
+%A:i32 = var
+%c = slt %A, 1866231536
+%smin = select %c, %A, 1866231536
+%c2 = slt %smin, -1597877904
+%r = select %c2, %smin, -1597877904
+infer %r
+%c3 = slt %A, -1597877904
+%r2 = select %c3, %A, -1597877904
+result %r2
+
+; Name: Select:728
+; Pre: C1 u< C2
+; %c = icmp uge %A, C1
+; %umax = select %c, %A, C1
+; %c2 = icmp uge %umax, C2
+; %umax2 = select %c2, %umax, C2
+;   =>
+; %c3 = icmp uge %A, C2
+; %umax2 = select %c3, %A, C2
+
+%A:i8 = var
+%c = ule 12,  %A
+%umax = select %c, %A, 12
+%c2 = ule 13, %umax
+%r = select %c2, %umax, 13
+infer %r
+%c3 = ule 13, %A
+%r2 = select %c3, %A, 13
+result %r2

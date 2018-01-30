@@ -1,0 +1,198 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: Select:465-5
+; Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
+; %and = and %X, C1
+; %c = icmp eq %and, 0
+; %T = or i11 %Y, C2
+; %r = select %c, %T, %Y
+;   =>
+; %v = ZExtOrTrunc %and
+; %v2 = shl %v, log2(C2)-log2(C1)
+; %v3 = xor %v2, C2
+; %r = or %v3, %Y
+
+%X:i16 = var
+%Y:i32 = var
+%and = and %X, 1
+%c = eq %and, 0
+%T = or %Y, 1
+%r = select %c, %T, %Y
+infer %r
+%v:i32 = zext %and
+%v2 = shl %v, 0
+%v3 = xor %v2, 1
+%r2 = or %v3, %Y
+result %r2
+
+; Name: Select:465-6
+; Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
+; %and = and %X, C1
+; %c = icmp ne %and, 0
+; %T = or i11 %Y, C2
+; %r = select %c, %T, %Y
+;   =>
+; %v = ZExtOrTrunc %and
+; %v2 = shl %v, log2(C2)-log2(C1)
+; %r = or %v2, %Y
+
+%X:i8 = var
+%Y:i16 = var
+%and = and %X, 2
+%c = ne %and, 0
+%T = or %Y, 32768
+%r = select %c, %T, %Y
+infer %r
+%v:i16 = zext %and
+%v2 = shl %v, 14
+%r2 = or %v2, %Y
+result %r2
+
+; Name: Select:465-7
+; Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
+; %and = and %X, C1
+; %c = icmp eq %and, 0
+; %T = or i11 %Y, C2
+; %r = select %c, %T, %Y
+;   =>
+; %v = lshr %and, log2(C1)-log2(C2)
+; %v2 = ZExtOrTrunc %v
+; %v3 = xor %v2, C2
+; %r = or %v3, %Y
+
+%X:i16 = var
+%Y:i32 = var
+%and = and %X, 512
+%c = eq %and, 0
+%T = or %Y, 128
+%r = select %c, %T, %Y
+infer %r
+%v = lshr %and, 2
+%v2:i32 = zext %v
+%v3 = xor %v2, 128
+%r2 = or %v3, %Y
+result %r2
+
+; Name: Select:465-8
+; Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
+; %and = and %X, C1
+; %c = icmp ne %and, 0
+; %T = or i11 %Y, C2
+; %r = select %c, %T, %Y
+;   =>
+; %v = lshr %and, log2(C1)-log2(C2)
+; %v2 = ZExtOrTrunc %v
+; %r = or %v2, %Y
+
+%X:i32 = var
+%Y:i16 = var
+%and = and %X, 536870912
+%c = ne %and, 0
+%T = or %Y, 64
+%r = select %c, %T, %Y
+infer %r
+%v = lshr %and, 23
+%v2:i16 = trunc %v
+%r2 = or %v2, %Y
+result %r2
+
+; Name: Select:485
+; Pre: isSignBit(C)
+; %c = icmp slt i32 %x, C
+; %r = select %c, %A, %B
+;   =>
+; %r = %B
+
+%x:i16 = var
+%A:i32 = var
+%B:i32 = var
+%c = slt %x, -32768
+%r = select %c, %A, %B
+infer %r
+result %B
+
+; Name: Select:485-2
+; %c = icmp ult i32 %x, 0
+; %r = select %c, %A, %B
+;   =>
+; %r = %B
+
+%x:i32 = var
+%A:i44 = var
+%B:i44 = var
+%c = ult %x, 0
+%r = select %c, %A, %B
+infer %r
+result %B
+
+; Name: Select:489
+; Pre: C == (1<<(width(%x)-1))-1
+; %c = icmp sgt i32 %x, C
+; %r = select %c, %A, %B
+;   =>
+; %r = %B
+
+%x:i16 = var
+%A:i32 = var
+%B:i32 = var
+%c = slt 32767, %x
+%r = select %c, %A, %B
+infer %r
+result %B
+
+; Name: Select:489-2
+; %c = icmp ugt i32 %x, -1
+; %r = select %c, %A, %B
+;   =>
+; %r = %B
+
+%x:i64 = var
+%A:i8 = var
+%B:i8 = var
+%c = ult -1, %x
+%r = select %c, %A, %B
+infer %r
+result %B
+
+; Name: Select:510
+; Pre: C2 == C+1 && C != (1<<(width(%X)-1))-1
+; %c = icmp sgt %X, C
+; %r = select %c, %X, C2
+;   =>
+; %c2 = icmp slt %X, C2
+; %r = select %c2, C2, %X
+
+%X:i16 = var
+%c = slt 5344, %X
+%r = select %c, %X, 5345
+infer %r
+%c2 = slt %X, 5345
+%r2 = select %c2, 5345, %X
+result %r2
+
+; Name: Select:511
+; Pre: C2 == C-1 && !isSignBit(C)
+; %c = icmp slt %X, C
+; %r = select %c, %X, C2
+;   =>
+; %c2 = icmp sgt %X, C2
+; %r = select %c2, C2, %X
+
+%X:i64 = var
+%c = slt %X, 3245234
+%r = select %c, %X, 3245233
+infer %r
+%c2 = slt 3245233, %X
+%r2 = select %c2, 3245233, %X
+result %r2

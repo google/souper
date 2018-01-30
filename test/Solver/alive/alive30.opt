@@ -1,0 +1,208 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: 1321
+; Pre: C < 0 && !isSignBit(C)
+; %r = srem i11 %Op0, C
+;   =>
+; %r = srem %Op0, -C
+
+%Op0:i16 = var
+%r = srem %Op0, -20000
+infer %r
+%r2 = srem %Op0, 20000
+result %r2
+
+; Name: Select:420
+; Pre: isPowerOf2(C1) && C1 == C2
+; %and = and %X, C1
+; %c = icmp eq %and, 0
+; %F = xor %X, C2
+; %r = select %c, %X, %F
+;   =>
+; %r = and %X, ~C1
+
+%X:i32 = var
+%Y:i32 = var
+%and = and %X, 65536
+%c = eq %and, 0
+%F = xor %X, 65536
+%r = select %c, %X, %F
+infer %r
+%r2 = and %X, -65537
+result %r2
+
+; Name: Select:423
+; Pre: isPowerOf2(C1) && C1 == ~C2
+; %and = and %X, C1
+; %c = icmp eq %and, 0
+; %F = and %X, C2
+; %r = select %c, %X, %F
+;   =>
+; %r = %F
+
+%X:i16 = var
+%and = and %X, 256
+%c = eq %and, 0
+%F = and %X, -257
+%r = select %c, %X, %F
+infer %r
+result %F
+
+; Name: Select:427
+; Pre: isPowerOf2(C1) && C1 == C2
+; %and = and %X, C1
+; %c = icmp eq %and, 0
+; %T = xor %X, C2
+; %r = select %c, %T, %X
+;   =>
+; %r = or %X, C1
+
+%X:i32 = var
+%and = and %X, 2097152
+%c = eq %and, 0
+%T = xor %X, 2097152
+%r = select %c, %T, %X
+infer %r
+%r2 = or %X, 2097152
+result %r2
+
+; Name: Select:430
+; Pre: isPowerOf2(C1) && C1 == ~C2
+; %and = and %X, C1
+; %c = icmp eq %and, 0
+; %T = and %X, C2
+; %r = select %c, %T, %X
+;   =>
+; %r = %X
+
+%X:i32 = var
+%and = and %X, 33554432
+%c = eq %and, 0
+%T = and %X, -33554433
+%r = select %c, %T, %X
+infer %r
+result %X
+
+; Name: Select:433
+; Pre: isPowerOf2(C1) && C1 == C2
+; %and = and %X, C1
+; %c = icmp eq %and, 0
+; %T = or %X, C2
+; %r = select %c, %T, %X
+;   =>
+; %r = %T
+
+%X:i32 = var
+%and = and %X, 4096
+%c = eq %and, 0
+%T = or %X, 4096
+%r = select %c, %T, %X
+infer %r
+result %T
+
+; Name: Select:465
+; Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
+; %and = and %X, C1
+; %c = icmp eq %and, 0
+; %F = or i11 %Y, C2
+; %r = select %c, %Y, %F
+;   =>
+; %v = ZExtOrTrunc %and
+; %v2 = shl %v, log2(C2)-log2(C1)
+; %r = or %v2, %Y
+
+%X:i32 = var
+%Y:i16 = var
+%and = and %X, 16
+%c = eq %and, 0
+%F = or %Y, 1024
+%r = select %c, %Y, %F
+infer %r
+%v:i16 = trunc %and
+%v2 = shl %v, 6
+%r2 = or %v2, %Y
+result %r2
+
+; Name: Select:465-2
+; Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
+; %and = and %X, C1
+; %c = icmp ne %and, 0
+; %F = or i11 %Y, C2
+; %r = select %c, %Y, %F
+;   =>
+; %v = ZExtOrTrunc %and
+; %v2 = shl %v, log2(C2)-log2(C1)
+; %v3 = xor %v2, C2
+; %r = or %v3, %Y
+
+%X:i32 = var
+%Y:i64 = var
+%and = and %X, 32768
+%c = ne %and, 0
+%F = or %Y, 65536
+%r = select %c, %Y, %F
+infer %r
+%v:i64 = zext %and
+%v2 = shl %v, 1
+%v3 = xor %v2, 65536
+%r2 = or %v3, %Y
+result %r2
+
+; Name: Select:465-3
+; Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
+; %and = and %X, C1
+; %c = icmp eq %and, 0
+; %F = or i11 %Y, C2
+; %r = select %c, %Y, %F
+;   =>
+; %v = lshr %and, log2(C1)-log2(C2)
+; %v2 =ZExtOrTrunc %v
+; %r = or %v2, %Y
+
+%X:i16 = var
+%Y:i8 = var
+%and = and %X, 8192
+%c = eq %and, 0
+%F = or %Y, 128
+%r = select %c, %Y, %F
+infer %r
+%v = lshr %and, 6
+%v2:i8 = trunc %v
+%r2 = or %v2, %Y
+result %r2
+
+; Name: Select:465-4
+; Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
+; %and = and %X, C1
+; %c = icmp ne %and, 0
+; %F = or i11 %Y, C2
+; %r = select %c, %Y, %F
+;   =>
+; %v = lshr %and, log2(C1)-log2(C2)
+; %v2 =ZExtOrTrunc %v
+; %v3 = xor %v2, C2
+; %r = or %v3, %Y
+
+%X:i32 = var
+%Y:i16 = var
+%and = and %X, 32
+%c = ne %and, 0
+%F = or %Y, 16
+%r = select %c, %Y, %F
+infer %r
+%v = lshr %and, 1
+%v2:i16 = trunc %v
+%v3 = xor %v2, 16
+%r2 = or %v3, %Y
+result %r2

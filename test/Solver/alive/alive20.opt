@@ -1,0 +1,186 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:2356
+; %op0 = sext i1 %A
+; %r = or %op0, %op1
+;   =>
+; %r = select %A, -1, %op1
+
+%A:i1 = var
+%op1:i32 = var
+%op0:i32 = sext %A
+%r = or %op0, %op1
+infer %r
+%r2 = select %A, -1, %op1
+result %r2
+
+; Name: AndOrXor:2367
+; %op0 = or %A, C1
+; %r = or %op0, %op1
+;   =>
+; %i = or %A, %op1
+; %r = or %i, C1
+
+%A:i32 = var
+%op1:i32 = var
+%op0 = or %A, 457806123
+%r = or %op0, %op1
+infer %r
+%i = or %A, %op1
+%r2 = or %i, 457806123
+result %r2
+
+; Name: AndOrXor:2375
+; %op0 = select %x, %A, %B
+; %op1 = select %x, %C, %D
+; %r = or %op0, %op1
+;   =>
+; %t = or %A, %C
+; %f = or %B, %D
+; %r = select %x, %t, %f
+
+%x:i1 = var
+%A:i20 = var
+%B:i20 = var
+%C:i20 = var
+%D:i20 = var
+%op0 = select %x, %A, %B
+%op1 = select %x, %C, %D
+%r = or %op0, %op1
+infer %r
+%t = or %A, %C
+%f = or %B, %D
+%r2 = select %x, %t, %f
+result %r2
+
+; Name: AndOrXor:2416
+; %x = xor %nx, -1
+; %op0 = and %x, %y
+; %r = xor %op0, -1
+;   =>
+; %ny = xor %y, -1
+; %r = or %nx, %ny
+
+%nx:i32 = var
+%y:i32 = var
+%x = xor %nx, -1
+%op0 = and %x, %y
+%r = xor %op0, -1
+infer %r
+%ny = xor %y, -1
+%r2 = or %nx, %ny
+result %r2
+
+; Name: AndOrXor:2417
+; %x = xor %nx, -1
+; %op0 = or %x, %y
+; %r = xor %op0, -1
+;   =>
+; %ny = xor %y, -1
+; %r = and %nx, %ny
+
+%nx:i32 = var
+%y:i32 = var
+%x = xor %nx, -1
+%op0 = or %x, %y
+%r = xor %op0, -1
+infer %r
+%ny = xor %y, -1
+%r2 = and %nx, %ny
+result %r2
+
+; Name: AndOrXor:2429
+; %op0 = and %x, %y
+; %r = xor %op0, -1
+;   =>
+; %nx = xor %x, -1
+; %ny = xor %y, -1
+; %r = or %nx, %ny
+
+%x:i16 = var
+%y:i16 = var
+%op0 = and %x, %y
+%r = xor %op0, -1
+infer %r
+%nx = xor %x, -1
+%ny = xor %y, -1
+%r2 = or %nx, %ny
+result %r2
+
+;;; JDR: why is this one desirable???
+; Name: AndOrXor:2430
+; %op0 = or %x, %y
+; %r = xor %op0, -1
+;   =>
+; %nx = xor %x, -1
+; %ny = xor %y, -1
+; %r = and %nx, %ny
+
+%x:i64 = var
+%y:i64 = var
+%op0 = or %x, %y
+%r = xor %op0, -1
+infer %r
+%nx = xor %x, -1
+%ny = xor %y, -1
+%r2 = and %nx, %ny
+result %r2
+
+; Name: AndOrXor:2443
+; %nx = xor %x, -1
+; %op0 = ashr %nx, %y
+; %r = xor %op0, -1
+;   =>
+; %r = ashr %x, %y
+
+%x:i32 = var
+%y:i32 = var
+%nx = xor %x, -1
+%op0 = ashr %nx, %y
+%r = xor %op0, -1
+infer %r
+%r2 = ashr %x, %y
+result %r2
+
+; Name: AndOrXor:2453
+; %op0 = icmp slt %x, %y
+; %r = xor %op0, -1
+;   =>
+; %r = icmp sge %x, %y
+
+%x:i64 = var
+%y:i64 = var
+%op0 = slt %x, %y
+%r = xor %op0, -1
+infer %r
+%r2 = sle %y, %x
+result %r2
+
+; Name: AndOrXor:2459-1
+; %cmp = icmp slt %x, %y
+; %op0 = zext %cmp to i11
+; %r = xor %op0, 1
+;   =>
+; %ncmp = icmp sge %x, %y
+; %r = zext %ncmp
+
+%x:i16 = var
+%y:i16 = var
+%cmp = slt %x, %y
+%op0:i64 = zext %cmp
+%r = xor %op0, 1
+infer %r
+%ncmp = sle %y, %x
+%r2:i64 = zext %ncmp
+result %r2

@@ -1,0 +1,175 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:1880
+; Pre: C1 u< C2
+; %cmp1 = icmp ugt %X, C1
+; %cmp2 = icmp ugt %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp1
+
+%X:i16 = var
+%cmp1 = ult 63200, %X
+%cmp2 = ult 64001, %X
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp1
+
+; Name: AndOrXor:1884
+; Pre: C1 u< C2
+; %cmp1 = icmp ugt %X, C1
+; %cmp2 = icmp ne %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = true
+
+%X:i32 = var
+%cmp1 = ult 234532, %X
+%cmp2 = ne %X, 4564554
+%r = or %cmp1, %cmp2
+infer %r
+result 1:i1
+
+; Name: AndOrXor:1885
+; Pre: C1 u< C2
+; %cmp1 = icmp ugt %X, C1
+; %cmp2 = icmp ult %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = true
+
+%X:i16 = var
+%cmp1 = ult 2345, %X
+%cmp2 = ult %X, 65511
+%r = or %cmp1, %cmp2
+infer %r
+result 1:i1
+
+; Name: AndOrXor:1894
+; Pre: C1 < C2
+; %cmp1 = icmp sgt %X, C1
+; %cmp2 = icmp eq %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp1
+
+%X:i8 = var
+%cmp1 = slt -34, %X
+%cmp2 = eq %X, 122
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp1
+
+; Name: AndOrXor:1895
+; Pre: C1 < C2
+; %cmp1 = icmp sgt %X, C1
+; %cmp2 = icmp sgt %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp1
+
+%X:i32 = var
+%cmp1 = slt 326324, %X
+%cmp2 = slt 34953489, %X
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp1
+
+; Name: AndOrXor:1899
+; Pre: C1 < C2
+; %cmp1 = icmp sgt %X, C1
+; %cmp2 = icmp ne %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = true
+
+%X:i8 = var
+%cmp1 = slt -4, %X
+%cmp2 = ne %X, -3
+%r = or %cmp1, %cmp2
+infer %r
+result 1:i1
+
+; Name: AndOrXor:1900
+; Pre: C1 < C2
+; %cmp1 = icmp sgt %X, C1
+; %cmp2 = icmp slt %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = true
+
+%X:i32 = var
+%cmp1 = slt -234533334, %X
+%cmp2 = slt %X, -3453434
+%r = or %cmp1, %cmp2
+infer %r
+result 1:i1
+
+; Name: AndOrXor:1979
+; Pre: C1 ^ C2 == -1
+; %or = or %A, %B
+; %op0 = and %or, C1
+; %op1 = and %B, C2
+; %r = or %op0, %op1
+;   =>
+; %a = and %A, C1
+; %r = or %a, %B
+
+%A:i16 = var
+%B:i16 = var
+%or = or %A, %B
+%op0 = and %or, 40061
+%op1 = and %B, 25474
+%r = or %op0, %op1
+infer %r
+%a = and %A, 40061
+%r2 = or %a, %B
+result %r2
+
+; Name: AndOrXor:2008
+; Pre: C1 ^ C2 == -1
+; %or = xor %A, %B
+; %op0 = and %or, C1
+; %op1 = and %B, C2
+; %r = or %op0, %op1
+;   =>
+; %a = and %A, C1
+; %r = xor %a, %B
+
+%A:i16 = var
+%B:i16 = var
+%or = xor %A, %B
+%op0 = and %or, 24959
+%op1 = and %B, 40576
+%r = or %op0, %op1
+infer %r
+%a = and %A, 24959
+%r2 = xor %a, %B
+result %r2
+
+; Name: AndOrXor:2052  (X & C1) | C2 --> (X | C2) & (C1|C2)
+; Pre: C & C1 != 0 ; @@ why? it's just as correct without
+; %op0 = and %x, C1
+; %r = or %op0, C
+;   =>
+; %or = or %x, C
+; %r = and %or, (C | C1)
+
+%x:i16 = var
+%op0 = and %x, 6633
+%r = or %op0, 5434
+infer %r
+%or = or %x, 5434
+%r2 = and %or, 7675
+result %r2
