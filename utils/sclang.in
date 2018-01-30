@@ -70,9 +70,6 @@ optimization found in the current compilation unit and only perform
 those that fall within the range [SOUPER_FIRST_OPT
 .. SOUPER_LAST_OPT], inclusive. Used for debugging Souper
 
-SOUPER_IGNORE_SOLVER_ERRORS -- Keep going when the solver fails, for
-example due to running out of memory or time.
-
 SOUPER_INFER_INT -- Try to synthesize constants.
 
 SOUPER_INFER_NOP -- Try to synthesize nops: Optimizations where the
@@ -213,10 +210,6 @@ if ($souper) {
 
     if (exists $ENV{"SOUPER_INFER_NOP"}) {
       push @ARGV, ("-mllvm", "-souper-infer-nop");
-    }
-
-    if (exists $ENV{"SOUPER_IGNORE_SOLVER_ERRORS"}) {
-        push @ARGV, ("-mllvm", "-souper-ignore-solver-errors");
     }
 
     if (exists $ENV{"SOUPER_STATS"}) {
