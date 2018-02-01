@@ -14,6 +14,7 @@
 
 #include "llvm/Analysis/DemandedBits.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
@@ -90,6 +91,7 @@ public:
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfoWrapperPass>();
     Info.addRequired<DemandedBitsWrapperPass>();
+    Info.addRequired<TargetLibraryInfoWrapperPass>();
   }
 
   void dynamicProfile(Function *F, CandidateReplacement &Cand) {
@@ -167,7 +169,10 @@ public:
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>(*F).getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, IC, EBC);
+    TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+    if (!TLI)
+      report_fatal_error("getTLI() failed");
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, IC, EBC, TLI);
 
     std::string FunctionName;
     if (F->hasLocalLinkage()) {
@@ -290,6 +295,7 @@ void initializeSouperPassPass(llvm::PassRegistry &);
 INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)

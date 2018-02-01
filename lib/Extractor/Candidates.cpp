@@ -37,6 +37,7 @@
 #include <unordered_set>
 #include <tuple>
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 
 static llvm::cl::opt<bool> ExploitBPCs(
     "souper-exploit-blockpcs",
@@ -87,13 +88,15 @@ namespace {
 
 struct ExprBuilder {
   ExprBuilder(const ExprBuilderOptions &Opts, Module *M, const LoopInfo *LI,
-              DemandedBits *DB, InstContext &IC, ExprBuilderContext &EBC)
-      : Opts(Opts), DL(M->getDataLayout()), LI(LI), DB(DB), IC(IC), EBC(EBC) {}
+              DemandedBits *DB, TargetLibraryInfo * TLI, InstContext &IC,
+              ExprBuilderContext &EBC)
+    : Opts(Opts), DL(M->getDataLayout()), LI(LI), DB(DB), TLI(TLI), IC(IC), EBC(EBC) {}
 
   const ExprBuilderOptions &Opts;
   const DataLayout &DL;
   const LoopInfo *LI;
   DemandedBits *DB;
+  TargetLibraryInfo *TLI;
   InstContext &IC;
   ExprBuilderContext &EBC;
 
@@ -436,6 +439,7 @@ Inst *ExprBuilder::build(Value *V) {
       }
     }
   } else if (auto Call = dyn_cast<CallInst>(V)) {
+    LibFunc Func;
     if (auto II = dyn_cast<IntrinsicInst>(Call)) {
       Inst *L = get(II->getOperand(0));
       switch (II->getIntrinsicID()) {
@@ -485,6 +489,18 @@ Inst *ExprBuilder::build(Value *V) {
           Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R});
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
+      }
+    } else if (TLI->getLibFunc(*Call->getCalledFunction(), Func) && TLI->has(Func)) {
+      switch (Func) {
+        case LibFunc_abs: {
+          Inst *A = get(Call->getOperand(0));
+          Inst *Z = IC.getConst(APInt(A->Width, 0));
+          Inst *NegA = IC.getInst(Inst::SubNSW, A->Width, {Z, A});
+          Inst *Cmp = IC.getInst(Inst::Slt, 1, {Z, A});
+          return IC.getInst(Inst::Select, A->Width, {Cmp, A, NegA});
+        }
+        default:
+          break;
       }
     }
   }
@@ -718,8 +734,9 @@ std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
 void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
                            const ExprBuilderOptions &Opts, InstContext &IC,
                            ExprBuilderContext &EBC,
+                           TargetLibraryInfo *TLI,
                            FunctionCandidateSet &Result) {
-  ExprBuilder EB(Opts, F.getParent(), LI, DB, IC, EBC);
+  ExprBuilder EB(Opts, F.getParent(), LI, DB, TLI, IC, EBC);
 
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
@@ -761,17 +778,19 @@ public:
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfoWrapperPass>();
     Info.addRequired<DemandedBitsWrapperPass>();
+    Info.addRequired<TargetLibraryInfoWrapperPass>();
     Info.setPreservesAll();
   }
 
   bool runOnFunction(Function &F) {
+    TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
     if (!LI)
       report_fatal_error("getLoopInfo() failed");
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>().getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
-    ExtractExprCandidates(F, LI, DB, Opts, IC, EBC, Result);
+    ExtractExprCandidates(F, LI, DB, Opts, IC, EBC, TLI, Result);
     return false;
   }
 };
@@ -782,9 +801,10 @@ char ExtractExprCandidatesPass::ID = 0;
 
 FunctionCandidateSet souper::ExtractCandidatesFromPass(
     Function *F, const LoopInfo *LI, DemandedBits *DB, InstContext &IC,
-    ExprBuilderContext &EBC, const ExprBuilderOptions &Opts) {
+    ExprBuilderContext &EBC,
+    TargetLibraryInfo *TLI, const ExprBuilderOptions &Opts) {
   FunctionCandidateSet Result;
-  ExtractExprCandidates(*F, LI, DB, Opts, IC, EBC, Result);
+  ExtractExprCandidates(*F, LI, DB, Opts, IC, EBC, TLI, Result);
   return Result;
 }
 
