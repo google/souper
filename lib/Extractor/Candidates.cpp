@@ -454,38 +454,38 @@ Inst *ExprBuilder::build(Value *V) {
           return IC.getInst(Inst::Ctlz, L->Width, {L});
         case Intrinsic::sadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R});
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SAddWithOverflow, L->Width+1, {Add, Overflow});
         }
         case Intrinsic::uadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R});
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::UAddWithOverflow, L->Width+1, {Add, Overflow});
         }
         case Intrinsic::ssub_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R});
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SSubWithOverflow, L->Width+1, {Sub, Overflow});
         }
         case Intrinsic::usub_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R});
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::USubWithOverflow, L->Width+1, {Sub, Overflow});
         }
         case Intrinsic::smul_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R});
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
         case Intrinsic::umul_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R});
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
       }
@@ -494,8 +494,8 @@ Inst *ExprBuilder::build(Value *V) {
         case LibFunc_abs: {
           Inst *A = get(Call->getOperand(0));
           Inst *Z = IC.getConst(APInt(A->Width, 0));
-          Inst *NegA = IC.getInst(Inst::SubNSW, A->Width, {Z, A});
-          Inst *Cmp = IC.getInst(Inst::Slt, 1, {Z, A});
+          Inst *NegA = IC.getInst(Inst::SubNSW, A->Width, {Z, A}, /*Available=*/false);
+          Inst *Cmp = IC.getInst(Inst::Slt, 1, {Z, A}, /*Available=*/false);
           return IC.getInst(Inst::Select, A->Width, {Cmp, A, NegA});
         }
         default:
