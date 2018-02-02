@@ -172,7 +172,7 @@ public:
     TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
     if (!TLI)
       report_fatal_error("getTLI() failed");
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, IC, EBC, TLI);
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, TLI, IC, EBC);
 
     std::string FunctionName;
     if (F->hasLocalLinkage()) {

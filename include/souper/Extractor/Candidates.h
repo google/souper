@@ -116,8 +116,7 @@ struct ExprBuilderContext {
 
 FunctionCandidateSet ExtractCandidatesFromPass(
     llvm::Function *F, const llvm::LoopInfo *LI, llvm::DemandedBits *DB,
-    InstContext &IC, ExprBuilderContext &EBC,
-    llvm::TargetLibraryInfo *TLI,
+    llvm::TargetLibraryInfo *TLI, InstContext &IC, ExprBuilderContext &EBC,
     const ExprBuilderOptions &Opts = ExprBuilderOptions());
 
 FunctionCandidateSet ExtractCandidates(

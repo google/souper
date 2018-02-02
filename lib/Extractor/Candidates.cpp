@@ -37,7 +37,6 @@
 #include <unordered_set>
 #include <tuple>
 #include "llvm/Analysis/ValueTracking.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 
 static llvm::cl::opt<bool> ExploitBPCs(
     "souper-exploit-blockpcs",
@@ -732,9 +731,9 @@ std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
 }
 
 void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
+                           TargetLibraryInfo *TLI,
                            const ExprBuilderOptions &Opts, InstContext &IC,
                            ExprBuilderContext &EBC,
-                           TargetLibraryInfo *TLI,
                            FunctionCandidateSet &Result) {
   ExprBuilder EB(Opts, F.getParent(), LI, DB, TLI, IC, EBC);
 
@@ -790,7 +789,7 @@ public:
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>().getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
-    ExtractExprCandidates(F, LI, DB, Opts, IC, EBC, TLI, Result);
+    ExtractExprCandidates(F, LI, DB, TLI, Opts, IC, EBC, Result);
     return false;
   }
 };
@@ -800,11 +799,10 @@ char ExtractExprCandidatesPass::ID = 0;
 }
 
 FunctionCandidateSet souper::ExtractCandidatesFromPass(
-    Function *F, const LoopInfo *LI, DemandedBits *DB, InstContext &IC,
-    ExprBuilderContext &EBC,
-    TargetLibraryInfo *TLI, const ExprBuilderOptions &Opts) {
+    Function *F, const LoopInfo *LI, DemandedBits *DB, TargetLibraryInfo *TLI,
+    InstContext &IC, ExprBuilderContext &EBC, const ExprBuilderOptions &Opts) {
   FunctionCandidateSet Result;
-  ExtractExprCandidates(*F, LI, DB, Opts, IC, EBC, TLI, Result);
+  ExtractExprCandidates(*F, LI, DB, TLI, Opts, IC, EBC, Result);
   return Result;
 }
 
