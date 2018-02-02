@@ -1,0 +1,93 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -souper-infer-nop %s | FileCheck %s
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+; CHECK: RHS inferred successfully
+
+%a:i32 = var
+%op0 = eq %a, 3452
+%op1 = ult %a, 12435
+%r = and %op0, %op1
+infer %r
+
+%a:i16 = var
+%op0 = eq %a, -5323
+%op1 = slt %a, 633
+%r = and %op0, %op1
+infer %r
+
+%a:i32 = var
+%op0 = ne %a, 4632
+%op1 = eq %a, 45645546
+%r = and %op0, %op1
+infer %r
+
+%a:i32 = var
+%op0 = ne %a, 6354
+%op1 = ult 30394759, %a
+%r = and %op0, %op1
+infer %r
+
+%a:i32 = var
+%op0 = ne %a, -245
+%op1 = slt 57347, %a
+%r = and %op0, %op1
+infer %r
+
+%a:i32 = var
+%op0 = ult %a, 3346
+%op1 = ne %a, 3347
+%r = and %op0, %op1
+infer %r
+
+%a:i32 = var
+%op0 = ult %a, 3452345
+%op1 = ult %a, -1
+%r = and %op0, %op1
+infer %r
+
+%a:i32 = var
+%op0 = slt %a, -1
+%op1 = ne %a, 1
+%r = and %op0, %op1
+infer %r
+
+%a:i8 = var
+%op0 = slt %a, -53
+%op1 = slt %a, 65
+%r = and %op0, %op1
+infer %r
+
+%a:i16 = var
+%op0 = ult 345, %a
+%op1 = eq %a, 40599
+%r = and %op0, %op1
+infer %r
+
+%a:i32 = var
+%op0 = ult 63, %a
+%op1 = ult 3000000000, %a
+%r = and %op0, %op1
+infer %r
+
+%a:i16 = var
+%op0 = slt 633, %a
+%op1 = eq %a, 8322
+%r = and %op0, %op1
+infer %r
+
+%a:i32 = var
+%op0 = slt 435345, %a
+%op1 = slt 657567, %a
+%r = and %op0, %op1
+infer %r

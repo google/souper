@@ -1,0 +1,397 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:2617
+; %na = xor %a, -1
+; %nb = xor %b, -1
+; %op0 = and %a, %nb
+; %op1 = and %na, %b
+; %r = xor %op0, %op1
+;   =>
+; %r = xor %a, %b
+
+%a:i40 = var
+%b:i40 = var
+%na = xor %a, -1
+%nb = xor %b, -1
+%op0 = and %a, %nb
+%op1 = and %na, %b
+%r = xor %op0, %op1
+infer %r
+%r2 = xor %a, %b
+result %r2
+
+; Name: AndOrXor:2627
+; %op0 = xor %a, %c
+; %op1 = or %a, %b
+; %r = xor %op0, %op1
+;   =>
+; %na = xor %a, -1
+; %and = and %na, %b
+; %r = xor %and, %c
+
+%a:i16 = var
+%b:i16 = var
+%c:i16 = var
+%op0 = xor %a, %c
+%op1 = or %a, %b
+%r = xor %op0, %op1
+infer %r
+%na = xor %a, -1
+%and = and %na, %b
+%r2 = xor %and, %c
+result %r2
+
+; Name: AndOrXor:2647
+; %op0 = and %a, %b
+; %op1 = xor %a, %b
+; %r = xor %op0, %op1
+;   =>
+; %r = or %a, %b
+
+%a:i20 = var
+%b:i20 = var
+%op0 = and %a, %b
+%op1 = xor %a, %b
+%r = xor %op0, %op1
+infer %r
+%r2 = or %a, %b
+result %r2
+
+; Name: AndOrXor:2658
+; %nb = xor %b, -1
+; %op0 = and %a, %nb
+; %na = xor %a, -1
+; %r = xor %op0, %na
+;   =>
+; %and = and %a, %b
+; %r = xor %and, -1
+
+%a:i55 = var
+%b:i55 = var
+%nb = xor %b, -1
+%op0 = and %a, %nb
+%na = xor %a, -1
+%r = xor %op0, %na
+infer %r
+%and = and %a, %b
+%r2 = xor %and, -1
+result %r2
+
+; Name: AndOrXor:2663
+; %op0 = icmp ule %a, %b
+; %op1 = icmp ne %a, %b
+; %r = xor %op0, %op1
+;   =>
+; %r = icmp uge %a, %b
+
+%a:i16 = var
+%b:i16 = var
+%op0 = ule %a, %b
+%op1 = ne %a, %b
+%r = xor %op0, %op1
+infer %r
+%r2 = ule %b, %a
+result %r2
+
+; Name: AndOrXor:2681-1
+; %op0 = zext %a
+; %op1 = zext %b
+; %r = xor %op0, %op1
+;   =>
+; %0 = xor %a, %b
+; %r = zext %0
+
+%a:i10 = var
+%b:i10 = var
+%op0:i11 = zext %a
+%op1:i11 = zext %b
+%r = xor %op0, %op1
+infer %r
+%0 = xor %a, %b
+%r2:i11 = zext %0
+result %r2
+
+; Name: AndOrXor:2681-2
+; %op0 = sext %a
+; %op1 = sext %b
+; %r = xor %op0, %op1
+;   =>
+; %0 = xor %a, %b
+; %r = sext %0
+
+%a:i17 = var
+%b:i17 = var
+%op0:i31 = sext %a
+%op1:i31 = sext %b
+%r = xor %op0, %op1
+infer %r
+%0 = xor %a, %b
+%r2:i31 = sext %0
+result %r2
+
+; Name: LoadStoreAlloca:221
+; %p = alloca Ty, 0
+; %p2 = alloca Ty, 0
+;   =>
+; %p2 = %p
+
+;;; JDR: this and subsequent not supported in souper yet
+;%p = alloca Ty, 0
+;%p2 = alloca Ty, 0
+;infer %r
+;%p2 = %p
+;result %r2
+
+; Name: LoadStoreAlloca:234
+; %p = alloca i5
+; %p2 = alloca i7, 0
+;   =>
+; %p2 = alloca i7, 0
+; %p = alloca i5
+
+;%p = alloca i5
+;%p2 = alloca i7, 0
+;infer %r
+;%p2 = alloca i7, 0
+;%p = alloca i5
+;result %r2
+
+; Name: LoadStoreAlloca:256
+; %p = alloca i3, 0
+; %p2 = alloca i7, 0
+;   =>
+; %p2 = bitcast %p
+
+;%p = alloca i3, 0
+;%p2 = alloca i7, 0
+;infer %r
+;%p2 = bitcast %p
+;result %r2
+
+; Name: LoadStoreAlloca:419
+; Pre: equivalentAddressValues(%p1, %p2)
+; store %x, %p1
+; %y = load %p2
+;   =>
+; store %x, %p1
+; %y = bitcast %x
+
+;store %x, %p1
+;%y = load %p2
+;infer %r
+;store %x, %p1
+;%y = bitcast %x
+;result %r2
+
+; Name: LoadStoreAlloca:423
+; %p = getelementptr i5* null, %idxs
+; %y = load i5* %p
+;   =>
+; %y = undef
+; store undef, i7* null
+
+;%p = getelementptr i5* null, %idxs
+;%y = load i5* %p
+;infer %r
+;%y = undef
+;store undef, i7* null
+;result %r2
+
+; Name: LoadStoreAlloca:438
+; %y = load i5* null
+;   =>
+; %y = undef
+; store undef, i7* null
+
+;%y = load i5* null
+;infer %r
+;%y = undef
+;store undef, i7* null
+;result %r2
+
+; Name: LoadStoreAlloca:438-2
+; %y = load i5* undef
+;   =>
+; %y = undef
+; store undef, i7* null
+
+;%y = load i5* undef
+;infer %r
+;%y = undef
+;store undef, i7* null
+;result %r2
+
+; Name: LoadStoreAlloca:472
+; %p = select %c, null, %p1
+; %y = load %p
+;   =>
+; %y = load %p1
+
+;%p = select %c, null, %p1
+;%y = load %p
+;infer %r
+;%y = load %p1
+;result %r2
+
+; Name: LoadStoreAlloca:482
+; %p = select %c, %p1, null
+; %y = load %p
+;   =>
+; %y = load %p1
+
+;%p = select %c, %p1, null
+;%y = load %p
+;infer %r
+;%y = load %p1
+;result %r2
+
+; Name: LoadStoreAlloca:567
+; %p = bitcast %p0
+; store %x, %p
+;   =>
+; %x2 = bitcast %x
+; store %x2, %p0
+
+;%p = bitcast %p0
+;store %x, %p
+;infer %r
+;%x2 = bitcast %x
+;store %x2, %p0
+;result %r2
+
+; Name: LoadStoreAlloca:646
+; Pre: hasOneUse(%Ptr)
+; %Ptr = alloca i9
+; store %x, %Ptr
+;   =>
+; skip
+
+;%Ptr = alloca i9
+;store %x, %Ptr
+;infer %r
+;skip
+;result %r2
+
+; Name: LoadStoreAlloca:651
+; Pre: hasOneUse(%ptr) && hasOneUse(%a)
+; %a = alloca i5
+; %ptr = getelementptr %a, %idx
+; store %x, i5* %ptr
+;   =>
+; skip
+
+;%a = alloca i5
+;%ptr = getelementptr %a, %idx
+;store %x, i5* %ptr
+;infer %r
+;skip
+;result %r2
+
+; Name: LoadStoreAlloca:671
+; Pre: equivalentAddressValues(%p1, %p2)
+; store %x, %p1
+; store %y, %p2
+;   =>
+; store %y, %p2
+
+;store %x, %p1
+;store %y, %p2
+;infer %r
+;store %y, %p2
+;result %r2
+
+; Name: LoadStoreAlloca:686
+; Pre: equivalentAddressValues(%p1, %p2)
+; %x = load %p1
+; store %x, %p2
+;   =>
+; skip
+
+;%x = load %p1
+;store %x, %p2
+;infer %r
+;skip
+;result %r2
+
+; Name: LoadStoreAlloca:702
+; store %x, i7* null
+;   =>
+; store undef, i7* null
+
+;store %x, i7* null
+;infer %r
+;store undef, i7* null
+;result %r2
+
+; Name: simplifyValueKnownNonZero 1
+; Pre: hasOneUse(%Y)
+; %s = shl i33 1, %A
+; %Y = lshr %s, %B
+; %r = udiv %X, %Y
+;   =>
+; %sub = sub %A, %B
+; %Y = shl 1, %sub
+; %r = udiv %X, %Y
+
+%A:i13 = var
+%B:i13 = var
+%X:i13 = var
+%s = shl 1, %A
+%Y = lshr %s, %B
+%r = udiv %X, %Y
+infer %r
+%sub = sub %A, %B
+%Y2 = shl 1, %sub
+%r2 = udiv %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 2
+; Pre: isPowerOf2(%A) && hasOneUse(%Y)
+; %Y = lshr %A, %B
+; %r = udiv %X, %Y
+;   =>
+; %Y = lshr exact %A, %B
+; %r = udiv %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%cp = ctpop %A
+pc %cp 1
+%Y = lshr %A, %B
+%r = udiv %X, %Y
+infer %r
+%Y2 = lshrexact %A, %B
+%r2 = udiv %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 3
+; Pre: isPowerOf2(%A) && hasOneUse(%Y)
+; %Y = shl %A, %B
+; %r = udiv %X, %Y
+;   =>
+; %Y = shl nuw %A, %B
+; %r = udiv %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%cp = ctpop %A
+pc %cp 1
+%Y = shl %A, %B
+%r = udiv %X, %Y
+infer %r
+%Y2 = shlnuw %A, %B
+%r2 = udiv %X, %Y2
+result %r2

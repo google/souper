@@ -1,0 +1,138 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: Select:855
+; %A = select %B, %C, false
+;   =>
+; %A = and %B, %C
+
+%B:i1 = var
+%C:i1 = var
+%r = select %B, %C, 0
+infer %r
+%r2 = and %B, %C
+result %r2
+
+; Name: Select:859
+; %A = select %B, %C, true
+;   =>
+; %notb = xor %B, true
+; %A = or %notb, %C
+
+%B:i1 = var
+%C:i1 = var
+%r = select %B, %C, 1
+infer %r
+%notb = xor %B, 1
+%r2 = or %notb, %C
+result %r2
+
+; Name: Select:851
+; %r = select %a, %b, %a
+;   =>
+; %r = and %a, %b
+
+%a:i1 = var
+%b:i1 = var
+%r = select %a, %b, %a
+infer %r
+%r2 = and %a, %b
+result %r2
+
+; Name: Select:852
+; %r = select %a, %a, %b
+;   =>
+; %r = or %a, %b
+
+%a:i1 = var
+%b:i1 = var
+%r = select %a, %a, %b
+infer %r
+%r2 = or %a, %b
+result %r2
+
+; Name: Select:858
+; %nota = xor %a, -1
+; %r = select %a, %nota, %b
+;   =>
+; %r = and %nota, %b
+
+%a:i1 = var
+%b:i1 = var
+%nota = xor %a, -1
+%r = select %a, %nota, %b
+infer %r
+%r2 = and %nota, %b
+result %r2
+
+; Name: Select:859
+; %nota = xor %a, -1
+; %r = select %a, %b, %nota
+;   =>
+; %r = or %nota, %b
+
+%a:i1 = var
+%b:i1 = var
+%nota = xor %a, -1
+%r = select %a, %b, %nota
+infer %r
+%r2 = or %nota, %b
+result %r2
+
+; Name: Select:869
+; %r = select C, 1, 0
+;   =>
+; %r = zext C
+
+%C:i1 = var
+%r = select %C, 1, 0:i32
+infer %r
+%r2:i32 = zext %C
+result %r2
+
+; Name: Select:873
+; %r = select C, -1, 0
+;   =>
+; %r = sext C
+
+%C:i1 = var
+%r = select %C, -1:i64, 0
+infer %r
+%r2:i64 = sext %C
+result %r2
+
+; Name: Select:877
+; %r = select %c, 0, 1
+;   =>
+; %notc = xor %c, -1
+; %r = zext %notc
+
+%c:i1 = var
+%r = select %c, 0, 1:i8
+infer %r
+%notc = xor %c, -1
+%r2:i8 = zext %notc
+result %r2
+
+; Name: Select:883
+; %r = select %c, 0, -1
+;   =>
+; %notc = xor %c, -1
+; %r = sext %notc
+
+%c:i1 = var
+%r = select %c, 0, -1:i32
+infer %r
+%notc = xor %c, -1
+%r2:i32 = sext %notc
+result %r2

@@ -1,0 +1,178 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:1829
+; Pre: C1 < C2
+; %cmp1 = icmp ne %X, C1
+; %cmp2 = icmp sgt %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp1
+
+%X:i32 = var
+%cmp1 = ne %X, -436234
+%cmp2 = slt 7489399, %X
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp1
+
+; Name: AndOrXor:1831
+; Pre: C1 u< C2
+; %cmp1 = icmp ne %X, C1
+; %cmp2 = icmp ne %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = true
+
+%X:i32 = var
+%cmp1 = ne %X, 34623
+%cmp2 = ne %X, 345893
+%r = or %cmp1, %cmp2
+infer %r
+result 1:i1
+
+; Name: AndOrXor:1832
+; Pre: C1 u< C2
+; %cmp1 = icmp ne %X, C1
+; %cmp2 = icmp ult %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = true
+
+%X:i32 = var
+%cmp1 = ne %X, 45968
+%cmp2 = ult %X, 342950
+%r = or %cmp1, %cmp2
+infer %r
+result 1:i1
+
+; Name: AndOrXor:1833
+; Pre: C1 < C2
+; %cmp1 = icmp ne %X, C1
+; %cmp2 = icmp slt %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = true
+
+%X:i16 = var
+%cmp1 = ne %X, -3245
+%cmp2 = slt %X, 3567
+%r = or %cmp1, %cmp2
+infer %r
+result 1:i1
+
+; Name: AndOrXor:1844
+; Pre: C1 u< C2 && C2 == -1
+; %cmp1 = icmp ult %X, C1
+; %cmp2 = icmp ugt %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp1
+
+%X:i16 = var
+%cmp1 = ult %X, 345
+%cmp2 = ult 65535, %X
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp1
+
+; Name: AndOrXor:1849
+; Pre: C1 u< C2
+; %cmp1 = icmp ult %X, C1
+; %cmp2 = icmp ne %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp2
+
+%X:i32 = var
+%cmp1 = ult %X, 234
+%cmp2 = ne %X, 3456245
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp2
+
+; Name: AndOrXor:1850
+; Pre: C1 u< C2
+; %cmp1 = icmp ult %X, C1
+; %cmp2 = icmp ult %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp2
+
+%X:i16 = var
+%cmp1 = ult %X, 64
+%cmp2 = ult %X, 9234
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp2
+
+; Name: AndOrXor:1864
+; Pre: C1 < C2 && C2 == 1 << (width(C2)-1)
+; %cmp1 = icmp slt %X, C1
+; %cmp2 = icmp sgt %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp1
+
+;;;;; precondition is unsatisfiable!! ;;;;;
+;%X:i16 = var
+;%cmp1 = slt %X, 32767
+;%cmp2 = slt 32768, %X
+;%r = or %cmp1, %cmp2
+;infer %r
+;result %cmp1
+
+; Name: AndOrXor:1869
+; Pre: C1 < C2
+; %cmp1 = icmp slt %X, C1
+; %cmp2 = icmp ne %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp2
+
+%X:i32 = var
+%cmp1 = slt %X, 34253
+%cmp2 = ne %X, 49890
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp2
+
+; Name: AndOrXor:1870
+; Pre: C1 < C2
+; %cmp1 = icmp slt %X, C1
+; %cmp2 = icmp slt %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp2
+
+%X:i32 = var
+%cmp1 = slt %X, -3234452
+%cmp2 = slt %X, -2343333
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp2
+
+; Name: AndOrXor:1879
+; Pre: C1 u< C2
+; %cmp1 = icmp ugt %X, C1
+; %cmp2 = icmp eq %X, C2
+; %r = or %cmp1, %cmp2
+;   =>
+; %r = %cmp1
+
+%X:i16 = var
+%cmp1 = ult 2332, %X
+%cmp2 = eq %X, 5422
+%r = or %cmp1, %cmp2
+infer %r
+result %cmp1

@@ -1,0 +1,187 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: Select:962
+; %s1 = add %x, %y
+; %s2 = add %x, %z
+; %r = select %c, %s1, %s2
+;   =>
+; %yz = select %c, %y, %z
+; %r = add %x, %yz
+
+%x:i32 = var
+%y:i32 = var
+%z:i32 = var
+%c:i1 = var
+%s1 = add %x, %y
+%s2 = add %x, %z
+%r = select %c, %s1, %s2
+infer %r
+%yz = select %c, %y, %z
+%r2 = add %x, %yz
+result %r2
+
+; Name: Select:967a
+; %sum = add i9 %x, %y
+; %dif = sub %x, %y
+; %r = select %c, %sum, %dif
+;   =>
+; %neg = sub 0, %y
+; %sel = select %c, %y, %neg
+; %r = add %x, %sel
+
+;;; why is this one so slow for larger widths?
+
+%x:i8 = var
+%y:i8 = var
+%c:i1 = var
+%sum = add %x, %y
+%dif = sub %x, %y
+%r = select %c, %sum, %dif
+infer %r
+%neg = sub 0, %y
+%sel = select %c, %y, %neg
+%r2 = add %x, %sel
+result %r2
+
+; Name: Select:967b
+; %sum = sub i9 %x, %y
+; %dif = add %x, %y
+; %r = select %c, %sum, %dif
+;   =>
+; %neg = sub 0, %y
+; %sel = select %c, %neg, %y
+; %r = add %x, %sel
+
+;;; why is this so slow with larger vars?
+
+%x:i8 = var
+%y:i8 = var
+%c:i1 = var
+%sum = sub %x, %y
+%dif = add %x, %y
+%r = select %c, %sum, %dif
+infer %r
+%neg = sub 0, %y
+%sel = select %c, %neg, %y
+%r2 = add %x, %sel
+result %r2
+
+; Name: Select:1070
+; %X = select %c, %W, %Z
+; %r = select %c, %X, %Y
+;   =>
+; %r = select %c, %W, %Y
+
+%c:i1 = var
+%W:i38 = var
+%Y:i38 = var
+%Z:i38 = var
+%X = select %c, %W, %Z
+%r = select %c, %X, %Y
+infer %r
+%r2 = select %c, %W, %Y
+result %r2
+
+; Name: Select:1078
+; %Y = select %c, %W, %Z
+; %r = select %c, %X, %Y
+;   =>
+; %r = select %c, %X, %Z
+
+%c:i1 = var
+%W:i38 = var
+%X:i38 = var
+%Z:i38 = var
+%Y = select %c, %W, %Z
+%r = select %c, %X, %Y
+infer %r
+%r2 = select %c, %X, %Z
+result %r2
+
+; Name: Select:1087
+; %c = xor %val, true
+; %r = select %c, %X, %Y
+;   =>
+; %r = select %val, %Y, %X
+
+%val:i1 = var
+%X:i32 = var
+%Y:i32 = var
+%c = xor %val, 1
+%r = select %c, %X, %Y
+infer %r
+%r2 = select %val, %Y, %X
+result %r2
+
+; Name: Select:1100
+; %r = select true, %X, %Y
+;   =>
+; %r = %X
+
+%X:i6 = var
+%Y:i6 = var
+%r = select 1:i1, %X, %Y
+infer %r
+result %X
+
+; Name: InstCombineShift: 46
+; Pre: isPowerOf2(C)
+; %Op1 = srem i31 %A, C
+; %r = shl %Op0, %Op1
+;   =>
+; %a = and %A, C-1
+; %r = shl %Op0, %a
+
+%Op0:i32 = var
+%A:i32 = var
+%Op1 = srem %A, 65536
+%r = shl %Op0, %Op1
+infer %r
+%a = and %A, 65535
+%r2 = shl %Op0, %a
+result %r2
+
+; Name: InstCombineShift: 46-2
+; Pre: isPowerOf2(C)
+; %Op1 = srem i29 %A, C
+; %r = ashr %Op0, %Op1
+;   =>
+; %a = and %A, C-1
+; %r = ashr %Op0, %a
+
+%Op0:i16 = var
+%A:i16 = var
+%Op1 = srem %A, 1024
+%r = ashr %Op0, %Op1
+infer %r
+%a = and %A, 1023
+%r2 = ashr %Op0, %a
+result %r2
+
+; Name: InstCombineShift: 46-3
+; Pre: isPowerOf2(C)
+; %Op1 = srem i27 %A, C
+; %r = lshr %Op0, %Op1
+;   =>
+; %a = and %A, C-1
+; %r = lshr %Op0, %a
+
+%A:i64 = var
+%Op0:i64 = var
+%Op1 = srem %A, 256
+%r = lshr %Op0, %Op1
+infer %r
+%a = and %A, 255
+%r2 = lshr %Op0, %a
+result %r2

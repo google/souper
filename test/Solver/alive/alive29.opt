@@ -1,0 +1,162 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: 976-exact
+; %Op0 = zext Ty %X
+; %Op1 = zext Ty %Y
+; %r = udiv exact i9 %Op0, %Op1
+;   =>
+; %d = udiv exact %X, %Y
+; %r = zext %d
+
+%X:i8 = var
+%Y:i8 = var
+%Op0:i16 = zext %X
+%Op1:i16 = zext %Y
+%r = udivexact %Op0, %Op1
+infer %r
+%d = udivexact %X, %Y
+%r2:i16 = zext %d
+result %r2
+
+; Name: 1030
+; %r = sdiv %X, -1
+;   =>
+; %r = sub 0, %X
+
+%X:i32 = var
+%r = sdiv %X, -1
+infer %r
+%r2 = sub 0, %X
+result %r2
+
+; Name: 1033
+; Pre: C >= 0 && isPowerOf2(C)
+; %r = sdiv exact i33 %Op0, C
+;   =>
+; %r = ashr exact %Op0, log2(C)
+
+%Op0:i16 = var
+%r = sdivexact %Op0, 8192
+infer %r
+%r2 = ashrexact %Op0, 13
+result %r2
+
+; Name: 1045
+; Pre: isSignBit(C)
+; %r = sdiv %Op0, C
+;   =>
+; %cmp = icmp eq %Op0, C
+; %r = zext %cmp
+
+%Op0:i16 = var
+%r = sdiv %Op0, -32768
+infer %r
+%cmp = eq %Op0, -32768
+%r2:i16 = zext %cmp
+result %r2
+
+; Name: 1049
+; %Op0 = sub nsw i11 0, %X
+; %r = sdiv %Op0, C
+;   =>
+; %r = sdiv %X, -C
+
+%X:i32 = var
+%Op0 = subnsw 0, %X
+%r = sdiv %Op0, -1384167459
+infer %r
+%r2 = sdiv %X, 1384167459
+result %r2
+
+; Name: 1062
+; Pre: MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1)) && MaskedValueIsZero(%Op1, 1<<(width(%Op0)-1))
+; %r = sdiv %Op0, %Op1
+;   =>
+; %r = udiv %Op0, %Op1
+
+%Op0:i16 = var
+%Op1:i16 = var
+%m1 = and %Op0, -32768
+pc %m1 0
+%m2 = and %Op1, -32768
+pc %m2 0
+%r = sdiv %Op0, %Op1
+infer %r
+%r2 = udiv %Op0, %Op1
+result %r2
+
+; Name: 1065
+; Pre: MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1)) && isPowerOf2(C)
+; %Op1 = shl i23 C, %X
+; %r = sdiv %Op0, %Op1
+;   =>
+; %r = udiv %Op0, %Op1
+
+%Op0:i16 = var
+%X:i16 = var
+%m1 = and %Op0, -32768
+pc %m1 0
+%Op1 = shl 1024, %X
+%r = sdiv %Op0, %Op1
+infer %r
+%r2 = udiv %Op0, %Op1
+result %r2
+
+; Name: 1285
+; %Op0 = zext Ty %X
+; %Op1 = zext Ty %Y
+; %r = urem %Op0, %Op1
+;   =>
+; %u = urem %X, %Y
+; %r = zext %u
+
+%X:i10 = var
+%Y:i10 = var
+%Op0:i16 = zext %X
+%Op1:i16 = zext %Y
+%r = urem %Op0, %Op1
+infer %r
+%u = urem %X, %Y
+%r2:i16 = zext %u
+result %r2
+
+; Name: 1291
+; Pre: isPowerOf2OrZero(%Op1)
+; %r = urem i33 %Op0, %Op1
+;   =>
+; %add = add %Op1, -1
+; %r = and %Op0, %add
+
+%Op0:i16 = var
+%Op1:i16 = var
+%p = ctpop %Op1
+pc %p 1
+%r = urem %Op0, %Op1
+infer %r
+%add = add %Op1, -1
+%r2 = and %Op0, %add
+result %r2
+
+; Name: 1298
+; %r = urem 1, %Op1
+;   =>
+; %cmp = icmp ne %Op1, 1
+; %r = zext %cmp
+
+%Op1:i20 = var
+%r = urem 1, %Op1
+infer %r
+%cmp = ne %Op1, 1
+%r2:i20 = zext %cmp
+result %r2

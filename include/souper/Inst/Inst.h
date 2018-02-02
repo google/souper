@@ -105,6 +105,7 @@ struct Inst : llvm::FoldingSetNode {
   unsigned Number;
   unsigned Width;
   Block *B;
+  bool Available = true;
   llvm::APInt Val;
   std::string Name;
   std::vector<Inst *> Ops;
@@ -202,7 +203,8 @@ public:
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
 
-  Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops);
+  Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
+                bool Available=true);
 };
 
 int cost(Inst *I);

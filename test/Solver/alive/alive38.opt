@@ -1,0 +1,211 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: InstCombineShift: 366-2
+; %TrOp = lshr %X, C1
+; %Op0 = trunc %TrOp
+; %r = shl i17 %Op0, C2
+;   =>
+; %s1 = shl %TrOp, zext(C2)
+; %and = and %s1, ((1<<width(C2))-1) << zext(C2)
+; %r = trunc %and
+
+%X:i32 = var
+%TrOp = lshr %X, 5
+%Op0:i16 = trunc %TrOp
+%r = shl %Op0, 4
+infer %r
+%s1 = shl %TrOp, 4
+%and = and %s1, 524272
+%r2:i16 = trunc %and
+result %r2
+
+; Name: InstCombineShift: 366-3
+; %TrOp = ashr %X, C1
+; %Op0 = trunc %TrOp
+; %r = shl i17 %Op0, C2
+;   =>
+; %s1 = shl %TrOp, zext(C2)
+; %and = and %s1, ((1<<width(C2))-1) << zext(C2)
+; %r = trunc %and
+
+%X:i32 = var
+%TrOp = ashr %X, 1
+%Op0:i16 = trunc %TrOp
+%r = shl %Op0, 17
+infer %r
+%s1 = shl %TrOp, 17
+%and = and %s1, -131072
+%r2:i16 = trunc %and
+result %r2
+
+; Name: InstCombineShift: 366-4
+; %TrOp = shl %X, C1
+; %Op0 = trunc %TrOp
+; %r = lshr i17 %Op0, C2
+;   =>
+; %s1 = lshr %TrOp, zext(C2)
+; %and = and %s1, ((1<<width(C2))-1) u>> zext(C2)
+; %r = trunc %and
+
+%X:i16 = var
+%TrOp = shl %X, 3
+%Op0:i8 = trunc %TrOp
+%r = lshr %Op0, 1
+infer %r
+%s1 = lshr %TrOp, 1
+%and = and %s1, 127
+%r2:i8 = trunc %and
+result %r2
+
+; Name: InstCombineShift: 366-5
+; %TrOp = lshr %X, C1
+; %Op0 = trunc %TrOp
+; %r = lshr %Op0, C2
+;   =>
+; %s1 = lshr %TrOp, zext(C2)
+; %and = and %s1, ((1<<width(C2))-1) u>> zext(C2)
+; %r = trunc %and
+
+%X:i64 = var
+%TrOp = lshr %X, 55
+%Op0:i32 = trunc %TrOp
+%r = lshr %Op0, 59
+infer %r
+%s1 = lshr %TrOp, 59
+%and = and %s1, 15
+%r2:i32 = trunc %and
+result %r2
+
+; Name: InstCombineShift: 366-6
+; %TrOp = ashr %X, C1
+; %Op0 = trunc %TrOp
+; %r = lshr %Op0, C2
+;   =>
+; %s1 = lshr %TrOp, zext(C2)
+; %and = and %s1, ((1<<width(C2))-1) u>> zext(C2)
+; %r = trunc %and
+
+%X:i64 = var
+%TrOp = ashr %X, 3
+%Op0:i32 = trunc %TrOp
+%r = lshr %Op0, 60
+infer %r
+%s1 = lshr %TrOp, 60
+%and = and %s1, 7
+%r2:i32 = trunc %and
+result %r2
+
+; Name: InstCombineShift: 422-1
+; %Op1 = lshr i31 %X, C
+; %Op0 = add %Y, %Op1
+; %r = shl %Op0, C
+;   =>
+; %s = shl %Y, C
+; %a = add %s, %X
+; %r = and %a, -1 << C
+
+%X:i32 = var
+%Y:i32 = var
+%Op1 = lshr %X, 16
+%Op0 = add %Y, %Op1
+%r = shl %Op0, 16
+infer %r
+%s = shl %Y, 16
+%a = add %s, %X
+%r2 = and %a, -65536
+result %r2
+
+; Name: InstCombineShift: 422-2
+; %Op1 = ashr i31 %X, C
+; %Op0 = add %Y, %Op1
+; %r = shl %Op0, C
+;   =>
+; %s = shl %Y, C
+; %a = add %s, %X
+; %r = and %a, -1 << C
+
+%X:i16 = var
+%Y:i16 = var
+%Op1 = ashr %X, 1
+%Op0 = add %Y, %Op1
+%r = shl %Op0, 1
+infer %r
+%s = shl %Y, 1
+%a = add %s, %X
+%r2 = and %a, 65534
+result %r2
+
+; Name: InstCombineShift: 440
+; %s = lshr %X, C
+; %Op1 = and %s, C2
+; %Op0 = xor %Y, %Op1
+; %r = shl %Op0, C
+;   =>
+; %a = and %X, C2 << C
+; %y2 = shl %Y, C
+; %r = xor %a, %y2
+
+%X:i32 = var
+%Y:i32 = var
+%s = lshr %X, 5
+%Op1 = and %s, 255057929
+%Op0 = xor %Y, %Op1
+%r = shl %Op0, 5
+infer %r
+%a = and %X, 3866886432
+%y2 = shl %Y, 5
+%r2 = xor %a, %y2
+result %r2
+
+; Name: InstCombineShift: 458
+; %s = ashr i31 %X, C
+; %Op0 = sub %s, %Y
+; %r = shl %Op0, C
+;   =>
+; %s2 = shl %Y, C
+; %a = sub %X, %s2
+; %r = and %a, -1<<C
+
+%X:i32 = var
+%Y:i32 = var
+%s = ashr %X, 27
+%Op0 = sub %s, %Y
+%r = shl %Op0, 27
+infer %r
+%s2 = shl %Y, 27
+%a = sub %X, %s2
+%r2 = and %a, 4160749568
+result %r2
+
+; Name: InstCombineShift: 476
+; %shr = lshr %X, C
+; %s = and %shr, C2
+; %Op0 = or %s, %Y
+; %r = shl %Op0, C
+;   =>
+; %s2 = shl %Y, C
+; %a = and %X, C2<<C
+; %r = or %a, %s2
+
+%X:i32 = var
+%Y:i32 = var
+%shr = lshr %X, 3
+%s = and %shr, -2110523512
+%Op0 = or %s, %Y
+%r = shl %Op0, 3
+infer %r
+%s2 = shl %Y, 3
+%a = and %X, 295681088
+%r2 = or %a, %s2
+result %r2

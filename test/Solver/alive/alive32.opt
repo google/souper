@@ -1,0 +1,184 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: Select:523
+; Pre: (C2 == sext(C+1)) && C != (1<<(width(%x)-1))-1
+; %c = icmp sgt %x, C
+; %X = sext %x to i15
+; %r = select %c, %X, C2
+;   =>
+; %c2 = icmp slt %X, C2
+; %r = select %c2, C2, %X
+
+%x:i8 = var
+%c = slt -125, %x
+%X:i32 = sext %x
+%r = select %c, %X, -124
+infer %r
+%c2 = slt %X, -124
+%r2 = select %c2, -124, %X
+result %r2
+
+; Name: Select:524
+; Pre: (C2 == sext(C-1)) && !isSignBit(C)
+; %c = icmp slt %x, C
+; %X = sext %x to i15
+; %r = select %c, %X, C2
+;   =>
+; %c2 = icmp sgt %X, C2
+; %r = select %c2, C2, %X
+
+%x:i16 = var
+%c = slt %x, 5555
+%X:i32 = sext %x
+%r = select %c, %X, 5554
+infer %r
+%c2 = slt 5554, %X
+%r2 = select %c2, 5554, %X
+result %r2
+
+; Name: Select:525
+; Pre: (C2 == sext(C+1)) && C != -1
+; %c = icmp ugt %x, C
+; %X = sext %x to i15
+; %r = select %c, %X, C2
+;   =>
+; %c2 = icmp ult %X, C2
+; %r = select %c2, C2, %X
+
+%x:i16 = var
+%c = ult -2, %x
+%X:i32 = sext %x
+%r = select %c, %X, -1
+infer %r
+%c2 = ult %X, -1
+%r2 = select %c2, -1, %X
+result %r2
+
+; Name: Select:526
+; Pre: (C2 == sext(C-1)) && C != 0
+; %c = icmp ult %x, C
+; %X = sext %x to i15
+; %r = select %c, %X, C2
+;   =>
+; %c2 = icmp ugt %X, C2
+; %r = select %c2, C2, %X
+
+%x:i8 = var
+%c = ult %x, -100
+%X:i128 = sext %x
+%r = select %c, %X, -101
+infer %r
+%c2 = ult -101, %X
+%r2 = select %c2, -101, %X
+result %r2
+
+; Name: Select:537
+; Pre: (C2 == zext(C+1)) && C != -1
+; %c = icmp ugt %x, C
+; %X = zext %x to i15
+; %r = select %c, %X, C2
+;   =>
+; %c2 = icmp ult %X, C2
+; %r = select %c2, C2, %X
+
+%x:i32 = var
+%c = ult 23452343, %x
+%X:i33 = zext %x
+%r = select %c, %X, 23452344
+infer %r
+%c2 = ult %X, 23452344
+%r2 = select %c2, 23452344, %X
+result %r2
+
+; Name: Select:538
+; Pre: (C2 == zext(C-1)) && C != 0
+; %c = icmp ult %x, C
+; %X = zext %x to i15
+; %r = select %c, %X, C2
+;   =>
+; %c2 = icmp ugt %X, C2
+; %r = select %c2, C2, %X
+
+%x:i11 = var
+%c = ult %x, 1500
+%X:i22 = zext %x
+%r = select %c, %X, 1499
+infer %r
+%c2 = ult 1499, %X
+%r2 = select %c2, 1499, %X
+result %r2
+
+; Name: Select:575
+; %c = icmp sgt %X, -1
+; %r = select %c, C1, C2
+;   =>
+; %s = ashr %X, width(%X)-1
+; %a = and %s, C2-C1
+; %r = add %a, C1
+
+%X:i64 = var
+%c = slt -1, %X
+%r = select %c, -8494242232709579858:i64, -3671342357661587618
+infer %r
+%s = ashr %X, 63
+%a = and %s, 4822899875047992240
+%r2 = add %a, -8494242232709579858
+result %r2
+
+; Name: Select:575
+; %c = icmp sgt %X, -1
+; %r = select %c, C1, -1
+;   =>
+; %s = ashr %X, width(%X)-1
+; %r = or %s, C1
+
+%X:i32 = var
+%c = slt -1, %X
+%r = select %c, 986256027, -1:i32
+infer %r
+%s = ashr %X, 31
+%r2 = or %s, 986256027
+result %r2
+
+; Name: Select:576
+; %c = icmp slt %X, 0
+; %r = select %c, C2, C1
+;   =>
+; %s = ashr %X, width(%X)-1
+; %a = and %s, C2-C1
+; %r = add %a, C1
+
+%X:i32 = var
+%c = slt %X, 0
+%r = select %c, -1565908448, -1696780520:i32
+infer %r
+%s = ashr %X, 31
+%a = and %s, 130872072
+%r2 = add %a, -1696780520
+result %r2
+
+; Name: Select:576
+; %c = icmp slt %X, 0
+; %r = select %c, -1, C1
+;   =>
+; %s = ashr %X, width(%X)-1
+; %r = or %s, C1
+
+%X:i16 = var
+%c = slt %X, 0
+%r = select %c, -1, 10869:i16
+infer %r
+%s = ashr %X, 15
+%r2 = or %s, 10869
+result %r2

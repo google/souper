@@ -1,0 +1,154 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: InstCombineShift: 592
+; Pre: C1 < C2
+; %Op0 = ashr exact %X, C1
+; %r = shl nuw %Op0, C2
+;   =>
+; %r = shl nuw i27 %X, C2-C1
+
+%X:i32 = var
+%Op0 = ashrexact %X, 5
+%r = shlnuw %Op0, 15
+infer %r
+%r2 = shlnuw %X, 10
+result %r2
+
+; Name: InstCombineShift: 592
+; Pre: C1 < C2
+; %Op0 = lshr exact %X, C1
+; %r = shl i33 %Op0, C2
+;   =>
+; %r = shl %X, C2-C1
+
+%X:i32 = var
+%Op0 = lshrexact %X, 1
+%r = shl %Op0, 2
+infer %r
+%r2 = shl %X, 1
+result %r2
+
+; Name: InstCombineShift: 592
+; Pre: C1 < C2
+; %Op0 = lshr exact %X, C1
+; %r = shl nsw i31 %Op0, C2
+;   =>
+; %r = shl nsw %X, C2-C1
+
+%X:i32 = var
+%Op0 = lshrexact %X, 4
+%r = shlnsw %Op0, 22
+infer %r
+%r2 = shlnsw %X, 18
+result %r2
+
+; Name: InstCombineShift: 592
+; Pre: C1 < C2
+; %Op0 = lshr exact %X, C1
+; %r = shl nuw %Op0, C2
+;   =>
+; %r = shl nuw i27 %X, C2-C1
+
+%X:i32 = var
+%Op0 = lshrexact %X, 5
+%r = shlnuw %Op0, 25
+infer %r
+%r2 = shlnuw %X, 20
+result %r2
+
+; Name: InstCombineShift: 612
+; Pre: C1 < C2
+; %Op0 = shl nuw %X, C1
+; %r =  lshr i33 %Op0, C2
+;   =>
+; %r = lshr %X, C2-C1
+
+%X:i32 = var
+%Op0 = shlnuw %X, 6
+%r =  lshr %Op0, 29
+infer %r
+%r2 = lshr %X, 23
+result %r2
+
+; Name: InstCombineShift: 612
+; Pre: C1 < C2
+; %Op0 = shl nuw %X, C1
+; %r =  lshr exact %Op0, C2
+;   =>
+; %r = lshr exact i31 %X, C2-C1
+
+%X:i32 = var
+%Op0 = shlnuw %X, 19
+%r =  lshrexact %Op0, 30
+infer %r
+%r2 = lshrexact %X, 11
+result %r2
+
+; Name: InstCombineShift: 622
+; Pre: C1 < C2
+; %Op0 = shl %X, C1
+; %r =  lshr i33 %Op0, C2
+;   =>
+; %s = lshr %X, C2-C1
+; %r = and %s, -1 u>> C2
+
+%X:i32 = var
+%Op0 = shl %X, 2
+%r =  lshr %Op0, 3
+infer %r
+%s = lshr %X, 1
+%r2 = and %s, 536870911
+result %r2
+
+; Name: InstCombineShift: 628
+; Pre: C1 < C2
+; %Op0 = shl nsw %X, C1
+; %r = ashr i33 %Op0, C2
+;   =>
+; %r = ashr %X, C2-C1
+
+%X:i32 = var
+%Op0 = shlnsw %X, 1
+%r = ashr %Op0, 5
+infer %r
+%r2 = ashr %X, 4
+result %r2
+
+; Name: InstCombineShift: 628-2
+; Pre: C1 < C2
+; %Op0 = shl nsw %X, C1
+; %r = ashr exact i33 %Op0, C2
+;   =>
+; %r = ashr exact %X, C2-C1
+
+%X:i32 = var
+%Op0 = shlnsw %X, 30
+%r = ashrexact %Op0, 31
+infer %r
+%r2 = ashrexact %X, 1
+result %r2
+
+; Name: InstCombineShift: 646
+; Pre: C1 > C2
+; %Op0 = lshr exact %X, C1
+; %r = shl i33 %Op0, C2
+;   =>
+; %r = lshr exact %X, C1-C2
+
+%X:i32 = var
+%Op0 = lshrexact %X, 22
+%r = shl %Op0, 1
+infer %r
+%r2 = lshrexact %X, 21
+result %r2

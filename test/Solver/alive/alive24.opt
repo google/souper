@@ -1,0 +1,159 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: 160
+; %sh = shl i7 %x, C2
+; %r = mul %sh, C1
+;   =>
+; %r = mul %x, C1<<C2
+
+%x:i32 = var
+%sh = shl %x, 8
+%r = mul %sh, 9281
+infer %r
+%r2 = mul %x, 2375936
+result %r2
+
+; Name: 168
+; Pre: isPowerOf2(C1)
+; %r = mul i11 %x, C1
+;   =>
+; %r = shl %x, log2(C1)
+
+%x:i20 = var
+%r = mul %x, 4096
+infer %r
+%r2 = shl %x, 12
+result %r2
+
+; Name: 168-2
+; Pre: isPowerOf2(C1)
+; %r = mul nuw i11 %x, C1
+;   =>
+; %r = shl nuw %x, log2(C1)
+
+%x:i16 = var
+%r = mulnuw %x, 256
+infer %r
+%r2 = shlnuw %x, 8
+result %r2
+
+; Name: 201
+; Pre: C < 0 && isPowerOf2(abs(C))
+; %Op0 = sub %Y, %X
+; %r = mul %Op0, C
+;   =>
+; %sub = sub %X, %Y
+; %r = mul %sub, abs(C)
+
+%X:i16 = var
+%Y:i16 = var
+%Op0 = sub %Y, %X
+%r = mul %Op0, -1024
+infer %r
+%sub = sub %X, %Y
+%r2 = mul %sub, 1024
+result %r2
+
+; Name: 203
+; Pre: C < 0 && isPowerOf2(abs(C))
+; %Op0 = add %Y, C1
+; %r = mul %Op0, C
+;   =>
+; %sub = sub -C1, %Y
+; %r = mul %sub, abs(C)
+
+%X:i16 = var
+%Y:i16 = var
+%Op0 = add %Y, -20507
+%r = mul %Op0, -8
+infer %r
+%sub = sub 20507, %Y
+%r2 = mul %sub, 8
+result %r2
+
+; Name: 229
+; %Op0 = add %X, C1
+; %r = mul %Op0, %Op1
+;   =>
+; %mul = mul C1, %Op1
+; %tmp = mul %X, %Op1
+; %r = add %tmp, %mul
+
+%X:i16 = var
+%Op1:i16 = var
+%Op0 = add %X, 16749
+%r = mul %Op0, %Op1
+infer %r
+%mul = mul 16749, %Op1
+%tmp = mul %X, %Op1
+%r2 = add %tmp, %mul
+result %r2
+
+; Name: 239
+; %a = sub 0, %X
+; %b = sub 0, %Y
+; %r = mul %a, %b
+;   =>
+; %r = mul %X, %Y
+
+%X:i20 = var
+%Y:i20 = var
+%a = sub 0, %X
+%b = sub 0, %Y
+%r = mul %a, %b
+infer %r
+%r2 = mul %X, %Y
+result %r2
+
+; Name: 265
+; %div = udiv exact %X, %Y
+; %r = mul %div, %Y
+;   =>
+; %r = %X
+
+%X:i16 = var
+%Y:i16 = var
+%div = udivexact %X, %Y
+%r = mul %div, %Y
+infer %r
+result %X
+
+; Name: 265-2
+; %div = sdiv exact %X, %Y
+; %r = mul %div, %Y
+;   =>
+; %r = %X
+
+%X:i16 = var
+%Y:i16 = var
+%div = sdivexact %X, %Y
+%r = mul %div, %Y
+infer %r
+result %X
+
+; Name: 266
+; %div = udiv exact %X, %Y
+; %negY = sub 0, %Y
+; %r = mul %div, %negY
+;   =>
+; %r = sub 0, %X
+
+%X:i16 = var
+%Y:i16 = var
+%div = udivexact %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+infer %r
+%r2 = sub 0, %X
+result %r2

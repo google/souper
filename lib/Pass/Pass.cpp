@@ -14,6 +14,7 @@
 
 #include "llvm/Analysis/DemandedBits.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
@@ -55,10 +56,6 @@ static cl::opt<bool> DynamicProfile("souper-dynamic-profile", cl::init(false),
 static cl::opt<bool> StaticProfile("souper-static-profile", cl::init(false),
     cl::desc("Static profiling of Souper optimizations (default=false)"));
 
-static cl::opt<bool> IgnoreSolverErrors("souper-ignore-solver-errors",
-                                        cl::init(false),
-                                        cl::desc("Ignore solver errors"));
-
 static cl::opt<unsigned> FirstReplace("souper-first-opt", cl::Hidden,
     cl::init(0),
     cl::desc("First Souper optimization to perform (default=0)"));
@@ -94,6 +91,7 @@ public:
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfoWrapperPass>();
     Info.addRequired<DemandedBitsWrapperPass>();
+    Info.addRequired<TargetLibraryInfoWrapperPass>();
   }
 
   void dynamicProfile(Function *F, CandidateReplacement &Cand) {
@@ -171,7 +169,10 @@ public:
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>(*F).getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, IC, EBC);
+    TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+    if (!TLI)
+      report_fatal_error("getTLI() failed");
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, TLI, IC, EBC);
 
     std::string FunctionName;
     if (F->hasLocalLinkage()) {
@@ -227,10 +228,8 @@ public:
       if (std::error_code EC =
           S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
                    Cand.Mapping.RHS, IC)) {
-        if (EC == std::errc::timed_out)
-          continue;
-        if (IgnoreSolverErrors) {
-          llvm::errs() << "Unable to query solver: " + EC.message() + "\n";
+        if (EC == std::errc::timed_out ||
+            EC == std::errc::value_too_large) {
           continue;
         } else {
           report_fatal_error("Unable to query solver: " + EC.message() + "\n");
@@ -296,6 +295,7 @@ void initializeSouperPassPass(llvm::PassRegistry &);
 INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)

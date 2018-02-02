@@ -1,0 +1,169 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: 266-2
+; %div = sdiv exact %X, %Y
+; %negY = sub 0, %Y
+; %r = mul %div, %negY
+;   =>
+; %r = sub 0, %X
+
+%X:i16 = var
+%Y:i16 = var
+%div = sdivexact %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+infer %r
+%r2 = sub 0, %X
+result %r2
+
+; Name: 275
+; %div = udiv i5 %X, %Y
+; %r = mul %div, %Y
+;   =>
+; %rem = urem %X, %Y
+; %r = sub  %X, %rem
+
+%X:i8 = var
+%Y:i8 = var
+%div = udiv %X, %Y
+%r = mul %div, %Y
+infer %r
+%rem = urem %X, %Y
+%r2 = sub %X, %rem
+result %r2
+
+; Name: 275-2
+; %div = sdiv i5 %X, %Y
+; %r = mul %div, %Y
+;   =>
+; %rem = srem %X, %Y
+; %r = sub  %X, %rem
+
+%X:i8 = var
+%Y:i8 = var
+%div = sdiv %X, %Y
+%r = mul %div, %Y
+infer %r
+%rem = srem %X, %Y
+%r2 = sub  %X, %rem
+result %r2
+
+; Name: 276
+; %div = sdiv i5 %X, %Y
+; %negY = sub 0, %Y
+; %r = mul %div, %negY
+;   =>
+; %rem = srem %X, %Y
+; %r = sub %rem, %X
+
+%X:i8 = var
+%Y:i8 = var
+%div = sdiv %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+infer %r
+%rem = srem %X, %Y
+%r2 = sub %rem, %X
+result %r2
+
+; Name: 276-2
+; %div = udiv i5 %X, %Y
+; %negY = sub 0, %Y
+; %r = mul %div, %negY
+;   =>
+; %rem = urem %X, %Y
+; %r = sub %rem, %X
+
+%X:i8 = var
+%Y:i8 = var
+%div = udiv %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+infer %r
+%rem = urem %X, %Y
+%r2 = sub %rem, %X
+result %r2
+
+; Name: 283
+; %r = mul i1 %X, %Y
+;   =>
+; %r = and %X, %Y
+
+%X:i1 = var
+%Y:i1 = var
+%r = mul %X, %Y
+infer %r
+%r2 = and %X, %Y
+result %r2
+
+; Name: 290 & 292
+; %Op0 = shl 1, %Y
+; %r = mul %Op0, %Op1
+;   =>
+; %r = shl %Op1, %Y
+
+%Y:i32 = var
+%Op1:i32 = var
+%Op0 = shl 1, %Y
+%r = mul %Op0, %Op1
+infer %r
+%r2 = shl %Op1, %Y
+result %r2
+
+; Name: 304
+; Pre: MaskedValueIsZero(%Op0, -2)
+; %r = mul %Op0, %Op1
+;   =>
+; %s = sub 0, %Op0
+; %r = and %s, %Op1
+
+%Op0:i32 = var
+%Op1:i32 = var
+%mask = and %Op0, -2
+%cmp = eq %mask, 0
+pc %cmp 1
+%r = mul %Op0, %Op1
+infer %r
+%s = sub 0, %Op0
+%r2 = and %s, %Op1
+result %r2
+
+; Name: SimplifyDivRemOfSelect
+; %sel = select %c, %Y, 0
+; %r = udiv %X, %sel
+;   =>
+; %r = udiv %X, %Y
+
+%X:i8 = var
+%Y:i8 = var
+%c:i1 = var
+%sel = select %c, %Y, 0
+%r = udiv %X, %sel
+infer %r
+%r2 = udiv %X, %Y
+result %r2
+
+; Name: 735
+; Pre: WillNotOverflowSignedMul(C1, C2)
+; %Op0 = sdiv i7 %X, C1
+; %r = sdiv %Op0, C2
+;   =>
+; %r = sdiv %X, C1*C2
+
+%X:i8 = var
+%Op0 = sdiv %X, 5
+%r = sdiv %Op0, 9
+infer %r
+%r2 = sdiv %X, 45
+result %r2

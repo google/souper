@@ -1,0 +1,174 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: 865
+; Pre: isPowerOf2(C)
+; %r = udiv exact i9 %x, C
+;   =>
+; %r = lshr exact %x, log2(C)
+
+%x:i16 = var
+%r = udivexact %x, 128
+infer %r
+%r2 = lshrexact %x, 7
+result %r2
+
+; Name: 876
+; Pre: C u>= (1<<(width(C)-1))
+; %r = udiv %x, C
+;   =>
+; %c = icmp ult %x, C
+; %r = select %c, 0, 1
+
+%x:i16 = var
+%r = udiv %x, 40000
+infer %r
+%c = ult %x, 40000
+%r2 = select %c, 0:i16, 1
+result %r2
+
+; Name: 891
+; %s = shl i13 1, %N
+; %r = udiv %x, %s
+;   =>
+; %r = lshr %x, %N
+
+%x:i16 = var
+%N:i16 = var
+%s = shl 1, %N
+%r = udiv %x, %s
+infer %r
+%r2 = lshr %x, %N
+result %r2
+
+; Name: 891-exact
+; %s = shl i13 1, %N
+; %r = udiv exact %x, %s
+;   =>
+; %r = lshr exact %x, %N
+
+%x:i16 = var
+%N:i16 = var
+%s = shl 1, %N
+%r = udivexact %x, %s
+infer %r
+%r2 = lshrexact %x, %N
+result %r2
+
+; Name: 891-2
+; Pre: isPowerOf2(C)
+; %s = shl i13 C, %N
+; %r = udiv %x, %s
+;   =>
+; %N2 = add %N, log2(C)
+; %r = lshr %x, %N2
+
+%x:i16 = var
+%N:i16 = var
+%s = shl 512, %N
+%r = udiv %x, %s
+infer %r
+%N2 = add %N, 9
+%r2 = lshr %x, %N2
+result %r2
+
+; Name: 891-2
+; Pre: isPowerOf2(C)
+; %s = shl i13 C, %N
+; %r = udiv exact %x, %s
+;   =>
+; %N2 = add %N, log2(C)
+; %r = lshr exact %x, %N2
+
+%x:i16 = var
+%N:i16 = var
+%s = shl 16, %N
+%r = udivexact %x, %s
+infer %r
+%N2 = add %N, 4
+%r2 = lshrexact %x, %N2
+result %r2
+
+; Name: 891-3
+; Pre: isPowerOf2(C)
+; %s = shl C, %N
+; %Op1 = zext %s
+; %r = udiv i13 %x, %Op1
+;   =>
+; %N2 = add %N, log2(C)
+; %N3 = zext %N2
+; %r = lshr %x, %N3
+
+%x:i16 = var
+%N:i8 = var
+%s = shl 32, %N
+%Op1:i16 = zext %s
+%r = udiv %x, %Op1
+infer %r
+%N2 = add %N, 5
+%N3:i16 = zext %N2
+%r2 = lshr %x, %N3
+result %r2
+
+; Name: 891-3
+; Pre: isPowerOf2(C)
+; %s = shl C, %N
+; %Op1 = zext %s
+; %r = udiv exact i13 %x, %Op1
+;   =>
+; %N2 = add %N, log2(C)
+; %N3 = zext %N2
+; %r = lshr exact %x, %N3
+
+%x:i16 = var
+%N:i8 = var
+%s = shl 64, %N
+%Op1:i16 = zext %s
+%r = udivexact %x, %Op1
+infer %r
+%N2 = add %N, 6
+%N3:i16 = zext %N2
+%r2 = lshrexact %x, %N3
+result %r2
+
+; Name: 968
+; Pre: WillNotOverflowUnsignedShl(C2, C1)
+; %Op0 = lshr i9 %X, C1
+; %r = udiv %Op0, C2
+;   =>
+; %r = udiv %X, C2 << C1
+
+%X:i16 = var
+%Op0 = lshr %X, 2
+%r = udiv %Op0, 15885
+infer %r
+%r2 = udiv %X, 63540
+result %r2
+
+; Name: 976
+; %Op0 = zext Ty %X
+; %Op1 = zext Ty %Y
+; %r = udiv %Op0, %Op1
+;   =>
+; %d = udiv %X, %Y
+; %r = zext %d
+
+%X:i10 = var
+%Y:i10 = var
+%Op0:i16 = zext %X
+%Op1:i16 = zext %Y
+%r = udiv %Op0, %Op1
+infer %r
+%d = udiv %X, %Y
+%r2:i16 = zext %d
+result %r2
