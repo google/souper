@@ -489,7 +489,8 @@ Inst *ExprBuilder::build(Value *V) {
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
       }
-    } else if (TLI->getLibFunc(*Call->getCalledFunction(), Func) && TLI->has(Func)) {
+    } else if (Call->getCalledFunction() &&
+               TLI->getLibFunc(*Call->getCalledFunction(), Func) && TLI->has(Func)) {
       switch (Func) {
         case LibFunc_abs: {
           Inst *A = get(Call->getOperand(0));
