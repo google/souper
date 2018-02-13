@@ -289,9 +289,6 @@ public:
         NewVal->print(errs());
         errs() << "\" in:\n";
         PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
-      }
-
-      if (1 || DebugSouperPass) {
         errs() << "\"\n; with \"";
         NewVal->print(errs());
         errs() << "\"\n";
