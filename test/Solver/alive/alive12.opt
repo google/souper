@@ -163,10 +163,10 @@ result %r2
 %x:i32 = var
 %a = and %x, 345234534
 %op0:i8 = trunc %a
-%r = and %op0, 6795033293
+%r = and %op0, 233
 infer %r
 %newcast:i8 = trunc %x
-%r2 = and %newcast, 68
+%r2 = and %newcast, 96
 result %r2
 
 ; Name: AndOrXor:1230  ~A & ~B -> ~(A | B)

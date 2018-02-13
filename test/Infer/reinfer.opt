@@ -1,0 +1,38 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false -reinfer-rhs %s > %t 2>&1
+; RUN: FileCheck %s < %t
+; CHECK: no cost regression
+; CHECK: no cost regression
+; CHECK: no cost regression
+; CHECK: no cost regression
+; CHECK: no cost regression
+
+%0:i8 = var (knownBits=xxxx0000)
+%1:i8 = var (knownBits=0000xxxx)
+%2:i8 = and %0, %1
+%3:i1 = eq %2, 0:i8
+cand %3 1:i1
+
+%0:i16 = var (knownBits=1x1x1x1x1x1x1x1x)
+%1:i16 = var (knownBits=x1x1x1x1x1x1x1x1)
+%2:i16 = or %0, %1
+%3:i1 = eq %2, 65535:i16
+cand %3 1:i1
+
+%0:i64 = var (knownBits=1111111111111111111111111111111111111111111111111111111111111111)
+%1:i64 = var (knownBits=0000000000000000000000000000000000000000000000000000000000000000)
+%2:i64 = and %0, %1
+%3:i1 = eq %2, 0:i64
+cand %3 1:i1
+
+%0:i32 = var (knownBits=10000000000000000000000000000000)
+%1:i1 = eq 0:i32, %0
+cand %1 0:i1
+
+%0:i128 = var (knownBits=11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111)
+%1:i128 = var (knownBits=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)
+%2:i128 = and %0, %1
+%3:i1 = eq %2, 0:i128
+cand %3 1:i1
+

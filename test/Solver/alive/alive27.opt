@@ -1,0 +1,154 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: 764
+; Pre: C2 %u (1<<C1) == 0
+; %s = shl nuw i9 %X, C1
+; %r = udiv %s, C2
+;   =>
+; %r = udiv %X, C2/u (1<<C1)
+
+%X:i16 = var
+%s = shlnuw %X, 2
+%r = udiv %s, 3732
+infer %r
+%r2 = udiv %X, 933
+result %r2
+
+; Name: 764
+; Pre: C2 %u (1<<C1) == 0
+; %s = shl nuw i7 %X, C1
+; %r = udiv exact %s, C2
+;   =>
+; %r = udiv exact %X, C2/u (1<<C1)
+
+%X:i16 = var
+%s = shlnuw %X, 3
+%r = udivexact %s, 32600
+infer %r
+%r2 = udivexact %X, 4075
+result %r2
+
+; Name: 772
+; Pre: (1<<C1) % C2 == 0 && C1 != width(C1)-1
+; %s = shl nsw i9 %X, C1
+; %r = sdiv %s, C2
+;   =>
+; %r = mul nsw %X, (1<<C1)/C2
+
+%X:i16 = var
+%s = shlnsw %X, 14
+%r = sdiv %s, 65532
+infer %r
+%r2 = mulnsw %X, -4096
+result %r2
+
+; Name: 772
+; Pre: (1<<C1) %u C2 == 0
+; %s = shl nuw i9 %X, C1
+; %r = udiv %s, C2
+;   =>
+; %r = mul nuw %X, (1<<C1) /u C2
+
+%X:i16 = var
+%s = shlnuw %X, 13
+%r = udiv %s, 32
+infer %r
+%r2 = mulnuw %X, 256
+result %r2
+
+; Name: 772
+; Pre: (1<<C1) %u C2 == 0
+; %s = shl nsw nuw i9 %X, C1
+; %r = udiv %s, C2
+;   =>
+; %r = mul nsw nuw %X, (1<<C1) /u C2
+
+%X:i16 = var
+%s = shlnw %X, 5
+%r = udiv %s, 2
+infer %r
+%r2 = mulnw %X, 16
+result %r2
+
+; Name: 805
+; %r = sdiv 1, %X
+;   =>
+; %inc = add %X, 1
+; %c = icmp ult %inc, 3
+; %r = select %c, %X, 0
+
+%X:i16 = var
+%r = sdiv 1, %X
+infer %r
+%inc = add %X, 1
+%c = ult %inc, 3
+%r2 = select %c, %X, 0
+result %r2
+
+; Name: 809
+; %r = udiv 1, %X
+;   =>
+; %c = icmp eq %X, 1
+; %r = zext %c
+
+%X:i16 = var
+%r = udiv 1, %X
+infer %r
+%c = eq %X, 1
+%r2:i16 = zext %c
+result %r2
+
+; Name: 820
+; %Z = srem i9 %X, %Op1
+; %Op0 = sub %X, %Z
+; %r = sdiv %Op0, %Op1
+;   =>
+; %r = sdiv %X, %Op1
+
+%X:i8 = var
+%Op1:i8 = var
+%Z = srem %X, %Op1
+%Op0 = sub %X, %Z
+%r = sdiv %Op0, %Op1
+infer %r
+%r2 = sdiv %X, %Op1
+result %r2
+
+; Name: 820
+; %Z = urem i9 %X, %Op1
+; %Op0 = sub %X, %Z
+; %r = udiv %Op0, %Op1
+;   =>
+; %r = udiv %X, %Op1
+
+%X:i8 = var
+%Op1:i8 = var
+%Z = urem %X, %Op1
+%Op0 = sub %X, %Z
+%r = udiv %Op0, %Op1
+infer %r
+%r2 = udiv %X, %Op1
+result %r2
+
+; Name: 865
+; Pre: isPowerOf2(C)
+; %r = udiv i9 %x, C
+;   =>
+; %r = lshr %x, log2(C)
+
+%x:i16 = var
+%r = udiv %x, 8192
+infer %r
+%r2 = lshr %x, 13
+result %r2

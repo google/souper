@@ -221,7 +221,7 @@ FoundChar:
       }
       // this calculation is from an assertion in APInt::fromString()
       if ((((NumEnd - NumBegin) - 1) * 64) / 22 > Width) {
-        ErrStr = "integer too large for its width";
+        ErrStr = "integer constant is too large for its width";
         return Token{Token::Error, Begin, 0, APInt()};
       }
       return Token{Token::Int, NumBegin, size_t(Begin - NumBegin),
@@ -315,6 +315,14 @@ struct Parser {
   std::string makeErrStr(TokenPos TP, const std::string &ErrStr) {
     return FileName + ":" + utostr(TP.Line) + ":" + utostr(TP.Col) + ": " +
            ErrStr;
+  }
+
+  bool lossy(const APInt &I, unsigned NewWidth) {
+    unsigned W = I.getBitWidth();
+    if (NewWidth >= W)
+      return false;
+    auto NI = I.trunc(NewWidth);
+    return NI.zext(W) != I && NI.sext(W) != I;
   }
 
   bool consumeToken(std::string &ErrStr) {
@@ -413,6 +421,10 @@ bool Parser::typeCheckOpsMatchingWidths(llvm::MutableArrayRef<Inst *> Ops,
 
   for (auto &Op : Ops) {
     if (Op->Width == 0) {
+      if (lossy(Op->Val, Width)) {
+        ErrStr = "integer constant is too large for its width";
+        return false;
+      }
       Op = IC.getConst(Op->Val.sextOrTrunc(Width));
     }
   }
@@ -525,6 +537,10 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     MinOps = MaxOps = 3;
     if (Ops.size() > 1) {
       if (Ops[0]->Width == 0) {
+        if (lossy(Ops[0]->Val, 1)) {
+          ErrStr = "integer constant is too large for its width";
+          return false;
+        }
         Ops[0] = IC.getConst(Ops[0]->Val.trunc(1));
       } else if (Ops[0]->Width != 1) {
         ErrStr = std::string("first operand must have width of 1, has width ") +

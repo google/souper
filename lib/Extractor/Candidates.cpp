@@ -87,13 +87,15 @@ namespace {
 
 struct ExprBuilder {
   ExprBuilder(const ExprBuilderOptions &Opts, Module *M, const LoopInfo *LI,
-              DemandedBits *DB, InstContext &IC, ExprBuilderContext &EBC)
-      : Opts(Opts), DL(M->getDataLayout()), LI(LI), DB(DB), IC(IC), EBC(EBC) {}
+              DemandedBits *DB, TargetLibraryInfo * TLI, InstContext &IC,
+              ExprBuilderContext &EBC)
+    : Opts(Opts), DL(M->getDataLayout()), LI(LI), DB(DB), TLI(TLI), IC(IC), EBC(EBC) {}
 
   const ExprBuilderOptions &Opts;
   const DataLayout &DL;
   const LoopInfo *LI;
   DemandedBits *DB;
+  TargetLibraryInfo *TLI;
   InstContext &IC;
   ExprBuilderContext &EBC;
 
@@ -436,6 +438,7 @@ Inst *ExprBuilder::build(Value *V) {
       }
     }
   } else if (auto Call = dyn_cast<CallInst>(V)) {
+    LibFunc Func;
     if (auto II = dyn_cast<IntrinsicInst>(Call)) {
       Inst *L = get(II->getOperand(0));
       switch (II->getIntrinsicID()) {
@@ -451,39 +454,54 @@ Inst *ExprBuilder::build(Value *V) {
           return IC.getInst(Inst::Ctlz, L->Width, {L});
         case Intrinsic::sadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R});
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SAddWithOverflow, L->Width+1, {Add, Overflow});
         }
         case Intrinsic::uadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R});
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::UAddWithOverflow, L->Width+1, {Add, Overflow});
         }
         case Intrinsic::ssub_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R});
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SSubWithOverflow, L->Width+1, {Sub, Overflow});
         }
         case Intrinsic::usub_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R});
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::USubWithOverflow, L->Width+1, {Sub, Overflow});
         }
         case Intrinsic::smul_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R});
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
         case Intrinsic::umul_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R});
-          Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R});
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
+        }
+      }
+    } else {
+      Function* F = Call->getCalledFunction();
+      if(F && TLI->getLibFunc(*F, Func) && TLI->has(Func)) {
+        switch (Func) {
+          case LibFunc_abs: {
+            Inst *A = get(Call->getOperand(0));
+            Inst *Z = IC.getConst(APInt(A->Width, 0));
+            Inst *NegA = IC.getInst(Inst::SubNSW, A->Width, {Z, A}, /*Available=*/false);
+            Inst *Cmp = IC.getInst(Inst::Slt, 1, {Z, A}, /*Available=*/false);
+            return IC.getInst(Inst::Select, A->Width, {Cmp, A, NegA});
+          }
+          default:
+            break;
         }
       }
     }
@@ -717,10 +735,11 @@ std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
 }
 
 void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
+                           TargetLibraryInfo *TLI,
                            const ExprBuilderOptions &Opts, InstContext &IC,
                            ExprBuilderContext &EBC,
                            FunctionCandidateSet &Result) {
-  ExprBuilder EB(Opts, F.getParent(), LI, DB, IC, EBC);
+  ExprBuilder EB(Opts, F.getParent(), LI, DB, TLI, IC, EBC);
 
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
@@ -762,17 +781,19 @@ public:
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfoWrapperPass>();
     Info.addRequired<DemandedBitsWrapperPass>();
+    Info.addRequired<TargetLibraryInfoWrapperPass>();
     Info.setPreservesAll();
   }
 
   bool runOnFunction(Function &F) {
+    TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
     if (!LI)
       report_fatal_error("getLoopInfo() failed");
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>().getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
-    ExtractExprCandidates(F, LI, DB, Opts, IC, EBC, Result);
+    ExtractExprCandidates(F, LI, DB, TLI, Opts, IC, EBC, Result);
     return false;
   }
 };
@@ -782,10 +803,10 @@ char ExtractExprCandidatesPass::ID = 0;
 }
 
 FunctionCandidateSet souper::ExtractCandidatesFromPass(
-    Function *F, const LoopInfo *LI, DemandedBits *DB, InstContext &IC,
-    ExprBuilderContext &EBC, const ExprBuilderOptions &Opts) {
+    Function *F, const LoopInfo *LI, DemandedBits *DB, TargetLibraryInfo *TLI,
+    InstContext &IC, ExprBuilderContext &EBC, const ExprBuilderOptions &Opts) {
   FunctionCandidateSet Result;
-  ExtractExprCandidates(*F, LI, DB, Opts, IC, EBC, Result);
+  ExtractExprCandidates(*F, LI, DB, TLI, Opts, IC, EBC, Result);
   return Result;
 }
 

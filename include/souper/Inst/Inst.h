@@ -18,10 +18,11 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
-#include <map>
 
 namespace souper {
 
@@ -104,6 +105,7 @@ struct Inst : llvm::FoldingSetNode {
   unsigned Number;
   unsigned Width;
   Block *B;
+  bool Available = true;
   llvm::APInt Val;
   std::string Name;
   std::vector<Inst *> Ops;
@@ -201,8 +203,11 @@ public:
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
 
-  Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops);
+  Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
+                bool Available=true);
 };
+
+int cost(Inst *I);
 
 void PrintReplacement(llvm::raw_ostream &Out, const BlockPCs &BPCs,
                       const std::vector<InstMapping> &PCs, InstMapping Mapping,

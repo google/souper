@@ -1,0 +1,217 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: Select:740
+; %c = icmp sgt %A, 0
+; %minus = sub 0, %A
+; %abs = select %c, %A, %minus
+; %c2 = icmp sgt %abs, -1
+; %minus2 = sub 0, %abs
+; %abs2 = select %c2, %abs, %minus2
+;   =>
+; %abs2 = select %c, %A, %minus
+
+%A:i32 = var
+%c = slt 0, %A
+%minus = sub 0, %A
+%abs = select %c, %A, %minus
+%c2 = slt -1, %abs
+%minus2 = sub 0, %abs
+%r = select %c2, %abs, %minus2
+infer %r
+%r2 = select %c, %A, %minus
+result %r2
+
+; Name: Select:741
+; %c = icmp sgt %A, 0
+; %minus = sub 0, %A
+; %abs = select %c, %minus, %A
+; %c2 = icmp sgt %abs, -1
+; %minus2 = sub 0, %abs
+; %abs2 = select %c2, %minus2, %abs
+;   =>
+; %abs2 = select %c, %minus, %A
+
+%A:i64 = var
+%c = slt 0, %A
+%minus = sub 0, %A
+%abs = select %c, %minus, %A
+%c2 = slt -1, %abs
+%minus2 = sub 0, %abs
+%r = select %c2, %minus2, %abs
+infer %r
+%r2 = select %c, %minus, %A
+result %r2
+
+; Name: Select:746
+; %c = icmp slt %A, 0
+; %minus = sub 0, %A
+; %abs = select %c, %A, %minus
+; %c2 = icmp sgt %abs, 0
+; %minus2 = sub 0, %abs
+; %abs2 = select %c2, %abs, %minus2
+;   =>
+; %c3 = icmp sgt %A, 0
+; %abs2 = select %c3, %A, %minus
+
+%A:i32 = var
+%c = slt %A, 0
+%minus = sub 0, %A
+%abs = select %c, %A, %minus
+%c2 = slt 0, %abs
+%minus2 = sub 0, %abs
+%r = select %c2, %abs, %minus2
+infer %r
+%c3 = slt 0, %A
+%r2 = select %c3, %A, %minus
+result %r2
+
+; Name: Select:747
+; %c = icmp sgt %A, 0
+; %minus = sub 0, %A
+; %abs = select %c, %A, %minus
+; %c2 = icmp slt %abs, 0
+; %minus2 = sub 0, %abs
+; %abs2 = select %c2, %abs, %minus2
+;   =>
+; %c3 = icmp slt %A, 0
+; %abs2 = select %c3, %A, %minus
+
+%A:i8 = var
+%c = slt 0, %A
+%minus = sub 0, %A
+%abs = select %c, %A, %minus
+%c2 = slt %abs, 0
+%minus2 = sub 0, %abs
+%r = select %c2, %abs, %minus2
+infer %r
+%c3 = slt %A, 0
+%r2 = select %c3, %A, %minus
+result %r2
+
+; Name: Select:762
+; Pre: isPowerOf2(C) && isPowerOf2(C2-C3) && log2(C) < width(C2)
+; %lhs = and %Op, C
+; %c = icmp eq %lhs, 0
+; %s = select %c, C2, C3
+;   =>
+; %v0 = ZExtOrTrunc %lhs to i11
+; %v = shl %v0, max(0, log2(C2-C3) - log2(C))
+; %v2 = lshr %v, max(0, log2(C) - log2(C2-C3))
+; %x = xor %v2, C2-C3
+; %s = add %x, C3
+
+%Op:i16 = var
+%lhs = and %Op, 256
+%c = eq %lhs, 0
+%r = select %c, 2564:i13, 2500
+infer %r
+%v0:i13 = trunc %lhs
+%v = shl %v0, 0
+%v2 = lshr %v, 2
+%x = xor %v2, 64
+%r2 = add %x, 2500
+result %r2
+
+; Name: Select:762-2
+; Pre: isPowerOf2(C) && isPowerOf2(C2-C3) && log2(C) < width(C2)
+; %lhs = and %Op, C
+; %c = icmp ne %lhs, 0
+; %s = select %c, C2, C3
+;   =>
+; %v0 = ZExtOrTrunc %lhs to i11
+; %v = shl %v0, max(0, log2(C2-C3) - log2(C))
+; %v2 = lshr %v, max(0, log2(C) - log2(C2-C3))
+; %s = add %v2, C3
+
+%Op:i16 = var
+%lhs = and %Op, 8
+%c = ne %lhs, 0
+%r = select %c, 19244, 2860:i16
+infer %r
+%v = shl %lhs, 11
+%v2 = lshr %v, 0
+%r2 = add %v2, 2860
+result %r2
+
+; Name: Select:762-3
+; Pre: isPowerOf2(C) && isPowerOf2(C3-C2) && log2(C) < width(C2)
+; %lhs = and %Op, C
+; %c = icmp eq %lhs, 0
+; %s = select %c, C2, C3
+;   =>
+; %v0 = ZExtOrTrunc %lhs to i11
+; %v = shl %v0, max(0, log2(C3-C2) - log2(C))
+; %v2 = lshr %v, max(0, log2(C) - log2(C3-C2))
+; %s = add %v2, C2
+
+%Op:i16 = var
+%lhs = and %Op, 32768
+%c = eq %lhs, 0
+%r = select %c, 3906:i32, 3922
+infer %r
+%v0:i32 = zext %lhs
+%v = shl %v0, 0
+%v2 = lshr %v, 11
+%r2 = add %v2, 3906
+result %r2
+
+; Name: Select:762-4
+; Pre: isPowerOf2(C) && isPowerOf2(C3-C2) && log2(C) < width(C2)
+; %lhs = and %Op, C
+; %c = icmp ne %lhs, 0
+; %s = select %c, C2, C3
+;   =>
+; %v0 = ZExtOrTrunc %lhs to i11
+; %v = shl %v0, max(0, log2(C3-C2) - log2(C))
+; %v2 = lshr %v, max(0, log2(C) - log2(C3-C2))
+; %x = xor %v2, C3-C2
+; %s = add %x, C2
+
+%Op:i64 = var
+%lhs = and %Op, 1024
+%c = ne %lhs, 0
+%r = select %c, 12943, 12975:i16
+infer %r
+%v0:i16 = trunc %lhs
+%v = shl %v0, 0
+%v2 = lshr %v, 5
+%x = xor %v2, 32
+%r2 = add %x, 12943
+result %r2
+
+; Name: Select:846
+; %A = select %B, true, %C
+;   =>
+; %A = or %B, %C
+
+%B:i1 = var
+%C:i1 = var
+%r = select %B, 1, %C
+infer %r
+%r2 = or %B, %C
+result %r2
+
+; Name: Select:850
+; %A = select %B, false, %C
+;   =>
+; %notb = xor %B, true
+; %A = and %notb, %C
+
+%B:i1 = var
+%C:i1 = var
+%r = select %B, 0, %C
+infer %r
+%notb = xor %B, 1
+%r2 = and %notb, %C
+result %r2

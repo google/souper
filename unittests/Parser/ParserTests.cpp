@@ -39,7 +39,7 @@ TEST(ParserTest, Errors) {
       { "%2 = block 111111111111111111111\n",
         "<input>:1:12: 4294967295 is too many block predecessors" },
       { "pc 55555550:i5\n",
-        "<input>:1:15: integer too large for its width" },
+        "<input>:1:15: integer constant is too large for its width" },
       { "%0:i32 = var\n%1:i1 = eq %0:i32, %0:i32\n",
         "<input>:2:12: inst reference may not have a width" },
       { "%0:i1 = eq %1, %1\n", "<input>:1:12: %1 is not an inst" },

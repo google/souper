@@ -78,7 +78,7 @@ class BaseSolver : public Solver {
       if (Visited.insert(I).second) {
         for (auto Op : I->Ops)
           Q.push(std::make_tuple(Op, Benefit));
-        if (Benefit > 1 && I->Width == Root->Width)
+        if (Benefit > 1 && I->Width == Root->Width && I->Available)
           Guesses.emplace_back(I);
         // TODO: run experiments and see if it's worth doing these
         if (0) {

@@ -1,0 +1,209 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: simplifyValueKnownNonZero 4
+; Pre: hasOneUse(%Y)
+; %s = shl i33 1, %A
+; %Y = lshr %s, %B
+; %r = sdiv %X, %Y
+;   =>
+; %sub = sub %A, %B
+; %Y = shl 1, %sub
+; %r = sdiv %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%s = shl 1, %A
+%Y = lshr %s, %B
+%r = sdiv %X, %Y
+infer %r
+%sub = sub %A, %B
+%Y2 = shl 1, %sub
+%r2 = sdiv %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 5
+; Pre: isPowerOf2(%A) && hasOneUse(%Y)
+; %Y = lshr %A, %B
+; %r = sdiv %X, %Y
+;   =>
+; %Y = lshr exact %A, %B
+; %r = sdiv %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%cp = ctpop %A
+pc %cp 1
+%Y = lshr %A, %B
+%r = sdiv %X, %Y
+infer %r
+%Y2 = lshrexact %A, %B
+%r2 = sdiv %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 6
+; Pre: isPowerOf2(%A) && hasOneUse(%Y)
+; %Y = shl %A, %B
+; %r = sdiv %X, %Y
+;   =>
+; %Y = shl nuw %A, %B
+; %r = sdiv %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%cp = ctpop %A
+pc %cp 1
+%Y = shl %A, %B
+%r = sdiv %X, %Y
+infer %r
+%Y2 = shlnuw %A, %B
+%r2 = sdiv %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 7
+; Pre: hasOneUse(%Y)
+; %s = shl i33 1, %A
+; %Y = lshr %s, %B
+; %r = urem %X, %Y
+;   =>
+; %sub = sub %A, %B
+; %Y = shl 1, %sub
+; %r = urem %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%s = shl 1, %A
+%Y = lshr %s, %B
+%r = urem %X, %Y
+infer %r
+%sub = sub %A, %B
+%Y2 = shl 1, %sub
+%r2 = urem %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 8
+; Pre: isPowerOf2(%A) && hasOneUse(%Y)
+; %Y = lshr %A, %B
+; %r = urem %X, %Y
+;   =>
+; %Y = lshr exact %A, %B
+; %r = urem %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%cp = ctpop %A
+pc %cp 1
+%Y = lshr %A, %B
+%r = urem %X, %Y
+infer %r
+%Y2 = lshrexact %A, %B
+%r2 = urem %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 9
+; Pre: isPowerOf2(%A) && hasOneUse(%Y)
+; %Y = shl %A, %B
+; %r = urem %X, %Y
+;   =>
+; %Y = shl nuw %A, %B
+; %r = urem %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%cp = ctpop %A
+pc %cp 1
+%Y = shl %A, %B
+%r = urem %X, %Y
+infer %r
+%Y2 = shlnuw %A, %B
+%r2 = urem %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 10
+; Pre: hasOneUse(%Y)
+; %s = shl i33 1, %A
+; %Y = lshr %s, %B
+; %r = srem %X, %Y
+;   =>
+; %sub = sub %A, %B
+; %Y = shl 1, %sub
+; %r = srem %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%s = shl 1, %A
+%Y = lshr %s, %B
+%r = srem %X, %Y
+infer %r
+%sub = sub %A, %B
+%Y2 = shl 1, %sub
+%r2 = srem %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 11
+; Pre: isPowerOf2(%A) && hasOneUse(%Y)
+; %Y = lshr %A, %B
+; %r = srem %X, %Y
+;   =>
+; %Y = lshr exact %A, %B
+; %r = srem %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%cp = ctpop %A
+pc %cp 1
+%Y = lshr %A, %B
+%r = srem %X, %Y
+infer %r
+%Y2 = lshrexact %A, %B
+%r2 = srem %X, %Y2
+result %r2
+
+; Name: simplifyValueKnownNonZero 12
+; Pre: isPowerOf2(%A) && hasOneUse(%Y)
+; %Y = shl %A, %B
+; %r = srem %X, %Y
+;   =>
+; %Y = shl nuw %A, %B
+; %r = srem %X, %Y
+
+%A:i16 = var
+%B:i16 = var
+%X:i16 = var
+%cp = ctpop %A
+pc %cp 1
+%Y = shl %A, %B
+%r = srem %X, %Y
+infer %r
+%Y2 = shlnuw %A, %B
+%r2 = srem %X, %Y2
+result %r2
+
+; Name: 152
+; %r = mul %x, -1
+;   =>
+; %r = sub 0, %x
+
+%x:i88 = var
+%r = mul %x, -1
+infer %r
+%r2 = sub 0, %x
+result %r2

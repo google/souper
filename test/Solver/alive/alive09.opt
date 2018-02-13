@@ -141,7 +141,7 @@ result %r2
 
 %x:i32 = var
 %t:i16 = trunc %x
-%op0 = eq %t, -234523
+%op0 = eq %t, -2345
 %a1 = and %x, 953400
 %op1 = eq %a1, 3452346
 %r = and %op0, %op1

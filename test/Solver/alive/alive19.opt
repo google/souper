@@ -1,0 +1,186 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | FileCheck %s
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+; CHECK: LGTM
+
+; Name: AndOrXor:2247  (~A | ~B) == (~(A & B))
+; %na = xor %A, -1
+; %nb = xor %B, -1
+; %r = or %na, %nb
+;   =>
+; %a = and %A, %B
+; %r = xor %a, -1
+
+%A:i32 = var
+%B:i32 = var
+%na = xor %A, -1
+%nb = xor %B, -1
+%r = or %na, %nb
+infer %r
+%a = and %A, %B
+%r2 = xor %a, -1
+result %r2
+
+; Name: AndOrXor:2263
+; %op1 = xor %op0, %B
+; %r = or %op0, %op1
+;   =>
+; %r = or %op0, %B
+
+%op0:i64 = var
+%B:i64 = var
+%op1 = xor %op0, %B
+%r = or %op0, %op1
+infer %r
+%r2 = or %op0, %B
+result %r2
+
+; Name: AndOrXor:2264
+; %na = xor %A, -1
+; %op1 = xor %na, %B
+; %r = or %A, %op1
+;   =>
+; %nb = xor %B, -1
+; %r = or %A, %nb
+
+%A:i32 = var
+%B:i32 = var
+%na = xor %A, -1
+%op1 = xor %na, %B
+%r = or %A, %op1
+infer %r
+%nb = xor %B, -1
+%r2 = or %A, %nb
+result %r2
+
+; Name: AndOrXor:2265
+; %op0 = and %A, %B
+; %op1 = xor %A, %B
+; %r = or %op0, %op1
+;   =>
+; %r = or %A, %B
+
+%A:i80 = var
+%B:i80 = var
+%op0 = and %A, %B
+%op1 = xor %A, %B
+%r = or %op0, %op1
+infer %r
+%r2 = or %A, %B
+result %r2
+
+; Name: AndOrXor:2284
+; %o = or %A, %B
+; %op1 = xor %o, -1
+; %r = or %A, %op1
+;   =>
+; %not = xor %B, -1
+; %r = or %A, %not
+
+%A:i32 = var
+%B:i32 = var
+%o = or %A, %B
+%op1 = xor %o, -1
+%r = or %A, %op1
+infer %r
+%not = xor %B, -1
+%r2 = or %A, %not
+result %r2
+
+; Name: AndOrXor:2285
+; %o = xor %A, %B
+; %op1 = xor %o, -1
+; %r = or %A, %op1
+;   =>
+; %not = xor %B, -1
+; %r = or %A, %not
+
+%A:i64 = var
+%B:i64 = var
+%o = xor %A, %B
+%op1 = xor %o, -1
+%r = or %A, %op1
+infer %r
+%not = xor %B, -1
+%r2 = or %A, %not
+result %r2
+
+; Name: AndOrXor:2297
+; %op0 = and %A, %B
+; %na = xor %A, -1
+; %op1 = xor %na, %B
+; %r = or %op0, %op1
+;   =>
+; %r = xor %na, %B
+
+%A:i32 = var
+%B:i32 = var
+%op0 = and %A, %B
+%na = xor %A, -1
+%op1 = xor %na, %B
+%r = or %op0, %op1
+infer %r
+%r2 = xor %na, %B
+result %r2
+
+; Name: AndOrXor:2321-1
+; %op0 = zext %A
+; %op1 = zext %B
+; %r = or %op0, %op1
+;   =>
+; %or = or %A, %B
+; %r = zext %or
+
+%A:i16 = var
+%B:i16 = var
+%op0:i32 = zext %A
+%op1:i32 = zext %B
+%r = or %op0, %op1
+infer %r
+%or = or %A, %B
+%r2:i32 = zext %or
+result %r2
+
+; Name: AndOrXor:2321-2
+; %op0 = sext %A
+; %op1 = sext %B
+; %r = or %op0, %op1
+;   =>
+; %or = or %A, %B
+; %r = sext %or
+
+%A:i8 = var
+%B:i8 = var
+%op0:i64 = sext %A
+%op1:i64 = sext %B
+%r = or %op0, %op1
+infer %r
+%or = or %A, %B
+%r2:i64 = sext %or
+result %r2
+
+; Name: AndOrXor:2321-3
+; %op0 = trunc %A
+; %op1 = trunc %B
+; %r = or %op0, %op1
+;   =>
+; %or = or %A, %B
+; %r = trunc %or
+
+%A:i32 = var
+%B:i32 = var
+%op0:i4 = trunc %A
+%op1:i4 = trunc %B
+%r = or %op0, %op1
+infer %r
+%or = or %A, %B
+%r2:i4 = trunc %or
+result %r2
