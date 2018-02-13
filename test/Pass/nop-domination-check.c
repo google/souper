@@ -1,9 +1,11 @@
 // REQUIRES: solver
 
-// RUN: env SOUPER_NO_EXTERNAL_CACHE=1 SOUPER_INFER_NOP=1 SOUPER_SOLVER=%solver %sclang -O2 -c -o - %s
+// RUN: env SOUPER_NO_EXTERNAL_CACHE=1 SOUPER_INFER_NOP=1 SOUPER_SOLVER=%solver %sclang -O2 -c -o - %s 2>&1 | FileCheck %s
 
 // Reduced from SPEC CINT17 502.gcc_r/decNumber.c, this test will
 // fail if domination check in Pass.cpp is disabled.
+
+// CHECK-NOT: Instruction does not dominate all uses!
 
 typedef struct {
   char a;
