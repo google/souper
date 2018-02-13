@@ -276,7 +276,8 @@ public:
       Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT,
                                F->getParent());
       if (!NewVal) {
-        errs() << "\"\n; replacement failed\n";
+        if (DebugSouperPass)
+          errs() << "\"\n; replacement failed\n";
         continue;
       }
 
