@@ -515,6 +515,7 @@ Inst *ExprBuilder::get(Value *V) {
   if (!E) {
     E = build(V);
   }
+  EBC.Origins.insert(std::pair<Inst *, Value *>(E, V));
   E->DemandedBits = APInt::getAllOnesValue(E->Width);
   if (HarvestDemandedBits) {
     if (Instruction *I = dyn_cast<Instruction>(V))

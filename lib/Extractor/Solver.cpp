@@ -180,7 +180,7 @@ public:
         InstMapping Mapping(LHS, I);
         std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
         if (Query.empty())
-          return std::make_error_code(std::errc::value_too_large);
+          continue;
         bool IsSat;
         EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
         if (EC)
