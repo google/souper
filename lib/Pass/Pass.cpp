@@ -307,7 +307,7 @@ public:
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
         if (DynamicProfile)
           dynamicProfile(F, Cand);
-        I->replaceAllUsesWith(I);
+        I->replaceAllUsesWith(NewVal);
         Changed = true;
       } else {
         if (DebugSouperPass)

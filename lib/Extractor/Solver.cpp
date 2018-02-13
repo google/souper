@@ -174,6 +174,7 @@ public:
     }
 
     if (InferNop) {
+      unsigned Count = 0, Tried = 0;
       std::vector<Inst *> Guesses;
       findCands(LHS, Guesses, IC);
       for (auto I : Guesses) {
