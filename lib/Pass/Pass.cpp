@@ -174,6 +174,7 @@ public:
         if (V->getType() != T)
           continue;
         if (auto IP = dyn_cast<Instruction>(V)) {
+          // Domination check
           if (DT.dominates(IP, ReplacedInst))
             return V;
         } else if (isa<Argument>(V) || isa<Constant>(V)) {
