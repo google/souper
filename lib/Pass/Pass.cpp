@@ -192,7 +192,6 @@ public:
     bool Changed = false;
     InstContext IC;
     ExprBuilderContext EBC;
-    
     CandidateMap CandMap;
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>(*F).getLoopInfo();
     if (!LI)
@@ -269,9 +268,7 @@ public:
       }
       if (!Cand.Mapping.RHS)
         continue;
-
       // TODO: add non-const instruction support
-      
       Instruction *I = Cand.Origin.getInstruction();
       Instruction *ReplacedInst = Cand.Origin.getInstruction();
 

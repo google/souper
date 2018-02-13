@@ -174,32 +174,21 @@ public:
     }
 
     if (InferNop) {
-      unsigned Count = 0, Tried = 0;
       std::vector<Inst *> Guesses;
       findCands(LHS, Guesses, IC);
       for (auto I : Guesses) {
         InstMapping Mapping(LHS, I);
         std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
-        //llvm::errs() << "query for ";
-        //llvm::errs() << I->getKindName(I->K);
-        //Context.printInst(I, llvm::errs(), true);
-        //llvm::errs() << ": " << Query << "\n";
         if (Query.empty())
           continue;
         bool IsSat;
         EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
-        //llvm::errs() << "Works? " << !IsSat << "\n";
         if (EC)
-          continue;
+          return EC;
         if (!IsSat) {
           RHS = I;
-          ++Count;
+          return EC;
         }
-        ++Tried;
-      }
-      //llvm::errs() << "Solution count = " << Count << " out of " << Tried << "\n\n";
-      if (Count > 0) {
-        return EC;
       }
     }
 
