@@ -17,6 +17,8 @@
 #include "souper/Extractor/KLEEBuilder.h"
 #include "souper/Infer/InstSynthesis.h"
 
+#include <queue>
+
 using namespace souper;
 using namespace llvm;
 
@@ -1451,6 +1453,90 @@ void InstSynthesis::constrainConstWiring(const Inst *Cand,
   }
   LoopPCs.emplace_back(Ante, LIC->getConst(APInt(1, false)));
   WiringPCs.emplace_back(Ante, LIC->getConst(APInt(1, false)));
+}
+
+void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
+               int Max) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::queue<std::tuple<Inst *,int>> Q;
+  Q.push(std::make_tuple(Root, 0));
+  while (!Q.empty()) {
+    Inst *I;
+    int Benefit;
+    std::tie(I, Benefit) = Q.front();
+    Q.pop();
+    ++Benefit;
+    if (Visited.insert(I).second) {
+      for (auto Op : I->Ops)
+        Q.push(std::make_tuple(Op, Benefit));
+      if (Benefit > 1 && I->Width == Root->Width && I->Available)
+        Guesses.emplace_back(I);
+      // TODO: run experiments and see if it's worth doing these
+      if (0) {
+        if (Benefit > 2 && I->Width > Root->Width)
+          Guesses.emplace_back(IC.getInst(Inst::Trunc, Root->Width, {I}));
+        if (Benefit > 2 && I->Width < Root->Width) {
+          Guesses.emplace_back(IC.getInst(Inst::SExt, Root->Width, {I}));
+          Guesses.emplace_back(IC.getInst(Inst::ZExt, Root->Width, {I}));
+        }
+      }
+      if (Guesses.size() >= Max)
+        return;
+    }
+  }
+}
+
+Inst *getInstCopy(Inst *I, InstContext &IC,
+                  std::map<Inst *, Inst *> &InstCache,
+                  std::map<Block *, Block *> &BlockCache) {
+  std::vector<Inst *> Ops;
+  for (auto const &Op : I->Ops)
+    Ops.push_back(getInstCopy(Op, IC, InstCache, BlockCache));
+
+  if (I->K == Inst::Var) {
+    if (!InstCache.count(I)) {
+      Inst *Copy = IC.createVar(I->Width, "copy", I->KnownZeros, I->KnownOnes,
+                                I->NonZero, I->NonNegative, I->PowOfTwo,
+                                I->Negative, I->NumSignBits);
+      InstCache[I] = Copy;
+      return Copy;
+    } else
+      return InstCache.at(I);
+  } else if (I->K == Inst::Phi)
+    if (!BlockCache.count(I->B)) {
+      auto BlockCopy = IC.createBlock(I->B->Preds);
+      BlockCache[I->B] = BlockCopy;
+      return IC.getPhi(BlockCopy, Ops);
+    } else
+      return IC.getPhi(BlockCache.at(I->B), Ops);
+  else if (I->K == Inst::Const || I->K == Inst::UntypedConst)
+    return I;
+  else
+    return IC.getInst(I->K, I->Width, Ops);
+}
+
+void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
+                      std::map<Inst *, Inst *> &InstCache,
+                      std::map<Block *, Block *> &BlockCache,
+                      InstContext &IC) {
+  for (const auto &BPC : BPCs) {
+    auto BPCCopy = BPC;
+    BPCCopy.B = BlockCache[BPC.B];
+    BPCCopy.PC = InstMapping(getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache),
+                             getInstCopy(BPC.PC.RHS, IC, InstCache, BlockCache));
+    BPCsCopy.emplace_back(BPCCopy);
+  }
+}
+
+void separatePCs(const std::vector<InstMapping> &PCs,
+                 std::vector<InstMapping> &PCsCopy,
+                 std::map<Inst *, Inst *> &InstCache,
+                 std::map<Block *, Block *> &BlockCache,
+                 InstContext &IC) {
+  for (const auto &PC : PCs)
+    PCsCopy.emplace_back(getInstCopy(PC.LHS, IC, InstCache, BlockCache),
+                         getInstCopy(PC.RHS, IC, InstCache, BlockCache));
 }
 
 }

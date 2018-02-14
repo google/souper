@@ -1,0 +1,11 @@
+; REQUIRES: solver
+; RUN: %souper-check -infer-rhs -souper-infer-nop %solver %s | FileCheck %s
+; CHECK: Failed to infer RHS
+
+%0 = block 3
+%1:i1 = phi %0, 1:i1, 1:i1, 0:i1
+%2:i64 = var
+%3:i32 = trunc %2
+%4:i1 = ult 1:i32, %3
+%5:i1 = and %1, %4
+infer %5

@@ -1,0 +1,11 @@
+; REQUIRES: solver
+; RUN: %souper-check -infer-rhs -souper-infer-nop -souper-stress-nop %solver %s | FileCheck %s
+; CHECK: result %2
+
+%0:i64 = var
+%1:i1 = eq 0:i64, %0
+%2:i1 = xor 1:i1, %1
+%3:i64 = var (nonZero)
+%4:i1 = eq %0, %3
+%5:i1 = or %2, %4
+infer %5
