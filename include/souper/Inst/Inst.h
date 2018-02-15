@@ -28,10 +28,13 @@ namespace souper {
 
 const unsigned MaxPreds = 100000;
 
+struct Inst;
+
 struct Block {
   std::string Name;
   unsigned Preds;
   unsigned Number;
+  std::vector<Inst *> PredVars;
 };
 
 struct Inst : llvm::FoldingSetNode {
