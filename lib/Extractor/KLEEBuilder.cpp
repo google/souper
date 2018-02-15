@@ -894,10 +894,10 @@ bool ExprBuilder::getUBPaths(Inst *I, UBPath *Current,
     if (CachedUBPathInsts.count(I))
       return true;
     Current->Insts.push_back(I);
-    // Based on the dependency chain, looks like we would never
-    // encounter this case.
-    assert(!Current->BlockConstraints.count(I->B) &&
-           "Basic block has been added into BlockConstraints!");
+    // Since we treat a select instruction as a phi instruction, it's
+    // possible that I->B has been added already.
+    if (Current->BlockConstraints.count(I->B))
+      return true;
     std::vector<UBPath *> Tmp = { Current };
     // Create copies of the current path
     for (unsigned J = 1; J < Ops.size(); ++J) {
