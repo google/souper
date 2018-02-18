@@ -17,27 +17,25 @@
 using namespace llvm;
 using namespace souper;
 
+ExprBuilder::~ExprBuilder() {}
+
 namespace souper {
 
-ExprBuilder::ExprBuilder(std::vector<std::unique_ptr<Array>> &Arrays,
-            std::vector<Inst *> &ArrayVars)
-    : Arrays(Arrays), ArrayVars(ArrayVars), IsForBlockPCUBInst(false) {}
-
-SMTExpr ExprBuilder::buildAssoc(
-    std::function<SMTExpr(SMTExpr, SMTExpr)> F,
+ref<Expr> ExprBuilder::buildAssoc(
+    std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
     llvm::ArrayRef<Inst *> Ops) {
-  SMTExpr E = get(Ops[0]);
+  ref<Expr> E = get(Ops[0]);
   for (Inst *I : llvm::ArrayRef<Inst *>(Ops.data()+1, Ops.size()-1)) {
     E = F(E, get(I));
   }
   return E;
 }
 
-std::vector<SMTExpr> ExprBuilder::getBlockPredicates(Inst *I) {
+std::vector<ref<Expr>> ExprBuilder::getBlockPredicates(Inst *I) {
   assert(I->K == Inst::Phi && "not a phi inst");
   if (BlockPredMap.count(I->B))
     return BlockPredMap[I->B];
-  std::vector<SMTExpr> PredExpr;
+  std::vector<ref<Expr>> PredExpr;
   for (auto const &PredVar : I->B->PredVars)
     PredExpr.push_back(build(PredVar));
   BlockPredMap[I->B] = PredExpr;
@@ -190,45 +188,32 @@ void ExprBuilder::getBlockPCPhiPaths(
     getBlockPCPhiPaths(Ops[J], Tmp[J], Paths, CachedPhis);
 }
 
-SMTExpr ExprBuilder::getZeroBitsMapping(Inst *I) {
+ref<Expr> ExprBuilder::getZeroBitsMapping(Inst *I) {
   return ZeroBitsMap[I];
 }
 
-SMTExpr ExprBuilder::getOneBitsMapping(Inst *I) {
+ref<Expr> ExprBuilder::getOneBitsMapping(Inst *I) {
   return OneBitsMap[I];
 }
 
-SMTExpr ExprBuilder::getNonZeroBitsMapping(Inst *I) {
+ref<Expr> ExprBuilder::getNonZeroBitsMapping(Inst *I) {
   return NonZeroBitsMap[I];
 }
 
-SMTExpr ExprBuilder::getNonNegBitsMapping(Inst *I) {
+ref<Expr> ExprBuilder::getNonNegBitsMapping(Inst *I) {
   return NonNegBitsMap[I];
 }
 
-SMTExpr ExprBuilder::getNegBitsMapping(Inst *I) {
+ref<Expr> ExprBuilder::getNegBitsMapping(Inst *I) {
   return NegBitsMap[I];
 }
 
-SMTExpr ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
+ref<Expr> ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
   return PowerTwoBitsMap[I];
 }
 
-SMTExpr ExprBuilder::getSignBitsMapping(Inst *I) {
+ref<Expr> ExprBuilder::getSignBitsMapping(Inst *I) {
   return SignBitsMap[I];
 }
-
-//llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
-//    const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-//    InstMapping Mapping, bool Negate) {
-//  return CandidateExpr();
-//}
-
-//std::string BuildQuery(const BlockPCs &BPCs,
-//                       const std::vector<InstMapping> &PCs,
-//                       InstMapping Mapping,
-//                       std::vector<Inst *> *ModelVars, bool Negate) {
-//  return "";
-//}
 
 }
