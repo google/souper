@@ -18,11 +18,13 @@
 #include "klee/Expr.h"
 #include "klee/util/Ref.h"
 #include "llvm/ADT/Optional.h"
-#include "souper/Extractor/Candidates.h"
+#include "souper/Extractor/ExprBuilder.h"
 #include <memory>
 #include <vector>
 
 namespace souper {
+
+class KLEEBuilder : public ExprBuilder
 
 struct CandidateExpr {
   std::vector<std::unique_ptr<klee::Array>> Arrays;
@@ -30,6 +32,7 @@ struct CandidateExpr {
   klee::ref<klee::Expr> E;
 };
 
+#if 0
 llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
     const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
     InstMapping Mapping, bool Negate);
@@ -37,6 +40,7 @@ llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
 std::string BuildQuery(const BlockPCs &BPCs,
                        const std::vector<InstMapping> &PCs, InstMapping Mapping,
                        std::vector<Inst *> *ModelVars, bool Negate=false);
+#endif
 
 }
 

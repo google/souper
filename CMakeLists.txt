@@ -109,6 +109,30 @@ find_library(HIREDIS_LIBRARY
   PATHS
   third_party/hiredis/install/lib)
 
+find_path(Z3_INCLUDE_DIRECTORY
+  NAMES
+  z3.h
+  PATHS
+  /usr/include
+  /usr/local/include
+  /opt/local/include)
+if(Z3_INCLUDE_DIRECTORY STREQUAL "Z3_INCLUDE_DIRECTORY-NOTFOUND")
+  message(FATAL_ERROR "Can't find folder containing z3.h")
+endif()
+
+include_directories(${Z3_INCLUDE_DIRECTORY})
+
+find_library(Z3_LIBRARY_DIRECTORY
+  NAMES
+  z3
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /opt/local/lib)
+if(Z3_LIBRARY_DIRECTORY STREQUAL "Z3_LIBRARY_DIRECTORY-NOTFOUND")
+  message(FATAL_ERROR "Can't find folder containing z3 library")
+endif()
+
 set(SOUPER_CLANG_TOOL_FILES
   lib/ClangTool/Actions.cpp
   include/souper/ClangTool/Actions.h
@@ -120,10 +144,12 @@ add_library(souperClangTool STATIC
 
 set(SOUPER_EXTRACTOR_FILES
   lib/Extractor/Candidates.cpp
-  lib/Extractor/KLEEBuilder.cpp
+#  lib/Extractor/KLEEBuilder.cpp
+  lib/Extractor/ExprBuilder.cpp
   lib/Extractor/Solver.cpp
   include/souper/Extractor/Candidates.h
   include/souper/Extractor/KLEEBuilder.h
+  include/souper/Extractor/ExprBuilder.h
   include/souper/Extractor/Solver.h
 )
 
@@ -263,14 +289,14 @@ target_link_libraries(souperKVStore ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperParser souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
-target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY})
-target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS} ${HIREDIS_LIBRARY})
-target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY})
+target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
-target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY})
-target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY})
+target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS})
@@ -306,7 +332,7 @@ if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
   set_target_properties(souperweb-backend
     PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
 
-  target_link_libraries(souperweb-backend souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
+  target_link_libraries(souperweb-backend souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY} ${Z3_LIBRARY})
 
   add_custom_target(souperweb ALL COMMAND ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/souperweb ${CMAKE_SOURCE_DIR}/tools/souperweb.go
                                   COMMENT "Building souperweb")

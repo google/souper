@@ -48,105 +48,13 @@ using namespace llvm;
 using namespace klee;
 using namespace souper;
 
-namespace {
+namespace souper {
 
-const unsigned MAX_PHI_DEPTH = 25;
+KLEEBuilder::ExprBuilder(std::vector<std::unique_ptr<Array>> &Arrays,
+            std::vector<Inst *> &ArrayVars)
+    : Arrays(Arrays), ArrayVars(ArrayVars), IsForBlockPCUBInst(false) {}
 
-typedef std::unordered_map<Inst *, std::vector<ref<Expr>>> UBPathInstMap;
-typedef std::map<unsigned, ref<Expr>> BlockPCPredMap;
-
-struct UBPath {
-  std::map<Block *, unsigned> BlockConstraints;
-  std::map<Inst *, bool> SelectBranches;
-  std::vector<Inst *> Insts;
-  std::vector<Inst *> UBInsts;
-};
-
-struct BlockPCPhiPath {
-  std::map<Block *, unsigned> BlockConstraints;
-  std::vector<Inst *> Phis;
-  std::vector<ref<Expr>> PCs;
-};
-
-struct ExprBuilder {
-  ExprBuilder(std::vector<std::unique_ptr<Array>> &Arrays,
-              std::vector<Inst *> &ArrayVars)
-      : Arrays(Arrays), ArrayVars(ArrayVars), IsForBlockPCUBInst(false) {}
-
-  std::map<Block *, std::vector<ref<Expr>>> BlockPredMap;
-  std::map<Inst *, ref<Expr>> ExprMap;
-  std::map<Inst *, ref<Expr>> UBExprMap;
-  std::map<Inst *, ref<Expr>> ZeroBitsMap;
-  std::map<Inst *, ref<Expr>> OneBitsMap;
-  std::map<Inst *, ref<Expr>> NonZeroBitsMap;
-  std::map<Inst *, ref<Expr>> NonNegBitsMap;
-  std::map<Inst *, ref<Expr>> PowerTwoBitsMap;
-  std::map<Inst *, ref<Expr>> NegBitsMap;
-  std::map<Inst *, ref<Expr>> SignBitsMap;
-  std::map<Block *, BlockPCPredMap> BlockPCMap;
-  std::vector<std::unique_ptr<Array>> &Arrays;
-  std::vector<Inst *> &ArrayVars;
-  std::vector<Inst *> UBPathInsts;
-  UniqueNameSet ArrayNames;
-  // Holding the precondition, i.e. blockpc, for the UBInst under process.
-  ref<Expr> UBInstPrecondition;
-  // Indicate if the UBInst relates to BlockPC
-  bool IsForBlockPCUBInst;
-
-  ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin);
-  ref<Expr> addnswUB(Inst *I);
-  ref<Expr> addnuwUB(Inst *I);
-  ref<Expr> subnswUB(Inst *I);
-  ref<Expr> subnuwUB(Inst *I);
-  ref<Expr> mulnswUB(Inst *I);
-  ref<Expr> mulnuwUB(Inst *I);
-  ref<Expr> udivUB(Inst *I);
-  ref<Expr> udivExactUB(Inst *I);
-  ref<Expr> sdivUB(Inst *I);
-  ref<Expr> sdivExactUB(Inst *I);
-  ref<Expr> shiftUB(Inst *I);
-  ref<Expr> shlnswUB(Inst *I);
-  ref<Expr> shlnuwUB(Inst *I);
-  ref<Expr> lshrExactUB(Inst *I);
-  ref<Expr> ashrExactUB(Inst *I);
-  ref<Expr> countOnes(ref<Expr> E);
-  void recordUBInstruction(Inst *I, ref<Expr> E);
-  ref<Expr> buildAssoc(std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
-                       llvm::ArrayRef<Inst *> Ops);
-  ref<Expr> build(Inst *I);
-  ref<Expr> get(Inst *I);
-  ref<Expr> getInstMapping(const InstMapping &IM);
-  ref<Expr> getZeroBitsMapping(Inst *I);
-  ref<Expr> getOneBitsMapping(Inst *I);
-  ref<Expr> getNonZeroBitsMapping(Inst *I);
-  ref<Expr> getNonNegBitsMapping(Inst *I);
-  ref<Expr> getPowerTwoBitsMapping(Inst *I);
-  ref<Expr> getNegBitsMapping(Inst *I);
-  ref<Expr> getSignBitsMapping(Inst *I);
-  std::vector<ref<Expr >> getBlockPredicates(Inst *I);
-  ref<Expr> getUBInstCondition();
-  ref<Expr> getBlockPCs();
-  void setBlockPCMap(const BlockPCs &BPCs);
-  ref<Expr> createPathPred(std::map<Block *, unsigned> &BlockConstraints,
-                           Inst* PathInst,
-                           std::map<Inst *, bool> *SelectBranches);
-  ref<Expr> createUBPathInstsPred(Inst *CurrentInst,
-                           std::vector<Inst *> &UBPathInsts,
-                           std::map<Block *, unsigned> &BlockConstraints,
-                           std::map<Inst *, bool> *SelectBranches,
-                           UBPathInstMap &CachedUBPathInsts);
-  bool getUBPaths(Inst *I, UBPath *Current,
-                  std::vector<std::unique_ptr<UBPath>> &Paths,
-                  UBPathInstMap &CachedUBPathInsts, unsigned Depth);
-  void getBlockPCPhiPaths(Inst *I, BlockPCPhiPath *Current,
-                          std::vector<std::unique_ptr<BlockPCPhiPath>> &Paths,
-                          UBPathInstMap &CachedPhis);
-};
-
-}
-
-ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
-                                          Inst *Origin) {
+ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin) {
   std::string NameStr;
   if (Name.empty())
     NameStr = "arr";
@@ -195,7 +103,7 @@ ref<Expr> ExprBuilder::makeSizedArrayRead(unsigned Width, StringRef Name,
   return Var;
 }
 
-ref<Expr> ExprBuilder::addnswUB(Inst *I) {
+ref<Expr> KLEEBuilder::addnswUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Add = AddExpr::create(L, R);
@@ -207,7 +115,7 @@ ref<Expr> ExprBuilder::addnswUB(Inst *I) {
                               EqExpr::create(LMSB, AddMSB));
 }
 
-ref<Expr> ExprBuilder::addnuwUB(Inst *I) {
+ref<Expr> KLEEBuilder::addnuwUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    Expr::Width Width = L->getWidth();
@@ -218,7 +126,7 @@ ref<Expr> ExprBuilder::addnuwUB(Inst *I) {
    return Expr::createIsZero(AddMSB);
 }
 
-ref<Expr> ExprBuilder::subnswUB(Inst *I) {
+ref<Expr> KLEEBuilder::subnswUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Sub = SubExpr::create(L, R);
@@ -230,7 +138,7 @@ ref<Expr> ExprBuilder::subnswUB(Inst *I) {
                               EqExpr::create(LMSB, SubMSB));
 }
 
-ref<Expr> ExprBuilder::subnuwUB(Inst *I) {
+ref<Expr> KLEEBuilder::subnuwUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    Expr::Width Width = L->getWidth();
@@ -241,7 +149,7 @@ ref<Expr> ExprBuilder::subnuwUB(Inst *I) {
    return Expr::createIsZero(SubMSB);
 }
 
-ref<Expr> ExprBuilder::mulnswUB(Inst *I) {
+ref<Expr> KLEEBuilder::mulnswUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    // The computation below has to be performed on the operands of
    // multiplication instruction. The instruction using mulnswUB()
@@ -256,7 +164,7 @@ ref<Expr> ExprBuilder::mulnswUB(Inst *I) {
    return EqExpr::create(Mul, LowerBitsExt);
 }
 
-ref<Expr> ExprBuilder::mulnuwUB(Inst *I) {
+ref<Expr> KLEEBuilder::mulnuwUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    Expr::Width Width = L->getWidth();
@@ -267,20 +175,20 @@ ref<Expr> ExprBuilder::mulnuwUB(Inst *I) {
    return Expr::createIsZero(HigherBits);
 }
 
-ref<Expr> ExprBuilder::udivUB(Inst *I) {
+ref<Expr> KLEEBuilder::udivUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> R = get(Ops[1]);
    return NeExpr::create(R, klee::ConstantExpr::create(0, R->getWidth()));
 }
 
-ref<Expr> ExprBuilder::udivExactUB(Inst *I) {
+ref<Expr> KLEEBuilder::udivExactUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Udiv = UDivExpr::create(L, R);
    return EqExpr::create(L, MulExpr::create(R, Udiv));
 }
 
-ref<Expr> ExprBuilder::sdivUB(Inst *I) {
+ref<Expr> KLEEBuilder::sdivUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> ShiftBy = klee::ConstantExpr::create(L->getWidth()-1,
@@ -293,21 +201,21 @@ ref<Expr> ExprBuilder::sdivUB(Inst *I) {
                           NeExpr::create(L, IntMin), NeExpr::create(R, NegOne)));
 }
 
-ref<Expr> ExprBuilder::sdivExactUB(Inst *I) {
+ref<Expr> KLEEBuilder::sdivExactUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Sdiv = SDivExpr::create(L, R);
    return EqExpr::create(L, MulExpr::create(R, Sdiv));
 }
 
-ref<Expr> ExprBuilder::shiftUB(Inst *I) {
+ref<Expr> KLEEBuilder::shiftUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Lwidth = klee::ConstantExpr::create(L->getWidth(), L->getWidth());
    return UltExpr::create(R, Lwidth);
 }
 
-ref<Expr> ExprBuilder::shlnswUB(Inst *I) {
+ref<Expr> KLEEBuilder::shlnswUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Result = ShlExpr::create(L, R);
@@ -315,7 +223,7 @@ ref<Expr> ExprBuilder::shlnswUB(Inst *I) {
    return EqExpr::create(RShift, L);
 }
 
-ref<Expr> ExprBuilder::shlnuwUB(Inst *I) {
+ref<Expr> KLEEBuilder::shlnuwUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Result = ShlExpr::create(L, R);
@@ -323,7 +231,7 @@ ref<Expr> ExprBuilder::shlnuwUB(Inst *I) {
    return EqExpr::create(RShift, L);
 }
 
-ref<Expr> ExprBuilder::lshrExactUB(Inst *I) {
+ref<Expr> KLEEBuilder::lshrExactUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Result = LShrExpr::create(L, R);
@@ -331,7 +239,7 @@ ref<Expr> ExprBuilder::lshrExactUB(Inst *I) {
    return EqExpr::create(LShift, L);
 }
 
-ref<Expr> ExprBuilder::ashrExactUB(Inst *I) {
+ref<Expr> KLEEBuilder::ashrExactUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Result = AShrExpr::create(L, R);
@@ -339,17 +247,7 @@ ref<Expr> ExprBuilder::ashrExactUB(Inst *I) {
    return EqExpr::create(LShift, L);
 }
 
-ref<Expr> ExprBuilder::buildAssoc(
-    std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
-    llvm::ArrayRef<Inst *> Ops) {
-  ref<Expr> E = get(Ops[0]);
-  for (Inst *I : llvm::ArrayRef<Inst *>(Ops.data()+1, Ops.size()-1)) {
-    E = F(E, get(I));
-  }
-  return E;
-}
-
-ref<Expr> ExprBuilder::countOnes(ref<Expr> L) {
+ref<Expr> KLEEBuilder::countOnes(ref<Expr> L) {
    Expr::Width Width = L->getWidth();
    ref<Expr> Count =  klee::ConstantExpr::alloc(llvm::APInt(Width, 0));
    for (unsigned i=0; i<Width; i++) {
@@ -360,7 +258,7 @@ ref<Expr> ExprBuilder::countOnes(ref<Expr> L) {
    return Count;
 }
 
-void ExprBuilder::recordUBInstruction(Inst *I, ref<Expr> E) {
+void KLEEBuilder::recordUBInstruction(Inst *I, ref<Expr> E) {
   if (!IsForBlockPCUBInst) {
     UBExprMap[I] = E;
   }
@@ -374,7 +272,7 @@ void ExprBuilder::recordUBInstruction(Inst *I, ref<Expr> E) {
   }
 }
 
-ref<Expr> ExprBuilder::build(Inst *I) {
+ref<Expr> KLEEBuilder::build(Inst *I) {
   const std::vector<Inst *> &Ops = I->orderedOps();
   switch (I->K) {
   case Inst::UntypedConst:
@@ -650,7 +548,7 @@ ref<Expr> ExprBuilder::build(Inst *I) {
   llvm_unreachable("unknown kind");
 }
 
-ref<Expr> ExprBuilder::get(Inst *I) {
+ref<Expr> KLEEBuilder::get(Inst *I) {
   ref<Expr> &E = ExprMap[I];
   if (E.isNull()) {
     E = build(I);
@@ -659,22 +557,11 @@ ref<Expr> ExprBuilder::get(Inst *I) {
   return E;
 }
 
-ref<Expr> ExprBuilder::getInstMapping(const InstMapping &IM) {
+ref<Expr> KLEEBuilder::getInstMapping(const InstMapping &IM) {
   return EqExpr::create(get(IM.LHS), get(IM.RHS));
 }
 
-std::vector<ref<Expr>> ExprBuilder::getBlockPredicates(Inst *I) {
-  assert(I->K == Inst::Phi && "not a phi inst");
-  if (BlockPredMap.count(I->B))
-    return BlockPredMap[I->B];
-  std::vector<ref<Expr>> PredExpr;
-  for (auto const &PredVar : I->B->PredVars)
-    PredExpr.push_back(build(PredVar));
-  BlockPredMap[I->B] = PredExpr;
-  return PredExpr;
-}
-
-ref<Expr> ExprBuilder::createPathPred(
+ref<Expr> KLEEBuilder::createPathPred(
     std::map<Block *, unsigned> &BlockConstraints, Inst* PathInst,
     std::map<Inst *, bool> *SelectBranches) {
 
@@ -714,7 +601,7 @@ ref<Expr> ExprBuilder::createPathPred(
   return Pred;
 }
 
-ref<Expr> ExprBuilder::createUBPathInstsPred(
+ref<Expr> KLEEBuilder::createUBPathInstsPred(
     Inst *CurrentInst, std::vector<Inst *> &PathInsts,
     std::map<Block *, unsigned> &BlockConstraints,
     std::map<Inst *, bool> *SelectBranches, UBPathInstMap &CachedUBPathInsts) {
@@ -801,7 +688,7 @@ ref<Expr> ExprBuilder::createUBPathInstsPred(
 // These tricks basically relies on the dependency chain of instructions
 // generated by souper. For example, if we say %12 depends on %11, then
 // %12 would never appear earlier than %11.
-ref<Expr> ExprBuilder::getUBInstCondition() {
+ref<Expr> KLEEBuilder::getUBInstCondition() {
 
   // A map from a Phi instruction to all of its KLEE expressions that
   // encode the path and UB Inst predicates.
@@ -850,105 +737,7 @@ ref<Expr> ExprBuilder::getUBInstCondition() {
   return Result;
 }
 
-bool ExprBuilder::getUBPaths(Inst *I, UBPath *Current,
-                             std::vector<std::unique_ptr<UBPath>> &Paths,
-                             UBPathInstMap &CachedUBPathInsts, unsigned Depth) {
-  if (Depth > MAX_PHI_DEPTH)
-    return false;
-
-  switch (I->K) {
-    default:
-      break;
-
-    case Inst::AddNSW:
-    case Inst::AddNUW:
-    case Inst::AddNW:
-    case Inst::SubNSW:
-    case Inst::SubNUW:
-    case Inst::SubNW:
-    case Inst::MulNSW:
-    case Inst::MulNUW:
-    case Inst::MulNW:
-    case Inst::UDiv:
-    case Inst::SDiv:
-    case Inst::UDivExact:
-    case Inst::SDivExact:
-    case Inst::URem:
-    case Inst::SRem:
-    case Inst::Shl:
-    case Inst::ShlNSW:
-    case Inst::ShlNUW:
-    case Inst::ShlNW:
-    case Inst::LShr:
-    case Inst::LShrExact:
-    case Inst::AShr:
-    case Inst::AShrExact:
-      Current->UBInsts.push_back(I);
-      break;
-  }
-
-  const std::vector<Inst *> &Ops = I->orderedOps();
-  if (I->K == Inst::Phi) {
-    // Early terminate because this phi has been processed.
-    // We will use its cached predicates.
-    if (CachedUBPathInsts.count(I))
-      return true;
-    Current->Insts.push_back(I);
-    // Since we treat a select instruction as a phi instruction, it's
-    // possible that I->B has been added already.
-    if (Current->BlockConstraints.count(I->B))
-      return true;
-    std::vector<UBPath *> Tmp = { Current };
-    // Create copies of the current path
-    for (unsigned J = 1; J < Ops.size(); ++J) {
-      UBPath *New = new UBPath;
-      *New = *Current;
-      New->BlockConstraints[I->B] = J;
-      Paths.push_back(std::move(std::unique_ptr<UBPath>(New)));
-      Tmp.push_back(New);
-    }
-    // Original path takes the first branch
-    Current->BlockConstraints[I->B] = 0;
-    // Continue recursively
-    for (unsigned J = 0; J < Ops.size(); ++J) {
-      if (!getUBPaths(Ops[J], Tmp[J], Paths, CachedUBPathInsts, Depth + 1))
-        return false;
-    }
-  } else if (I->K == Inst::Select) {
-    // Early terminate because this phi has been processed.
-    // We will use its cached predicates.
-    if (CachedUBPathInsts.count(I))
-      return true;
-    Current->Insts.push_back(I);
-    // Current is the predicate operand branch
-    std::vector<UBPath *> Tmp = { Current };
-    // True branch
-    UBPath *True = new UBPath;
-    *True = *Current;
-    True->SelectBranches[I] = true;
-    Paths.push_back(std::move(std::unique_ptr<UBPath>(True)));
-    Tmp.push_back(True);
-    // False branch
-    UBPath *False = new UBPath;
-    *False = *Current;
-    False->SelectBranches[I] = false;
-    Paths.push_back(std::move(std::unique_ptr<UBPath>(False)));
-    Tmp.push_back(False);
-    // Continue recursively
-    for (unsigned J = 0; J < Ops.size(); ++J) {
-      if (!getUBPaths(Ops[J], Tmp[J], Paths, CachedUBPathInsts, Depth + 1))
-        return false;
-    }
-  } else {
-    for (unsigned J = 0; J < Ops.size(); ++J) {
-      if (!getUBPaths(Ops[J], Current, Paths, CachedUBPathInsts, Depth + 1))
-        return false;
-    }
-  }
-  return true;
-}
-
-void ExprBuilder::setBlockPCMap(const BlockPCs &BPCs) {
+void KLEEBuilder::setBlockPCMap(const BlockPCs &BPCs) {
   for (auto BPC : BPCs) {
     assert(BPC.B && "Block is NULL!");
     BlockPCPredMap &PCMap = BlockPCMap[BPC.B];
@@ -980,7 +769,7 @@ void ExprBuilder::setBlockPCMap(const BlockPCs &BPCs) {
 // However, mixing two parts (one for UB constraints, one for BlockPCs)
 // may make the code less structured. If we see big performance overhead,
 // we may consider to combine these two parts together. 
-ref<Expr> ExprBuilder::getBlockPCs() {
+ref<Expr> KLEEBuilder::getBlockPCs() {
 
   UBPathInstMap CachedPhis;
   ref<Expr> Result = klee::ConstantExpr::create(1, Expr::Bool);
@@ -1015,157 +804,6 @@ ref<Expr> ExprBuilder::getBlockPCs() {
   return Result;
 }
 
-void ExprBuilder::getBlockPCPhiPaths(
-    Inst *I, BlockPCPhiPath *Current,
-    std::vector<std::unique_ptr<BlockPCPhiPath>> &Paths,
-    UBPathInstMap &CachedPhis) {
-
-  const std::vector<Inst *> &Ops = I->orderedOps();
-  if (I->K != Inst::Phi) {
-    for (unsigned J = 0; J < Ops.size(); ++J)
-      getBlockPCPhiPaths(Ops[J], Current, Paths, CachedPhis);
-    return;
-  }
-
-  // Early terminate because this phi has been processed.
-  // We will use its cached predicates.
-  if (CachedPhis.count(I))
-    return;
-  Current->Phis.push_back(I);
-
-  // Since we treat a select instruction as a phi instruction, it's
-  // possible that I->B has been added already.
-  if (Current->BlockConstraints.count(I->B))
-    return;
-
-  std::vector<BlockPCPhiPath *> Tmp = { Current };
-  // Create copies of the current path
-  for (unsigned J = 1; J < Ops.size(); ++J) {
-    BlockPCPhiPath *New = new BlockPCPhiPath;
-    *New = *Current;
-    New->BlockConstraints[I->B] = J;
-    Paths.push_back(std::move(std::unique_ptr<BlockPCPhiPath>(New)));
-    Tmp.push_back(New);
-  }
-  // Original path takes the first branch
-  Current->BlockConstraints[I->B] = 0;
-
-  auto PCMap = BlockPCMap.find(I->B);
-  if (PCMap != BlockPCMap.end()) {
-    for (unsigned J = 0; J < Ops.size(); ++J) {
-      auto P = PCMap->second.find(J);
-      if (P != PCMap->second.end())
-        Tmp[J]->PCs.push_back(P->second);
-    }
-  }
-  // Continue recursively
-  for (unsigned J = 0; J < Ops.size(); ++J)
-    getBlockPCPhiPaths(Ops[J], Tmp[J], Paths, CachedPhis);
-}
-
-ref<Expr> ExprBuilder::getZeroBitsMapping(Inst *I) {
-  return ZeroBitsMap[I];
-}
-
-ref<Expr> ExprBuilder::getOneBitsMapping(Inst *I) {
-  return OneBitsMap[I];
-}
-
-ref<Expr> ExprBuilder::getNonZeroBitsMapping(Inst *I) {
-  return NonZeroBitsMap[I];
-}
-
-ref<Expr> ExprBuilder::getNonNegBitsMapping(Inst *I) {
-  return NonNegBitsMap[I];
-}
-
-ref<Expr> ExprBuilder::getNegBitsMapping(Inst *I) {
-  return NegBitsMap[I];
-}
-
-ref<Expr> ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
-  return PowerTwoBitsMap[I];
-}
-
-ref<Expr> ExprBuilder::getSignBitsMapping(Inst *I) {
-  return SignBitsMap[I];
-}
-
-// Return an expression which must be proven valid for the candidate to apply.
-llvm::Optional<CandidateExpr> souper::GetCandidateExprForReplacement(
-    const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-    InstMapping Mapping, bool Negate) {
-
-  CandidateExpr CE;
-  ExprBuilder EB(CE.Arrays, CE.ArrayVars);
-  // Build LHS
-  ref<Expr> LHS = EB.get(Mapping.LHS);
-  ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-  ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
-  if (!Mapping.LHS->DemandedBits.isAllOnesValue())
-    LHS = AndExpr::create(LHS, DemandedBits);
-  for (const auto I : CE.ArrayVars) {
-    if (I) {
-      if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
-        Ante = AndExpr::create(Ante, EB.getZeroBitsMapping(I));
-        Ante = AndExpr::create(Ante, EB.getOneBitsMapping(I));
-      }
-      if (I->NonZero)
-        Ante = AndExpr::create(Ante, EB.getNonZeroBitsMapping(I));
-      if (I->NonNegative)
-        Ante = AndExpr::create(Ante, EB.getNonNegBitsMapping(I));
-      if (I->PowOfTwo)
-        Ante = AndExpr::create(Ante, EB.getPowerTwoBitsMapping(I));
-      if (I->Negative)
-        Ante = AndExpr::create(Ante, EB.getNegBitsMapping(I));
-      if (I->NumSignBits > 1)
-        Ante = AndExpr::create(Ante, EB.getSignBitsMapping(I));
-    }
-  }
-  // Build PCs
-  for (const auto &PC : PCs) {
-    Ante = AndExpr::create(Ante, EB.getInstMapping(PC));
-  }
-  // Build BPCs 
-  if (BPCs.size()) {
-    EB.setBlockPCMap(BPCs);
-    Ante = AndExpr::create(Ante, EB.getBlockPCs());
-  }
-  // Get UB constraints of LHS and (B)PCs
-  ref<Expr> LHSPCsUB = klee::ConstantExpr::create(1, Expr::Bool);
-  if (ExploitUB) {
-    LHSPCsUB = EB.getUBInstCondition();
-    if (LHSPCsUB.isNull())
-      return llvm::Optional<CandidateExpr>();
-  }
-  // Build RHS
-  ref<Expr> RHS = EB.get(Mapping.RHS);
-  if (!Mapping.LHS->DemandedBits.isAllOnesValue())
-    RHS = AndExpr::create(RHS, DemandedBits);
-  // Get all UB constraints (LHS && (B)PCs && RHS)
-  ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
-  if (ExploitUB) {
-    UB = EB.getUBInstCondition();
-    if (UB.isNull())
-      return llvm::Optional<CandidateExpr>();
-  }
-
-  ref<Expr> Cons;
-  if (Negate) // (LHS != RHS)
-    Cons = NeExpr::create(LHS, RHS);
-  else        // (LHS == RHS)
-    Cons = EqExpr::create(LHS, RHS);
-  // Cons && UB
-  if (Mapping.RHS->K != Inst::Const)
-    Cons = AndExpr::create(Cons, UB);
-  // (LHS UB && (B)PCs && (B)PCs UB)
-  Ante = AndExpr::create(Ante, LHSPCsUB);
-  // (LHS UB && (B)PCs && (B)PCs UB) => Cons && UB
-  CE.E = Expr::createImplies(Ante, Cons);
-
-  return llvm::Optional<CandidateExpr>(std::move(CE));
-}
-
 std::string souper::BuildQuery(const BlockPCs &BPCs,
                                const std::vector<InstMapping> &PCs,
                                InstMapping Mapping,
@@ -1173,7 +811,7 @@ std::string souper::BuildQuery(const BlockPCs &BPCs,
   std::string SMTStr;
   llvm::raw_string_ostream SMTSS(SMTStr);
   ConstraintManager Manager;
-  Optional<CandidateExpr> OptionalCE = GetCandidateExprForReplacement(BPCs,
+  Optional<CandidateExpr> OptionalCE = GetCandidateExprForReplacement2(BPCs,
       PCs, Mapping, Negate);
   if (!OptionalCE.hasValue())
     return std::string();

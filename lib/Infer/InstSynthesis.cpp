@@ -14,7 +14,8 @@
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
-#include "souper/Extractor/KLEEBuilder.h"
+//#include "souper/Extractor/KLEEBuilder.h"
+#include "souper/Extractor/ExprBuilder.h"
 #include "souper/Infer/InstSynthesis.h"
 
 #include <queue>
