@@ -27,6 +27,11 @@ namespace souper {
 
 class ExprBuilder {
 public:
+  enum Builder {
+    KLEE,
+    Z3
+  };
+
   const unsigned MAX_PHI_DEPTH = 25;
   
   typedef std::unordered_map<Inst *, std::vector<ref<Expr>>> UBPathInstMap;
@@ -119,6 +124,7 @@ public:
     std::vector<Inst *> ArrayVars;
     ref<Expr> E;
   };
+  CandidateExpr CE;
   virtual llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
       const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
       InstMapping Mapping, bool Negate) = 0;
@@ -127,6 +133,10 @@ public:
                  const std::vector<InstMapping> &PCs, InstMapping Mapping,
                  std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
 };
+
+std::string BuildQuery(const BlockPCs &BPCs,
+       const std::vector<InstMapping> &PCs, InstMapping Mapping,
+       std::vector<Inst *> *ModelVars, bool Negate=false);
 
 std::unique_ptr<ExprBuilder> createKLEEBuilder();
 

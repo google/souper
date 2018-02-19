@@ -12,12 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "llvm/Support/CommandLine.h"
 #include "souper/Extractor/ExprBuilder.h"
 
 using namespace llvm;
 using namespace souper;
 
 ExprBuilder::~ExprBuilder() {}
+
+static llvm::cl::opt<souper::ExprBuilder::Builder> SMTExprBuilder(
+    "souper-smt-expr-builder",
+    llvm::cl::Hidden,
+    llvm::cl::desc("SMT-LIBv2 expression builder (default=klee)"),
+    llvm::cl::values(clEnumValN(souper::ExprBuilder::KLEE, "klee",
+                                "Use KLEE's Expr library"),
+                     clEnumValN(souper::ExprBuilder::Z3, "z3",
+                                "Use Z3's API")),
+    llvm::cl::init(souper::ExprBuilder::KLEE));
 
 namespace souper {
 
@@ -214,6 +225,27 @@ ref<Expr> ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
 
 ref<Expr> ExprBuilder::getSignBitsMapping(Inst *I) {
   return SignBitsMap[I];
+}
+
+// TODO: Fix GetCandidateExprForReplacement
+
+std::string BuildQuery(const BlockPCs &BPCs,
+       const std::vector<InstMapping> &PCs, InstMapping Mapping,
+       std::vector<Inst *> *ModelVars, bool Negate) {
+  std::unique_ptr<ExprBuilder> EB;
+  switch (SMTExprBuilder) {
+  case ExprBuilder::KLEE:
+    EB = createKLEEBuilder();
+    break;
+  case ExprBuilder::Z3:
+    report_fatal_error("not supported yet");
+    break;
+  default:
+    report_fatal_error("cannot reach here");
+    break;
+  }
+
+  return EB->BuildQuery(BPCs, PCs, Mapping, ModelVars, Negate);
 }
 
 }

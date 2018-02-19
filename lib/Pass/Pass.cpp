@@ -130,7 +130,7 @@ public:
     Constant *Repl = ConstantDataArray::getString(C, LHS, true);
     Constant *ReplVar = new GlobalVariable(*M, Repl->getType(), true,
         GlobalValue::PrivateLinkage, Repl, "");
-    Constant *ReplPtr = ConstantExpr::getPointerCast(ReplVar,
+    Constant *ReplPtr = llvm::ConstantExpr::getPointerCast(ReplVar,
         PointerType::getInt8PtrTy(C));
 
     Constant *Field = ConstantDataArray::getString(C, "dprofile " + Loc.str(),
@@ -138,7 +138,7 @@ public:
     Constant *FieldVar = new GlobalVariable(*M, Field->getType(), true,
                                             GlobalValue::PrivateLinkage, Field,
                                             "");
-    Constant *FieldPtr = ConstantExpr::getPointerCast(FieldVar,
+    Constant *FieldPtr = llvm::ConstantExpr::getPointerCast(FieldVar,
         PointerType::getInt8PtrTy(C));
 
     Constant *CntVar = new GlobalVariable(*M, Type::getInt64Ty(C), false,

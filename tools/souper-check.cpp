@@ -176,7 +176,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
   KVStore *KV = 0;
-  std::unique_ptr<Solver> S = 0;
+  std::unique_ptr<souper::Solver> S = 0;
   if (!ParseOnly && !ParseLHSOnly) {
     S = GetSolverFromArgs(KV);
     if (!S) {

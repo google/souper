@@ -50,9 +50,6 @@ using namespace souper;
 namespace {
 
 class KLEEBuilder : public ExprBuilder {
-  std::vector<std::unique_ptr<Array>> &Arrays;
-  std::vector<Inst *> &ArrayVars;
-
 public:
   KLEEBuilder() {}
   ~KLEEBuilder() {}
@@ -65,12 +62,12 @@ public:
       NameStr = ("a" + Name).str();
     else
       NameStr = Name;
-    Arrays.emplace_back(
+    CE.Arrays.emplace_back(
         new Array(ArrayNames.makeName(NameStr), 1, 0, 0, Expr::Int32, Width));
-    ArrayVars.push_back(Origin);
+    CE.ArrayVars.push_back(Origin);
   
     std::vector<unsigned> ZeroBits, OneBits;
-    UpdateList UL(Arrays.back().get(), 0);
+    UpdateList UL(CE.Arrays.back().get(), 0);
     ref<Expr> Var = ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
     if (Origin && Origin->K == Inst::Var) {
       if (Origin->KnownZeros.getBoolValue() || Origin->KnownOnes.getBoolValue()) {
@@ -811,11 +808,8 @@ public:
   llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
       const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
       InstMapping Mapping, bool Negate) {
-  
-    CandidateExpr CE;
-    ExprBuilder EB(CE.Arrays, CE.ArrayVars);
     // Build LHS
-    ref<Expr> LHS = EB.get(Mapping.LHS);
+    ref<Expr> LHS = get(Mapping.LHS);
     ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
     ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
     if (!Mapping.LHS->DemandedBits.isAllOnesValue())
@@ -823,45 +817,45 @@ public:
     for (const auto I : CE.ArrayVars) {
       if (I) {
         if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
-          Ante = AndExpr::create(Ante, EB.getZeroBitsMapping(I));
-          Ante = AndExpr::create(Ante, EB.getOneBitsMapping(I));
+          Ante = AndExpr::create(Ante, getZeroBitsMapping(I));
+          Ante = AndExpr::create(Ante, getOneBitsMapping(I));
         }
         if (I->NonZero)
-          Ante = AndExpr::create(Ante, EB.getNonZeroBitsMapping(I));
+          Ante = AndExpr::create(Ante, getNonZeroBitsMapping(I));
         if (I->NonNegative)
-          Ante = AndExpr::create(Ante, EB.getNonNegBitsMapping(I));
+          Ante = AndExpr::create(Ante, getNonNegBitsMapping(I));
         if (I->PowOfTwo)
-          Ante = AndExpr::create(Ante, EB.getPowerTwoBitsMapping(I));
+          Ante = AndExpr::create(Ante, getPowerTwoBitsMapping(I));
         if (I->Negative)
-          Ante = AndExpr::create(Ante, EB.getNegBitsMapping(I));
+          Ante = AndExpr::create(Ante, getNegBitsMapping(I));
         if (I->NumSignBits > 1)
-          Ante = AndExpr::create(Ante, EB.getSignBitsMapping(I));
+          Ante = AndExpr::create(Ante, getSignBitsMapping(I));
       }
     }
     // Build PCs
     for (const auto &PC : PCs) {
-      Ante = AndExpr::create(Ante, EB.getInstMapping(PC));
+      Ante = AndExpr::create(Ante, getInstMapping(PC));
     }
     // Build BPCs 
     if (BPCs.size()) {
-      EB.setBlockPCMap(BPCs);
-      Ante = AndExpr::create(Ante, EB.getBlockPCs());
+      setBlockPCMap(BPCs);
+      Ante = AndExpr::create(Ante, getBlockPCs());
     }
     // Get UB constraints of LHS and (B)PCs
     ref<Expr> LHSPCsUB = klee::ConstantExpr::create(1, Expr::Bool);
     if (ExploitUB) {
-      LHSPCsUB = EB.getUBInstCondition();
+      LHSPCsUB = getUBInstCondition();
       if (LHSPCsUB.isNull())
         return llvm::Optional<CandidateExpr>();
     }
     // Build RHS
-    ref<Expr> RHS = EB.get(Mapping.RHS);
+    ref<Expr> RHS = get(Mapping.RHS);
     if (!Mapping.LHS->DemandedBits.isAllOnesValue())
       RHS = AndExpr::create(RHS, DemandedBits);
     // Get all UB constraints (LHS && (B)PCs && RHS)
     ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
     if (ExploitUB) {
-      UB = EB.getUBInstCondition();
+      UB = getUBInstCondition();
       if (UB.isNull())
         return llvm::Optional<CandidateExpr>();
     }
