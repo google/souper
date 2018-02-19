@@ -204,7 +204,6 @@ add_library(souperSMTLIB2 STATIC
 set(SOUPER_TOOL_FILES
   lib/Tool/CandidateMapUtils.cpp
   include/souper/Tool/CandidateMapUtils.h
-  include/souper/Tool/GetExprBuilderFromArgs.h
   include/souper/Tool/GetSolverFromArgs.h
 )
 
