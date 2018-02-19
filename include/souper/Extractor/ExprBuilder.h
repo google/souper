@@ -32,6 +32,9 @@ public:
     Z3
   };
 
+  // Local reference
+  InstContext *LIC;
+
   const unsigned MAX_PHI_DEPTH = 25;
   
   typedef std::unordered_map<Inst *, std::vector<ref<Expr>>> UBPathInstMap;
@@ -54,13 +57,15 @@ public:
 
   ref<Expr> buildAssoc(std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
                        llvm::ArrayRef<Inst *> Ops);
-  ref<Expr> getZeroBitsMapping(Inst *I);
-  ref<Expr> getOneBitsMapping(Inst *I);
-  ref<Expr> getNonZeroBitsMapping(Inst *I);
-  ref<Expr> getNonNegBitsMapping(Inst *I);
-  ref<Expr> getPowerTwoBitsMapping(Inst *I);
-  ref<Expr> getNegBitsMapping(Inst *I);
-  ref<Expr> getSignBitsMapping(Inst *I);
+
+  Inst *getZeroBitsMapping(Inst *I);
+  Inst *getOneBitsMapping(Inst *I);
+  Inst *getNonZeroBitsMapping(Inst *I);
+  Inst *getNonNegBitsMapping(Inst *I);
+  Inst *getPowerTwoBitsMapping(Inst *I);
+  Inst *getNegBitsMapping(Inst *I);
+  Inst *getSignBitsMapping(Inst *I);
+
   std::vector<ref<Expr>> getBlockPredicates(Inst *I);
   bool getUBPaths(Inst *I, UBPath *Current,
                   std::vector<std::unique_ptr<UBPath>> &Paths,
@@ -71,14 +76,17 @@ public:
 
   std::map<Block *, std::vector<ref<Expr>>> BlockPredMap;
   std::map<Inst *, ref<Expr>> ExprMap;
+
   std::map<Inst *, ref<Expr>> UBExprMap;
-  std::map<Inst *, ref<Expr>> ZeroBitsMap;
-  std::map<Inst *, ref<Expr>> OneBitsMap;
-  std::map<Inst *, ref<Expr>> NonZeroBitsMap;
-  std::map<Inst *, ref<Expr>> NonNegBitsMap;
-  std::map<Inst *, ref<Expr>> PowerTwoBitsMap;
-  std::map<Inst *, ref<Expr>> NegBitsMap;
-  std::map<Inst *, ref<Expr>> SignBitsMap;
+
+  std::map<Inst *, Inst *> ZeroBitsMap;
+  std::map<Inst *, Inst *> OneBitsMap;
+  std::map<Inst *, Inst *> NonZeroBitsMap;
+  std::map<Inst *, Inst *> NonNegBitsMap;
+  std::map<Inst *, Inst *> PowerTwoBitsMap;
+  std::map<Inst *, Inst *> NegBitsMap;
+  std::map<Inst *, Inst *> SignBitsMap;
+
   std::map<Block *, BlockPCPredMap> BlockPCMap;
   std::vector<Inst *> UBPathInsts;
   UniqueNameSet ArrayNames;
@@ -139,11 +147,11 @@ protected:
                            UBPathInstMap &CachedUBPathInsts) = 0;
 };
 
-std::string BuildQuery(const BlockPCs &BPCs,
+std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
        const std::vector<InstMapping> &PCs, InstMapping Mapping,
        std::vector<Inst *> *ModelVars, bool Negate=false);
 
-std::unique_ptr<ExprBuilder> createKLEEBuilder();
+std::unique_ptr<ExprBuilder> createKLEEBuilder(InstContext &IC);
 
 }
 

@@ -199,43 +199,43 @@ void ExprBuilder::getBlockPCPhiPaths(
     getBlockPCPhiPaths(Ops[J], Tmp[J], Paths, CachedPhis);
 }
 
-ref<Expr> ExprBuilder::getZeroBitsMapping(Inst *I) {
+Inst *ExprBuilder::getZeroBitsMapping(Inst *I) {
   return ZeroBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getOneBitsMapping(Inst *I) {
+Inst *ExprBuilder::getOneBitsMapping(Inst *I) {
   return OneBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getNonZeroBitsMapping(Inst *I) {
+Inst *ExprBuilder::getNonZeroBitsMapping(Inst *I) {
   return NonZeroBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getNonNegBitsMapping(Inst *I) {
+Inst *ExprBuilder::getNonNegBitsMapping(Inst *I) {
   return NonNegBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getNegBitsMapping(Inst *I) {
+Inst *ExprBuilder::getNegBitsMapping(Inst *I) {
   return NegBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
+Inst *ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
   return PowerTwoBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getSignBitsMapping(Inst *I) {
+Inst *ExprBuilder::getSignBitsMapping(Inst *I) {
   return SignBitsMap[I];
 }
 
 // TODO: Fix GetCandidateExprForReplacement
 
-std::string BuildQuery(const BlockPCs &BPCs,
+std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
        const std::vector<InstMapping> &PCs, InstMapping Mapping,
        std::vector<Inst *> *ModelVars, bool Negate) {
   std::unique_ptr<ExprBuilder> EB;
   switch (SMTExprBuilder) {
   case ExprBuilder::KLEE:
-    EB = createKLEEBuilder();
+    EB = createKLEEBuilder(IC);
     break;
   case ExprBuilder::Z3:
     report_fatal_error("not supported yet");

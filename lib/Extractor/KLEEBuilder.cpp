@@ -51,13 +51,15 @@ namespace {
 
 class KLEEBuilder : public ExprBuilder {
 public:
-  KLEEBuilder() {}
+  KLEEBuilder(InstContext &IC) {
+    LIC = &IC;
+  }
   ~KLEEBuilder() {}
 
   std::string BuildQuery(const BlockPCs &BPCs,
-                                 const std::vector<InstMapping> &PCs,
-                                 InstMapping Mapping,
-                                 std::vector<Inst *> *ModelVars, bool Negate) override {
+                         const std::vector<InstMapping> &PCs,
+                         InstMapping Mapping,
+                         std::vector<Inst *> *ModelVars, bool Negate) override {
     std::string SMTStr;
     llvm::raw_string_ostream SMTSS(SMTStr);
     ConstraintManager Manager;
@@ -809,19 +811,19 @@ private:
     for (const auto I : CE.ArrayVars) {
       if (I) {
         if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
-          Ante = AndExpr::create(Ante, getZeroBitsMapping(I));
-          Ante = AndExpr::create(Ante, getOneBitsMapping(I));
+          Ante = AndExpr::create(Ante, get(getZeroBitsMapping(I)));
+          Ante = AndExpr::create(Ante, get(getOneBitsMapping(I)));
         }
         if (I->NonZero)
-          Ante = AndExpr::create(Ante, getNonZeroBitsMapping(I));
+          Ante = AndExpr::create(Ante, get(getNonZeroBitsMapping(I)));
         if (I->NonNegative)
-          Ante = AndExpr::create(Ante, getNonNegBitsMapping(I));
+          Ante = AndExpr::create(Ante, get(getNonNegBitsMapping(I)));
         if (I->PowOfTwo)
-          Ante = AndExpr::create(Ante, getPowerTwoBitsMapping(I));
+          Ante = AndExpr::create(Ante, get(getPowerTwoBitsMapping(I)));
         if (I->Negative)
-          Ante = AndExpr::create(Ante, getNegBitsMapping(I));
+          Ante = AndExpr::create(Ante, get(getNegBitsMapping(I)));
         if (I->NumSignBits > 1)
-          Ante = AndExpr::create(Ante, getSignBitsMapping(I));
+          Ante = AndExpr::create(Ante, get(getSignBitsMapping(I)));
       }
     }
     // Build PCs
@@ -921,6 +923,6 @@ private:
 
 }
 
-std::unique_ptr<ExprBuilder> souper::createKLEEBuilder() {
-  return std::unique_ptr<ExprBuilder>(new KLEEBuilder());
+std::unique_ptr<ExprBuilder> souper::createKLEEBuilder(InstContext &IC) {
+  return std::unique_ptr<ExprBuilder>(new KLEEBuilder(IC));
 }
