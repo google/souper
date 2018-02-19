@@ -52,29 +52,8 @@ public:
 
   virtual ~ExprBuilder();
 
-  virtual ref<Expr> addnswUB(Inst *I) = 0;
-  virtual ref<Expr> addnuwUB(Inst *I) = 0;
-  virtual ref<Expr> subnswUB(Inst *I) = 0;
-  virtual ref<Expr> subnuwUB(Inst *I) = 0;
-  virtual ref<Expr> mulnswUB(Inst *I) = 0;
-  virtual ref<Expr> mulnuwUB(Inst *I) = 0;
-  virtual ref<Expr> udivUB(Inst *I) = 0;
-  virtual ref<Expr> udivExactUB(Inst *I) = 0;
-  virtual ref<Expr> sdivUB(Inst *I) = 0;
-  virtual ref<Expr> sdivExactUB(Inst *I) = 0;
-  virtual ref<Expr> shiftUB(Inst *I) = 0;
-  virtual ref<Expr> shlnswUB(Inst *I) = 0;
-  virtual ref<Expr> shlnuwUB(Inst *I) = 0;
-  virtual ref<Expr> lshrExactUB(Inst *I) = 0;
-  virtual ref<Expr> ashrExactUB(Inst *I) = 0;
-  virtual ref<Expr> countOnes(ref<Expr> E) = 0;
-
-  virtual void recordUBInstruction(Inst *I, ref<Expr> E) = 0;
   ref<Expr> buildAssoc(std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
                        llvm::ArrayRef<Inst *> Ops);
-  virtual ref<Expr> build(Inst *I) = 0;
-  virtual ref<Expr> get(Inst *I) = 0;
-  virtual ref<Expr> getInstMapping(const InstMapping &IM) = 0;
   ref<Expr> getZeroBitsMapping(Inst *I);
   ref<Expr> getOneBitsMapping(Inst *I);
   ref<Expr> getNonZeroBitsMapping(Inst *I);
@@ -83,17 +62,6 @@ public:
   ref<Expr> getNegBitsMapping(Inst *I);
   ref<Expr> getSignBitsMapping(Inst *I);
   std::vector<ref<Expr>> getBlockPredicates(Inst *I);
-  virtual ref<Expr> getUBInstCondition() = 0;
-  virtual ref<Expr> getBlockPCs() = 0;
-  virtual void setBlockPCMap(const BlockPCs &BPCs) = 0;
-  virtual ref<Expr> createPathPred(std::map<Block *, unsigned> &BlockConstraints,
-                           Inst* PathInst,
-                           std::map<Inst *, bool> *SelectBranches) = 0;
-  virtual ref<Expr> createUBPathInstsPred(Inst *CurrentInst,
-                           std::vector<Inst *> &UBPathInsts,
-                           std::map<Block *, unsigned> &BlockConstraints,
-                           std::map<Inst *, bool> *SelectBranches,
-                           UBPathInstMap &CachedUBPathInsts) = 0;
   bool getUBPaths(Inst *I, UBPath *Current,
                   std::vector<std::unique_ptr<UBPath>> &Paths,
                   UBPathInstMap &CachedUBPathInsts, unsigned Depth);
@@ -132,6 +100,43 @@ public:
   virtual std::string BuildQuery(const BlockPCs &BPCs,
                  const std::vector<InstMapping> &PCs, InstMapping Mapping,
                  std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
+
+protected:
+  virtual ref<Expr> addnswUB(Inst *I) = 0;
+  virtual ref<Expr> addnuwUB(Inst *I) = 0;
+  virtual ref<Expr> subnswUB(Inst *I) = 0;
+  virtual ref<Expr> subnuwUB(Inst *I) = 0;
+  virtual ref<Expr> mulnswUB(Inst *I) = 0;
+  virtual ref<Expr> mulnuwUB(Inst *I) = 0;
+  virtual ref<Expr> udivUB(Inst *I) = 0;
+  virtual ref<Expr> udivExactUB(Inst *I) = 0;
+  virtual ref<Expr> sdivUB(Inst *I) = 0;
+  virtual ref<Expr> sdivExactUB(Inst *I) = 0;
+  virtual ref<Expr> shiftUB(Inst *I) = 0;
+  virtual ref<Expr> shlnswUB(Inst *I) = 0;
+  virtual ref<Expr> shlnuwUB(Inst *I) = 0;
+  virtual ref<Expr> lshrExactUB(Inst *I) = 0;
+  virtual ref<Expr> ashrExactUB(Inst *I) = 0;
+  virtual ref<Expr> countOnes(ref<Expr> E) = 0;
+
+  virtual void recordUBInstruction(Inst *I, ref<Expr> E) = 0;
+
+  virtual ref<Expr> build(Inst *I) = 0;
+  virtual ref<Expr> get(Inst *I) = 0;
+  virtual ref<Expr> getInstMapping(const InstMapping &IM) = 0;
+
+  virtual ref<Expr> getUBInstCondition() = 0;
+  virtual ref<Expr> getBlockPCs() = 0;
+  virtual void setBlockPCMap(const BlockPCs &BPCs) = 0;
+
+  virtual ref<Expr> createPathPred(std::map<Block *, unsigned> &BlockConstraints,
+                           Inst* PathInst,
+                           std::map<Inst *, bool> *SelectBranches) = 0;
+  virtual ref<Expr> createUBPathInstsPred(Inst *CurrentInst,
+                           std::vector<Inst *> &UBPathInsts,
+                           std::map<Block *, unsigned> &BlockConstraints,
+                           std::map<Inst *, bool> *SelectBranches,
+                           UBPathInstMap &CachedUBPathInsts) = 0;
 };
 
 std::string BuildQuery(const BlockPCs &BPCs,
