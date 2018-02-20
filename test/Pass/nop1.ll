@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: llvm-as -o %t %s
-; RUN: opt -load %pass -souper %solver -souper-infer-nop -souper-stress-nop -S -o - %s | FileCheck %s
+; RUN: opt -load %pass -souper %solver -souper-infer-nop -souper-stress-nop -S -stats -o - %s 2>&1 | FileCheck %s
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
@@ -14,10 +14,12 @@ entry:
 
 jmp:
   %c = phi i32 [%call, %entry]
-  %d = add i32 0, %c
-  ; CHECK: ret i32 %c
-  ret i32 %d
+  ; CHECK: ret i32 %call
+  ret i32 %c
 }
 
 ; Function Attrs: nounwind readnone
 declare i32 @a(i32) local_unnamed_addr #1
+
+; CHECK: 1 souper - Number of instructions replaced by another instruction
+

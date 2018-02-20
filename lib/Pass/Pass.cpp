@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define DEBUG_TYPE "souper"
+
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/DemandedBits.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -33,6 +36,9 @@
 #include "souper/Tool/GetSolverFromArgs.h"
 #include "souper/Tool/CandidateMapUtils.h"
 #include "set"
+
+STATISTIC(InstructionReplaced, "Number of instructions replaced by another instruction");
+STATISTIC(DominanceCheckFailed, "Number of failed replacement due to dominance check");
 
 using namespace souper;
 using namespace llvm;
@@ -174,9 +180,13 @@ public:
         if (V->getType() != T)
           continue;
         if (auto IP = dyn_cast<Instruction>(V)) {
-          // Domination check
-          if (DT.dominates(IP, ReplacedInst))
+          // Dominance check
+          if (DT.dominates(IP, ReplacedInst)) {
+            ++InstructionReplaced;
             return V;
+          } else {
+            ++DominanceCheckFailed;
+          }
         } else if (isa<Argument>(V) || isa<Constant>(V)) {
           return V;
         } else {
