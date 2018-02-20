@@ -37,8 +37,8 @@ public:
 
   const unsigned MAX_PHI_DEPTH = 25;
   
-  typedef std::unordered_map<Inst *, std::vector<ref<Expr>>> UBPathInstMap;
-  typedef std::map<unsigned, ref<Expr>> BlockPCPredMap;
+  typedef std::unordered_map<Inst *, std::vector<Inst *>> UBPathInstMap;
+  typedef std::map<unsigned, Inst *> BlockPCPredMap;
   
   struct UBPath {
     std::map<Block *, unsigned> BlockConstraints;
@@ -50,7 +50,7 @@ public:
   struct BlockPCPhiPath {
     std::map<Block *, unsigned> BlockConstraints;
     std::vector<Inst *> Phis;
-    std::vector<ref<Expr>> PCs;
+    std::vector<Inst *> PCs;
   };
 
   virtual ~ExprBuilder();
@@ -58,40 +58,54 @@ public:
   ref<Expr> buildAssoc(std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
                        llvm::ArrayRef<Inst *> Ops);
 
-  Inst *getZeroBitsMapping(Inst *I);
-  Inst *getOneBitsMapping(Inst *I);
-  Inst *getNonZeroBitsMapping(Inst *I);
-  Inst *getNonNegBitsMapping(Inst *I);
-  Inst *getPowerTwoBitsMapping(Inst *I);
-  Inst *getNegBitsMapping(Inst *I);
-  Inst *getSignBitsMapping(Inst *I);
+  ref<Expr> getZeroBitsMapping(Inst *I);
+  ref<Expr> getOneBitsMapping(Inst *I);
+  ref<Expr> getNonZeroBitsMapping(Inst *I);
+  ref<Expr> getNonNegBitsMapping(Inst *I);
+  ref<Expr> getPowerTwoBitsMapping(Inst *I);
+  ref<Expr> getNegBitsMapping(Inst *I);
+  ref<Expr> getSignBitsMapping(Inst *I);
 
-  std::vector<ref<Expr>> getBlockPredicates(Inst *I);
+  std::vector<Inst *> getBlockPredicates(Inst *I);
   bool getUBPaths(Inst *I, UBPath *Current,
                   std::vector<std::unique_ptr<UBPath>> &Paths,
                   UBPathInstMap &CachedUBPathInsts, unsigned Depth);
   void getBlockPCPhiPaths(Inst *I, BlockPCPhiPath *Current,
                           std::vector<std::unique_ptr<BlockPCPhiPath>> &Paths,
                           UBPathInstMap &CachedPhis);
+  Inst *createPathPred(std::map<Block *, unsigned> &BlockConstraints,
+                       Inst* PathInst,
+                       std::map<Inst *, bool> *SelectBranches);
+  Inst *createUBPathInstsPred(Inst *CurrentInst,
+                              std::vector<Inst *> &UBPathInsts,
+                              std::map<Block *, unsigned> &BlockConstraints,
+                              std::map<Inst *, bool> *SelectBranches,
+                              UBPathInstMap &CachedUBPathInsts);
 
-  std::map<Block *, std::vector<ref<Expr>>> BlockPredMap;
+  Inst *getInstMapping(const InstMapping &IM);
+  Inst *getUBInstCondition();
+  Inst *getBlockPCs();
+  void setBlockPCMap(const BlockPCs &BPCs);
+  void recordUBInstruction(Inst *I, Inst *E);
+
+  std::map<Block *, std::vector<Inst *>> BlockPredMap;
+
   std::map<Inst *, ref<Expr>> ExprMap;
+  std::map<Inst *, Inst *> UBExprMap;
 
-  std::map<Inst *, ref<Expr>> UBExprMap;
-
-  std::map<Inst *, Inst *> ZeroBitsMap;
-  std::map<Inst *, Inst *> OneBitsMap;
-  std::map<Inst *, Inst *> NonZeroBitsMap;
-  std::map<Inst *, Inst *> NonNegBitsMap;
-  std::map<Inst *, Inst *> PowerTwoBitsMap;
-  std::map<Inst *, Inst *> NegBitsMap;
-  std::map<Inst *, Inst *> SignBitsMap;
+  std::map<Inst *, ref<Expr>> ZeroBitsMap;
+  std::map<Inst *, ref<Expr>> OneBitsMap;
+  std::map<Inst *, ref<Expr>> NonZeroBitsMap;
+  std::map<Inst *, ref<Expr>> NonNegBitsMap;
+  std::map<Inst *, ref<Expr>> PowerTwoBitsMap;
+  std::map<Inst *, ref<Expr>> NegBitsMap;
+  std::map<Inst *, ref<Expr>> SignBitsMap;
 
   std::map<Block *, BlockPCPredMap> BlockPCMap;
   std::vector<Inst *> UBPathInsts;
   UniqueNameSet ArrayNames;
   // Holding the precondition, i.e. blockpc, for the UBInst under process.
-  ref<Expr> UBInstPrecondition;
+  Inst *UBInstPrecondition;
   // Indicate if the UBInst relates to BlockPC
   bool IsForBlockPCUBInst = false;
 
@@ -127,24 +141,9 @@ protected:
   virtual ref<Expr> ashrExactUB(Inst *I) = 0;
   virtual ref<Expr> countOnes(ref<Expr> E) = 0;
 
-  virtual void recordUBInstruction(Inst *I, ref<Expr> E) = 0;
-
   virtual ref<Expr> build(Inst *I) = 0;
   virtual ref<Expr> get(Inst *I) = 0;
-  virtual ref<Expr> getInstMapping(const InstMapping &IM) = 0;
 
-  virtual ref<Expr> getUBInstCondition() = 0;
-  virtual ref<Expr> getBlockPCs() = 0;
-  virtual void setBlockPCMap(const BlockPCs &BPCs) = 0;
-
-  virtual ref<Expr> createPathPred(std::map<Block *, unsigned> &BlockConstraints,
-                           Inst* PathInst,
-                           std::map<Inst *, bool> *SelectBranches) = 0;
-  virtual ref<Expr> createUBPathInstsPred(Inst *CurrentInst,
-                           std::vector<Inst *> &UBPathInsts,
-                           std::map<Block *, unsigned> &BlockConstraints,
-                           std::map<Inst *, bool> *SelectBranches,
-                           UBPathInstMap &CachedUBPathInsts) = 0;
 };
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,

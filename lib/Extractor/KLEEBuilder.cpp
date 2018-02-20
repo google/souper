@@ -252,20 +252,6 @@ private:
      return Count;
   }
   
-  void recordUBInstruction(Inst *I, ref<Expr> E) override {
-    if (!IsForBlockPCUBInst) {
-      UBExprMap[I] = E;
-    }
-    else if (!UBInstPrecondition.isNull()) {
-      // The current UBInst comes from BlockPC. It's possible
-      // that the precondition is missing at this point (e.g.,
-      // the corresponding Phi is not part of the current
-      // Souper IR because the Phi is not in the equivalence class
-      // of the instruction.
-      UBExprMap[I] = Expr::createImplies(UBInstPrecondition, E);
-    }
-  }
-  
   ref<Expr> build(Inst *I) override {
     const std::vector<Inst *> &Ops = I->orderedOps();
     switch (I->K) {
@@ -280,7 +266,7 @@ private:
       ref<Expr> E = get(Ops[0]);
       // e.g. P2 ? (P1 ? Op1_Expr : Op2_Expr) : Op3_Expr
       for (unsigned J = 1; J < Ops.size(); ++J) {
-        E = SelectExpr::create(PredExpr[J-1], E, get(Ops[J]));
+        E = SelectExpr::create(get(PredExpr[J-1]), E, get(Ops[J]));
       }
       UBPathInsts.push_back(I);
       return E;
@@ -289,51 +275,51 @@ private:
       return buildAssoc(AddExpr::create, Ops);
     case Inst::AddNSW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, addnswUB(I));
+      //recordUBInstruction(I, addnswUB(I));
       return Add;
     }
     case Inst::AddNUW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, addnuwUB(I));
+      //recordUBInstruction(I, addnuwUB(I));
       return Add;
     }
     case Inst::AddNW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, AndExpr::create(addnswUB(I), addnuwUB(I)));
+      //recordUBInstruction(I, AndExpr::create(addnswUB(I), addnuwUB(I)));
       return Add;
     }
     case Inst::Sub:
       return SubExpr::create(get(Ops[0]), get(Ops[1]));
     case Inst::SubNSW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, subnswUB(I));
+      //recordUBInstruction(I, subnswUB(I));
       return Sub;
     }
     case Inst::SubNUW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, subnuwUB(I));
+      //recordUBInstruction(I, subnuwUB(I));
       return Sub;
     }
     case Inst::SubNW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, AndExpr::create(subnswUB(I), subnuwUB(I)));
+      //recordUBInstruction(I, AndExpr::create(subnswUB(I), subnuwUB(I)));
       return Sub;
     }
     case Inst::Mul:
       return buildAssoc(MulExpr::create, Ops);
     case Inst::MulNSW: {
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, mulnswUB(I));
+      //recordUBInstruction(I, mulnswUB(I));
       return Mul;
     }
     case Inst::MulNUW: {
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, mulnuwUB(I));
+      //recordUBInstruction(I, mulnuwUB(I));
       return Mul;
     }
     case Inst::MulNW: {
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, AndExpr::create(mulnswUB(I), mulnuwUB(I)));
+      //recordUBInstruction(I, AndExpr::create(mulnswUB(I), mulnuwUB(I)));
       return Mul;
     }
   
@@ -352,7 +338,7 @@ private:
       // a constant zero.
       ref<Expr> R = get(Ops[1]);
       if (R->isZero()) {
-        recordUBInstruction(I, klee::ConstantExpr::create(0, 1));
+        //recordUBInstruction(I, klee::ConstantExpr::create(0, 1));
         return klee::ConstantExpr::create(0, Ops[1]->Width);
       }
   
@@ -362,32 +348,32 @@ private:
   
       case Inst::UDiv: {
         ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-        recordUBInstruction(I, udivUB(I));
+        //recordUBInstruction(I, udivUB(I));
         return Udiv;
       }
       case Inst::SDiv: {
         ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-        recordUBInstruction(I, sdivUB(I));
+        //recordUBInstruction(I, sdivUB(I));
         return Sdiv;
       }
       case Inst::UDivExact: {
         ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-        recordUBInstruction(I, AndExpr::create(udivUB(I), udivExactUB(I)));
+        //recordUBInstruction(I, AndExpr::create(udivUB(I), udivExactUB(I)));
         return Udiv;
       }
       case Inst::SDivExact: {
         ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-        recordUBInstruction(I, AndExpr::create(sdivUB(I), sdivExactUB(I)));
+        //recordUBInstruction(I, AndExpr::create(sdivUB(I), sdivExactUB(I)));
         return Sdiv;
       }
       case Inst::URem: {
         ref<Expr> Urem = URemExpr::create(get(Ops[0]), R);
-        recordUBInstruction(I, udivUB(I));
+        //recordUBInstruction(I, udivUB(I));
         return Urem;
       }
       case Inst::SRem: {
         ref<Expr> Srem = SRemExpr::create(get(Ops[0]), R);
-        recordUBInstruction(I, sdivUB(I));
+        //recordUBInstruction(I, sdivUB(I));
         return Srem;
       }
       llvm_unreachable("unknown kind");
@@ -402,44 +388,44 @@ private:
       return buildAssoc(XorExpr::create, Ops);
     case Inst::Shl: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, shiftUB(I));
+      //recordUBInstruction(I, shiftUB(I));
       return Result;
     }
     case Inst::ShlNSW: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, AndExpr::create(shiftUB(I), shlnswUB(I)));
+      //recordUBInstruction(I, AndExpr::create(shiftUB(I), shlnswUB(I)));
       return Result;
     }
     case Inst::ShlNUW: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, AndExpr::create(shiftUB(I), shlnuwUB(I)));
+      //recordUBInstruction(I, AndExpr::create(shiftUB(I), shlnuwUB(I)));
       return Result;
     }
     case Inst::ShlNW: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, AndExpr::create(shiftUB(I),
-                                             AndExpr::create(shlnswUB(I),
-                                                             shlnuwUB(I))));
+      //recordUBInstruction(I, AndExpr::create(shiftUB(I),
+      //                                       AndExpr::create(shlnswUB(I),
+      //                                                       shlnuwUB(I))));
       return Result;
     }
     case Inst::LShr: {
       ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, shiftUB(I));
+      //recordUBInstruction(I, shiftUB(I));
       return Result;
     }
     case Inst::LShrExact: {
       ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, AndExpr::create(shiftUB(I), lshrExactUB(I)));
+      //recordUBInstruction(I, AndExpr::create(shiftUB(I), lshrExactUB(I)));
       return Result;
     }
     case Inst::AShr: {
       ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, shiftUB(I));
+      //recordUBInstruction(I, shiftUB(I));
       return Result;
     }
     case Inst::AShrExact: {
       ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, AndExpr::create(shiftUB(I), ashrExactUB(I)));
+      //recordUBInstruction(I, AndExpr::create(shiftUB(I), ashrExactUB(I)));
       return Result;
     }
     case Inst::Select:
@@ -551,253 +537,6 @@ private:
     return E;
   }
   
-  ref<Expr> getInstMapping(const InstMapping &IM) override {
-    return EqExpr::create(get(IM.LHS), get(IM.RHS));
-  }
-  
-  ref<Expr> createPathPred(
-      std::map<Block *, unsigned> &BlockConstraints, Inst* PathInst,
-      std::map<Inst *, bool> *SelectBranches) override {
-  
-    ref<Expr> Pred = klee::ConstantExpr::alloc(1, 1);
-    if (PathInst->K == Inst::Phi) {
-      unsigned Num = BlockConstraints[PathInst->B];
-      const auto &PredExpr = BlockPredMap[PathInst->B];
-      // Sanity checks
-      assert(PredExpr.size() && "there must be path predicates for the UBs");
-      assert(PredExpr.size() == PathInst->Ops.size()-1 &&
-             "phi predicate size mismatch");
-      // Add the predicate(s)
-      if (Num == 0)
-        Pred = AndExpr::create(Pred, PredExpr[0]);
-      else
-        Pred = AndExpr::create(Pred, Expr::createIsZero(PredExpr[Num-1]));
-      for (unsigned B = Num; B < PredExpr.size(); ++B)
-        Pred = AndExpr::create(Pred, PredExpr[B]);
-    }
-    else if (PathInst->K == Inst::Select) {
-      ref<Expr> SelectPred = get(PathInst->orderedOps()[0]);
-      assert(SelectBranches && "NULL SelectBranches?");
-      auto SI = SelectBranches->find(PathInst);
-      // The current path doesn't have info about this select instruction.
-      if (SI == SelectBranches->end()) {
-        return Pred;
-      }
-      if (SI->second)
-        Pred = AndExpr::create(Pred, SelectPred);
-      else
-        Pred = AndExpr::create(Pred, Expr::createIsZero(SelectPred));
-    }
-    else {
-      assert(0 && "cannot reach here");
-    }
-  
-    return Pred;
-  }
-  
-  ref<Expr> createUBPathInstsPred(
-      Inst *CurrentInst, std::vector<Inst *> &PathInsts,
-      std::map<Block *, unsigned> &BlockConstraints,
-      std::map<Inst *, bool> *SelectBranches, UBPathInstMap &CachedUBPathInsts) override {
-    ref<Expr> Pred = klee::ConstantExpr::alloc(1, 1);
-    for (const auto &PathInst : PathInsts) {
-      if (PathInst->Ops.size() == 1)
-        continue;
-      ref<Expr> InstPred =
-        createPathPred(BlockConstraints, PathInst, SelectBranches);
-  
-      UBPathInstMap::iterator PI = CachedUBPathInsts.find(PathInst);
-      if (PI == CachedUBPathInsts.end()) {
-         // It's possible that we don't have a cached instruction yet,
-         // e.g., the CurrentInst is a select operator.
-         assert(CurrentInst->K == Inst::Select && "No cached Inst?");
-         CachedUBPathInsts[PathInst] = {};
-         PI = CachedUBPathInsts.find(PathInst);
-      }
-      if (PI->first != CurrentInst && PI->second.size() != 0) {
-        // Use cached Expr along each path which has UB Insts,
-        // and cache the expanded Expr for the current working Phi
-        for (auto CE : PI->second) {
-          InstPred = AndExpr::create(CE, InstPred);
-          CachedUBPathInsts[CurrentInst].push_back(InstPred);
-          Pred = AndExpr::create(Pred, InstPred);
-        }
-      }
-      else {
-        CachedUBPathInsts[CurrentInst].push_back(InstPred);
-        Pred = AndExpr::create(Pred, InstPred);
-      }
-    }
-    return Pred;
-  }
-  
-  // Collect UB Inst condition for each Phi instruction.
-  // The basic algorithm is:
-  // (1) for a given phi instruction, we first collect all paths that start
-  //     from the phi. For each path, we also keep the the phi instructions
-  //     along the path and the UB instructions associated with these phi
-  //     instructions;
-  // (2) then for each path, we generate a corresponding KLEE expression
-  //     based on the facts that we collected in step (1), including:
-  //     * UB instructions;
-  //     * Phi predicates;
-  //
-  // With the algorithm, it is easy to get into the path explosion problem,
-  // i.e., the number of paths is increased exponentially. Under some
-  // circumstances, e.g., the number of phis is too large, we will suffer
-  // with large performance overhead. In some extreme cases, we will fail
-  // to process some file due to the large memory footprint, i.e., `newing'
-  // too many UBPaths. Two tricks are used to relief the penalty of the
-  // path explosion problem:
-  // (1) caching the KLEE expresions for each processed phi, where each
-  //     KLEE expression encodes the path that starts from one of the phi's
-  //     values. For example, when processing a sample souper IR below
-  //
-  //     %0 = block
-  //     %1 = block
-  //     %2:i32 = var
-  //     %3:i32 = shl 0:i32, %2
-  //     %4:i32 = var
-  //     %5:i32 = shl 0:i32, %4
-  //     %6 = var
-  //     %11:i32 = phi %1, %3, %5
-  //     %12:i32 = phi %0, %6, %11
-  //
-  //     we first encounter phi %11. The generated KLEE expression
-  //     for this phi encodes two paths, i.e., %3 and %5. We cache
-  //     these two into CachedUBPathInsts. Then we move to process phi %12.
-  //     At this point, rather than recursively re-contruct %11 (through
-  //     %12's value), we just re-used the cached path-expressions.
-  //     For each path-expression, we append it with %12's own predicate
-  //     and also cache them with %12 for future use. After finishing
-  //     %12, we will have three entries for phi %12.
-  // (2) The first trick increases the performance, but we still suffer
-  //     with large memory consumption, i.e., it's easy to cache too
-  //     many paths. The second trick is to reduce the memory footprint
-  //     by only caching "useful" path that has UB Insts. For example,
-  //     in the example in (1), for phi %12, we don't need to cache
-  //     the path starting from %6, because this path doesn't have any
-  //     UB Insts.
-  //
-  // These tricks basically relies on the dependency chain of instructions
-  // generated by souper. For example, if we say %12 depends on %11, then
-  // %12 would never appear earlier than %11.
-  ref<Expr> getUBInstCondition() override {
-  
-    // A map from a Phi instruction to all of its KLEE expressions that
-    // encode the path and UB Inst predicates.
-    UBPathInstMap CachedUBPathInsts;
-    std::set<Inst *> UsedUBInsts;
-    ref<Expr> Result = klee::ConstantExpr::create(1, Expr::Bool);
-    // For each Phi/Select instruction
-    for (const auto &I : UBPathInsts) {
-      if (CachedUBPathInsts.count(I) != 0)
-        continue;
-      // Recursively collect UB instructions
-      // on the block constrained Phi and Select branches
-      std::vector<std::unique_ptr<UBPath>> UBPaths;
-      UBPath *Current = new UBPath;
-      UBPaths.push_back(std::move(std::unique_ptr<UBPath>(Current)));
-      if (!getUBPaths(I, Current, UBPaths, CachedUBPathInsts, 0))
-        return ref<Expr>();
-      CachedUBPathInsts[I] = {};
-      // For each found path
-      for (const auto &Path : UBPaths) {
-        if (!Path->UBInsts.size())
-          continue;
-        // Aggregate collected UB constraints
-        ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-        for (const auto &I : Path->UBInsts) {
-          auto Iter = UBExprMap.find(I);
-          // It's possible that the instruction I is not in the map.
-          // For example, it may come from a blockpc which doesn't
-          // have any preconditions.
-          if (Iter != UBExprMap.end())
-            Ante = AndExpr::create(Ante, Iter->second);
-          UsedUBInsts.insert(I);
-        }
-        // Create path predicate
-        ref<Expr> Pred =
-          createUBPathInstsPred(I, Path->Insts, Path->BlockConstraints,
-                                &Path->SelectBranches, CachedUBPathInsts);
-        // Add predicate->UB constraint
-        Result = AndExpr::create(Result, Expr::createImplies(Pred, Ante));
-      }
-    }
-    // Add the unconditional UB constraints at the top level
-    for (const auto &Entry: UBExprMap)
-      if (!UsedUBInsts.count(Entry.first))
-        Result = AndExpr::create(Result, Entry.second);
-    return Result;
-  }
-  
-  void setBlockPCMap(const BlockPCs &BPCs) override {
-    for (auto BPC : BPCs) {
-      assert(BPC.B && "Block is NULL!");
-      BlockPCPredMap &PCMap = BlockPCMap[BPC.B];
-      auto I = PCMap.find(BPC.PredIdx);
-      // Relying on a class-level flag may not be a nice solution,
-      // but it seems hard to differentiate two cases:
-      //   (1) UBInstExpr collected through blockpc, and;
-      //   (2) UBInstExpr collected through pc/lhs/rhs
-      // For the first case, UBInst(s) is conditional, i.e.,
-      // they rely on the fact that blockpc(s) are true.
-      if (I != PCMap.end()) {
-        UBInstPrecondition = I->second;
-      }
-      IsForBlockPCUBInst = true;
-      ref<Expr> PE = getInstMapping(BPC.PC);
-      IsForBlockPCUBInst = false;
-      UBInstPrecondition = nullptr;
-      if (I == PCMap.end()) {
-        PCMap[BPC.PredIdx] = PE;
-      }
-      else {
-        PCMap[BPC.PredIdx] = AndExpr::create(I->second, PE);
-      }
-    }
-  }
-  
-  // Similar to the way we collect UB constraints. We could combine it with 
-  // getUBInstCondition, because the workflow is quite similar. 
-  // However, mixing two parts (one for UB constraints, one for BlockPCs)
-  // may make the code less structured. If we see big performance overhead,
-  // we may consider to combine these two parts together. 
-  ref<Expr> getBlockPCs() override {
-  
-    UBPathInstMap CachedPhis;
-    ref<Expr> Result = klee::ConstantExpr::create(1, Expr::Bool);
-    // For each Phi instruction
-    for (const auto &I : UBPathInsts) {
-      if (CachedPhis.count(I) != 0)
-        continue;
-      // Recursively collect BlockPCs
-      std::vector<std::unique_ptr<BlockPCPhiPath>> BlockPCPhiPaths;
-      BlockPCPhiPath *Current = new BlockPCPhiPath;
-      BlockPCPhiPaths.push_back(
-                          std::move(std::unique_ptr<BlockPCPhiPath>(Current)));
-      getBlockPCPhiPaths(I, Current, BlockPCPhiPaths, CachedPhis);
-      CachedPhis[I] = {};
-      // For each found path
-      for (const auto &Path : BlockPCPhiPaths) {
-        if (!Path->PCs.size())
-          continue;
-        // Aggregate collected BlockPC constraints
-        ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-        for (const auto &PC : Path->PCs) {
-          Ante = AndExpr::create(Ante, PC);
-        }
-        // Create path predicate
-        ref<Expr> Pred =
-          createUBPathInstsPred(I, Path->Phis, Path->BlockConstraints,
-                                /*SelectBranches=*/nullptr, CachedPhis);
-        // Add predicate->UB constraint
-        Result = AndExpr::create(Result, Expr::createImplies(Pred, Ante));
-      }
-    }
-    return Result;
-  }
-  
   // Return an expression which must be proven valid for the candidate to apply.
   llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
       const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
@@ -811,34 +550,34 @@ private:
     for (const auto I : CE.ArrayVars) {
       if (I) {
         if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
-          Ante = AndExpr::create(Ante, get(getZeroBitsMapping(I)));
-          Ante = AndExpr::create(Ante, get(getOneBitsMapping(I)));
+          Ante = AndExpr::create(Ante, getZeroBitsMapping(I));
+          Ante = AndExpr::create(Ante, getOneBitsMapping(I));
         }
         if (I->NonZero)
-          Ante = AndExpr::create(Ante, get(getNonZeroBitsMapping(I)));
+          Ante = AndExpr::create(Ante, getNonZeroBitsMapping(I));
         if (I->NonNegative)
-          Ante = AndExpr::create(Ante, get(getNonNegBitsMapping(I)));
+          Ante = AndExpr::create(Ante, getNonNegBitsMapping(I));
         if (I->PowOfTwo)
-          Ante = AndExpr::create(Ante, get(getPowerTwoBitsMapping(I)));
+          Ante = AndExpr::create(Ante, getPowerTwoBitsMapping(I));
         if (I->Negative)
-          Ante = AndExpr::create(Ante, get(getNegBitsMapping(I)));
+          Ante = AndExpr::create(Ante, getNegBitsMapping(I));
         if (I->NumSignBits > 1)
-          Ante = AndExpr::create(Ante, get(getSignBitsMapping(I)));
+          Ante = AndExpr::create(Ante, getSignBitsMapping(I));
       }
     }
     // Build PCs
     for (const auto &PC : PCs) {
-      Ante = AndExpr::create(Ante, getInstMapping(PC));
+      Ante = AndExpr::create(Ante, get(getInstMapping(PC)));
     }
     // Build BPCs 
     if (BPCs.size()) {
       setBlockPCMap(BPCs);
-      Ante = AndExpr::create(Ante, getBlockPCs());
+      Ante = AndExpr::create(Ante, get(getBlockPCs()));
     }
     // Get UB constraints of LHS and (B)PCs
     ref<Expr> LHSPCsUB = klee::ConstantExpr::create(1, Expr::Bool);
     if (ExploitUB) {
-      LHSPCsUB = getUBInstCondition();
+      LHSPCsUB = get(getUBInstCondition());
       if (LHSPCsUB.isNull())
         return llvm::Optional<CandidateExpr>();
     }
@@ -849,7 +588,7 @@ private:
     // Get all UB constraints (LHS && (B)PCs && RHS)
     ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
     if (ExploitUB) {
-      UB = getUBInstCondition();
+      UB = get(getUBInstCondition());
       if (UB.isNull())
         return llvm::Optional<CandidateExpr>();
     }
