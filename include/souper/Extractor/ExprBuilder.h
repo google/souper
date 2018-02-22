@@ -55,16 +55,13 @@ public:
 
   virtual ~ExprBuilder();
 
-  ref<Expr> buildAssoc(std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
-                       llvm::ArrayRef<Inst *> Ops);
-
-  ref<Expr> getZeroBitsMapping(Inst *I);
-  ref<Expr> getOneBitsMapping(Inst *I);
-  ref<Expr> getNonZeroBitsMapping(Inst *I);
-  ref<Expr> getNonNegBitsMapping(Inst *I);
-  ref<Expr> getPowerTwoBitsMapping(Inst *I);
-  ref<Expr> getNegBitsMapping(Inst *I);
-  ref<Expr> getSignBitsMapping(Inst *I);
+  Inst *getZeroBitsMapping(Inst *I);
+  Inst *getOneBitsMapping(Inst *I);
+  Inst *getNonZeroBitsMapping(Inst *I);
+  Inst *getNonNegBitsMapping(Inst *I);
+  Inst *getPowerTwoBitsMapping(Inst *I);
+  Inst *getNegBitsMapping(Inst *I);
+  Inst *getSignBitsMapping(Inst *I);
 
   std::vector<Inst *> getBlockPredicates(Inst *I);
   bool getUBPaths(Inst *I, UBPath *Current,
@@ -90,16 +87,15 @@ public:
 
   std::map<Block *, std::vector<Inst *>> BlockPredMap;
 
-  std::map<Inst *, ref<Expr>> ExprMap;
   std::map<Inst *, Inst *> UBExprMap;
 
-  std::map<Inst *, ref<Expr>> ZeroBitsMap;
-  std::map<Inst *, ref<Expr>> OneBitsMap;
-  std::map<Inst *, ref<Expr>> NonZeroBitsMap;
-  std::map<Inst *, ref<Expr>> NonNegBitsMap;
-  std::map<Inst *, ref<Expr>> PowerTwoBitsMap;
-  std::map<Inst *, ref<Expr>> NegBitsMap;
-  std::map<Inst *, ref<Expr>> SignBitsMap;
+  std::map<Inst *, Inst *> ZeroBitsMap;
+  std::map<Inst *, Inst *> OneBitsMap;
+  std::map<Inst *, Inst *> NonZeroBitsMap;
+  std::map<Inst *, Inst *> NonNegBitsMap;
+  std::map<Inst *, Inst *> PowerTwoBitsMap;
+  std::map<Inst *, Inst *> NegBitsMap;
+  std::map<Inst *, Inst *> SignBitsMap;
 
   std::map<Block *, BlockPCPredMap> BlockPCMap;
   std::vector<Inst *> UBPathInsts;
@@ -111,39 +107,18 @@ public:
 
   struct CandidateExpr {
     std::vector<std::unique_ptr<Array>> Arrays;
-    std::vector<Inst *> ArrayVars;
-    ref<Expr> E;
+    std::vector<Inst *> Vars;
+    Inst *E;
   };
   CandidateExpr CE;
-  virtual llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
+
+  llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
       const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-      InstMapping Mapping, bool Negate) = 0;
+      InstMapping Mapping, bool Negate);
   
   virtual std::string BuildQuery(const BlockPCs &BPCs,
                  const std::vector<InstMapping> &PCs, InstMapping Mapping,
                  std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
-
-protected:
-  virtual ref<Expr> addnswUB(Inst *I) = 0;
-  virtual ref<Expr> addnuwUB(Inst *I) = 0;
-  virtual ref<Expr> subnswUB(Inst *I) = 0;
-  virtual ref<Expr> subnuwUB(Inst *I) = 0;
-  virtual ref<Expr> mulnswUB(Inst *I) = 0;
-  virtual ref<Expr> mulnuwUB(Inst *I) = 0;
-  virtual ref<Expr> udivUB(Inst *I) = 0;
-  virtual ref<Expr> udivExactUB(Inst *I) = 0;
-  virtual ref<Expr> sdivUB(Inst *I) = 0;
-  virtual ref<Expr> sdivExactUB(Inst *I) = 0;
-  virtual ref<Expr> shiftUB(Inst *I) = 0;
-  virtual ref<Expr> shlnswUB(Inst *I) = 0;
-  virtual ref<Expr> shlnuwUB(Inst *I) = 0;
-  virtual ref<Expr> lshrExactUB(Inst *I) = 0;
-  virtual ref<Expr> ashrExactUB(Inst *I) = 0;
-  virtual ref<Expr> countOnes(ref<Expr> E) = 0;
-
-  virtual ref<Expr> build(Inst *I) = 0;
-  virtual ref<Expr> get(Inst *I) = 0;
-
 };
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,

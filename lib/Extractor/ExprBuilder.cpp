@@ -15,6 +15,11 @@
 #include "llvm/Support/CommandLine.h"
 #include "souper/Extractor/ExprBuilder.h"
 
+static llvm::cl::opt<bool> ExploitUB(
+    "souper-exploit-ub",
+    llvm::cl::desc("Exploit undefined behavior (default=true)"),
+    llvm::cl::init(true));
+
 using namespace llvm;
 using namespace souper;
 
@@ -31,16 +36,6 @@ static llvm::cl::opt<souper::ExprBuilder::Builder> SMTExprBuilder(
     llvm::cl::init(souper::ExprBuilder::KLEE));
 
 namespace souper {
-
-ref<Expr> ExprBuilder::buildAssoc(
-    std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
-    llvm::ArrayRef<Inst *> Ops) {
-  ref<Expr> E = get(Ops[0]);
-  for (Inst *I : llvm::ArrayRef<Inst *>(Ops.data()+1, Ops.size()-1)) {
-    E = F(E, get(I));
-  }
-  return E;
-}
 
 std::vector<Inst *> ExprBuilder::getBlockPredicates(Inst *I) {
   assert(I->K == Inst::Phi && "not a phi inst");
@@ -467,31 +462,31 @@ void ExprBuilder::recordUBInstruction(Inst *I, Inst *E) {
 #endif
 }
   
-ref<Expr> ExprBuilder::getZeroBitsMapping(Inst *I) {
+Inst *ExprBuilder::getZeroBitsMapping(Inst *I) {
   return ZeroBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getOneBitsMapping(Inst *I) {
+Inst *ExprBuilder::getOneBitsMapping(Inst *I) {
   return OneBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getNonZeroBitsMapping(Inst *I) {
+Inst *ExprBuilder::getNonZeroBitsMapping(Inst *I) {
   return NonZeroBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getNonNegBitsMapping(Inst *I) {
+Inst *ExprBuilder::getNonNegBitsMapping(Inst *I) {
   return NonNegBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getNegBitsMapping(Inst *I) {
+Inst *ExprBuilder::getNegBitsMapping(Inst *I) {
   return NegBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
+Inst *ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
   return PowerTwoBitsMap[I];
 }
 
-ref<Expr> ExprBuilder::getSignBitsMapping(Inst *I) {
+Inst *ExprBuilder::getSignBitsMapping(Inst *I) {
   return SignBitsMap[I];
 }
 
@@ -499,7 +494,82 @@ Inst *ExprBuilder::getInstMapping(const InstMapping &IM) {
   return LIC->getInst(Inst::Eq, 1, {IM.LHS, IM.RHS});
 }
 
-// TODO: Fix GetCandidateExprForReplacement
+// Return an expression which must be proven valid for the candidate to apply.
+llvm::Optional<ExprBuilder::CandidateExpr> ExprBuilder::GetCandidateExprForReplacement(
+    const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+    InstMapping Mapping, bool Negate) {
+  // Build LHS
+  Inst *LHS = Mapping.LHS;
+  Inst *Ante = LIC->getConst(APInt(1, true));
+  llvm::APInt DemandedBits = Mapping.LHS->DemandedBits;
+  if (!DemandedBits.isAllOnesValue())
+    LHS = LIC->getInst(Inst::And, LHS->Width,
+                       {LHS, LIC->getConst(DemandedBits)});
+  for (const auto I : CE.Vars) {
+    if (I) {
+      if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
+        Ante = LIC->getInst(Inst::And, 1, {Ante, getZeroBitsMapping(I)});
+        Ante = LIC->getInst(Inst::And, 1, {Ante, getOneBitsMapping(I)});
+      }
+      if (I->NonZero)
+        Ante = LIC->getInst(Inst::And, 1, {Ante, getNonZeroBitsMapping(I)});
+      if (I->NonNegative)
+        Ante = LIC->getInst(Inst::And, 1, {Ante, getNonNegBitsMapping(I)});
+      if (I->PowOfTwo)
+        Ante = LIC->getInst(Inst::And, 1, {Ante, getPowerTwoBitsMapping(I)});
+      if (I->Negative)
+        Ante = LIC->getInst(Inst::And, 1, {Ante, getNegBitsMapping(I)});
+      if (I->NumSignBits > 1)
+        Ante = LIC->getInst(Inst::And, 1, {Ante, getSignBitsMapping(I)});
+    }
+  }
+  // Build PCs
+  for (const auto &PC : PCs)
+    Ante = LIC->getInst(Inst::And, 1, {Ante, getInstMapping(PC)});
+  // Build BPCs 
+  if (BPCs.size()) {
+    setBlockPCMap(BPCs);
+    Ante = LIC->getInst(Inst::And, 1, {Ante, getBlockPCs()});
+  }
+  // Get UB constraints of LHS and (B)PCs
+  Inst *LHSPCsUB = LIC->getConst(APInt(1, true));
+  if (ExploitUB) {
+    LHSPCsUB = getUBInstCondition();
+    //TODO
+    //if (LHSPCsUB.isNull())
+    //  return llvm::Optional<CandidateExpr>();
+  }
+  // Build RHS
+  Inst *RHS = Mapping.RHS;
+  if (!DemandedBits.isAllOnesValue())
+    RHS = LIC->getInst(Inst::And, RHS->Width,
+                       {RHS, LIC->getConst(DemandedBits)});
+  // Get all UB constraints (LHS && (B)PCs && RHS)
+  Inst *UB = LIC->getConst(APInt(1, true));
+  if (ExploitUB) {
+    UB = getUBInstCondition();
+    //TODO
+    //if (UB.isNull())
+    //  return llvm::Optional<CandidateExpr>();
+  }
+
+  Inst *Cons;
+  if (Negate) // (LHS != RHS)
+    Cons = LIC->getInst(Inst::Ne, 1, {LHS, RHS});
+  else        // (LHS == RHS)
+    Cons = LIC->getInst(Inst::Eq, 1, {LHS, RHS});
+  // Cons && UB
+  if (Mapping.RHS->K != Inst::Const)
+    Cons = LIC->getInst(Inst::And, Cons->Width, {Cons, UB});
+  // (LHS UB && (B)PCs && (B)PCs UB)
+  Ante = LIC->getInst(Inst::And, 1, {Ante, LHSPCsUB});
+  // (LHS UB && (B)PCs && (B)PCs UB) => Cons && UB
+  Inst *IsZero = LIC->getInst(Inst::Eq, 1,
+                              {Ante, LIC->getConst(APInt(1, false))});
+  CE.E = LIC->getInst(Inst::Or, 1, {IsZero, Cons});
+
+  return llvm::Optional<CandidateExpr>(std::move(CE));
+}
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
        const std::vector<InstMapping> &PCs, InstMapping Mapping,

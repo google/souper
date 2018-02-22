@@ -38,10 +38,6 @@ static llvm::cl::opt<bool> DumpKLEEExprs(
     "dump-klee-exprs",
     llvm::cl::desc("Dump KLEE expressions after SMTLIB queries"),
     llvm::cl::init(false));
-static llvm::cl::opt<bool> ExploitUB(
-    "souper-exploit-ub",
-    llvm::cl::desc("Exploit undefined behavior (default=true)"),
-    llvm::cl::init(true));
 
 using namespace llvm;
 using namespace klee;
@@ -56,6 +52,9 @@ public:
   }
   ~KLEEBuilder() {}
 
+  //TODO
+  std::map<Inst *, ref<Expr>> ExprMap;
+
   std::string BuildQuery(const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,
                          InstMapping Mapping,
@@ -68,16 +67,17 @@ public:
     if (!OptionalCE.hasValue())
       return std::string();
     CandidateExpr CE = std::move(OptionalCE.getValue());
-    Query KQuery(Manager, CE.E);
+    ref<Expr> E = get(CE.E);
+    Query KQuery(Manager, E);
     ExprSMTLIBPrinter Printer;
     Printer.setOutput(SMTSS);
     Printer.setQuery(KQuery);
     std::vector<const klee::Array *> Arrays;
     if (ModelVars) {
-      for (unsigned I = 0; I != CE.ArrayVars.size(); ++I) {
-        if (CE.ArrayVars[I]) {
+      for (unsigned I = 0; I != CE.Vars.size(); ++I) {
+        if (CE.Vars[I]) {
           Arrays.push_back(CE.Arrays[I].get());
-          ModelVars->push_back(CE.ArrayVars[I]);
+          ModelVars->push_back(CE.Vars[I]);
         }
       }
       Printer.setArrayValuesToGet(Arrays);
@@ -88,8 +88,8 @@ public:
       SMTSS << "; KLEE expression:\n; ";
       std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SMTSS));
       PP->setForceNoLineBreaks(true);
-      PP->scan(CE.E);
-      PP->print(CE.E);
+      PP->scan(E);
+      PP->print(E);
       SMTSS << '\n';
     }
   
@@ -97,7 +97,7 @@ public:
   }
 
 private:
-  ref<Expr> addnswUB(Inst *I) override {
+  ref<Expr> addnswUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> Add = AddExpr::create(L, R);
@@ -109,7 +109,7 @@ private:
                                 EqExpr::create(LMSB, AddMSB));
   }
   
-  ref<Expr> addnuwUB(Inst *I) override {
+  ref<Expr> addnuwUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      Expr::Width Width = L->getWidth();
@@ -120,7 +120,7 @@ private:
      return Expr::createIsZero(AddMSB);
   }
   
-  ref<Expr> subnswUB(Inst *I) override {
+  ref<Expr> subnswUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> Sub = SubExpr::create(L, R);
@@ -132,7 +132,7 @@ private:
                                 EqExpr::create(LMSB, SubMSB));
   }
   
-  ref<Expr> subnuwUB(Inst *I) override {
+  ref<Expr> subnuwUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      Expr::Width Width = L->getWidth();
@@ -143,7 +143,7 @@ private:
      return Expr::createIsZero(SubMSB);
   }
   
-  ref<Expr> mulnswUB(Inst *I) override {
+  ref<Expr> mulnswUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      // The computation below has to be performed on the operands of
      // multiplication instruction. The instruction using mulnswUB()
@@ -158,7 +158,7 @@ private:
      return EqExpr::create(Mul, LowerBitsExt);
   }
   
-  ref<Expr> mulnuwUB(Inst *I) override {
+  ref<Expr> mulnuwUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      Expr::Width Width = L->getWidth();
@@ -169,20 +169,20 @@ private:
      return Expr::createIsZero(HigherBits);
   }
   
-  ref<Expr> udivUB(Inst *I) override {
+  ref<Expr> udivUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> R = get(Ops[1]);
      return NeExpr::create(R, klee::ConstantExpr::create(0, R->getWidth()));
   }
   
-  ref<Expr> udivExactUB(Inst *I) override {
+  ref<Expr> udivExactUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> Udiv = UDivExpr::create(L, R);
      return EqExpr::create(L, MulExpr::create(R, Udiv));
   }
   
-  ref<Expr> sdivUB(Inst *I) override {
+  ref<Expr> sdivUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> ShiftBy = klee::ConstantExpr::create(L->getWidth()-1,
@@ -195,21 +195,21 @@ private:
                             NeExpr::create(L, IntMin), NeExpr::create(R, NegOne)));
   }
   
-  ref<Expr> sdivExactUB(Inst *I) override {
+  ref<Expr> sdivExactUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> Sdiv = SDivExpr::create(L, R);
      return EqExpr::create(L, MulExpr::create(R, Sdiv));
   }
   
-  ref<Expr> shiftUB(Inst *I) override {
+  ref<Expr> shiftUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> Lwidth = klee::ConstantExpr::create(L->getWidth(), L->getWidth());
      return UltExpr::create(R, Lwidth);
   }
   
-  ref<Expr> shlnswUB(Inst *I) override {
+  ref<Expr> shlnswUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> Result = ShlExpr::create(L, R);
@@ -217,7 +217,7 @@ private:
      return EqExpr::create(RShift, L);
   }
   
-  ref<Expr> shlnuwUB(Inst *I) override {
+  ref<Expr> shlnuwUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> Result = ShlExpr::create(L, R);
@@ -225,7 +225,7 @@ private:
      return EqExpr::create(RShift, L);
   }
   
-  ref<Expr> lshrExactUB(Inst *I) override {
+  ref<Expr> lshrExactUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> Result = LShrExpr::create(L, R);
@@ -233,7 +233,7 @@ private:
      return EqExpr::create(LShift, L);
   }
   
-  ref<Expr> ashrExactUB(Inst *I) override {
+  ref<Expr> ashrExactUB(Inst *I) {
      const std::vector<Inst *> &Ops = I->orderedOps();
      ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
      ref<Expr> Result = AShrExpr::create(L, R);
@@ -241,7 +241,7 @@ private:
      return EqExpr::create(LShift, L);
   }
   
-  ref<Expr> countOnes(ref<Expr> L) override {
+  ref<Expr> countOnes(ref<Expr> L) {
      Expr::Width Width = L->getWidth();
      ref<Expr> Count =  klee::ConstantExpr::alloc(llvm::APInt(Width, 0));
      for (unsigned i=0; i<Width; i++) {
@@ -251,8 +251,18 @@ private:
      }
      return Count;
   }
-  
-  ref<Expr> build(Inst *I) override {
+
+  ref<Expr> buildAssoc(
+      std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
+      llvm::ArrayRef<Inst *> Ops) {
+    ref<Expr> E = get(Ops[0]);
+    for (Inst *I : llvm::ArrayRef<Inst *>(Ops.data()+1, Ops.size()-1)) {
+      E = F(E, get(I));
+    }
+    return E;
+  }
+
+  ref<Expr> build(Inst *I) {
     const std::vector<Inst *> &Ops = I->orderedOps();
     switch (I->K) {
     case Inst::UntypedConst:
@@ -528,7 +538,7 @@ private:
     llvm_unreachable("unknown kind");
   }
   
-  ref<Expr> get(Inst *I) override {
+  ref<Expr> get(Inst *I) {
     ref<Expr> &E = ExprMap[I];
     if (E.isNull()) {
       E = build(I);
@@ -537,78 +547,6 @@ private:
     return E;
   }
   
-  // Return an expression which must be proven valid for the candidate to apply.
-  llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
-      const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-      InstMapping Mapping, bool Negate) override {
-    // Build LHS
-    ref<Expr> LHS = get(Mapping.LHS);
-    ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-    ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
-    if (!Mapping.LHS->DemandedBits.isAllOnesValue())
-      LHS = AndExpr::create(LHS, DemandedBits);
-    for (const auto I : CE.ArrayVars) {
-      if (I) {
-        if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
-          Ante = AndExpr::create(Ante, getZeroBitsMapping(I));
-          Ante = AndExpr::create(Ante, getOneBitsMapping(I));
-        }
-        if (I->NonZero)
-          Ante = AndExpr::create(Ante, getNonZeroBitsMapping(I));
-        if (I->NonNegative)
-          Ante = AndExpr::create(Ante, getNonNegBitsMapping(I));
-        if (I->PowOfTwo)
-          Ante = AndExpr::create(Ante, getPowerTwoBitsMapping(I));
-        if (I->Negative)
-          Ante = AndExpr::create(Ante, getNegBitsMapping(I));
-        if (I->NumSignBits > 1)
-          Ante = AndExpr::create(Ante, getSignBitsMapping(I));
-      }
-    }
-    // Build PCs
-    for (const auto &PC : PCs) {
-      Ante = AndExpr::create(Ante, get(getInstMapping(PC)));
-    }
-    // Build BPCs 
-    if (BPCs.size()) {
-      setBlockPCMap(BPCs);
-      Ante = AndExpr::create(Ante, get(getBlockPCs()));
-    }
-    // Get UB constraints of LHS and (B)PCs
-    ref<Expr> LHSPCsUB = klee::ConstantExpr::create(1, Expr::Bool);
-    if (ExploitUB) {
-      LHSPCsUB = get(getUBInstCondition());
-      if (LHSPCsUB.isNull())
-        return llvm::Optional<CandidateExpr>();
-    }
-    // Build RHS
-    ref<Expr> RHS = get(Mapping.RHS);
-    if (!Mapping.LHS->DemandedBits.isAllOnesValue())
-      RHS = AndExpr::create(RHS, DemandedBits);
-    // Get all UB constraints (LHS && (B)PCs && RHS)
-    ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
-    if (ExploitUB) {
-      UB = get(getUBInstCondition());
-      if (UB.isNull())
-        return llvm::Optional<CandidateExpr>();
-    }
-  
-    ref<Expr> Cons;
-    if (Negate) // (LHS != RHS)
-      Cons = NeExpr::create(LHS, RHS);
-    else        // (LHS == RHS)
-      Cons = EqExpr::create(LHS, RHS);
-    // Cons && UB
-    if (Mapping.RHS->K != Inst::Const)
-      Cons = AndExpr::create(Cons, UB);
-    // (LHS UB && (B)PCs && (B)PCs UB)
-    Ante = AndExpr::create(Ante, LHSPCsUB);
-    // (LHS UB && (B)PCs && (B)PCs UB) => Cons && UB
-    CE.E = Expr::createImplies(Ante, Cons);
-  
-    return llvm::Optional<CandidateExpr>(std::move(CE));
-  }
-
   ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin) {
     std::string NameStr;
     if (Name.empty())
@@ -619,7 +557,7 @@ private:
       NameStr = Name;
     CE.Arrays.emplace_back(
         new Array(ArrayNames.makeName(NameStr), 1, 0, 0, Expr::Int32, Width));
-    CE.ArrayVars.push_back(Origin);
+    CE.Vars.push_back(Origin);
   
     std::vector<unsigned> ZeroBits, OneBits;
     UpdateList UL(CE.Arrays.back().get(), 0);
