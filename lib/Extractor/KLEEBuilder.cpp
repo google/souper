@@ -34,6 +34,10 @@
 #include <sstream>
 #include <unordered_map>
 
+static llvm::cl::opt<bool> ExploitUB(
+    "souper-exploit-ub",
+    llvm::cl::desc("Exploit undefined behavior (default=true)"),
+    llvm::cl::init(true));
 static llvm::cl::opt<bool> DumpKLEEExprs(
     "dump-klee-exprs",
     llvm::cl::desc("Dump KLEE expressions after SMTLIB queries"),
@@ -55,6 +59,83 @@ public:
   //TODO
   std::map<Inst *, ref<Expr>> ExprMap;
 
+  // Return an expression which must be proven valid for the candidate to apply.
+  llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
+      const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+      InstMapping Mapping, bool Negate) override {
+  
+    // Build LHS
+    ref<Expr> LHS = get(Mapping.LHS);
+    ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
+#if 0
+    ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
+    if (!Mapping.LHS->DemandedBits.isAllOnesValue())
+      LHS = AndExpr::create(LHS, DemandedBits);
+    for (const auto I : CE.ArrayVars) {
+      if (I) {
+        if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
+          Ante = AndExpr::create(Ante, getZeroBitsMapping(I));
+          Ante = AndExpr::create(Ante, getOneBitsMapping(I));
+        }
+        if (I->NonZero)
+          Ante = AndExpr::create(Ante, getNonZeroBitsMapping(I));
+        if (I->NonNegative)
+          Ante = AndExpr::create(Ante, getNonNegBitsMapping(I));
+        if (I->PowOfTwo)
+          Ante = AndExpr::create(Ante, getPowerTwoBitsMapping(I));
+        if (I->Negative)
+          Ante = AndExpr::create(Ante, getNegBitsMapping(I));
+        if (I->NumSignBits > 1)
+          Ante = AndExpr::create(Ante, getSignBitsMapping(I));
+      }
+    }
+#endif
+    // Build PCs
+    for (const auto &PC : PCs) {
+      Ante = AndExpr::create(Ante, get(getInstMapping(PC)));
+    }
+    // Build BPCs
+    if (BPCs.size()) {
+      setBlockPCMap(BPCs);
+      Ante = AndExpr::create(Ante, get(getBlockPCs()));
+    }
+    // Get UB constraints of LHS and (B)PCs
+    ref<Expr> LHSPCsUB = klee::ConstantExpr::create(1, Expr::Bool);
+    if (ExploitUB) {
+      LHSPCsUB = get(getUBInstCondition());
+      if (LHSPCsUB.isNull())
+        return llvm::Optional<CandidateExpr>();
+    }
+    // Build RHS
+    ref<Expr> RHS = get(Mapping.RHS);
+#if 0
+    if (!Mapping.LHS->DemandedBits.isAllOnesValue())
+      RHS = AndExpr::create(RHS, DemandedBits);
+#endif
+    // Get all UB constraints (LHS && (B)PCs && RHS)
+    ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
+    if (ExploitUB) {
+      UB = get(getUBInstCondition());
+      if (UB.isNull())
+        return llvm::Optional<CandidateExpr>();
+    }
+  
+    ref<Expr> Cons;
+    if (Negate) // (LHS != RHS)
+      Cons = NeExpr::create(LHS, RHS);
+    else        // (LHS == RHS)
+      Cons = EqExpr::create(LHS, RHS);
+    // Cons && UB
+    if (Mapping.RHS->K != Inst::Const)
+      Cons = AndExpr::create(Cons, UB);
+    // (LHS UB && (B)PCs && (B)PCs UB)
+    Ante = AndExpr::create(Ante, LHSPCsUB);
+    // (LHS UB && (B)PCs && (B)PCs UB) => Cons && UB
+    CE.E = Expr::createImplies(Ante, Cons);
+  
+    return llvm::Optional<CandidateExpr>(std::move(CE));
+  }
+
   std::string BuildQuery(const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,
                          InstMapping Mapping,
@@ -67,7 +148,7 @@ public:
     if (!OptionalCE.hasValue())
       return std::string();
     CandidateExpr CE = std::move(OptionalCE.getValue());
-    ref<Expr> E = get(CE.E);
+    ref<Expr> E = CE.E;
     Query KQuery(Manager, E);
     ExprSMTLIBPrinter Printer;
     Printer.setOutput(SMTSS);
@@ -559,9 +640,10 @@ private:
         new Array(ArrayNames.makeName(NameStr), 1, 0, 0, Expr::Int32, Width));
     CE.Vars.push_back(Origin);
   
-    std::vector<unsigned> ZeroBits, OneBits;
     UpdateList UL(CE.Arrays.back().get(), 0);
     ref<Expr> Var = ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
+#if 0
+    std::vector<unsigned> ZeroBits, OneBits;
     if (Origin && Origin->K == Inst::Var) {
       if (Origin->KnownZeros.getBoolValue() || Origin->KnownOnes.getBoolValue()) {
         ref<Expr> NotZeros = NotExpr::create(klee::ConstantExpr::alloc(Origin->KnownZeros));
@@ -593,6 +675,7 @@ private:
                                              EqExpr::create(Res, klee::ConstantExpr::create(0, Width)));
       }
     }
+#endif
     return Var;
   }
 

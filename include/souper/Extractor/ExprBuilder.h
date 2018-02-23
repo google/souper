@@ -108,13 +108,13 @@ public:
   struct CandidateExpr {
     std::vector<std::unique_ptr<Array>> Arrays;
     std::vector<Inst *> Vars;
-    Inst *E;
+    ref<Expr> E;
   };
   CandidateExpr CE;
 
-  llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
+  virtual llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
       const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-      InstMapping Mapping, bool Negate);
+      InstMapping Mapping, bool Negate) = 0;
   
   virtual std::string BuildQuery(const BlockPCs &BPCs,
                  const std::vector<InstMapping> &PCs, InstMapping Mapping,
