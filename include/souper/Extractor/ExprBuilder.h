@@ -55,14 +55,6 @@ public:
 
   virtual ~ExprBuilder();
 
-  Inst *getZeroBitsMapping(Inst *I);
-  Inst *getOneBitsMapping(Inst *I);
-  Inst *getNonZeroBitsMapping(Inst *I);
-  Inst *getNonNegBitsMapping(Inst *I);
-  Inst *getPowerTwoBitsMapping(Inst *I);
-  Inst *getNegBitsMapping(Inst *I);
-  Inst *getSignBitsMapping(Inst *I);
-
   std::vector<Inst *> getBlockPredicates(Inst *I);
   bool getUBPaths(Inst *I, UBPath *Current,
                   std::vector<std::unique_ptr<UBPath>> &Paths,
@@ -81,6 +73,7 @@ public:
 
   Inst *getInstMapping(const InstMapping &IM);
   Inst *getUBInstCondition();
+  Inst *getDemandedBitsCondition(Inst *I);
   Inst *getBlockPCs();
   void setBlockPCMap(const BlockPCs &BPCs);
   void recordUBInstruction(Inst *I, Inst *E);
@@ -88,14 +81,6 @@ public:
   std::map<Block *, std::vector<Inst *>> BlockPredMap;
 
   std::map<Inst *, Inst *> UBExprMap;
-
-  std::map<Inst *, Inst *> ZeroBitsMap;
-  std::map<Inst *, Inst *> OneBitsMap;
-  std::map<Inst *, Inst *> NonZeroBitsMap;
-  std::map<Inst *, Inst *> NonNegBitsMap;
-  std::map<Inst *, Inst *> PowerTwoBitsMap;
-  std::map<Inst *, Inst *> NegBitsMap;
-  std::map<Inst *, Inst *> SignBitsMap;
 
   std::map<Block *, BlockPCPredMap> BlockPCMap;
   std::vector<Inst *> UBPathInsts;

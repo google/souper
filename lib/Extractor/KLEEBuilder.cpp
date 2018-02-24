@@ -67,29 +67,16 @@ public:
     // Build LHS
     ref<Expr> LHS = get(Mapping.LHS);
     ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-#if 0
+
+    // Get demanded bits constaints
     ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
     if (!Mapping.LHS->DemandedBits.isAllOnesValue())
       LHS = AndExpr::create(LHS, DemandedBits);
-    for (const auto I : CE.ArrayVars) {
-      if (I) {
-        if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue()) {
-          Ante = AndExpr::create(Ante, getZeroBitsMapping(I));
-          Ante = AndExpr::create(Ante, getOneBitsMapping(I));
-        }
-        if (I->NonZero)
-          Ante = AndExpr::create(Ante, getNonZeroBitsMapping(I));
-        if (I->NonNegative)
-          Ante = AndExpr::create(Ante, getNonNegBitsMapping(I));
-        if (I->PowOfTwo)
-          Ante = AndExpr::create(Ante, getPowerTwoBitsMapping(I));
-        if (I->Negative)
-          Ante = AndExpr::create(Ante, getNegBitsMapping(I));
-        if (I->NumSignBits > 1)
-          Ante = AndExpr::create(Ante, getSignBitsMapping(I));
-      }
+    for (const auto I : CE.Vars) {
+      if (I)
+        Ante = AndExpr::create(Ante, get(getDemandedBitsCondition(I)));
     }
-#endif
+
     // Build PCs
     for (const auto &PC : PCs) {
       Ante = AndExpr::create(Ante, get(getInstMapping(PC)));
@@ -108,10 +95,8 @@ public:
     }
     // Build RHS
     ref<Expr> RHS = get(Mapping.RHS);
-#if 0
     if (!Mapping.LHS->DemandedBits.isAllOnesValue())
       RHS = AndExpr::create(RHS, DemandedBits);
-#endif
     // Get all UB constraints (LHS && (B)PCs && RHS)
     ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
     if (ExploitUB) {
@@ -641,42 +626,7 @@ private:
     CE.Vars.push_back(Origin);
   
     UpdateList UL(CE.Arrays.back().get(), 0);
-    ref<Expr> Var = ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
-#if 0
-    std::vector<unsigned> ZeroBits, OneBits;
-    if (Origin && Origin->K == Inst::Var) {
-      if (Origin->KnownZeros.getBoolValue() || Origin->KnownOnes.getBoolValue()) {
-        ref<Expr> NotZeros = NotExpr::create(klee::ConstantExpr::alloc(Origin->KnownZeros));
-        ref<Expr> VarOrNotZero = OrExpr::create(Var, NotZeros);
-        ZeroBitsMap[Origin] = EqExpr::create(VarOrNotZero, NotZeros);
-        ref<Expr> Ones = klee::ConstantExpr::alloc(Origin->KnownOnes);
-        ref<Expr> VarAndOnes = AndExpr::create(Var, Ones);
-        OneBitsMap[Origin] = EqExpr::create(VarAndOnes, Ones);
-      }
-      if (Origin->NonZero)
-        NonZeroBitsMap[Origin] = NeExpr::create(Var, klee::ConstantExpr::create(0, Width));
-      if (Origin->NonNegative)
-        NonNegBitsMap[Origin] = SleExpr::create(klee::ConstantExpr::create(0, Width), Var);
-      if (Origin->PowOfTwo) {
-        ref<Expr> Zero = klee::ConstantExpr::create(0, Width);
-        PowerTwoBitsMap[Origin] = AndExpr::create(NeExpr::create(Var, Zero),
-                                                  EqExpr::create(AndExpr::create(Var,
-                                                  SubExpr::create(Var, klee::ConstantExpr::create(1, Width))),
-                                                  Zero));
-      }
-      if (Origin->Negative)
-        NegBitsMap[Origin] = SltExpr::create(Var, klee::ConstantExpr::create(0, Width));
-      if (Origin->NumSignBits > 1) {
-        ref<Expr> Res = AShrExpr::create(Var, klee::ConstantExpr::create(Width - Origin->NumSignBits, Width));
-        ref<Expr> TestOnes = AShrExpr::create(ShlExpr::create(klee::ConstantExpr::create(1, Width),
-                                                              klee::ConstantExpr::create(Width - 1, Width)),
-                                              klee::ConstantExpr::create(Width - 1, Width));
-        SignBitsMap[Origin] = OrExpr::create(EqExpr::create(Res, TestOnes),
-                                             EqExpr::create(Res, klee::ConstantExpr::create(0, Width)));
-      }
-    }
-#endif
-    return Var;
+    return ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
   }
 
 };

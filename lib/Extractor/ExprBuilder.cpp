@@ -338,6 +338,85 @@ Inst *ExprBuilder::getUBInstCondition() {
   return LIC->getConst(APInt(1, true));
 }
 
+Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
+  Inst *Result = LIC->getConst(APInt(1, true));
+
+  if (I->K != Inst::Var)
+    return Result;
+
+  unsigned Width = I->Width;
+  Inst *Zero = LIC->getConst(APInt(Width, 0));
+  Inst *One = LIC->getConst(APInt(Width, 1));
+
+  if (I->KnownZeros.getBoolValue()) {
+    //ref<Expr> NotZeros = NotExpr::create(klee::ConstantExpr::alloc(Origin->KnownZeros));
+    Inst *NotZeros = LIC->getInst(Inst::Xor, Width,
+                                  {LIC->getConst(I->KnownZeros),
+                                   LIC->getConst(APInt::getAllOnesValue(Width))});
+    //ref<Expr> VarOrNotZero = OrExpr::create(Var, NotZeros);
+    Inst *VarNotZero = LIC->getInst(Inst::Or, Width, {I, NotZeros});
+    //ZeroBitsMap[Origin] = EqExpr::create(VarOrNotZero, NotZeros);
+    Inst *ZeroBits = LIC->getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
+    Result = LIC->getInst(Inst::And, 1, {Result, ZeroBits});
+  }
+  if (I->KnownOnes.getBoolValue()) {
+    //ref<Expr> Ones = klee::ConstantExpr::alloc(Origin->KnownOnes);
+    //ref<Expr> VarAndOnes = AndExpr::create(Var, Ones);
+    Inst *Ones = LIC->getConst(I->KnownOnes);
+    Inst *VarAndOnes = LIC->getInst(Inst::And, Width, {I, Ones});
+    //OneBitsMap[Origin] = EqExpr::create(VarAndOnes, Ones);
+    Inst *OneBits = LIC->getInst(Inst::Eq, 1, {VarAndOnes, Ones});
+    Result = LIC->getInst(Inst::And, 1, {Result, OneBits});
+  }
+  if (I->NonZero) {
+    //NonZeroBitsMap[Origin] = NeExpr::create(Var, klee::ConstantExpr::create(0, Width));
+    Inst *NonZeroBits = LIC->getInst(Inst::Ne, 1, {I, Zero});
+    Result = LIC->getInst(Inst::And, 1, {Result, NonZeroBits});
+  }
+  if (I->NonNegative) {
+    //NonNegBitsMap[Origin] = SleExpr::create(klee::ConstantExpr::create(0, Width), Var);
+    Inst *NonNegBits = LIC->getInst(Inst::Sle, 1, {Zero, I});
+    Result = LIC->getInst(Inst::And, 1, {Result, NonNegBits});
+  }
+  if (I->PowOfTwo) {
+    //ref<Expr> Zero = klee::ConstantExpr::create(0, Width);
+    //PowerTwoBitsMap[Origin] = AndExpr::create(NeExpr::create(Var, Zero),
+    //                                          EqExpr::create(AndExpr::create(Var,
+    //                                          SubExpr::create(Var, klee::ConstantExpr::create(1, Width))),
+    //                                          Zero));
+    Inst *And = LIC->getInst(Inst::And, Width,
+                             {I, LIC->getInst(Inst::Sub, Width, {I, One})});
+    Inst *PowerTwoBits = LIC->getInst(Inst::And, 1,
+                                      {LIC->getInst(Inst::Ne, 1, {I, Zero}),
+                                       LIC->getInst(Inst::Eq, 1, {And, Zero})});
+    Result = LIC->getInst(Inst::And, 1, {Result, PowerTwoBits});
+  }
+  if (I->Negative) {
+    //NegBitsMap[Origin] = SltExpr::create(Var, klee::ConstantExpr::create(0, Width));
+    Inst *NegBits = LIC->getInst(Inst::Slt, 1, {I, Zero});
+    Result = LIC->getInst(Inst::And, 1, {Result, NegBits});
+  }
+  if (I->NumSignBits > 1) {
+    //ref<Expr> Res = AShrExpr::create(Var, klee::ConstantExpr::create(Width - Origin->NumSignBits, Width));
+    Inst *Res = LIC->getInst(Inst::AShr, Width,
+                             {I, LIC->getConst(APInt(Width, Width - I->NumSignBits))});
+    //ref<Expr> TestOnes = AShrExpr::create(ShlExpr::create(klee::ConstantExpr::create(1, Width),
+    //                                                      klee::ConstantExpr::create(Width - 1, Width)),
+    //                                      klee::ConstantExpr::create(Width - 1, Width));
+    Inst *TestOnes = LIC->getInst(Inst::AShr, Width,
+                                  {LIC->getInst(Inst::Shl, Width, {One, LIC->getConst(APInt(Width, Width-1))}),
+                                   LIC->getConst(APInt(Width, Width-1))});
+    //SignBitsMap[Origin] = OrExpr::create(EqExpr::create(Res, TestOnes),
+    //                                     EqExpr::create(Res, klee::ConstantExpr::create(0, Width)));
+    Inst *SignBits = LIC->getInst(Inst::Or, 1,
+                                  {LIC->getInst(Inst::Eq, 1, {Res, TestOnes}),
+                                   LIC->getInst(Inst::Eq, 1, {Res, Zero})});
+    Result = LIC->getInst(Inst::And, 1, {Result, SignBits});
+  }
+
+  return Result;
+}
+
 // Similar to the way we collect UB constraints. We could combine it with 
 // getUBInstCondition, because the workflow is quite similar. 
 // However, mixing two parts (one for UB constraints, one for BlockPCs)
@@ -456,37 +535,9 @@ void ExprBuilder::recordUBInstruction(Inst *I, Inst *E) {
   }
 #endif
 }
-  
-Inst *ExprBuilder::getZeroBitsMapping(Inst *I) {
-  return ZeroBitsMap[I];
-}
-
-Inst *ExprBuilder::getOneBitsMapping(Inst *I) {
-  return OneBitsMap[I];
-}
-
-Inst *ExprBuilder::getNonZeroBitsMapping(Inst *I) {
-  return NonZeroBitsMap[I];
-}
-
-Inst *ExprBuilder::getNonNegBitsMapping(Inst *I) {
-  return NonNegBitsMap[I];
-}
-
-Inst *ExprBuilder::getNegBitsMapping(Inst *I) {
-  return NegBitsMap[I];
-}
-
-Inst *ExprBuilder::getPowerTwoBitsMapping(Inst *I) {
-  return PowerTwoBitsMap[I];
-}
-
-Inst *ExprBuilder::getSignBitsMapping(Inst *I) {
-  return SignBitsMap[I];
-}
 
 Inst *ExprBuilder::getInstMapping(const InstMapping &IM) {
-  return LIC->getInst(Inst::Eq, 1, {IM.LHS, IM.RHS});
+ return LIC->getInst(Inst::Eq, 1, {IM.LHS, IM.RHS});
 }
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
