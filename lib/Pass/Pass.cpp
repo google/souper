@@ -346,8 +346,7 @@ public:
 
       Instruction *I = Cand.Origin.getInstruction();
       Instruction *ReplacedInst = Cand.Origin.getInstruction();
-      IRBuilder<> Builder(ReplacedInst->getParent());
-      Builder.SetInsertPoint(ReplacedInst);
+      IRBuilder<> Builder(ReplacedInst);
 
       Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT,
                                Builder, F->getParent());
