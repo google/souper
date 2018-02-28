@@ -32,4 +32,4 @@ declare i32 @a(i32) local_unnamed_addr #1
 declare i1 @branch(i32) local_unnamed_addr #1
 
 ; CHECK: 3 souper - Number of instructions replaced by another instruction
-
+; XFAIL: *

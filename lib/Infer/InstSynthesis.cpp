@@ -1468,8 +1468,10 @@ void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
     Q.pop();
     ++Benefit;
     if (Visited.insert(I).second) {
-      for (auto Op : I->Ops)
-        Q.push(std::make_tuple(Op, Benefit));
+      if (I->K != Inst::Phi) {
+        for (auto Op : I->Ops)
+          Q.push(std::make_tuple(Op, Benefit));
+      }
       if (Benefit > 1 && I->Width == Root->Width && I->Available)
         Guesses.emplace_back(I);
       // TODO: run experiments and see if it's worth doing these
