@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define DEBUG_TYPE "souper"
+
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/DemandedBits.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
@@ -32,6 +36,9 @@
 #include "souper/Tool/GetSolverFromArgs.h"
 #include "souper/Tool/CandidateMapUtils.h"
 #include "set"
+
+STATISTIC(InstructionReplaced, "Number of instructions replaced by another instruction");
+STATISTIC(DominanceCheckFailed, "Number of failed replacement due to dominance check");
 
 using namespace souper;
 using namespace llvm;
@@ -90,6 +97,7 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
     Info.addRequired<LoopInfoWrapperPass>();
+    Info.addRequired<DominatorTreeWrapperPass>();
     Info.addRequired<DemandedBitsWrapperPass>();
     Info.addRequired<TargetLibraryInfoWrapperPass>();
   }
@@ -158,6 +166,39 @@ public:
                       SyncScope::System, I);
   }
 
+  Value *getValue(Inst *I, Instruction *ReplacedInst,
+                  ExprBuilderContext &EBC, DominatorTree &DT,
+                  Module *M) {
+    Type *T = Type::getIntNTy(ReplacedInst->getContext(), I->Width);
+    if (I->K == Inst::Const) {
+      return ConstantInt::get(T, I->Val);
+    } else if (EBC.Origins.count(I) != 0) {
+      // if there's an Origin, we're connecting to existing code
+      auto It = EBC.Origins.equal_range(I);
+      for (auto O = It.first; O != It.second; ++O) {
+        Value *V = O->second;
+        if (V->getType() != T)
+          continue;
+        if (auto IP = dyn_cast<Instruction>(V)) {
+          // Dominance check
+          if (DT.dominates(IP, ReplacedInst)) {
+            ++InstructionReplaced;
+            return V;
+          } else {
+            ++DominanceCheckFailed;
+          }
+        } else if (isa<Argument>(V) || isa<Constant>(V)) {
+          return V;
+        } else {
+          report_fatal_error("Unhandled LLVM instruction in getValue()");
+        }
+      }
+      return 0;
+    }
+    report_fatal_error((std::string)"Unhandled Souper instruction " +
+                       Inst::getKindName(I->K) + " in getValue()");
+  }
+
   bool runOnFunction(Function *F) {
     bool Changed = false;
     InstContext IC;
@@ -166,6 +207,7 @@ public:
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>(*F).getLoopInfo();
     if (!LI)
       report_fatal_error("getLoopInfo() failed");
+    auto &DT = getAnalysis<DominatorTreeWrapperPass>(*F).getDomTree();
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>(*F).getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
@@ -238,11 +280,17 @@ public:
       if (!Cand.Mapping.RHS)
         continue;
       // TODO: add non-const instruction support
-      if (Cand.Mapping.RHS->K != Inst::Const)
-        continue;
       Instruction *I = Cand.Origin.getInstruction();
+      Instruction *ReplacedInst = Cand.Origin.getInstruction();
 
-      Constant *CI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
+      Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT,
+                               F->getParent());
+      if (!NewVal) {
+        if (DebugSouperPass)
+          errs() << "\"\n; replacement failed\n";
+        continue;
+      }
+
       if (DebugSouperPass) {
         errs() << "\n";
         errs() << "; Replacing \"";
@@ -250,14 +298,20 @@ public:
         errs() << "\"\n; from \"";
         I->getDebugLoc().print(errs());
         errs() << "\"\n; with \"";
-        CI->print(errs());
+        NewVal->print(errs());
         errs() << "\" in:\n";
         PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
+        errs() << "\"\n; with \"";
+        NewVal->print(errs());
+        errs() << "\"\n";
       }
+      EBC.Origins.erase(Cand.Mapping.LHS);
+      EBC.Origins.insert(std::pair<Inst *, Value *>(Cand.Mapping.LHS, NewVal));
+
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
         if (DynamicProfile)
           dynamicProfile(F, Cand);
-        I->replaceAllUsesWith(CI);
+        I->replaceAllUsesWith(NewVal);
         Changed = true;
       } else {
         if (DebugSouperPass)
@@ -295,6 +349,7 @@ void initializeSouperPassPass(llvm::PassRegistry &);
 INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,

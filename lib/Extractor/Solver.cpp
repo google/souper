@@ -24,7 +24,6 @@
 #include "souper/KVStore/KVStore.h"
 #include "souper/Parser/Parser.h"
 
-#include <queue>
 #include <sstream>
 #include <unordered_map>
 
@@ -40,14 +39,18 @@ using namespace llvm;
 
 namespace {
 
-const int MAX_NOPS = 20;
-
 static cl::opt<bool> NoInfer("souper-no-infer",
-    cl::desc("Populate the external cache, but don't infer replacements"),
+    cl::desc("Populate the external cache, but don't infer replacements (default=false)"),
     cl::init(false));
 static cl::opt<bool> InferNop("souper-infer-nop",
     cl::desc("Infer that the output is the same as an input value (default=false)"),
     cl::init(false));
+static cl::opt<bool> StressNop("souper-stress-nop",
+    cl::desc("stress-test big queries in nop synthesis by always performing all of the small queries (slow!) (default=false)"),
+    cl::init(false));
+static cl::opt<int>MaxNops("souper-max-nops",
+    cl::desc("maximum number of values from the LHS to try to use as the RHS (default=20)"),
+    cl::init(20));
 static cl::opt<bool> InferInts("souper-infer-iN",
     cl::desc("Infer iN integers for N>1 (default=true)"),
     cl::init(true));
@@ -55,45 +58,12 @@ static cl::opt<bool> InferInsts("souper-infer-inst",
     cl::desc("Infer instructions (default=false)"),
     cl::init(false));
 static cl::opt<int> MaxLHSSize("souper-max-lhs-size",
-    cl::desc("Max size of LHS (in bytes) to put in external cache"),
+    cl::desc("Max size of LHS (in bytes) to put in external cache (default=1024)"),
     cl::init(1024));
 
 class BaseSolver : public Solver {
   std::unique_ptr<SMTLIBSolver> SMTSolver;
   unsigned Timeout;
-
-  void findCands(Inst *Root, std::vector<Inst *> &Guesses,
-                 InstContext &IC) {
-    // breadth-first search
-    std::set<Inst *> Visited;
-    std::queue<std::tuple<Inst *,int>> Q;
-    Q.push(std::make_tuple(Root, 0));
-    while (!Q.empty()) {
-      Inst *I;
-      int Benefit;
-      std::tie(I, Benefit) = Q.front();
-      Q.pop();
-      if (I->K != Inst::Phi)
-        ++Benefit;
-      if (Visited.insert(I).second) {
-        for (auto Op : I->Ops)
-          Q.push(std::make_tuple(Op, Benefit));
-        if (Benefit > 1 && I->Width == Root->Width && I->Available)
-          Guesses.emplace_back(I);
-        // TODO: run experiments and see if it's worth doing these
-        if (0) {
-          if (Benefit > 2 && I->Width > Root->Width)
-            Guesses.emplace_back(IC.getInst(Inst::Trunc, Root->Width, {I}));
-          if (Benefit > 2 && I->Width < Root->Width) {
-            Guesses.emplace_back(IC.getInst(Inst::SExt, Root->Width, {I}));
-            Guesses.emplace_back(IC.getInst(Inst::ZExt, Root->Width, {I}));
-          }
-        }
-        if (Guesses.size() >= MAX_NOPS)
-          return;
-      }
-    }
-  }
 
 public:
   BaseSolver(std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout)
@@ -175,21 +145,56 @@ public:
 
     if (InferNop) {
       std::vector<Inst *> Guesses;
-      findCands(LHS, Guesses, IC);
+      findCands(LHS, Guesses, IC, MaxNops);
+
+      Inst *Ante = IC.getConst(APInt(1, true));
+      BlockPCs BPCsCopy;
+      std::vector<InstMapping> PCsCopy;
       for (auto I : Guesses) {
-        InstMapping Mapping(LHS, I);
-        std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
-        if (Query.empty())
-          return std::make_error_code(std::errc::value_too_large);
-        bool IsSat;
-        EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
-        if (EC)
-          return EC;
-        if (!IsSat) {
-          RHS = I;
-          return EC;
+        // separate sub-expressions by copying vars
+        std::map<Inst *, Inst *> InstCache;
+        std::map<Block *, Block *> BlockCache;
+        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache),
+              getInstCopy(I, IC, InstCache, BlockCache)});
+        Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
+        separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC);
+        separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC);
+      }
+      // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
+      InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
+      std::string Query = BuildQuery(BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
+      if (Query.empty())
+        return std::make_error_code(std::errc::value_too_large);
+      bool BigQueryIsSat;
+      EC = SMTSolver->isSatisfiable(Query, BigQueryIsSat, 0, 0, Timeout);
+      if (EC)
+        return EC;
+
+      bool SmallQueryIsSat = true;
+      if (StressNop || !BigQueryIsSat) {
+        // find the nop
+        for (auto I : Guesses) {
+          InstMapping Mapping(LHS, I);
+          std::string Query = BuildQuery(BPCs, PCs, Mapping, 0);
+          if (Query.empty())
+            continue;
+          EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, 0, 0, Timeout);
+          if (EC)
+            return EC;
+          if (!SmallQueryIsSat) {
+            RHS = I;
+            break;
+          }
         }
       }
+
+      if (!BigQueryIsSat && SmallQueryIsSat)
+        report_fatal_error("big query indicated a nop, but none was found");
+      if (BigQueryIsSat && !SmallQueryIsSat)
+        report_fatal_error("big query did not indicate a nop, but one was found");
+
+      if (!SmallQueryIsSat)
+        return EC;
     }
 
     if (InferInsts && SMTSolver->supportsModels()) {

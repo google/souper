@@ -489,17 +489,20 @@ Inst *ExprBuilder::build(Value *V) {
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
       }
-    } else if (TLI->getLibFunc(*Call->getCalledFunction(), Func) && TLI->has(Func)) {
-      switch (Func) {
-        case LibFunc_abs: {
-          Inst *A = get(Call->getOperand(0));
-          Inst *Z = IC.getConst(APInt(A->Width, 0));
-          Inst *NegA = IC.getInst(Inst::SubNSW, A->Width, {Z, A}, /*Available=*/false);
-          Inst *Cmp = IC.getInst(Inst::Slt, 1, {Z, A}, /*Available=*/false);
-          return IC.getInst(Inst::Select, A->Width, {Cmp, A, NegA});
+    } else {
+      Function* F = Call->getCalledFunction();
+      if(F && TLI->getLibFunc(*F, Func) && TLI->has(Func)) {
+        switch (Func) {
+          case LibFunc_abs: {
+            Inst *A = get(Call->getOperand(0));
+            Inst *Z = IC.getConst(APInt(A->Width, 0));
+            Inst *NegA = IC.getInst(Inst::SubNSW, A->Width, {Z, A}, /*Available=*/false);
+            Inst *Cmp = IC.getInst(Inst::Slt, 1, {Z, A}, /*Available=*/false);
+            return IC.getInst(Inst::Select, A->Width, {Cmp, A, NegA});
+          }
+          default:
+            break;
         }
-        default:
-          break;
       }
     }
   }
@@ -512,6 +515,7 @@ Inst *ExprBuilder::get(Value *V) {
   if (!E) {
     E = build(V);
   }
+  EBC.Origins.insert(std::pair<Inst *, Value *>(E, V));
   E->DemandedBits = APInt::getAllOnesValue(E->Width);
   if (HarvestDemandedBits) {
     if (Instruction *I = dyn_cast<Instruction>(V))

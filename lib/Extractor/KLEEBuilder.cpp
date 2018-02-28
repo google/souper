@@ -668,9 +668,8 @@ std::vector<ref<Expr>> ExprBuilder::getBlockPredicates(Inst *I) {
   if (BlockPredMap.count(I->B))
     return BlockPredMap[I->B];
   std::vector<ref<Expr>> PredExpr;
-  const std::vector<Inst *> &Ops = I->orderedOps();
-  for (unsigned J = 0; J < Ops.size()-1; ++J)
-    PredExpr.push_back(makeSizedArrayRead(1, "blockpred", 0));
+  for (auto const &PredVar : I->B->PredVars)
+    PredExpr.push_back(build(PredVar));
   BlockPredMap[I->B] = PredExpr;
   return PredExpr;
 }
@@ -895,10 +894,10 @@ bool ExprBuilder::getUBPaths(Inst *I, UBPath *Current,
     if (CachedUBPathInsts.count(I))
       return true;
     Current->Insts.push_back(I);
-    // Based on the dependency chain, looks like we would never
-    // encounter this case.
-    assert(!Current->BlockConstraints.count(I->B) &&
-           "Basic block has been added into BlockConstraints!");
+    // Since we treat a select instruction as a phi instruction, it's
+    // possible that I->B has been added already.
+    if (Current->BlockConstraints.count(I->B))
+      return true;
     std::vector<UBPath *> Tmp = { Current };
     // Create copies of the current path
     for (unsigned J = 1; J < Ops.size(); ++J) {
