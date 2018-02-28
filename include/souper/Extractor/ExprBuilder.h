@@ -97,6 +97,24 @@ public:
   };
   CandidateExpr CE;
 
+  Inst *getExtractInst(Inst *I, unsigned Offset, unsigned W);
+
+  Inst *addnswUB(Inst *I);
+  Inst *addnuwUB(Inst *I);
+  Inst *subnswUB(Inst *I);
+  Inst *subnuwUB(Inst *I);
+  Inst *mulnswUB(Inst *I);
+  Inst *mulnuwUB(Inst *I);
+  Inst *udivUB(Inst *I);
+  Inst *udivExactUB(Inst *I);
+  Inst *sdivUB(Inst *I);
+  Inst *sdivExactUB(Inst *I);
+  Inst *shiftUB(Inst *I);
+  Inst *shlnswUB(Inst *I);
+  Inst *shlnuwUB(Inst *I);
+  Inst *lshrExactUB(Inst *I);
+  Inst *ashrExactUB(Inst *I);
+
   virtual llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
       const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
       InstMapping Mapping, bool Negate) = 0;

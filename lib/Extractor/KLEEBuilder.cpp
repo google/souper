@@ -163,150 +163,6 @@ public:
   }
 
 private:
-  ref<Expr> addnswUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> Add = AddExpr::create(L, R);
-     Expr::Width Width = L->getWidth();
-     ref<Expr> LMSB = ExtractExpr::create(L, Width-1, Expr::Bool);
-     ref<Expr> RMSB = ExtractExpr::create(R, Width-1, Expr::Bool);
-     ref<Expr> AddMSB = ExtractExpr::create(Add, Width-1, Expr::Bool);
-     return Expr::createImplies(EqExpr::create(LMSB, RMSB),
-                                EqExpr::create(LMSB, AddMSB));
-  }
-  
-  ref<Expr> addnuwUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     Expr::Width Width = L->getWidth();
-     ref<Expr> Lext = ZExtExpr::create(L, Width+1);
-     ref<Expr> Rext = ZExtExpr::create(R, Width+1);
-     ref<Expr> Add = AddExpr::create(Lext, Rext);
-     ref<Expr> AddMSB = ExtractExpr::create(Add, Width, Expr::Bool);
-     return Expr::createIsZero(AddMSB);
-  }
-  
-  ref<Expr> subnswUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> Sub = SubExpr::create(L, R);
-     Expr::Width Width = L->getWidth();
-     ref<Expr> LMSB = ExtractExpr::create(L, Width-1, Expr::Bool);
-     ref<Expr> RMSB = ExtractExpr::create(R, Width-1, Expr::Bool);
-     ref<Expr> SubMSB = ExtractExpr::create(Sub, Width-1, Expr::Bool);
-     return Expr::createImplies(NeExpr::create(LMSB, RMSB),
-                                EqExpr::create(LMSB, SubMSB));
-  }
-  
-  ref<Expr> subnuwUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     Expr::Width Width = L->getWidth();
-     ref<Expr> Lext = ZExtExpr::create(L, Width+1);
-     ref<Expr> Rext = ZExtExpr::create(R, Width+1);
-     ref<Expr> Sub = SubExpr::create(Lext, Rext);
-     ref<Expr> SubMSB = ExtractExpr::create(Sub, Width, Expr::Bool);
-     return Expr::createIsZero(SubMSB);
-  }
-  
-  ref<Expr> mulnswUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     // The computation below has to be performed on the operands of
-     // multiplication instruction. The instruction using mulnswUB()
-     // can be of different width, for instance in SMulO instruction
-     // which is of 1-bit, but the operands width are to be used here.
-     Expr::Width Width = get(Ops[0])->getWidth();
-     ref<Expr> L = SExtExpr::create(get(Ops[0]), 2*Width);
-     ref<Expr> R = SExtExpr::create(get(Ops[1]), 2*Width);
-     ref<Expr> Mul = MulExpr::create(L, R);
-     ref<Expr> LowerBits = ExtractExpr::create(Mul, 0, Width);
-     ref<Expr> LowerBitsExt = SExtExpr::create(LowerBits, 2*Width);
-     return EqExpr::create(Mul, LowerBitsExt);
-  }
-  
-  ref<Expr> mulnuwUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     Expr::Width Width = L->getWidth();
-     ref<Expr> Lext = ZExtExpr::create(L, 2*Width);
-     ref<Expr> Rext = ZExtExpr::create(R, 2*Width);
-     ref<Expr> Mul = MulExpr::create(Lext, Rext);
-     ref<Expr> HigherBits = ExtractExpr::create(Mul, Width, Width);
-     return Expr::createIsZero(HigherBits);
-  }
-  
-  ref<Expr> udivUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> R = get(Ops[1]);
-     return NeExpr::create(R, klee::ConstantExpr::create(0, R->getWidth()));
-  }
-  
-  ref<Expr> udivExactUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> Udiv = UDivExpr::create(L, R);
-     return EqExpr::create(L, MulExpr::create(R, Udiv));
-  }
-  
-  ref<Expr> sdivUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> ShiftBy = klee::ConstantExpr::create(L->getWidth()-1,
-                                                    L->getWidth());
-     ref<Expr> IntMin = ShlExpr::create(klee::ConstantExpr::create(
-                                        1, L->getWidth()), ShiftBy);
-     ref<Expr> NegOne = AShrExpr::create(IntMin, ShiftBy);
-     return AndExpr::create(NeExpr::create(R, klee::ConstantExpr::create(
-                            0, R->getWidth())), OrExpr::create(
-                            NeExpr::create(L, IntMin), NeExpr::create(R, NegOne)));
-  }
-  
-  ref<Expr> sdivExactUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> Sdiv = SDivExpr::create(L, R);
-     return EqExpr::create(L, MulExpr::create(R, Sdiv));
-  }
-  
-  ref<Expr> shiftUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> Lwidth = klee::ConstantExpr::create(L->getWidth(), L->getWidth());
-     return UltExpr::create(R, Lwidth);
-  }
-  
-  ref<Expr> shlnswUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> Result = ShlExpr::create(L, R);
-     ref<Expr> RShift = AShrExpr::create(Result, R);
-     return EqExpr::create(RShift, L);
-  }
-  
-  ref<Expr> shlnuwUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> Result = ShlExpr::create(L, R);
-     ref<Expr> RShift = LShrExpr::create(Result, R);
-     return EqExpr::create(RShift, L);
-  }
-  
-  ref<Expr> lshrExactUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> Result = LShrExpr::create(L, R);
-     ref<Expr> LShift = ShlExpr::create(Result, R);
-     return EqExpr::create(LShift, L);
-  }
-  
-  ref<Expr> ashrExactUB(Inst *I) {
-     const std::vector<Inst *> &Ops = I->orderedOps();
-     ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
-     ref<Expr> Result = AShrExpr::create(L, R);
-     ref<Expr> LShift = ShlExpr::create(Result, R);
-     return EqExpr::create(LShift, L);
-  }
-  
   ref<Expr> countOnes(ref<Expr> L) {
      Expr::Width Width = L->getWidth();
      ref<Expr> Count =  klee::ConstantExpr::alloc(llvm::APInt(Width, 0));
@@ -577,17 +433,17 @@ private:
                              countOnes(Val));
     }
     case Inst::SAddO:
-      return XorExpr::create(addnswUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+      return XorExpr::create(get(addnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
     case Inst::UAddO:
-      return XorExpr::create(addnuwUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+      return XorExpr::create(get(addnuwUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
     case Inst::SSubO:
-      return XorExpr::create(subnswUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+      return XorExpr::create(get(subnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
     case Inst::USubO:
-      return XorExpr::create(subnuwUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+      return XorExpr::create(get(subnuwUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
     case Inst::SMulO:
-      return XorExpr::create(mulnswUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+      return XorExpr::create(get(mulnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
     case Inst::UMulO:
-      return XorExpr::create(mulnuwUB(I), klee::ConstantExpr::create(1, Expr::Bool));
+      return XorExpr::create(get(mulnuwUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
     case Inst::ExtractValue: {
       unsigned Index = Ops[1]->Val.getZExtValue();
       return get(Ops[0]->Ops[Index]);
