@@ -15,6 +15,10 @@
 # limitations under the License.
 
 # hiredis version 0.13.3
+if [ -d "third_party" ]; then
+  echo "Directory third_party exists!"
+  exit 1;
+fi
 hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
 llvm_branch=branches/release_60
 klee_repo=https://github.com/rsas/klee
@@ -52,6 +56,7 @@ cat <<EOF | patch $llvmdir/lib/Transforms/InstCombine/InstCombineSelect.cpp
    }
 -
 +#endif
+   // Selecting between two integer or vector splat integer constants?
 EOF
 mkdir -p $llvm_builddir
 

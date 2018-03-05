@@ -24,13 +24,13 @@ run cd /usr/src/redis \
 run export GOPATH=/usr/src/go \
 	&& go get github.com/garyburd/redigo/redis
 
-add update_deps.sh /usr/src/souper/update_deps.sh
+add checkout_deps.sh /usr/src/souper/checkout_deps.sh
 add clone_and_test.sh /usr/src/souper/clone_and_test.sh
 
 run cd /usr/src/souper \
-#	&& ./update_deps.sh Debug \
+#	&& ./checkout_deps.sh Debug \
 #       && rm -rf third_party/llvm/Debug-build \
-	&& ./update_deps.sh Release \
+	&& ./checkout_deps.sh Release \
         && rm -rf third_party/llvm/Release-build \
 	&& rm -rf third_party/hiredis/install/lib/libhiredis.so*
 
