@@ -86,7 +86,7 @@ public:
   std::vector<Inst *> UBPathInsts;
   UniqueNameSet ArrayNames;
   // Holding the precondition, i.e. blockpc, for the UBInst under process.
-  Inst *UBInstPrecondition;
+  Inst *UBInstPrecondition = nullptr;
   // Indicate if the UBInst relates to BlockPC
   bool IsForBlockPCUBInst = false;
 
@@ -98,11 +98,14 @@ public:
   CandidateExpr CE;
 
   Inst *getExtractInst(Inst *I, unsigned Offset, unsigned W);
+  Inst *getImpliesInst(Inst *Ante, Inst *I);
 
   Inst *addnswUB(Inst *I);
   Inst *addnuwUB(Inst *I);
+  Inst *addnwUB(Inst *I);
   Inst *subnswUB(Inst *I);
   Inst *subnuwUB(Inst *I);
+  Inst *subnwUB(Inst *I);
   Inst *mulnswUB(Inst *I);
   Inst *mulnuwUB(Inst *I);
   Inst *udivUB(Inst *I);

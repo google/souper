@@ -517,11 +517,10 @@ Inst *ExprBuilder::createUBPathInstsPred(
 }
 
 void ExprBuilder::recordUBInstruction(Inst *I, Inst *E) {
-#if 0
   if (!IsForBlockPCUBInst) {
     UBExprMap[I] = E;
   }
-  else if (!UBInstPrecondition.isNull()) {
+  else if (UBInstPrecondition) {
     // The current UBInst comes from BlockPC. It's possible
     // that the precondition is missing at this point (e.g.,
     // the corresponding Phi is not part of the current
@@ -530,7 +529,6 @@ void ExprBuilder::recordUBInstruction(Inst *I, Inst *E) {
     Inst *IsZero = LIC->getInst(Inst::Eq, 1, {UBInstPrecondition, LIC->getConst(APInt(1, false))});
     UBExprMap[I] = LIC->getInst(Inst::Or, 1, {IsZero, E});
   }
-#endif
 }
 
 Inst *ExprBuilder::getInstMapping(const InstMapping &IM) {
@@ -541,12 +539,25 @@ Inst *ExprBuilder::getExtractInst(Inst *I, unsigned Offset, unsigned W) {
   if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
     return LIC->getConst(APInt(I->Val.ashr(Offset)).zextOrTrunc(W));
   } else {
-    return NULL;
+    Inst *AShr = LIC->getInst(Inst::AShr, I->Width,
+                              {I, LIC->getConst(APInt(I->Width, Offset))});
+    if (AShr->Width < W)
+      return LIC->getInst(Inst::ZExt, W, {AShr});
+    else if (AShr->Width > W)
+      return LIC->getInst(Inst::Trunc, W, {AShr});
+    else
+      return AShr;
   }
 }
 
+Inst *ExprBuilder::getImpliesInst(Inst *Ante, Inst *I) {
+  Inst *IsZero = LIC->getInst(Inst::Eq, 1,
+                              {Ante, LIC->getConst(APInt(Ante->Width, 0))});
+  return LIC->getInst(Inst::Or, 1, {IsZero, I});
+}
+
 Inst *ExprBuilder::addnswUB(Inst *I) {
-  #if 0
+#if 0
    const std::vector<Inst *> &Ops = I->orderedOps();
    ref<Expr> L = get(Ops[0]), R = get(Ops[1]);
    ref<Expr> Add = AddExpr::create(L, R);
@@ -557,7 +568,16 @@ Inst *ExprBuilder::addnswUB(Inst *I) {
    return Expr::createImplies(EqExpr::create(LMSB, RMSB),
                               EqExpr::create(LMSB, AddMSB));
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Add = LIC->getInst(Inst::Add, Width, {L, R});
+   Inst *LMSB = getExtractInst(L, Width-1, 1);
+   Inst *RMSB = getExtractInst(R, Width-1, 1);
+   Inst *AddMSB = getExtractInst(Add, Width-1, 1);
+   return getImpliesInst(LIC->getInst(Inst::Eq, 1, {LMSB, RMSB}),
+                         LIC->getInst(Inst::Eq, 1, {LMSB, AddMSB}));
 }
 
 Inst *ExprBuilder::addnuwUB(Inst *I) {
@@ -571,7 +591,22 @@ Inst *ExprBuilder::addnuwUB(Inst *I) {
    ref<Expr> AddMSB = ExtractExpr::create(Add, Width, Expr::Bool);
    return Expr::createIsZero(AddMSB);
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Lext = LIC->getInst(Inst::ZExt, Width+1, {L});
+   Inst *Rext = LIC->getInst(Inst::ZExt, Width+1, {R});
+   Inst *Add = LIC->getInst(Inst::Add, Width+1, {Lext, Rext});
+   Inst *AddMSB = getExtractInst(Add, Width, 1);
+   return LIC->getInst(Inst::Eq, 1, {AddMSB, LIC->getConst(APInt(1, false))});
+}
+
+Inst *ExprBuilder::addnwUB(Inst *I) {
+#if 0
+   recordUBInstruction(I, AndExpr::create(addnswUB(I), addnuwUB(I)));
+#endif
+   return LIC->getInst(Inst::And, 1, {addnswUB(I), addnuwUB(I)});
 }
 
 Inst *ExprBuilder::subnswUB(Inst *I) {
@@ -586,7 +621,16 @@ Inst *ExprBuilder::subnswUB(Inst *I) {
    return Expr::createImplies(NeExpr::create(LMSB, RMSB),
                               EqExpr::create(LMSB, SubMSB));
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Sub = LIC->getInst(Inst::Sub, Width, {L, R});
+   Inst *LMSB = getExtractInst(L, Width-1, 1);
+   Inst *RMSB = getExtractInst(R, Width-1, 1);
+   Inst *SubMSB = getExtractInst(Sub, Width-1, 1);
+   return getImpliesInst(LIC->getInst(Inst::Ne, 1, {LMSB, RMSB}),
+                         LIC->getInst(Inst::Eq, 1, {LMSB, SubMSB}));
 }
 
 Inst *ExprBuilder::subnuwUB(Inst *I) {
@@ -600,8 +644,24 @@ Inst *ExprBuilder::subnuwUB(Inst *I) {
    ref<Expr> SubMSB = ExtractExpr::create(Sub, Width, Expr::Bool);
    return Expr::createIsZero(SubMSB);
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Lext = LIC->getInst(Inst::ZExt, Width+1, {L});
+   Inst *Rext = LIC->getInst(Inst::ZExt, Width+1, {R});
+   Inst *Sub = LIC->getInst(Inst::Sub, Width+1, {Lext, Rext});
+   Inst *SubMSB = getExtractInst(Sub, Width, 1);
+   return LIC->getInst(Inst::Eq, 1, {SubMSB, LIC->getConst(APInt(1, false))});
 }
+
+Inst *ExprBuilder::subnwUB(Inst *I) {
+#if 0
+   recordUBInstruction(I, AndExpr::create(subnswUB(I), subnuwUB(I)));
+#endif
+   return LIC->getInst(Inst::And, 1, {subnswUB(I), subnuwUB(I)});
+}
+
 
 Inst *ExprBuilder::mulnswUB(Inst *I) {
 #if 0
@@ -641,7 +701,9 @@ Inst *ExprBuilder::udivUB(Inst *I) {
    ref<Expr> R = get(Ops[1]);
    return NeExpr::create(R, klee::ConstantExpr::create(0, R->getWidth()));
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto R = Ops[1];
+   return LIC->getInst(Inst::Ne, 1, {R, LIC->getConst(APInt(R->Width, 0))});
 }
 
 Inst *ExprBuilder::udivExactUB(Inst *I) {
@@ -651,7 +713,14 @@ Inst *ExprBuilder::udivExactUB(Inst *I) {
    ref<Expr> Udiv = UDivExpr::create(L, R);
    return EqExpr::create(L, MulExpr::create(R, Udiv));
 #endif
-   return NULL;
+   // TODO: fails
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Udiv = LIC->getInst(Inst::UDiv, Width, {L, R});
+   return LIC->getInst(Inst::Eq, 1,
+                       {L, LIC->getInst(Inst::Mul, Width, {R, Udiv})});
 }
 
 Inst *ExprBuilder::sdivUB(Inst *I) {

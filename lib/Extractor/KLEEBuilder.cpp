@@ -207,34 +207,34 @@ private:
       return buildAssoc(AddExpr::create, Ops);
     case Inst::AddNSW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, addnswUB(I));
+      recordUBInstruction(I, addnswUB(I));
       return Add;
     }
     case Inst::AddNUW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, addnuwUB(I));
+      recordUBInstruction(I, addnuwUB(I));
       return Add;
     }
     case Inst::AddNW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, AndExpr::create(addnswUB(I), addnuwUB(I)));
+      recordUBInstruction(I, addnwUB(I));
       return Add;
     }
     case Inst::Sub:
       return SubExpr::create(get(Ops[0]), get(Ops[1]));
     case Inst::SubNSW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, subnswUB(I));
+      recordUBInstruction(I, subnswUB(I));
       return Sub;
     }
     case Inst::SubNUW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, subnuwUB(I));
+      recordUBInstruction(I, subnuwUB(I));
       return Sub;
     }
     case Inst::SubNW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, AndExpr::create(subnswUB(I), subnuwUB(I)));
+      recordUBInstruction(I, subnwUB(I));
       return Sub;
     }
     case Inst::Mul:
@@ -280,7 +280,7 @@ private:
   
       case Inst::UDiv: {
         ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, udivUB(I));
+        recordUBInstruction(I, udivUB(I));
         return Udiv;
       }
       case Inst::SDiv: {
