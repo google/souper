@@ -15,6 +15,10 @@
 # limitations under the License.
 
 # hiredis version 0.13.3
+if [ -d "third_party" ]; then
+  echo "Directory third_party exists, remove this directory before running build_deps.sh."
+  exit 1;
+fi
 hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
 llvm_branch=branches/release_60
 klee_repo=https://github.com/rsas/klee
@@ -33,6 +37,27 @@ llvm_builddir=$(pwd)/$llvmdir/${llvm_build_type}-build
 svn co https://llvm.org/svn/llvm-project/llvm/${llvm_branch} $llvmdir
 svn co https://llvm.org/svn/llvm-project/cfe/${llvm_branch} $llvmdir/tools/clang
 svn co https://llvm.org/svn/llvm-project/compiler-rt/${llvm_branch} $llvmdir/projects/compiler-rt
+# Disable the broken select -> logic optimizations
+cat <<EOF | patch $llvmdir/lib/Transforms/InstCombine/InstCombineSelect.cpp
+--- lib/Transforms/InstCombine/InstCombineSelect.cpp    (revision 326606)
++++ lib/Transforms/InstCombine/InstCombineSelect.cpp    (working copy)
+@@ -1334,7 +1334,7 @@
+     Worklist.Add(Cond);
+     return &SI;
+   }
+-
++#if 0
+   if (SelType->isIntOrIntVectorTy(1) &&
+       TrueVal->getType() == CondVal->getType()) {
+     if (match(TrueVal, m_One())) {
+@@ -1370,7 +1370,7 @@
+     if (match(FalseVal, m_Not(m_Specific(CondVal))))
+       return BinaryOperator::CreateOr(TrueVal, FalseVal);
+   }
+-
++#endif
+   // Selecting between two integer or vector splat integer constants?
+EOF
 mkdir -p $llvm_builddir
 
 cmake_flags=".. -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DCMAKE_CXX_FLAGS=-DLLVM_ENABLE_STATS=true"
