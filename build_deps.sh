@@ -16,7 +16,7 @@
 
 # hiredis version 0.13.3
 if [ -d "third_party" ]; then
-  echo "Directory third_party exists!"
+  echo "Directory third_party exists, remove this directory before running build_deps.sh."
   exit 1;
 fi
 hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
