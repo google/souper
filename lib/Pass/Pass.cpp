@@ -222,8 +222,6 @@ public:
           // According to LLVM LangRef, the second argument of cttz i1 <is_zero_undef>
           // must be a constant and is a flag to indicate whether the intrinsic should
           // ensure that a zero as the first argument produces a defined result.
-          // Need furture investigation about the validation of this optimization.
-          // Currently we assume is_zero_undef == 0.
           return Builder.CreateCall(F, {V0,
                 ConstantInt::get(V0->getContext(), APInt(1, 0))});
         }
