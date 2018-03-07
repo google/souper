@@ -188,10 +188,18 @@ public:
         }
       }
 
-      if (!BigQueryIsSat && SmallQueryIsSat)
+      if (!BigQueryIsSat && SmallQueryIsSat) {
+        llvm::errs() << "*** oops ***\n";
+        ReplacementContext C;
+        llvm::errs() << GetReplacementLHSString(BPCs, PCs, LHS, C) << "\n";
         report_fatal_error("big query indicated a nop, but none was found");
-      if (BigQueryIsSat && !SmallQueryIsSat)
+      }
+      if (BigQueryIsSat && !SmallQueryIsSat) {
+        llvm::errs() << "*** oops ***\n";
+        ReplacementContext C;
+        llvm::errs() << GetReplacementLHSString(BPCs, PCs, LHS, C) << "\n";
         report_fatal_error("big query did not indicate a nop, but one was found");
+      }
 
       if (!SmallQueryIsSat)
         return EC;
