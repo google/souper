@@ -1,19 +1,16 @@
 ; REQUIRES: solver
 
 ; RUN: llvm-as -o %t %s
-; RUN: opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-comps=trunc -S -o - %s | FileCheck %s
+; RUN: opt -load %pass -souper -dce %solver -souper-infer-inst -S -o - %s | FileCheck %s
 
-; Not working, since trunc can not be a component (L326-327 in lib/Infer/InstSynthesis.cpp)
-; XFAIL:*
+; Translated from test/Infer/odd.opt
 
-define i1 @foo(i64 %x) {
+define i1 @foo(i8 %x) {
 entry:
-  ;CHECK-NOT: %a = and i64 %x, 1
-  %a = and i64 %x, 1
-  ;CHECK-NOT: %cmp = icmp eq i64 %a, 0
-  %cmp = icmp eq i64 %a, 0
-  ;CHECK-NOT: %b = select i1 %cmp, i1 0, i1 1
-  %b = select i1 %cmp, i1 0, i1 1
-  ;CHECK: trunc i64 %x to i1
-  ret i1 %b
+  ;CHECK-NOT: %a = urem i8 %x, 2
+  %a = urem i8 %x, 2
+  ;CHECK-NOT: %cmp = icmp eq i8 %a, 1
+  %cmp = icmp eq i8 %a, 1
+  ;CHECK: trunc i8 %x to i1
+  ret i1 %cmp
 }
