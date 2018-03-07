@@ -240,16 +240,26 @@ public:
           return 0;
         switch (I->K) {
         case Inst::And:
+          if (isa<Constant>(V0))
+            return Builder.CreateAnd(V1, V0);
           return Builder.CreateAnd(V0, V1);
         case Inst::Or:
+          if (isa<Constant>(V0))
+            return Builder.CreateOr(V1, V0);
           return Builder.CreateOr(V0, V1);
         case Inst::Xor:
+          if (isa<Constant>(V0))
+            return Builder.CreateXor(V1, V0);
           return Builder.CreateXor(V0, V1);
         case Inst::Add:
+          if (isa<Constant>(V0))
+            return Builder.CreateAdd(V1, V0);
           return Builder.CreateAdd(V0, V1);
         case Inst::Sub:
           return Builder.CreateSub(V0, V1);
         case Inst::Mul:
+          if (isa<Constant>(V0))
+            return Builder.CreateMul(V1, V0);
           return Builder.CreateMul(V0, V1);
         case Inst::Shl:
           return Builder.CreateShl(V0, V1);
