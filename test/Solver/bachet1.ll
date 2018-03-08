@@ -1,6 +1,6 @@
 ; REQUIRES: solver
 
-; RUN: llvm-as -o %t %s
+; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check %t
 
 ; x^2 + 2 = y^3 has a unique positive solution

@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
-; RUN: FileCheck %s < %t
+; RUN: %FileCheck %s < %t
 
 ; CHECK: LGTM
 %0:i16 = var (knownBits=xxxxxxxxx0000000) (signBits=9)

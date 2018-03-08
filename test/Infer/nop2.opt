@@ -1,5 +1,5 @@
 ; REQUIRES: solver
-; RUN: %souper-check -infer-rhs -souper-infer-nop -souper-stress-nop %solver %s | FileCheck %s
+; RUN: %souper-check -infer-rhs -souper-infer-nop -souper-stress-nop %solver %s | %FileCheck %s
 ; CHECK: result %a
 
 %a:i32 = var

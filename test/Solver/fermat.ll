@@ -1,6 +1,6 @@
 ; REQUIRES: solver
 
-; RUN: llvm-as -o %t %s
+; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check %t
 
 define void @fermat(i20 %a, i20 %b, i20 %c) #0 {

@@ -1,7 +1,7 @@
 
 ; REQUIRES: solver
 
-; RUN: llvm-as -o %t %s
+; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check %t
 
 define zeroext i1 @c_ispunct(i32 %a, i32 %b, i32 %c) {

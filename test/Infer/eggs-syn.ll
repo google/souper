@@ -1,9 +1,9 @@
 ; REQUIRES: solver, solver-model
 
-; RUN: llvm-as -o %t1 %s
+; RUN: %llvm-as -o %t1 %s
 ; RUN: %souper %solver -souper-infer-inst -souper-synthesis-comps=const %t1 > %t2
-; RUN: FileCheck %s -implicit-check-not=FIRST < %t2
-; RUN: FileCheck %s -implicit-check-not=SECOND < %t2
+; RUN: %FileCheck %s -implicit-check-not=FIRST < %t2
+; RUN: %FileCheck %s -implicit-check-not=SECOND < %t2
 
 ; result = 301+1
 ; result = 721+1
