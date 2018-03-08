@@ -1,5 +1,5 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver %s | FileCheck %s
+; RUN: %souper-check %solver %s | %FileCheck %s
 ; CHECK: LGTM
 
 ; (a<0 && b>=0) || (a>=0 && b<0)

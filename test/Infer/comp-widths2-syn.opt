@@ -1,7 +1,7 @@
 ; REQUIRES: solver, solver-model
 
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,ashr %s > %t1
-; RUN: FileCheck %s < %t1
+; RUN: %FileCheck %s < %t1
 
 ; CHECK: {{(%3:i64 = sext %0)?}}
 ; CHECK: {{(%4:i64 = ashr %3, 4:i64)?}}

@@ -1,6 +1,6 @@
 ; REQUIRES: solver
 
-; RUN: llvm-as -o %t %s
+; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check -souper-infer-iN=false %t
 
 define i32 @foo(i32 %x0) {

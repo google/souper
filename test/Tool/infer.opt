@@ -1,11 +1,11 @@
 ; REQUIRES: solver
 
 ; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t1
-; RUN: FileCheck %s -check-prefix=SUCCESS < %t1
+; RUN: %FileCheck %s -check-prefix=SUCCESS < %t1
 ; RUN: %parser-test < %t1
-; RUN: %souper-check %solver < %t1 | FileCheck -check-prefix=LGTM %s
+; RUN: %souper-check %solver < %t1 | %FileCheck -check-prefix=LGTM %s
 ; RUN: %souper-check %solver -infer-rhs %s > %t2
-; RUN: cat %s %t2 | %souper-check %solver | FileCheck -check-prefix=LGTM %s
+; RUN: cat %s %t2 | %souper-check %solver | %FileCheck -check-prefix=LGTM %s
 
 ; SUCCESS: RHS inferred successfully
 ; LGTM: LGTM

@@ -1,7 +1,7 @@
 ; REQUIRES: solver, solver-model, synthesis
 
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=sub,const,or,lshr,xor %s > %t1
-; RUN: FileCheck %s < %t1
+; RUN: %FileCheck %s < %t1
 
 ; CHECK: {{(%6:i32 = or (%0|%1), %3)?}}
 ; CHECK: {{(%7:i32 = sub %6, %4)?}}

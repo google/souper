@@ -1,6 +1,6 @@
 ; REQUIRES: solver
 
-; RUN: llvm-as -o %t %s
+; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check %t
 
 define void @foo(i32 %x) #0 {

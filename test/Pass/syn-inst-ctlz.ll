@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
-; RUN: llvm-as -o %t %s
-; RUN: opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-comps=ctlz -S -o - %s | FileCheck %s
+; RUN: %llvm-as -o %t %s
+; RUN: %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-comps=ctlz -S -o - %s | %FileCheck %s
 
 define i8 @func(i8 %v) local_unnamed_addr #0 {
 entry:

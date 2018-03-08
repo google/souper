@@ -1,5 +1,5 @@
 ; REQUIRES: solver
-; RUN: %souper-check -infer-rhs %solver -souper-infer-inst -souper-synthesis-comps=add,const %s | FileCheck %s
+; RUN: %souper-check -infer-rhs %solver -souper-infer-inst -souper-synthesis-comps=add,const %s | %FileCheck %s
 ; CHECK: Failed to infer RHS
 
 %0 = block 3

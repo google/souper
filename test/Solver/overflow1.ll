@@ -1,6 +1,6 @@
 ; REQUIRES: solver
 
-; RUN: llvm-as -o %t %s
+; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check %t
 
 ; Function Attrs: nounwind readnone

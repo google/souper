@@ -1,8 +1,8 @@
 ; REQUIRES: solver, solver-model
 
-; RUN: llvm-as -o %t1 %s
+; RUN: %llvm-as -o %t1 %s
 ; RUN: %souper %solver -souper-infer-inst -souper-synthesis-comps=const %t1 > %t2
-; RUN: FileCheck %s -check-prefix=SUCCESS < %t2
+; RUN: %FileCheck %s -check-prefix=SUCCESS < %t2
 
 ; SUCCESS: cand %0 873647531:i32
 

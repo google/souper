@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
-; RUN: opt -load %pass -souper %solver -S -o - %s -souper-debug -souper-debug-level=2 > %t 2>&1
-; RUN: FileCheck %s < %t
+; RUN: %opt -load %pass -souper %solver -S -o - %s -souper-debug -souper-debug-level=2 > %t 2>&1
+; RUN: %FileCheck %s < %t
 
 ; Check that the souper pass dumps all replacements.
 
