@@ -21,6 +21,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
@@ -168,7 +169,7 @@ public:
 
   Value *getValue(Inst *I, Instruction *ReplacedInst,
                   ExprBuilderContext &EBC, DominatorTree &DT,
-                  Module *M) {
+                  IRBuilder<> &Builder, Module *M) {
     Type *T = Type::getIntNTy(ReplacedInst->getContext(), I->Width);
     if (I->K == Inst::Const) {
       return ConstantInt::get(T, I->Val);
@@ -194,9 +195,88 @@ public:
         }
       }
       return 0;
+    } else {
+      // otherwise, recursively generate code
+      Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder, M);
+      if (!V0)
+        return 0;
+      switch (I->Ops.size()) {
+      case 1:
+        switch (I->K) {
+        case Inst::SExt:
+          return Builder.CreateSExt(V0, T);
+        case Inst::ZExt:
+          return Builder.CreateZExt(V0, T);
+        case Inst::Trunc:
+          return Builder.CreateTrunc(V0, T);
+        case Inst::CtPop:{
+          Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctpop, T);
+          return Builder.CreateCall(F, V0);
+        }
+        case Inst::BSwap:{
+          Function *F = Intrinsic::getDeclaration(M, Intrinsic::bswap, T);
+          return Builder.CreateCall(F, V0);
+        }
+        case Inst::Cttz:{
+          Function *F = Intrinsic::getDeclaration(M, Intrinsic::cttz, T);
+          // According to LLVM LangRef, the second argument of cttz i1 <is_zero_undef>
+          // must be a constant and is a flag to indicate whether the intrinsic should
+          // ensure that a zero as the first argument produces a defined result.
+          return Builder.CreateCall(F, {V0,
+                ConstantInt::get(V0->getContext(), APInt(1, 0))});
+        }
+        case Inst::Ctlz:{
+          // Ditto
+          Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctlz, T);
+          return Builder.CreateCall(F, {V0,
+                ConstantInt::get(V0->getContext(), APInt(1, 0))});
+        }
+        default:
+          break;
+        }
+      case 2:{
+        Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder, M);
+        if (!V1)
+          return 0;
+        switch (I->K) {
+        case Inst::And:
+          if (isa<Constant>(V0))
+            return Builder.CreateAnd(V1, V0);
+          return Builder.CreateAnd(V0, V1);
+        case Inst::Or:
+          if (isa<Constant>(V0))
+            return Builder.CreateOr(V1, V0);
+          return Builder.CreateOr(V0, V1);
+        case Inst::Xor:
+          if (isa<Constant>(V0))
+            return Builder.CreateXor(V1, V0);
+          return Builder.CreateXor(V0, V1);
+        case Inst::Add:
+          if (isa<Constant>(V0))
+            return Builder.CreateAdd(V1, V0);
+          return Builder.CreateAdd(V0, V1);
+        case Inst::Sub:
+          return Builder.CreateSub(V0, V1);
+        case Inst::Mul:
+          if (isa<Constant>(V0))
+            return Builder.CreateMul(V1, V0);
+          return Builder.CreateMul(V0, V1);
+        case Inst::Shl:
+          return Builder.CreateShl(V0, V1);
+        case Inst::AShr:
+          return Builder.CreateAShr(V0, V1);
+        case Inst::LShr:
+          return Builder.CreateLShr(V0, V1);
+        default:
+          break;
+        }
+      }
+      default:
+        break;
+      }
+      report_fatal_error((std::string)"Unhandled Souper instruction " +
+                         Inst::getKindName(I->K) + " in getValue()");
     }
-    report_fatal_error((std::string)"Unhandled Souper instruction " +
-                       Inst::getKindName(I->K) + " in getValue()");
   }
 
   bool runOnFunction(Function *F) {
@@ -279,12 +359,13 @@ public:
       }
       if (!Cand.Mapping.RHS)
         continue;
-      // TODO: add non-const instruction support
+
       Instruction *I = Cand.Origin.getInstruction();
       Instruction *ReplacedInst = Cand.Origin.getInstruction();
+      IRBuilder<> Builder(ReplacedInst);
 
       Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT,
-                               F->getParent());
+                               Builder, F->getParent());
       if (!NewVal) {
         if (DebugSouperPass)
           errs() << "\"\n; replacement failed\n";
