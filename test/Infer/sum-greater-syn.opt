@@ -1,7 +1,7 @@
 ; REQUIRES: solver, solver-model
 
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,slt %s > %t1
-; RUN: FileCheck %s < %t1
+; RUN: %FileCheck %s < %t1
 
 ; return b > 0
 ; CHECK:      %5:i1 = slt 0:i32, %1

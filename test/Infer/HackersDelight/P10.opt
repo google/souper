@@ -1,7 +1,7 @@
 ; REQUIRES: solver, solver-model, synthesis
 
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=ule,and,xor %s > %t1
-; RUN: FileCheck %s < %t1
+; RUN: %FileCheck %s < %t1
 
 ; CHECK: result %4
 

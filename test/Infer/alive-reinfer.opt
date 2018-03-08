@@ -1,7 +1,7 @@
 ; REQUIRES: solver, solver-model, synthesis
 
 ; RUN: %souper-check %solver -reinfer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,and,sub,or %s > %t1
-; RUN: FileCheck %s < %t1
+; RUN: %FileCheck %s < %t1
 
 ; CHECK: no cost regression
 ; CHECK: no cost regression

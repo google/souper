@@ -1,8 +1,8 @@
 ; REQUIRES: solver
 
-; RUN: llvm-as -o %t %s
+; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check %t 2> %t2 || true
-; RUN: FileCheck %s < %t2
+; RUN: %FileCheck %s < %t2
 
 define void @foo() {
 entry:
