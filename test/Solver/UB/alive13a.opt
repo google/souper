@@ -1,0 +1,20 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+; %a i17 = 0x1FFFF (131071, -1)
+; %b i17 = 0x00010 (16)
+; %sh i17 = poison
+; Source value: 0x10000 (65536, -65536)
+; Target value: poison
+
+%a:i17 = var
+%b:i17 = var
+%mul = shlnsw %a, %b
+infer %mul
+%sh = shlnsw 1, %b
+%mul2 = mulnsw %a, %sh
+result %mul2

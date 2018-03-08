@@ -1,0 +1,21 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+; let X = poison and C == 1
+; then a = X
+; r = -X
+; negC = -1
+; and r2 = UB (can't divide by -1)
+
+%C:i16 = var
+%X:i16 = var
+%a = sdiv %X, %C
+%r = sub 0, %a
+infer %r
+%negC = sub 0, %C
+%r2 = sdiv %X, %negC
+result %r2
