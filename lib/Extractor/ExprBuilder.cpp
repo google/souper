@@ -602,13 +602,6 @@ Inst *ExprBuilder::addnuwUB(Inst *I) {
    return LIC->getInst(Inst::Eq, 1, {AddMSB, LIC->getConst(APInt(1, false))});
 }
 
-Inst *ExprBuilder::addnwUB(Inst *I) {
-#if 0
-   recordUBInstruction(I, AndExpr::create(addnswUB(I), addnuwUB(I)));
-#endif
-   return LIC->getInst(Inst::And, 1, {addnswUB(I), addnuwUB(I)});
-}
-
 Inst *ExprBuilder::subnswUB(Inst *I) {
 #if 0
    const std::vector<Inst *> &Ops = I->orderedOps();
@@ -655,14 +648,6 @@ Inst *ExprBuilder::subnuwUB(Inst *I) {
    return LIC->getInst(Inst::Eq, 1, {SubMSB, LIC->getConst(APInt(1, false))});
 }
 
-Inst *ExprBuilder::subnwUB(Inst *I) {
-#if 0
-   recordUBInstruction(I, AndExpr::create(subnswUB(I), subnuwUB(I)));
-#endif
-   return LIC->getInst(Inst::And, 1, {subnswUB(I), subnuwUB(I)});
-}
-
-
 Inst *ExprBuilder::mulnswUB(Inst *I) {
 #if 0
    const std::vector<Inst *> &Ops = I->orderedOps();
@@ -678,7 +663,20 @@ Inst *ExprBuilder::mulnswUB(Inst *I) {
    ref<Expr> LowerBitsExt = SExtExpr::create(LowerBits, 2*Width);
    return EqExpr::create(Mul, LowerBitsExt);
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   // The computation below has to be performed on the operands of
+   // multiplication instruction. The instruction using mulnswUB()
+   // can be of different width, for instance in SMulO instruction
+   // which is of 1-bit, but the operands width are to be used here.
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   L = LIC->getInst(Inst::SExt, 2*Width, {L});
+   R = LIC->getInst(Inst::SExt, 2*Width, {R});
+   Inst *Mul = LIC->getInst(Inst::Mul, 2*Width, {L, R});
+   Inst *LowerBits = getExtractInst(Mul, 0, Width);
+   Inst *LowerBitsExt = LIC->getInst(Inst::SExt, 2*Width, {LowerBits});
+   return LIC->getInst(Inst::Eq, 1, {Mul, LowerBitsExt});
 }
 
 Inst *ExprBuilder::mulnuwUB(Inst *I) {
@@ -692,7 +690,15 @@ Inst *ExprBuilder::mulnuwUB(Inst *I) {
    ref<Expr> HigherBits = ExtractExpr::create(Mul, Width, Width);
    return Expr::createIsZero(HigherBits);
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Lext = LIC->getInst(Inst::ZExt, 2*Width, {L});
+   Inst *Rext = LIC->getInst(Inst::ZExt, 2*Width, {R});
+   Inst *Mul = LIC->getInst(Inst::Mul, 2*Width, {Lext, Rext});
+   Inst *HigherBits = getExtractInst(Mul, Width, Width);
+   return LIC->getInst(Inst::Eq, 1, {HigherBits, LIC->getConst(APInt(Width, 0))});
 }
 
 Inst *ExprBuilder::udivUB(Inst *I) {
@@ -746,7 +752,13 @@ Inst *ExprBuilder::sdivExactUB(Inst *I) {
    ref<Expr> Sdiv = SDivExpr::create(L, R);
    return EqExpr::create(L, MulExpr::create(R, Sdiv));
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Sdiv = LIC->getInst(Inst::SDiv, Width, {L, R});
+   return LIC->getInst(Inst::Eq, 1,
+                       {L, LIC->getInst(Inst::Mul, Width, {R, Sdiv})});
 }
 
 Inst *ExprBuilder::shiftUB(Inst *I) {
@@ -756,7 +768,12 @@ Inst *ExprBuilder::shiftUB(Inst *I) {
    ref<Expr> Lwidth = klee::ConstantExpr::create(L->getWidth(), L->getWidth());
    return UltExpr::create(R, Lwidth);
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Lwidth = LIC->getConst(APInt(Width, Width));
+   return LIC->getInst(Inst::Ult, 1, {R, Lwidth});
 }
 
 Inst *ExprBuilder::shlnswUB(Inst *I) {
@@ -767,7 +784,13 @@ Inst *ExprBuilder::shlnswUB(Inst *I) {
    ref<Expr> RShift = AShrExpr::create(Result, R);
    return EqExpr::create(RShift, L);
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Result = LIC->getInst(Inst::Shl, Width, {L, R});
+   Inst *RShift = LIC->getInst(Inst::AShr, Width, {Result, R});
+   return LIC->getInst(Inst::Eq, 1, {RShift, L});
 }
 
 Inst *ExprBuilder::shlnuwUB(Inst *I) {
@@ -778,7 +801,13 @@ Inst *ExprBuilder::shlnuwUB(Inst *I) {
    ref<Expr> RShift = LShrExpr::create(Result, R);
    return EqExpr::create(RShift, L);
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Result = LIC->getInst(Inst::Shl, Width, {L, R});
+   Inst *RShift = LIC->getInst(Inst::LShr, Width, {Result, R});
+   return LIC->getInst(Inst::Eq, 1, {RShift, L});
 }
 
 Inst *ExprBuilder::lshrExactUB(Inst *I) {
@@ -789,7 +818,13 @@ Inst *ExprBuilder::lshrExactUB(Inst *I) {
    ref<Expr> LShift = ShlExpr::create(Result, R);
    return EqExpr::create(LShift, L);
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Result = LIC->getInst(Inst::LShr, Width, {L, R});
+   Inst *LShift = LIC->getInst(Inst::Shl, Width, {Result, R});
+   return LIC->getInst(Inst::Eq, 1, {LShift, L});
 }
 
 Inst *ExprBuilder::ashrExactUB(Inst *I) {
@@ -800,7 +835,13 @@ Inst *ExprBuilder::ashrExactUB(Inst *I) {
    ref<Expr> LShift = ShlExpr::create(Result, R);
    return EqExpr::create(LShift, L);
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *Result = LIC->getInst(Inst::AShr, Width, {L, R});
+   Inst *LShift = LIC->getInst(Inst::Shl, Width, {Result, R});
+   return LIC->getInst(Inst::Eq, 1, {LShift, L});
 }
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,

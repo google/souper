@@ -102,10 +102,8 @@ public:
 
   Inst *addnswUB(Inst *I);
   Inst *addnuwUB(Inst *I);
-  Inst *addnwUB(Inst *I);
   Inst *subnswUB(Inst *I);
   Inst *subnuwUB(Inst *I);
-  Inst *subnwUB(Inst *I);
   Inst *mulnswUB(Inst *I);
   Inst *mulnuwUB(Inst *I);
   Inst *udivUB(Inst *I);

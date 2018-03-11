@@ -217,7 +217,8 @@ private:
     }
     case Inst::AddNW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, addnwUB(I));
+      recordUBInstruction(I, LIC->getInst(Inst::And, 1,
+                                          {addnswUB(I), addnuwUB(I)}));
       return Add;
     }
     case Inst::Sub:
@@ -234,24 +235,26 @@ private:
     }
     case Inst::SubNW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      recordUBInstruction(I, subnwUB(I));
+      recordUBInstruction(I, LIC->getInst(Inst::And, 1,
+                                          {subnswUB(I), subnuwUB(I)}));
       return Sub;
     }
     case Inst::Mul:
       return buildAssoc(MulExpr::create, Ops);
     case Inst::MulNSW: {
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, mulnswUB(I));
+      recordUBInstruction(I, mulnswUB(I));
       return Mul;
     }
     case Inst::MulNUW: {
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, mulnuwUB(I));
+      recordUBInstruction(I, mulnuwUB(I));
       return Mul;
     }
     case Inst::MulNW: {
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, AndExpr::create(mulnswUB(I), mulnuwUB(I)));
+      recordUBInstruction(I, LIC->getInst(Inst::And, 1,
+                                          {mulnswUB(I), mulnuwUB(I)}));
       return Mul;
     }
   
@@ -271,6 +274,7 @@ private:
       ref<Expr> R = get(Ops[1]);
       if (R->isZero()) {
         //recordUBInstruction(I, klee::ConstantExpr::create(0, 1));
+        recordUBInstruction(I, LIC->getConst(APInt(1, false)));
         return klee::ConstantExpr::create(0, Ops[1]->Width);
       }
   
@@ -291,6 +295,8 @@ private:
       case Inst::UDivExact: {
         ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
         //recordUBInstruction(I, AndExpr::create(udivUB(I), udivExactUB(I)));
+        recordUBInstruction(I, LIC->getInst(Inst::And, 1,
+                                            {udivUB(I), udivExactUB(I)}));
         return Udiv;
       }
       case Inst::SDivExact: {
@@ -320,44 +326,45 @@ private:
       return buildAssoc(XorExpr::create, Ops);
     case Inst::Shl: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, shiftUB(I));
+      recordUBInstruction(I, shiftUB(I));
       return Result;
     }
     case Inst::ShlNSW: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, AndExpr::create(shiftUB(I), shlnswUB(I)));
+      recordUBInstruction(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnswUB(I)}));
       return Result;
     }
     case Inst::ShlNUW: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, AndExpr::create(shiftUB(I), shlnuwUB(I)));
+      recordUBInstruction(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnuwUB(I)}));
       return Result;
     }
     case Inst::ShlNW: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, AndExpr::create(shiftUB(I),
-      //                                       AndExpr::create(shlnswUB(I),
-      //                                                       shlnuwUB(I))));
+      recordUBInstruction(I, LIC->getInst(Inst::And, 1,
+                                          {shiftUB(I), LIC->getInst(Inst::And, 1, {shlnswUB(I), shlnuwUB(I)})}));
       return Result;
     }
     case Inst::LShr: {
       ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, shiftUB(I));
+      recordUBInstruction(I, shiftUB(I));
       return Result;
     }
     case Inst::LShrExact: {
       ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, AndExpr::create(shiftUB(I), lshrExactUB(I)));
+      recordUBInstruction(I, LIC->getInst(Inst::And, 1,
+                                          {shiftUB(I), lshrExactUB(I)}));
       return Result;
     }
     case Inst::AShr: {
       ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, shiftUB(I));
+      recordUBInstruction(I, shiftUB(I));
       return Result;
     }
     case Inst::AShrExact: {
       ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, AndExpr::create(shiftUB(I), ashrExactUB(I)));
+      recordUBInstruction(I, LIC->getInst(Inst::And, 1,
+                                          {shiftUB(I), ashrExactUB(I)}));
       return Result;
     }
     case Inst::Select:
