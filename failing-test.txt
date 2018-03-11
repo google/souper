@@ -1,0 +1,22 @@
+********************
+Testing: 0 .. 10.. 20.. 30.. 40.. 50.. 60.. 70.. 80.. 90.. 
+Testing Time: 89.09s
+********************
+Failing Tests (12):
+    Souper :: Pass/clang-pass-profile.c
+    Souper :: Solver/alive/alive23.opt
+    Souper :: Solver/alive/alive24.opt
+    Souper :: Solver/alive/alive25.opt
+    Souper :: Solver/alive/alive27.opt
+    Souper :: Solver/alive/alive29.opt
+    Souper :: Solver/sdiv-cornercase.ll
+    Souper :: Tool/blockpc-invalid-3.opt
+    Souper :: Tool/more-knownbits2.opt
+    Souper :: Tool/more-knownbits25.opt
+    Souper :: Tool/too-many-phis.opt
+    Souper :: Unit/extractor_tests.ll
+
+  Expected Passes    : 332
+  Expected Failures  : 3
+  Unexpected Failures: 12
+ninja: build stopped: subcommand failed.
