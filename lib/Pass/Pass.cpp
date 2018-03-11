@@ -361,10 +361,9 @@ public:
         continue;
 
       Instruction *I = Cand.Origin.getInstruction();
-      Instruction *ReplacedInst = Cand.Origin.getInstruction();
-      IRBuilder<> Builder(ReplacedInst);
+      IRBuilder<> Builder(I);
 
-      Value *NewVal = getValue(Cand.Mapping.RHS, ReplacedInst, EBC, DT,
+      Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
                                Builder, F->getParent());
       if (!NewVal) {
         if (DebugSouperPass)
