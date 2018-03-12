@@ -719,7 +719,6 @@ Inst *ExprBuilder::udivExactUB(Inst *I) {
    ref<Expr> Udiv = UDivExpr::create(L, R);
    return EqExpr::create(L, MulExpr::create(R, Udiv));
 #endif
-   // TODO: fails
    const std::vector<Inst *> &Ops = I->orderedOps();
    auto L = Ops[0];
    auto R = Ops[1];
