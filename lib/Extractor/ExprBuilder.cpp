@@ -742,7 +742,20 @@ Inst *ExprBuilder::sdivUB(Inst *I) {
                           0, R->getWidth())), OrExpr::create(
                           NeExpr::create(L, IntMin), NeExpr::create(R, NegOne)));
 #endif
-   return NULL;
+   const std::vector<Inst *> &Ops = I->orderedOps();
+   auto L = Ops[0];
+   auto R = Ops[1];
+   unsigned Width = L->Width;
+   Inst *ShiftBy = LIC->getConst(APInt(Width, Width-1));
+   Inst *IntMin = LIC->getInst(Inst::Shl, Width,
+                               {LIC->getConst(APInt(Width, 1)), ShiftBy});
+   Inst *NegOne = LIC->getInst(Inst::AShr, Width, {IntMin, ShiftBy});
+   Inst *NeExpr = LIC->getInst(Inst::Ne, 1,
+                               {R, LIC->getConst(APInt(R->Width, 0))});
+   Inst *OrExpr = LIC->getInst(Inst::Or, 1,
+                               {LIC->getInst(Inst::Ne, 1, {L, IntMin}),
+                                LIC->getInst(Inst::Ne, 1, {R, NegOne})});
+   return LIC->getInst(Inst::And, 1, {NeExpr, OrExpr});
 }
 
 Inst *ExprBuilder::sdivExactUB(Inst *I) {

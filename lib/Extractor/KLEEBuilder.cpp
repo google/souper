@@ -273,7 +273,6 @@ private:
       // a constant zero.
       ref<Expr> R = get(Ops[1]);
       if (R->isZero()) {
-        //recordUBInstruction(I, klee::ConstantExpr::create(0, 1));
         recordUBInstruction(I, LIC->getConst(APInt(1, false)));
         return klee::ConstantExpr::create(0, Ops[1]->Width);
       }
@@ -289,29 +288,28 @@ private:
       }
       case Inst::SDiv: {
         ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, sdivUB(I));
+        recordUBInstruction(I, sdivUB(I));
         return Sdiv;
       }
       case Inst::UDivExact: {
         ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, AndExpr::create(udivUB(I), udivExactUB(I)));
         recordUBInstruction(I, LIC->getInst(Inst::And, 1,
                                             {udivUB(I), udivExactUB(I)}));
         return Udiv;
       }
       case Inst::SDivExact: {
         ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, AndExpr::create(sdivUB(I), sdivExactUB(I)));
+        recordUBInstruction(I, LIC->getInst(Inst::And, 1, {sdivUB(I), sdivExactUB(I)}));
         return Sdiv;
       }
       case Inst::URem: {
         ref<Expr> Urem = URemExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, udivUB(I));
+        recordUBInstruction(I, udivUB(I));
         return Urem;
       }
       case Inst::SRem: {
         ref<Expr> Srem = SRemExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, sdivUB(I));
+        recordUBInstruction(I, sdivUB(I));
         return Srem;
       }
       llvm_unreachable("unknown kind");
