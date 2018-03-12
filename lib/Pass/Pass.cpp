@@ -106,7 +106,7 @@ public:
   void dynamicProfile(Function *F, CandidateReplacement &Cand) {
     std::string Str;
     llvm::raw_string_ostream Loc(Str);
-    Instruction *I = Cand.Origin.getInstruction();
+    auto I = Cand.Origin;
     I->getDebugLoc().print(Loc);
     ReplacementContext Context;
     std::string LHS = GetReplacementLHSString(Cand.BPCs, Cand.PCs,
@@ -312,10 +312,9 @@ public:
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
         if (dumpAllReplacements()) {
-          Instruction *I = R.Origin.getInstruction();
           errs() << "\n; *****";
           errs() << "\n; For LLVM instruction:\n;";
-          I->print(errs());
+          R.Origin->print(errs());
           errs() << "\n; Generating replacement:\n";
           ReplacementContext Context;
           PrintReplacementLHS(errs(), R.BPCs, R.PCs, R.Mapping.LHS, Context);
@@ -334,8 +333,7 @@ public:
       if (StaticProfile) {
         std::string Str;
         llvm::raw_string_ostream Loc(Str);
-        Instruction *I = Cand.Origin.getInstruction();
-        I->getDebugLoc().print(Loc);
+        Cand.Origin->getDebugLoc().print(Loc);
         std::string HField = "sprofile " + Loc.str();
         ReplacementContext Context;
         KV->hIncrBy(GetReplacementLHSString(Cand.BPCs, Cand.PCs,
@@ -360,7 +358,7 @@ public:
       if (!Cand.Mapping.RHS)
         continue;
 
-      Instruction *I = Cand.Origin.getInstruction();
+      Instruction *I = Cand.Origin;
       IRBuilder<> Builder(I);
 
       Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
