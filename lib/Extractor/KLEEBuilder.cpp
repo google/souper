@@ -68,7 +68,7 @@ public:
     ref<Expr> LHS = get(Mapping.LHS);
     ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
 
-    // Get demanded bits constaints
+    // Get demanded bits constraints
     ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
     if (!Mapping.LHS->DemandedBits.isAllOnesValue())
       LHS = AndExpr::create(LHS, DemandedBits);

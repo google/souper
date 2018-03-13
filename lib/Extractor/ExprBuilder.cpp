@@ -322,9 +322,7 @@ Inst *ExprBuilder::getUBInstCondition() {
         createUBPathInstsPred(I, Path->Insts, Path->BlockConstraints,
                               &Path->SelectBranches, CachedUBPathInsts);
       // Add predicate->UB constraint
-      Inst *IsZero = LIC->getInst(Inst::Eq, 1, {Pred, LIC->getConst(APInt(1, false))});
-      Inst *Implies = LIC->getInst(Inst::Or, 1, {IsZero, Ante});
-      Result = LIC->getInst(Inst::And, 1, {Result, Implies});
+      Result = LIC->getInst(Inst::And, 1, {Result, getImpliesInst(Pred, Ante)});
     }
   }
   // Add the unconditional UB constraints at the top level
@@ -447,9 +445,7 @@ Inst *ExprBuilder::getBlockPCs() {
         createUBPathInstsPred(I, Path->Phis, Path->BlockConstraints,
                               /*SelectBranches=*/nullptr, CachedPhis);
       // Add predicate->UB constraint
-      Inst *IsZero = LIC->getInst(Inst::Eq, 1, {Pred, LIC->getConst(APInt(1, false))});
-      Inst *Implies = LIC->getInst(Inst::Or, 1, {IsZero, Ante});
-      Result = LIC->getInst(Inst::And, 1, {Result, Implies});
+      Result = LIC->getInst(Inst::And, 1, {Result, getImpliesInst(Pred, Ante)});
     }
   }
 
@@ -526,8 +522,7 @@ void ExprBuilder::recordUBInstruction(Inst *I, Inst *E) {
     // the corresponding Phi is not part of the current
     // Souper IR because the Phi is not in the equivalence class
     // of the instruction.
-    Inst *IsZero = LIC->getInst(Inst::Eq, 1, {UBInstPrecondition, LIC->getConst(APInt(1, false))});
-    UBExprMap[I] = LIC->getInst(Inst::Or, 1, {IsZero, E});
+    UBExprMap[I] = getImpliesInst(UBInstPrecondition, E);
   }
 }
 
