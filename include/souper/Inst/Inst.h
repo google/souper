@@ -18,6 +18,7 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
+#include "llvm/IR/Value.h"
 #include <map>
 #include <memory>
 #include <set>
@@ -113,9 +114,11 @@ struct Inst : llvm::FoldingSetNode {
   std::string Name;
   std::vector<Inst *> Ops;
   mutable std::vector<Inst *> OrderedOps;
+  std::vector<llvm::Value *> Origins;
 
   bool operator<(const Inst &I) const;
   const std::vector<Inst *> &orderedOps() const;
+  bool hasOrigin(llvm::Value *V) const;
 
   void Profile(llvm::FoldingSetNodeID &ID) const;
 

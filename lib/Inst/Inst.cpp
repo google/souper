@@ -20,6 +20,10 @@
 
 using namespace souper;
 
+bool Inst::hasOrigin(llvm::Value *V) const {
+  return std::find(Origins.begin(), Origins.end(), V) != Origins.end();
+}
+
 bool Inst::operator<(const Inst &Other) const {
   if (this == &Other)
     return false;
