@@ -23,6 +23,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace souper {
@@ -112,6 +113,7 @@ struct Inst : llvm::FoldingSetNode {
   bool Available = true;
   llvm::APInt Val;
   std::string Name;
+  std::unordered_set<Inst *> DepsWithExternalUses;
   std::vector<Inst *> Ops;
   mutable std::vector<Inst *> OrderedOps;
   std::vector<llvm::Value *> Origins;
@@ -169,6 +171,7 @@ class ReplacementContext {
   llvm::DenseMap<Block *, std::string> BlockNames;
   std::map<std::string, Inst *> NameToInst;
   std::map<std::string, Block *> NameToBlock;
+  std::string printInstImpl(Inst *I, llvm::raw_ostream &Out, bool printNames, Inst *OrigI);
 
 public:
   void printPCs(const std::vector<InstMapping> &PCs,

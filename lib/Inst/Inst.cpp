@@ -92,6 +92,12 @@ const std::vector<Inst *> &Inst::orderedOps() const {
 
 std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
                                           bool printNames) {
+  return printInstImpl(I, Out, printNames, I);
+}
+
+std::string ReplacementContext::printInstImpl(Inst *I, llvm::raw_ostream &Out,
+                                              bool printNames, Inst *OrigI) {
+
   std::string Str;
   llvm::raw_string_ostream SS(Str);
 
@@ -131,7 +137,7 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
       OpsSS << ", ";
     switch (I->K) {
       default:
-        OpsSS << printInst(Ops[Idx], Out, printNames);
+        OpsSS << printInstImpl(Ops[Idx], Out, printNames, OrigI);
         break;
       case Inst::SAddWithOverflow:
       case Inst::UAddWithOverflow:
@@ -139,7 +145,7 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
       case Inst::USubWithOverflow:
       case Inst::SMulWithOverflow:
       case Inst::UMulWithOverflow:
-        OpsSS << printInst(I->Ops[1]->Ops[Idx], Out, printNames);
+        OpsSS << printInstImpl(I->Ops[1]->Ops[Idx], Out, printNames, OrigI);
         break;
     }
   }
@@ -177,6 +183,10 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
           Out << " (signBits=" << I->NumSignBits << ")";
       }
       Out << OpsSS.str();
+
+      if (OrigI->DepsWithExternalUses.find(I) != OrigI->DepsWithExternalUses.end())
+        Out << " (hasExternalUses)";
+
       if (printNames && !I->Name.empty())
         Out << " ; " << I->Name;
       Out << '\n';
