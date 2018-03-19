@@ -505,6 +505,7 @@ Inst *ExprBuilder::build(Value *V) {
 }
 
 Inst *ExprBuilder::get(Value *V) {
+  // Cache V if V is not found in InstMap
   Inst *&E = EBC.InstMap[V];
   if (!E) {
     E = build(V);
