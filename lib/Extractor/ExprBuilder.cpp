@@ -15,6 +15,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "souper/Extractor/ExprBuilder.h"
 
+#include <queue>
+
 using namespace llvm;
 using namespace souper;
 
@@ -849,6 +851,130 @@ Inst *ExprBuilder::ashrExactUB(Inst *I) {
    Inst *Result = LIC->getInst(Inst::AShr, Width, {L, R});
    Inst *LShift = LIC->getInst(Inst::Shl, Width, {Result, R});
    return LIC->getInst(Inst::Eq, 1, {LShift, L});
+}
+
+std::map<Inst *, Inst *> ExprBuilder::getUBInstructions(Inst *Root) {
+  // breadth-first search
+  std::map<Inst *, Inst *> Result;
+  std::queue<Inst *> Q;
+  Q.push(Root);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    // Collect UB instructions
+    switch (I->K) {
+    case Inst::AddNSW: {
+      Result.emplace(I, addnswUB(I));
+    }
+    case Inst::AddNUW: {
+      Result.emplace(I, addnuwUB(I));
+    }
+    case Inst::AddNW: {
+      Result.emplace(I, LIC->getInst(Inst::And, 1,
+                                     {addnswUB(I), addnuwUB(I)}));
+    }
+    case Inst::SubNSW: {
+      Result.emplace(I, subnswUB(I));
+    }
+    case Inst::SubNUW: {
+      Result.emplace(I, subnuwUB(I));
+    }
+    case Inst::SubNW: {
+      Result.emplace(I, LIC->getInst(Inst::And, 1,
+                                     {subnswUB(I), subnuwUB(I)}));
+    }
+    case Inst::MulNSW: {
+      Result.emplace(I, mulnswUB(I));
+    }
+    case Inst::MulNUW: {
+      Result.emplace(I, mulnuwUB(I));
+    }
+    case Inst::MulNW: {
+      Result.emplace(I, LIC->getInst(Inst::And, 1,
+                                     {mulnswUB(I), mulnuwUB(I)}));
+    }
+
+    case Inst::UDiv:
+    case Inst::SDiv:
+    case Inst::UDivExact:
+    case Inst::SDivExact:
+    case Inst::URem:
+    case Inst::SRem: { // Fall-through
+      // If the second oprand is 0, then it definitely causes UB.
+      // There are quite a few cases where KLEE folds operations into zero,
+      // e.g., "sext i16 0 to i32", "0 + 0", "2 - 2", etc.  In all cases,
+      // we skip building the corresponding KLEE expressions and just return
+      // a constant zero.
+      Inst *R = I->Ops[1];
+      if (R == LIC->getConst(APInt(R->Width, 0))) {
+        Result.emplace(I, LIC->getConst(APInt(1, false)));
+        return Result;
+      }
+
+      switch (I->K) {
+      default:
+        break;
+
+      case Inst::UDiv: {
+        Result.emplace(I, udivUB(I));
+      }
+      case Inst::SDiv: {
+        Result.emplace(I, sdivUB(I));
+      }
+      case Inst::UDivExact: {
+        Result.emplace(I, LIC->getInst(Inst::And, 1,
+                                       {udivUB(I), udivExactUB(I)}));
+      }
+      case Inst::SDivExact: {
+        Result.emplace(I, LIC->getInst(Inst::And, 1, {sdivUB(I), sdivExactUB(I)}));
+      }
+      case Inst::URem: {
+        Result.emplace(I, udivUB(I));
+      }
+      case Inst::SRem: {
+        Result.emplace(I, sdivUB(I));
+      }
+      llvm_unreachable("unknown kind");
+      }
+    }
+
+    case Inst::Shl: {
+      Result.emplace(I, shiftUB(I));
+    }
+    case Inst::ShlNSW: {
+      Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnswUB(I)}));
+    }
+    case Inst::ShlNUW: {
+      Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnuwUB(I)}));
+    }
+    case Inst::ShlNW: {
+      Result.emplace(I, LIC->getInst(Inst::And, 1,
+                                     {shiftUB(I), LIC->getInst(Inst::And, 1, {shlnswUB(I), shlnuwUB(I)})}));
+    }
+    case Inst::LShr: {
+      Result.emplace(I, shiftUB(I));
+    }
+    case Inst::LShrExact: {
+      Result.emplace(I, LIC->getInst(Inst::And, 1,
+                                     {shiftUB(I), lshrExactUB(I)}));
+    }
+    case Inst::AShr: {
+      Result.emplace(I, shiftUB(I));
+    }
+    case Inst::AShrExact: {
+      Result.emplace(I, LIC->getInst(Inst::And, 1,
+                                     {shiftUB(I), ashrExactUB(I)}));
+    }
+    default:
+      break;
+    }
+
+    for (auto Op : I->orderedOps())
+      if (!Result.count(Op))
+        Q.push(Op);
+  }
+
+  return Result;
 }
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,

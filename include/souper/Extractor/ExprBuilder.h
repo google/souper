@@ -77,6 +77,7 @@ public:
   Inst *getBlockPCs();
   void setBlockPCMap(const BlockPCs &BPCs);
   void recordUBInstruction(Inst *I, Inst *E);
+  std::map<Inst *, Inst *> getUBInstructions(Inst *Root);
 
   std::map<Block *, std::vector<Inst *>> BlockPredMap;
 
