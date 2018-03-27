@@ -855,6 +855,7 @@ Inst *ExprBuilder::ashrExactUB(Inst *I) {
 
 std::map<Inst *, Inst *> ExprBuilder::getUBInstructions(Inst *Root) {
   // breadth-first search
+  std::set<Inst *> Visited;
   std::map<Inst *, Inst *> Result;
   std::queue<Inst *> Q;
   Q.push(Root);
@@ -865,33 +866,42 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstructions(Inst *Root) {
     switch (I->K) {
     case Inst::AddNSW: {
       Result.emplace(I, addnswUB(I));
+      break;
     }
     case Inst::AddNUW: {
       Result.emplace(I, addnuwUB(I));
+      break;
     }
     case Inst::AddNW: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
                                      {addnswUB(I), addnuwUB(I)}));
+      break;
     }
     case Inst::SubNSW: {
       Result.emplace(I, subnswUB(I));
+      break;
     }
     case Inst::SubNUW: {
       Result.emplace(I, subnuwUB(I));
+      break;
     }
     case Inst::SubNW: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
                                      {subnswUB(I), subnuwUB(I)}));
+      break;
     }
     case Inst::MulNSW: {
       Result.emplace(I, mulnswUB(I));
+      break;
     }
     case Inst::MulNUW: {
       Result.emplace(I, mulnuwUB(I));
+      break;
     }
     case Inst::MulNW: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
                                      {mulnswUB(I), mulnuwUB(I)}));
+      break;
     }
 
     case Inst::UDiv:
@@ -917,22 +927,28 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstructions(Inst *Root) {
 
       case Inst::UDiv: {
         Result.emplace(I, udivUB(I));
+        break;
       }
       case Inst::SDiv: {
         Result.emplace(I, sdivUB(I));
+        break;
       }
       case Inst::UDivExact: {
         Result.emplace(I, LIC->getInst(Inst::And, 1,
                                        {udivUB(I), udivExactUB(I)}));
+        break;
       }
       case Inst::SDivExact: {
         Result.emplace(I, LIC->getInst(Inst::And, 1, {sdivUB(I), sdivExactUB(I)}));
+        break;
       }
       case Inst::URem: {
         Result.emplace(I, udivUB(I));
+        break;
       }
       case Inst::SRem: {
         Result.emplace(I, sdivUB(I));
+        break;
       }
       llvm_unreachable("unknown kind");
       }
@@ -940,37 +956,45 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstructions(Inst *Root) {
 
     case Inst::Shl: {
       Result.emplace(I, shiftUB(I));
+      break;
     }
     case Inst::ShlNSW: {
       Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnswUB(I)}));
+      break;
     }
     case Inst::ShlNUW: {
       Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnuwUB(I)}));
+      break;
     }
     case Inst::ShlNW: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
                                      {shiftUB(I), LIC->getInst(Inst::And, 1, {shlnswUB(I), shlnuwUB(I)})}));
+      break;
     }
     case Inst::LShr: {
       Result.emplace(I, shiftUB(I));
+      break;
     }
     case Inst::LShrExact: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
                                      {shiftUB(I), lshrExactUB(I)}));
+      break;
     }
     case Inst::AShr: {
       Result.emplace(I, shiftUB(I));
+      break;
     }
     case Inst::AShrExact: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
                                      {shiftUB(I), ashrExactUB(I)}));
+      break;
     }
     default:
       break;
     }
 
-    for (auto Op : I->orderedOps())
-      if (!Result.count(Op))
+    if (Visited.insert(I).second)
+      for (auto Op : I->orderedOps())
         Q.push(Op);
   }
 

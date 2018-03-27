@@ -66,8 +66,6 @@ public:
   
     // Build LHS
     ref<Expr> LHS = get(Mapping.LHS);
-    if (UBExprMap.size() != getUBInstructions(Mapping.LHS).size())
-      report_fatal_error("UB instruction mismatch");
     ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
 
     // Get demanded bits constraints
