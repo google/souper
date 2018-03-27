@@ -1,14 +1,13 @@
+Testing Time: 87.60s
 ********************
-Failing Tests (4):
+Failing Tests (2):
     Souper :: Pass/clang-pass-profile.c
-    Souper :: Solver/alive-bug.ll
-    Souper :: Solver/bachet1.ll
     Souper :: Tool/too-many-phis.opt
 
-  Expected Passes    : 340
+  Expected Passes    : 342
   Expected Failures  : 3
-  Unexpected Failures: 4
+  Unexpected Failures: 2
 
-real	1m27.816s
-user	3m50.009s
-sys	0m15.642s
+real	1m27.715s
+user	4m12.942s
+sys	0m15.495s

@@ -63,7 +63,7 @@ public:
   llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
       const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
       InstMapping Mapping, bool Negate) override {
-  
+
     // Build LHS
     ref<Expr> LHS = get(Mapping.LHS);
     ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
@@ -77,27 +77,37 @@ public:
         Ante = AndExpr::create(Ante, get(getDemandedBitsCondition(I)));
     }
 
-    // Build PCs
-    for (const auto &PC : PCs) {
-      Ante = AndExpr::create(Ante, get(getInstMapping(PC)));
-    }
-    // Build BPCs
-    if (BPCs.size()) {
-      setBlockPCMap(BPCs);
-      Ante = AndExpr::create(Ante, get(getBlockPCs(Mapping.LHS)));
-    }
-    // Get UB constraints of LHS and (B)PCs
+    // Get UB constraints of LHS
     ref<Expr> LHSUB = klee::ConstantExpr::create(1, Expr::Bool);
     if (ExploitUB) {
       LHSUB = get(getUBInstCondition(Mapping.LHS));
       if (LHSUB.isNull())
         return llvm::Optional<CandidateExpr>();
     }
+
+    // Build PCs
+    for (const auto &PC : PCs) {
+      Ante = AndExpr::create(Ante, get(getInstMapping(PC)));
+      // Get UB constraints of PCs
+      if (ExploitUB)
+        LHSUB = AndExpr::create(LHSUB, get(getUBInstCondition(getInstMapping(PC))));
+    }
+
+    // Build BPCs
+    if (BPCs.size()) {
+      setBlockPCMap(BPCs);
+      // TODO: Get UB constraints of BPCs
+      Ante = AndExpr::create(Ante, get(getBlockPCs(Mapping.LHS)));
+    }
+
     // Build RHS
     ref<Expr> RHS = get(Mapping.RHS);
+
+    // Get demanded bits constraints
     if (!Mapping.LHS->DemandedBits.isAllOnesValue())
       RHS = AndExpr::create(RHS, DemandedBits);
-    // Get UB constraints of RHS and ((B)PCs)
+
+    // Get UB constraints of RHS
     ref<Expr> RHSUB = klee::ConstantExpr::create(1, Expr::Bool);
     if (ExploitUB) {
       RHSUB = get(getUBInstCondition(Mapping.RHS));
@@ -110,11 +120,14 @@ public:
       Cons = NeExpr::create(LHS, RHS);
     else        // (LHS == RHS)
       Cons = EqExpr::create(LHS, RHS);
+
     // Cons && RHS UB
     if (Mapping.RHS->K != Inst::Const)
       Cons = AndExpr::create(Cons, RHSUB);
+
     // (LHS UB && (B)PCs && (B)PCs UB)
     Ante = AndExpr::create(Ante, LHSUB);
+
     // (LHS UB && (B)PCs && (B)PCs UB) => Cons && RHS UB
     CE.E = Expr::createImplies(Ante, Cons);
   
