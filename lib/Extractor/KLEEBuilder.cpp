@@ -125,10 +125,10 @@ public:
     if (Mapping.RHS->K != Inst::Const)
       Cons = AndExpr::create(Cons, RHSUB);
 
-    // (LHS UB && (B)PCs && (B)PCs UB)
+    // (B)PCs && && LHS UB && (B)PCs UB
     Ante = AndExpr::create(Ante, LHSUB);
 
-    // (LHS UB && (B)PCs && (B)PCs UB) => Cons && RHS UB
+    // ((B)PCs && LHS UB && (B)PCs UB) => Cons && RHS UB
     CE.E = Expr::createImplies(Ante, Cons);
   
     return llvm::Optional<CandidateExpr>(std::move(CE));
