@@ -76,7 +76,7 @@ public:
   Inst *getDemandedBitsCondition(Inst *I);
   Inst *getBlockPCs();
   void setBlockPCMap(const BlockPCs &BPCs);
-  void recordUBInstruction(Inst *I, Inst *E);
+  //void recordUBInstruction(Inst *I, Inst *E);
   std::map<Inst *, Inst *> getUBInstructions(Inst *Root);
 
   std::map<Block *, std::vector<Inst *>> BlockPredMap;

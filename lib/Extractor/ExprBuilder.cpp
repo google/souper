@@ -514,6 +514,7 @@ Inst *ExprBuilder::createUBPathInstsPred(
   return Pred;
 }
 
+#if 0
 void ExprBuilder::recordUBInstruction(Inst *I, Inst *E) {
   if (!IsForBlockPCUBInst) {
     UBExprMap[I] = E;
@@ -527,6 +528,7 @@ void ExprBuilder::recordUBInstruction(Inst *I, Inst *E) {
     UBExprMap[I] = getImpliesInst(UBInstPrecondition, E);
   }
 }
+#endif
 
 Inst *ExprBuilder::getInstMapping(const InstMapping &IM) {
  return LIC->getInst(Inst::Eq, 1, {IM.LHS, IM.RHS});
