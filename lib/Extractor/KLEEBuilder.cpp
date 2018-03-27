@@ -84,24 +84,24 @@ public:
     // Build BPCs
     if (BPCs.size()) {
       setBlockPCMap(BPCs);
-      Ante = AndExpr::create(Ante, get(getBlockPCs()));
+      Ante = AndExpr::create(Ante, get(getBlockPCs(Mapping.LHS)));
     }
     // Get UB constraints of LHS and (B)PCs
-    ref<Expr> LHSPCsUB = klee::ConstantExpr::create(1, Expr::Bool);
+    ref<Expr> LHSUB = klee::ConstantExpr::create(1, Expr::Bool);
     if (ExploitUB) {
-      LHSPCsUB = get(getUBInstCondition());
-      if (LHSPCsUB.isNull())
+      LHSUB = get(getUBInstCondition(Mapping.LHS));
+      if (LHSUB.isNull())
         return llvm::Optional<CandidateExpr>();
     }
     // Build RHS
     ref<Expr> RHS = get(Mapping.RHS);
     if (!Mapping.LHS->DemandedBits.isAllOnesValue())
       RHS = AndExpr::create(RHS, DemandedBits);
-    // Get all UB constraints (LHS && (B)PCs && RHS)
-    ref<Expr> UB = klee::ConstantExpr::create(1, Expr::Bool);
+    // Get UB constraints of RHS and ((B)PCs)
+    ref<Expr> RHSUB = klee::ConstantExpr::create(1, Expr::Bool);
     if (ExploitUB) {
-      UB = get(getUBInstCondition());
-      if (UB.isNull())
+      RHSUB = get(getUBInstCondition(Mapping.RHS));
+      if (RHSUB.isNull())
         return llvm::Optional<CandidateExpr>();
     }
   
@@ -110,12 +110,12 @@ public:
       Cons = NeExpr::create(LHS, RHS);
     else        // (LHS == RHS)
       Cons = EqExpr::create(LHS, RHS);
-    // Cons && UB
+    // Cons && RHS UB
     if (Mapping.RHS->K != Inst::Const)
-      Cons = AndExpr::create(Cons, UB);
+      Cons = AndExpr::create(Cons, RHSUB);
     // (LHS UB && (B)PCs && (B)PCs UB)
-    Ante = AndExpr::create(Ante, LHSPCsUB);
-    // (LHS UB && (B)PCs && (B)PCs UB) => Cons && UB
+    Ante = AndExpr::create(Ante, LHSUB);
+    // (LHS UB && (B)PCs && (B)PCs UB) => Cons && RHS UB
     CE.E = Expr::createImplies(Ante, Cons);
   
     return llvm::Optional<CandidateExpr>(std::move(CE));
@@ -200,7 +200,7 @@ private:
       for (unsigned J = 1; J < Ops.size(); ++J) {
         E = SelectExpr::create(get(PredExpr[J-1]), E, get(Ops[J]));
       }
-      UBPathInsts.push_back(I);
+      //UBPathInsts.push_back(I);
       return E;
     }
     case Inst::Add:
@@ -366,7 +366,7 @@ private:
       return Result;
     }
     case Inst::Select:
-      UBPathInsts.push_back(I);
+      //UBPathInsts.push_back(I);
       return SelectExpr::create(get(Ops[0]), get(Ops[1]), get(Ops[2]));
     case Inst::ZExt:
       return ZExtExpr::create(get(Ops[0]), I->Width);

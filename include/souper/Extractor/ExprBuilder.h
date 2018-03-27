@@ -72,19 +72,20 @@ public:
                               UBPathInstMap &CachedUBPathInsts);
 
   Inst *getInstMapping(const InstMapping &IM);
-  Inst *getUBInstCondition();
+  Inst *getUBInstCondition(Inst *Root);
   Inst *getDemandedBitsCondition(Inst *I);
-  Inst *getBlockPCs();
+  Inst *getBlockPCs(Inst *Root);
   void setBlockPCMap(const BlockPCs &BPCs);
   //void recordUBInstruction(Inst *I, Inst *E);
-  std::map<Inst *, Inst *> getUBInstructions(Inst *Root);
+  std::map<Inst *, Inst *> getUBInstConstraints(Inst *Root);
+  std::vector<Inst *> getUBPathInsts(Inst *Root);
 
   std::map<Block *, std::vector<Inst *>> BlockPredMap;
 
-  std::map<Inst *, Inst *> UBExprMap;
+  //std::map<Inst *, Inst *> UBExprMap;
 
   std::map<Block *, BlockPCPredMap> BlockPCMap;
-  std::vector<Inst *> UBPathInsts;
+  //std::vector<Inst *> UBPathInsts;
   UniqueNameSet ArrayNames;
   // Holding the precondition, i.e. blockpc, for the UBInst under process.
   Inst *UBInstPrecondition = nullptr;

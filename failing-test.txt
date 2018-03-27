@@ -1,12 +1,14 @@
 ********************
-Testing: 0 .. 10.. 20.. 30.. 40.. 50.. 60.. 70.. 80.. 90.. 
-Testing Time: 95.07s
-********************
-Failing Tests (3):
+Failing Tests (4):
     Souper :: Pass/clang-pass-profile.c
-    Souper :: Tool/blockpc-invalid-3.opt
+    Souper :: Solver/alive-bug.ll
+    Souper :: Solver/bachet1.ll
     Souper :: Tool/too-many-phis.opt
 
-  Expected Passes    : 341
+  Expected Passes    : 340
   Expected Failures  : 3
-  Unexpected Failures: 3
+  Unexpected Failures: 4
+
+real	1m27.816s
+user	3m50.009s
+sys	0m15.642s
