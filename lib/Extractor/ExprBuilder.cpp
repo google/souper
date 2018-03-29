@@ -460,18 +460,7 @@ void ExprBuilder::setBlockPCMap(const BlockPCs &BPCs) {
     assert(BPC.B && "Block is NULL!");
     BlockPCPredMap &PCMap = BlockPCMap[BPC.B];
     auto I = PCMap.find(BPC.PredIdx);
-    // Relying on a class-level flag may not be a nice solution,
-    // but it seems hard to differentiate two cases:
-    //   (1) UBInstExpr collected through blockpc, and;
-    //   (2) UBInstExpr collected through pc/lhs/rhs
-    // For the first case, UBInst(s) is conditional, i.e.,
-    // they rely on the fact that blockpc(s) are true.
-    if (I != PCMap.end())
-      UBInstPrecondition = I->second;
-    IsForBlockPCUBInst = true;
     Inst *PE = getInstMapping(BPC.PC);
-    IsForBlockPCUBInst = false;
-    UBInstPrecondition = nullptr;
     if (I == PCMap.end())
       PCMap[BPC.PredIdx] = PE;
     else

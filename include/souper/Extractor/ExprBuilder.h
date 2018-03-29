@@ -88,9 +88,9 @@ public:
   //std::vector<Inst *> UBPathInsts;
   UniqueNameSet ArrayNames;
   // Holding the precondition, i.e. blockpc, for the UBInst under process.
-  Inst *UBInstPrecondition = nullptr;
+  //Inst *UBInstPrecondition = nullptr;
   // Indicate if the UBInst relates to BlockPC
-  bool IsForBlockPCUBInst = false;
+  //bool IsForBlockPCUBInst = false;
 
   struct CandidateExpr {
     std::vector<std::unique_ptr<Array>> Arrays;
