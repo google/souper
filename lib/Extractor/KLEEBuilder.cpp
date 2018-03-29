@@ -72,10 +72,6 @@ public:
     ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
     if (!Mapping.LHS->DemandedBits.isAllOnesValue())
       LHS = AndExpr::create(LHS, DemandedBits);
-    for (const auto I : CE.Vars) {
-      if (I)
-        Ante = AndExpr::create(Ante, get(getDemandedBitsCondition(I)));
-    }
 
     // Get UB constraints of LHS
     ref<Expr> LHSUB = klee::ConstantExpr::create(1, Expr::Bool);
@@ -106,6 +102,11 @@ public:
     // Get demanded bits constraints
     if (!Mapping.LHS->DemandedBits.isAllOnesValue())
       RHS = AndExpr::create(RHS, DemandedBits);
+
+    for (const auto I : CE.Vars) {
+      if (I)
+        Ante = AndExpr::create(Ante, get(getDemandedBitsCondition(I)));
+    }
 
     // Get UB constraints of RHS
     ref<Expr> RHSUB = klee::ConstantExpr::create(1, Expr::Bool);
