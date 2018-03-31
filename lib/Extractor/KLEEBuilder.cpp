@@ -34,10 +34,6 @@
 #include <sstream>
 #include <unordered_map>
 
-static llvm::cl::opt<bool> ExploitUB(
-    "souper-exploit-ub",
-    llvm::cl::desc("Exploit undefined behavior (default=true)"),
-    llvm::cl::init(true));
 static llvm::cl::opt<bool> DumpKLEEExprs(
     "dump-klee-exprs",
     llvm::cl::desc("Dump KLEE expressions after SMTLIB queries"),
@@ -56,84 +52,9 @@ public:
   }
   ~KLEEBuilder() {}
 
-  //TODO
+  std::vector<std::unique_ptr<Array>> Arrays;
+  std::vector<Inst *> Vars;
   std::map<Inst *, ref<Expr>> ExprMap;
-
-  // Return an expression which must be proven valid for the candidate to apply.
-  llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
-      const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-      InstMapping Mapping, bool Negate) override {
-
-    // Build LHS
-    ref<Expr> LHS = get(Mapping.LHS);
-    ref<Expr> Ante = klee::ConstantExpr::alloc(1, 1);
-
-    // Get demanded bits constraints
-    ref<Expr> DemandedBits = klee::ConstantExpr::alloc(Mapping.LHS->DemandedBits);
-    if (!Mapping.LHS->DemandedBits.isAllOnesValue())
-      LHS = AndExpr::create(LHS, DemandedBits);
-
-    // Get UB constraints of LHS
-    ref<Expr> LHSUB = klee::ConstantExpr::create(1, Expr::Bool);
-    if (ExploitUB) {
-      LHSUB = get(getUBInstCondition(Mapping.LHS));
-      if (LHSUB.isNull())
-        return llvm::Optional<CandidateExpr>();
-    }
-
-    // Build PCs
-    for (const auto &PC : PCs) {
-      Ante = AndExpr::create(Ante, get(getInstMapping(PC)));
-      // Get UB constraints of PCs
-      if (ExploitUB)
-        LHSUB = AndExpr::create(LHSUB, get(getUBInstCondition(getInstMapping(PC))));
-    }
-
-    // Build BPCs
-    if (BPCs.size()) {
-      setBlockPCMap(BPCs);
-      // TODO: Get UB constraints of BPCs
-      Ante = AndExpr::create(Ante, get(getBlockPCs(Mapping.LHS)));
-    }
-
-    // Build RHS
-    ref<Expr> RHS = get(Mapping.RHS);
-
-    // Get demanded bits constraints
-    if (!Mapping.LHS->DemandedBits.isAllOnesValue())
-      RHS = AndExpr::create(RHS, DemandedBits);
-
-    for (const auto I : CE.Vars) {
-      if (I)
-        Ante = AndExpr::create(Ante, get(getDemandedBitsCondition(I)));
-    }
-
-    // Get UB constraints of RHS
-    ref<Expr> RHSUB = klee::ConstantExpr::create(1, Expr::Bool);
-    if (ExploitUB) {
-      RHSUB = get(getUBInstCondition(Mapping.RHS));
-      if (RHSUB.isNull())
-        return llvm::Optional<CandidateExpr>();
-    }
-  
-    ref<Expr> Cons;
-    if (Negate) // (LHS != RHS)
-      Cons = NeExpr::create(LHS, RHS);
-    else        // (LHS == RHS)
-      Cons = EqExpr::create(LHS, RHS);
-
-    // Cons && RHS UB
-    if (Mapping.RHS->K != Inst::Const)
-      Cons = AndExpr::create(Cons, RHSUB);
-
-    // (B)PCs && && LHS UB && (B)PCs UB
-    Ante = AndExpr::create(Ante, LHSUB);
-
-    // ((B)PCs && LHS UB && (B)PCs UB) => Cons && RHS UB
-    CE.E = Expr::createImplies(Ante, Cons);
-  
-    return llvm::Optional<CandidateExpr>(std::move(CE));
-  }
 
   std::string BuildQuery(const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,
@@ -142,25 +63,23 @@ public:
     std::string SMTStr;
     llvm::raw_string_ostream SMTSS(SMTStr);
     ConstraintManager Manager;
-    Optional<CandidateExpr> OptionalCE = GetCandidateExprForReplacement(BPCs,
-        PCs, Mapping, Negate);
-    if (!OptionalCE.hasValue())
+    Inst *Candidate = GetCandidateInstForReplacement(BPCs, PCs, Mapping, Negate);
+    if (!Candidate)
       return std::string();
-    CandidateExpr CE = std::move(OptionalCE.getValue());
-    ref<Expr> E = CE.E;
+    ref<Expr> E = get(Candidate);
     Query KQuery(Manager, E);
     ExprSMTLIBPrinter Printer;
     Printer.setOutput(SMTSS);
     Printer.setQuery(KQuery);
-    std::vector<const klee::Array *> Arrays;
+    std::vector<const klee::Array *> Arr;
     if (ModelVars) {
-      for (unsigned I = 0; I != CE.Vars.size(); ++I) {
-        if (CE.Vars[I]) {
-          Arrays.push_back(CE.Arrays[I].get());
-          ModelVars->push_back(CE.Vars[I]);
+      for (unsigned I = 0; I != Vars.size(); ++I) {
+        if (Vars[I]) {
+          Arr.push_back(Arrays[I].get());
+          ModelVars->push_back(Vars[I]);
         }
       }
-      Printer.setArrayValuesToGet(Arrays);
+      Printer.setArrayValuesToGet(Arr);
     }
     Printer.generateOutput();
   
@@ -496,11 +415,11 @@ private:
       NameStr = ("a" + Name).str();
     else
       NameStr = Name;
-    CE.Arrays.emplace_back(
-        new Array(ArrayNames.makeName(NameStr), 1, 0, 0, Expr::Int32, Width));
-    CE.Vars.push_back(Origin);
+    Arrays.emplace_back(
+     new Array(ArrayNames.makeName(NameStr), 1, 0, 0, Expr::Int32, Width));
+    Vars.push_back(Origin);
   
-    UpdateList UL(CE.Arrays.back().get(), 0);
+    UpdateList UL(Arrays.back().get(), 0);
     return ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
   }
 

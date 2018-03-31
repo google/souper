@@ -22,6 +22,10 @@ using namespace souper;
 
 ExprBuilder::~ExprBuilder() {}
 
+static llvm::cl::opt<bool> ExploitUB(
+    "souper-exploit-ub",
+    llvm::cl::desc("Exploit undefined behavior (default=true)"),
+    llvm::cl::init(true));
 static llvm::cl::opt<souper::ExprBuilder::Builder> SMTExprBuilder(
     "souper-smt-expr-builder",
     llvm::cl::Hidden,
@@ -1024,9 +1028,104 @@ std::vector<Inst *> ExprBuilder::getUBPathInsts(Inst *Root) {
   return Result;
 }
 
+std::vector<Inst *> ExprBuilder::getVarInsts(const std::vector<Inst *> Insts) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::vector<Inst *> Result;
+  std::queue<Inst *> Q;
+  // Populate the queue
+  for (const auto &I : Insts)
+    Q.push(I);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    if (I->K == Inst::Var)
+      Result.push_back(I);
+    if (Visited.insert(I).second)
+      for (auto Op : I->orderedOps())
+        Q.push(Op);
+  }
+
+  return Result;
+}
+
+// Return a candidate Inst which must be proven valid for the candidate to apply.
+Inst *ExprBuilder::GetCandidateInstForReplacement(
+    const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+    InstMapping Mapping, bool Negate) {
+  Inst *Result = nullptr;
+
+  // Build LHS
+  Inst *LHS = Mapping.LHS;
+  Inst *Ante = LIC->getConst(APInt(1, true));
+
+  // Get demanded bits constraints
+  Inst *DemandedBits = LIC->getConst(LHS->DemandedBits);
+  if (!LHS->DemandedBits.isAllOnesValue())
+    LHS = LIC->getInst(Inst::And, LHS->Width, {LHS, DemandedBits});
+
+  // Get UB constraints of LHS
+  Inst *LHSUB = LIC->getConst(APInt(1, true));
+  if (ExploitUB) {
+    LHSUB = getUBInstCondition(Mapping.LHS);
+    if (LHSUB == LIC->getConst(APInt(1, false)))
+      return nullptr;
+  }
+
+  // Build PCs
+  for (const auto &PC : PCs) {
+    Inst *Eq = getInstMapping(PC);
+    Ante = LIC->getInst(Inst::And, 1, {Ante, Eq});
+    // Get UB constraints of PCs
+    if (ExploitUB)
+      LHSUB = LIC->getInst(Inst::And, 1, {LHSUB, getUBInstCondition(Eq)});
+  }
+
+  // Build BPCs
+  if (BPCs.size()) {
+    setBlockPCMap(BPCs);
+    Ante = LIC->getInst(Inst::And, 1, {Ante, getBlockPCs(Mapping.LHS)});
+  }
+
+  // Build RHS
+  Inst *RHS = Mapping.RHS;
+
+  // Get demanded bits constraints
+  if (!Mapping.LHS->DemandedBits.isAllOnesValue())
+    RHS = LIC->getInst(Inst::And, 1, {RHS, DemandedBits});
+
+  for (const auto &I : getVarInsts({Mapping.LHS, Mapping.RHS}))
+    Ante = LIC->getInst(Inst::And, 1, {Ante, getDemandedBitsCondition(I)});
+
+  // Get UB constraints of RHS
+  Inst *RHSUB = LIC->getConst(APInt(1, true));
+  if (ExploitUB) {
+    RHSUB = getUBInstCondition(Mapping.RHS);
+    if (RHSUB == LIC->getConst(APInt(1, false)))
+      return nullptr;
+  }
+
+  if (Negate) // (LHS != RHS)
+    Result = LIC->getInst(Inst::Ne, 1, {LHS, RHS});
+  else        // (LHS == RHS)
+    Result = LIC->getInst(Inst::Eq, 1, {LHS, RHS});
+
+  // Result && RHS UB
+  if (Mapping.RHS->K != Inst::Const)
+    Result = LIC->getInst(Inst::And, 1, {Result, RHSUB});
+
+  // (B)PCs && && LHS UB && (B)PCs UB
+  Ante = LIC->getInst(Inst::And, 1, {Ante, LHSUB});
+
+  // ((B)PCs && LHS UB && (B)PCs UB) => Result && RHS UB
+  Result = getImpliesInst(Ante, Result);
+
+  return Result;
+}
+
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
-       const std::vector<InstMapping> &PCs, InstMapping Mapping,
-       std::vector<Inst *> *ModelVars, bool Negate) {
+    const std::vector<InstMapping> &PCs, InstMapping Mapping,
+    std::vector<Inst *> *ModelVars, bool Negate) {
   std::unique_ptr<ExprBuilder> EB;
   switch (SMTExprBuilder) {
   case ExprBuilder::KLEE:

@@ -15,12 +15,10 @@
 #ifndef SOUPER_EXTRACTOR_EXPRBUILDER_H
 #define SOUPER_EXTRACTOR_EXPRBUILDER_H
 
-#include "klee/Expr.h"
 #include "souper/Inst/Inst.h"
 #include "souper/Util/UniqueNameSet.h"
 #include <unordered_map>
 
-using namespace klee;
 using namespace souper;
 
 namespace souper {
@@ -29,11 +27,9 @@ class ExprBuilder {
 public:
   enum Builder {
     KLEE,
+    // TODO
     Z3
   };
-
-  // Local reference
-  InstContext *LIC;
 
   const unsigned MAX_PHI_DEPTH = 25;
   
@@ -76,28 +72,16 @@ public:
   Inst *getDemandedBitsCondition(Inst *I);
   Inst *getBlockPCs(Inst *Root);
   void setBlockPCMap(const BlockPCs &BPCs);
-  //void recordUBInstruction(Inst *I, Inst *E);
   std::map<Inst *, Inst *> getUBInstConstraints(Inst *Root);
   std::vector<Inst *> getUBPathInsts(Inst *Root);
+  std::vector<Inst *> getVarInsts(const std::vector<Inst *> Insts);
+
+  // Local reference
+  InstContext *LIC;
 
   std::map<Block *, std::vector<Inst *>> BlockPredMap;
-
-  //std::map<Inst *, Inst *> UBExprMap;
-
   std::map<Block *, BlockPCPredMap> BlockPCMap;
-  //std::vector<Inst *> UBPathInsts;
   UniqueNameSet ArrayNames;
-  // Holding the precondition, i.e. blockpc, for the UBInst under process.
-  //Inst *UBInstPrecondition = nullptr;
-  // Indicate if the UBInst relates to BlockPC
-  //bool IsForBlockPCUBInst = false;
-
-  struct CandidateExpr {
-    std::vector<std::unique_ptr<Array>> Arrays;
-    std::vector<Inst *> Vars;
-    ref<Expr> E;
-  };
-  CandidateExpr CE;
 
   Inst *getExtractInst(Inst *I, unsigned Offset, unsigned W);
   Inst *getImpliesInst(Inst *Ante, Inst *I);
@@ -118,10 +102,10 @@ public:
   Inst *lshrExactUB(Inst *I);
   Inst *ashrExactUB(Inst *I);
 
-  virtual llvm::Optional<CandidateExpr> GetCandidateExprForReplacement(
-      const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-      InstMapping Mapping, bool Negate) = 0;
-  
+  Inst *GetCandidateInstForReplacement(
+         const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+         InstMapping Mapping, bool Negate);
+
   virtual std::string BuildQuery(const BlockPCs &BPCs,
                  const std::vector<InstMapping> &PCs, InstMapping Mapping,
                  std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
