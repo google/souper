@@ -38,15 +38,14 @@ static llvm::cl::opt<souper::ExprBuilder::Builder> SMTExprBuilder(
 
 namespace souper {
 
-std::vector<Inst *> ExprBuilder::getBlockPredicates(Inst *I) {
+void ExprBuilder::setBlockPredicates(Inst *I) {
   assert(I->K == Inst::Phi && "not a phi inst");
   if (BlockPredMap.count(I->B))
-    return BlockPredMap[I->B];
+    return;
   std::vector<Inst *> PredExpr;
   for (auto const &PredVar : I->B->PredVars)
     PredExpr.push_back(PredVar);
   BlockPredMap[I->B] = PredExpr;
-  return PredExpr;
 }
 
 bool ExprBuilder::getUBPaths(Inst *I, UBPath *Current,
@@ -471,7 +470,24 @@ void ExprBuilder::setBlockPCMap(const BlockPCs &BPCs) {
       PCMap[BPC.PredIdx] = LIC->getInst(Inst::And, 1, {I->second, PE});
   }
 }
-  
+
+void ExprBuilder::setBlockPredicateMap(Inst *Root) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::queue<Inst *> Q;
+  Q.push(Root);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    if (I->K == Inst::Phi)
+      setBlockPredicates(I);
+
+    if (Visited.insert(I).second)
+      for (auto Op : I->orderedOps())
+        Q.push(Op);
+  }
+}
+
 Inst *ExprBuilder::createUBPathInstsPred(
     Inst *CurrentInst, std::vector<Inst *> &PathInsts,
     std::map<Block *, unsigned> &BlockConstraints,
@@ -1063,6 +1079,9 @@ Inst *ExprBuilder::GetCandidateInstForReplacement(
   Inst *DemandedBits = LIC->getConst(LHS->DemandedBits);
   if (!LHS->DemandedBits.isAllOnesValue())
     LHS = LIC->getInst(Inst::And, LHS->Width, {LHS, DemandedBits});
+
+  // TODO
+  setBlockPredicateMap(Mapping.LHS);
 
   // Get UB constraints of LHS
   Inst *LHSUB = LIC->getConst(APInt(1, true));

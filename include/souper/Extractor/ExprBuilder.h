@@ -51,7 +51,8 @@ public:
 
   virtual ~ExprBuilder();
 
-  std::vector<Inst *> getBlockPredicates(Inst *I);
+  void setBlockPredicates(Inst *I);
+  void setBlockPredicateMap(Inst *Root);
   bool getUBPaths(Inst *I, UBPath *Current,
                   std::vector<std::unique_ptr<UBPath>> &Paths,
                   UBPathInstMap &CachedUBPathInsts, unsigned Depth);
