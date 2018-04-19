@@ -56,6 +56,25 @@ public:
   std::vector<Inst *> Vars;
   std::map<Inst *, ref<Expr>> ExprMap;
 
+  std::string GetExprStr(const BlockPCs &BPCs,
+                         const std::vector<InstMapping> &PCs,
+                         InstMapping Mapping,
+                         std::vector<Inst *> *ModelVars, bool Negate) override {
+    Inst *Candidate = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
+    if (!Candidate)
+      return std::string();
+    ref<Expr> E = get(Candidate);
+
+    std::string SStr;
+    llvm::raw_string_ostream SS(SStr);
+    std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SS));
+    PP->setForceNoLineBreaks(true);
+    PP->scan(E);
+    PP->print(E);
+
+    return SS.str();
+  }
+
   std::string BuildQuery(const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,
                          InstMapping Mapping,

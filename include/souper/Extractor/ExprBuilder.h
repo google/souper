@@ -107,6 +107,10 @@ public:
          const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
          InstMapping Mapping, bool Negate);
 
+  virtual std::string GetExprStr(const BlockPCs &BPCs,
+                 const std::vector<InstMapping> &PCs, InstMapping Mapping,
+                 std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
+
   virtual std::string BuildQuery(const BlockPCs &BPCs,
                  const std::vector<InstMapping> &PCs, InstMapping Mapping,
                  std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
