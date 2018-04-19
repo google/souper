@@ -26,9 +26,7 @@ namespace souper {
 class ExprBuilder {
 public:
   enum Builder {
-    KLEE,
-    // TODO
-    Z3
+    KLEE
   };
 
   const unsigned MAX_PHI_DEPTH = 25;
@@ -103,7 +101,7 @@ public:
   Inst *lshrExactUB(Inst *I);
   Inst *ashrExactUB(Inst *I);
 
-  Inst *GetCandidateInstForReplacement(
+  Inst *GetCandidateExprForReplacement(
          const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
          InstMapping Mapping, bool Negate);
 

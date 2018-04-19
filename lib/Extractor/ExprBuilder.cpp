@@ -22,18 +22,12 @@ using namespace souper;
 
 ExprBuilder::~ExprBuilder() {}
 
-static llvm::cl::opt<bool> ExploitUB(
-    "souper-exploit-ub",
-    llvm::cl::desc("Exploit undefined behavior (default=true)"),
-    llvm::cl::init(true));
 static llvm::cl::opt<souper::ExprBuilder::Builder> SMTExprBuilder(
     "souper-smt-expr-builder",
     llvm::cl::Hidden,
     llvm::cl::desc("SMT-LIBv2 expression builder (default=klee)"),
     llvm::cl::values(clEnumValN(souper::ExprBuilder::KLEE, "klee",
-                                "Use KLEE's Expr library"),
-                     clEnumValN(souper::ExprBuilder::Z3, "z3",
-                                "Use Z3's API")),
+                                "Use KLEE's Expr library")),
     llvm::cl::init(souper::ExprBuilder::KLEE));
 
 namespace souper {
@@ -1066,7 +1060,7 @@ std::vector<Inst *> ExprBuilder::getVarInsts(const std::vector<Inst *> Insts) {
 }
 
 // Return a candidate Inst which must be proven valid for the candidate to apply.
-Inst *ExprBuilder::GetCandidateInstForReplacement(
+Inst *ExprBuilder::GetCandidateExprForReplacement(
     const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
     InstMapping Mapping, bool Negate) {
   Inst *Result = nullptr;
@@ -1084,20 +1078,16 @@ Inst *ExprBuilder::GetCandidateInstForReplacement(
   setBlockPredicateMap(Mapping.LHS);
 
   // Get UB constraints of LHS
-  Inst *LHSUB = LIC->getConst(APInt(1, true));
-  if (ExploitUB) {
-    LHSUB = getUBInstCondition(Mapping.LHS);
-    if (LHSUB == LIC->getConst(APInt(1, false)))
+  Inst *LHSUB = getUBInstCondition(Mapping.LHS);
+  if (LHSUB == LIC->getConst(APInt(1, false)))
       return nullptr;
-  }
 
   // Build PCs
   for (const auto &PC : PCs) {
     Inst *Eq = getInstMapping(PC);
     Ante = LIC->getInst(Inst::And, 1, {Ante, Eq});
     // Get UB constraints of PCs
-    if (ExploitUB)
-      LHSUB = LIC->getInst(Inst::And, 1, {LHSUB, getUBInstCondition(Eq)});
+    LHSUB = LIC->getInst(Inst::And, 1, {LHSUB, getUBInstCondition(Eq)});
   }
 
   // Build BPCs
@@ -1117,12 +1107,9 @@ Inst *ExprBuilder::GetCandidateInstForReplacement(
     Ante = LIC->getInst(Inst::And, 1, {Ante, getDemandedBitsCondition(I)});
 
   // Get UB constraints of RHS
-  Inst *RHSUB = LIC->getConst(APInt(1, true));
-  if (ExploitUB) {
-    RHSUB = getUBInstCondition(Mapping.RHS);
-    if (RHSUB == LIC->getConst(APInt(1, false)))
-      return nullptr;
-  }
+  Inst *RHSUB = getUBInstCondition(Mapping.RHS);
+  if (RHSUB == LIC->getConst(APInt(1, false)))
+    return nullptr;
 
   if (Negate) // (LHS != RHS)
     Result = LIC->getInst(Inst::Ne, 1, {LHS, RHS});
@@ -1149,9 +1136,6 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
   switch (SMTExprBuilder) {
   case ExprBuilder::KLEE:
     EB = createKLEEBuilder(IC);
-    break;
-  case ExprBuilder::Z3:
-    report_fatal_error("not supported yet");
     break;
   default:
     report_fatal_error("cannot reach here");

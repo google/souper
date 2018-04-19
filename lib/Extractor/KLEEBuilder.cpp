@@ -82,7 +82,7 @@ public:
     std::string SMTStr;
     llvm::raw_string_ostream SMTSS(SMTStr);
     ConstraintManager Manager;
-    Inst *Candidate = GetCandidateInstForReplacement(BPCs, PCs, Mapping, Negate);
+    Inst *Candidate = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
     if (!Candidate)
       return std::string();
     ref<Expr> E = get(Candidate);
