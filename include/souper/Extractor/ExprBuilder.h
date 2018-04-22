@@ -78,7 +78,6 @@ public:
   // Local reference
   InstContext *LIC;
 
-  std::map<Block *, std::vector<Inst *>> BlockPredMap;
   std::map<Block *, BlockPCPredMap> BlockPCMap;
   UniqueNameSet ArrayNames;
 
