@@ -24,33 +24,42 @@ using namespace souper;
 namespace souper {
 
 class ExprBuilder {
-public:
-  enum Builder {
-    KLEE
-  };
-
   const unsigned MAX_PHI_DEPTH = 25;
-  
+
   typedef std::unordered_map<Inst *, std::vector<Inst *>> UBPathInstMap;
   typedef std::map<unsigned, Inst *> BlockPCPredMap;
-  
+
   struct UBPath {
     std::map<Block *, unsigned> BlockConstraints;
     std::map<Inst *, bool> SelectBranches;
     std::vector<Inst *> Insts;
     std::vector<Inst *> UBInsts;
   };
-  
+
   struct BlockPCPhiPath {
     std::map<Block *, unsigned> BlockConstraints;
     std::vector<Inst *> Phis;
     std::vector<Inst *> PCs;
   };
 
-  virtual ~ExprBuilder();
+  std::map<Block *, BlockPCPredMap> BlockPCMap;
+public:
+  enum Builder {
+    KLEE
+  };
 
-  void setBlockPredicates(Inst *I);
-  void setBlockPredicateMap(Inst *Root);
+  virtual ~ExprBuilder() {};
+
+  virtual std::string GetExprStr(const BlockPCs &BPCs,
+                 const std::vector<InstMapping> &PCs, InstMapping Mapping,
+                 std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
+
+  virtual std::string BuildQuery(const BlockPCs &BPCs,
+                 const std::vector<InstMapping> &PCs, InstMapping Mapping,
+                 std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
+protected:
+  InstContext *LIC;
+
   bool getUBPaths(Inst *I, UBPath *Current,
                   std::vector<std::unique_ptr<UBPath>> &Paths,
                   UBPathInstMap &CachedUBPathInsts, unsigned Depth);
@@ -66,21 +75,14 @@ public:
                               std::map<Inst *, bool> *SelectBranches,
                               UBPathInstMap &CachedUBPathInsts);
 
-  Inst *getInstMapping(const InstMapping &IM);
+  void setBlockPCMap(const BlockPCs &BPCs);
+
   Inst *getUBInstCondition(Inst *Root);
   Inst *getDemandedBitsCondition(Inst *I);
   Inst *getBlockPCs(Inst *Root);
-  void setBlockPCMap(const BlockPCs &BPCs);
   std::map<Inst *, Inst *> getUBInstConstraints(Inst *Root);
   std::vector<Inst *> getUBPathInsts(Inst *Root);
   std::vector<Inst *> getVarInsts(const std::vector<Inst *> Insts);
-
-  // Local reference
-  InstContext *LIC;
-
-  std::map<Block *, BlockPCPredMap> BlockPCMap;
-  UniqueNameSet ArrayNames;
-
   Inst *getExtractInst(Inst *I, unsigned Offset, unsigned W);
   Inst *getImpliesInst(Inst *Ante, Inst *I);
 
@@ -103,14 +105,6 @@ public:
   Inst *GetCandidateExprForReplacement(
          const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
          InstMapping Mapping, bool Negate);
-
-  virtual std::string GetExprStr(const BlockPCs &BPCs,
-                 const std::vector<InstMapping> &PCs, InstMapping Mapping,
-                 std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
-
-  virtual std::string BuildQuery(const BlockPCs &BPCs,
-                 const std::vector<InstMapping> &PCs, InstMapping Mapping,
-                 std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
 };
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
@@ -118,7 +112,6 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
        std::vector<Inst *> *ModelVars, bool Negate=false);
 
 std::unique_ptr<ExprBuilder> createKLEEBuilder(InstContext &IC);
-
 }
 
 #endif  // SOUPER_EXTRACTOR_EXPRBUILDER_H

@@ -30,6 +30,7 @@ static llvm::cl::opt<bool> DumpKLEEExprs(
     llvm::cl::init(false));
 
 class KLEEBuilder : public ExprBuilder {
+  UniqueNameSet ArrayNames;
   std::vector<std::unique_ptr<Array>> Arrays;
   std::map<Inst *, ref<Expr>> ExprMap;
   std::vector<Inst *> Vars;
