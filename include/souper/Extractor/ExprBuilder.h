@@ -24,18 +24,14 @@ using namespace souper;
 namespace souper {
 
 class ExprBuilder {
-  const unsigned MAX_PHI_DEPTH = 25;
-
   typedef std::unordered_map<Inst *, std::vector<Inst *>> UBPathInstMap;
   typedef std::map<unsigned, Inst *> BlockPCPredMap;
-
   struct UBPath {
     std::map<Block *, unsigned> BlockConstraints;
     std::map<Inst *, bool> SelectBranches;
     std::vector<Inst *> Insts;
     std::vector<Inst *> UBInsts;
   };
-
   struct BlockPCPhiPath {
     std::map<Block *, unsigned> BlockConstraints;
     std::vector<Inst *> Phis;
@@ -43,6 +39,7 @@ class ExprBuilder {
   };
 
   std::map<Block *, BlockPCPredMap> BlockPCMap;
+  const unsigned MAX_PHI_DEPTH = 25;
 public:
   enum Builder {
     KLEE
