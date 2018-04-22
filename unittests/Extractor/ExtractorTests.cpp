@@ -12,19 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "klee/Expr.h"
-#include "klee/util/ExprPPrinter.h"
-#include "klee/util/PrintContext.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/SourceMgr.h"
 #include "souper/Extractor/Candidates.h"
-#include "souper/Extractor/KLEEBuilder.h"
+#include "souper/Extractor/ExprBuilder.h"
 #include <memory>
 #include "gtest/gtest.h"
 
-using namespace klee;
 using namespace llvm;
 using namespace souper;
 
@@ -36,7 +32,7 @@ struct ExtractorTest : testing::Test {
   InstContext IC;
   ExprBuilderContext EBC;
   FunctionCandidateSet CS;
-  std::vector<std::unique_ptr<CandidateExpr>> CandExprs;
+  std::vector<std::string> CandExprs;
 
   bool extractFromIR(const char *IR) {
     SMDiagnostic Err;
@@ -63,10 +59,9 @@ struct ExtractorTest : testing::Test {
                                      IC.getConst(APInt(1, true)) };
         for (auto I : Guesses) {
           R.Mapping.RHS = I;
-          std::unique_ptr<CandidateExpr> CE(
-                  new CandidateExpr(GetCandidateExprForReplacement(R.BPCs, R.PCs,
-                  R.Mapping, false).getValue()));
-          CandExprs.emplace_back(std::move(CE));
+          std::unique_ptr<ExprBuilder> EB = createKLEEBuilder(IC);
+          std::string Cand = EB->GetExprStr(R.BPCs, R.PCs, R.Mapping, 0);
+          CandExprs.emplace_back(Cand);
         }
       }
     }
@@ -91,15 +86,7 @@ struct ExtractorTest : testing::Test {
 
   bool hasCandidateExpr(std::string Expected) {
     for (const auto &Cand : CandExprs) {
-      std::string SStr;
-      llvm::raw_string_ostream SS(SStr);
-
-      std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SS));
-      PP->setForceNoLineBreaks(true);
-      PP->scan(Cand->E);
-      PP->print(Cand->E);
-
-      if (SS.str() == Expected)
+      if (Cand == Expected)
         return true;
     }
     return false;
@@ -136,9 +123,9 @@ define void @f(i32 %p, i32 %q) {
 )m"));
 
   EXPECT_TRUE(hasCandidateExpr(
-      "(Or (And (Eq N0:(Extract 31 N1:(Read w32 0 p)) (Extract 31 N2:(Read w32 "
-      "0 q))) (Eq false (Eq N0 (Extract 31 N3:(Add w32 N1 N2))))) (Ult N1 "
-      "N3))"));
+      "(Or (And (Eq N0:(Extract 0 (AShr w32 N1:(Read w32 0 p) 31)) (Extract 0 "
+      "(AShr w32 N2:(Read w32 0 q) 31))) (Eq false (Eq N0 (Extract 0 (AShr w32 "
+      "N3:(Add w32 N1 N2) 31))))) (Ult N1 N3))"));
 }
 
 TEST_F(ExtractorTest, PhiCond) {

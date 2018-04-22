@@ -120,10 +120,11 @@ add_library(souperClangTool STATIC
 
 set(SOUPER_EXTRACTOR_FILES
   lib/Extractor/Candidates.cpp
+  lib/Extractor/ExprBuilder.cpp
   lib/Extractor/KLEEBuilder.cpp
   lib/Extractor/Solver.cpp
   include/souper/Extractor/Candidates.h
-  include/souper/Extractor/KLEEBuilder.h
+  include/souper/Extractor/ExprBuilder.h
   include/souper/Extractor/Solver.h
 )
 
