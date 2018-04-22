@@ -494,9 +494,6 @@ Inst *ExprBuilder::createUBPathInstsPred(
 
     UBPathInstMap::iterator PI = CachedUBPathInsts.find(PathInst);
     if (PI == CachedUBPathInsts.end()) {
-       // It's possible that we don't have a cached instruction yet,
-       // e.g., the CurrentInst is a select operator.
-       assert(CurrentInst->K == Inst::Select && "No cached Inst?");
        CachedUBPathInsts[PathInst] = {};
        PI = CachedUBPathInsts.find(PathInst);
     }
@@ -1101,7 +1098,7 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
 
   // Get demanded bits constraints
   if (!Mapping.LHS->DemandedBits.isAllOnesValue())
-    RHS = LIC->getInst(Inst::And, 1, {RHS, DemandedBits});
+    RHS = LIC->getInst(Inst::And, RHS->Width, {RHS, DemandedBits});
 
   for (const auto &I : getVarInsts({Mapping.LHS, Mapping.RHS}))
     Ante = LIC->getInst(Inst::And, 1, {Ante, getDemandedBitsCondition(I)});

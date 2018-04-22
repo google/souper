@@ -148,7 +148,7 @@ private:
     case Inst::Phi: {
       // TODO: Move to ExprBuilder
       const auto &PredExpr = BlockPredMap[I->B];
-      assert(PredExpr.size() && "there must be block predicates");
+      assert((PredExpr.size() || Ops.size() == 1) && "there must be block predicates");
       ref<Expr> E = get(Ops[0]);
       // e.g. P2 ? (P1 ? Op1_Expr : Op2_Expr) : Op3_Expr
       for (unsigned J = 1; J < Ops.size(); ++J) {
