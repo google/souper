@@ -15,29 +15,8 @@
 #include "klee/Expr.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprSMTLIBPrinter.h"
-#include "klee/util/Ref.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/GetElementPtrTypeIterator.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/LegacyPassManager.h"
-#include "llvm/Support/CommandLine.h"
 #include "souper/Extractor/ExprBuilder.h"
-#include "souper/Inst/Inst.h"
-#include "souper/Util/UniqueNameSet.h"
-#include <functional>
-#include <map>
-#include <memory>
-#include <sstream>
-#include <unordered_map>
-
-static llvm::cl::opt<bool> DumpKLEEExprs(
-    "dump-klee-exprs",
-    llvm::cl::desc("Dump KLEE expressions after SMTLIB queries"),
-    llvm::cl::init(false));
 
 using namespace llvm;
 using namespace klee;
@@ -45,25 +24,29 @@ using namespace souper;
 
 namespace {
 
+static llvm::cl::opt<bool> DumpKLEEExprs(
+    "dump-klee-exprs",
+    llvm::cl::desc("Dump KLEE expressions after SMTLIB queries"),
+    llvm::cl::init(false));
+
 class KLEEBuilder : public ExprBuilder {
+  std::vector<std::unique_ptr<Array>> Arrays;
+  std::map<Inst *, ref<Expr>> ExprMap;
+  std::vector<Inst *> Vars;
+
 public:
   KLEEBuilder(InstContext &IC) {
     LIC = &IC;
   }
-  ~KLEEBuilder() {}
-
-  std::vector<std::unique_ptr<Array>> Arrays;
-  std::vector<Inst *> Vars;
-  std::map<Inst *, ref<Expr>> ExprMap;
 
   std::string GetExprStr(const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,
                          InstMapping Mapping,
                          std::vector<Inst *> *ModelVars, bool Negate) override {
-    Inst *Candidate = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
-    if (!Candidate)
+    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
+    if (!Cand)
       return std::string();
-    ref<Expr> E = get(Candidate);
+    ref<Expr> E = get(Cand);
 
     std::string SStr;
     llvm::raw_string_ostream SS(SStr);
@@ -82,10 +65,10 @@ public:
     std::string SMTStr;
     llvm::raw_string_ostream SMTSS(SMTStr);
     ConstraintManager Manager;
-    Inst *Candidate = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
-    if (!Candidate)
+    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
+    if (!Cand)
       return std::string();
-    ref<Expr> E = get(Candidate);
+    ref<Expr> E = get(Cand);
     Query KQuery(Manager, E);
     ExprSMTLIBPrinter Printer;
     Printer.setOutput(SMTSS);
@@ -146,74 +129,60 @@ private:
     case Inst::Var:
       return makeSizedArrayRead(I->Width, I->Name, I);
     case Inst::Phi: {
-      // TODO: Move to ExprBuilder
-      const auto &PredExpr = BlockPredMap[I->B];
+      const auto &PredExpr = I->B->PredVars;
       assert((PredExpr.size() || Ops.size() == 1) && "there must be block predicates");
       ref<Expr> E = get(Ops[0]);
       // e.g. P2 ? (P1 ? Op1_Expr : Op2_Expr) : Op3_Expr
       for (unsigned J = 1; J < Ops.size(); ++J) {
         E = SelectExpr::create(get(PredExpr[J-1]), E, get(Ops[J]));
       }
-      //UBPathInsts.push_back(I);
       return E;
     }
     case Inst::Add:
       return buildAssoc(AddExpr::create, Ops);
     case Inst::AddNSW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, addnswUB(I));
       return Add;
     }
     case Inst::AddNUW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, addnuwUB(I));
       return Add;
     }
     case Inst::AddNW: {
       ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, LIC->getInst(Inst::And, 1,
-      //                                    {addnswUB(I), addnuwUB(I)}));
       return Add;
     }
     case Inst::Sub:
       return SubExpr::create(get(Ops[0]), get(Ops[1]));
     case Inst::SubNSW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, subnswUB(I));
       return Sub;
     }
     case Inst::SubNUW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, subnuwUB(I));
       return Sub;
     }
     case Inst::SubNW: {
       ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, LIC->getInst(Inst::And, 1,
-      //                                    {subnswUB(I), subnuwUB(I)}));
       return Sub;
     }
     case Inst::Mul:
       return buildAssoc(MulExpr::create, Ops);
     case Inst::MulNSW: {
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, mulnswUB(I));
       return Mul;
     }
     case Inst::MulNUW: {
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, mulnuwUB(I));
       return Mul;
     }
     case Inst::MulNW: {
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, LIC->getInst(Inst::And, 1,
-      //                                    {mulnswUB(I), mulnuwUB(I)}));
       return Mul;
     }
   
     // We introduce these extra checks here because KLEE invokes llvm::APInt's
-    // div functions , which crash upon divide-by-zero.
+    // div functions, which crash upon divide-by-zero.
     case Inst::UDiv:
     case Inst::SDiv:
     case Inst::UDivExact:
@@ -227,7 +196,6 @@ private:
       // a constant zero.
       ref<Expr> R = get(Ops[1]);
       if (R->isZero()) {
-        //recordUBInstruction(I, LIC->getConst(APInt(1, false)));
         return klee::ConstantExpr::create(0, Ops[1]->Width);
       }
   
@@ -237,33 +205,26 @@ private:
   
       case Inst::UDiv: {
         ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, udivUB(I));
         return Udiv;
       }
       case Inst::SDiv: {
         ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, sdivUB(I));
         return Sdiv;
       }
       case Inst::UDivExact: {
         ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, LIC->getInst(Inst::And, 1,
-        //                                    {udivUB(I), udivExactUB(I)}));
         return Udiv;
       }
       case Inst::SDivExact: {
         ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, LIC->getInst(Inst::And, 1, {sdivUB(I), sdivExactUB(I)}));
         return Sdiv;
       }
       case Inst::URem: {
         ref<Expr> Urem = URemExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, udivUB(I));
         return Urem;
       }
       case Inst::SRem: {
         ref<Expr> Srem = SRemExpr::create(get(Ops[0]), R);
-        //recordUBInstruction(I, sdivUB(I));
         return Srem;
       }
       llvm_unreachable("unknown kind");
@@ -278,49 +239,37 @@ private:
       return buildAssoc(XorExpr::create, Ops);
     case Inst::Shl: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, shiftUB(I));
       return Result;
     }
     case Inst::ShlNSW: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnswUB(I)}));
       return Result;
     }
     case Inst::ShlNUW: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnuwUB(I)}));
       return Result;
     }
     case Inst::ShlNW: {
       ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, LIC->getInst(Inst::And, 1,
-      //                                    {shiftUB(I), LIC->getInst(Inst::And, 1, {shlnswUB(I), shlnuwUB(I)})}));
       return Result;
     }
     case Inst::LShr: {
       ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, shiftUB(I));
       return Result;
     }
     case Inst::LShrExact: {
       ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, LIC->getInst(Inst::And, 1,
-      //                                    {shiftUB(I), lshrExactUB(I)}));
       return Result;
     }
     case Inst::AShr: {
       ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, shiftUB(I));
       return Result;
     }
     case Inst::AShrExact: {
       ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-      //recordUBInstruction(I, LIC->getInst(Inst::And, 1,
-      //                                    {shiftUB(I), ashrExactUB(I)}));
       return Result;
     }
     case Inst::Select:
-      //UBPathInsts.push_back(I);
       return SelectExpr::create(get(Ops[0]), get(Ops[1]), get(Ops[2]));
     case Inst::ZExt:
       return ZExtExpr::create(get(Ops[0]), I->Width);
