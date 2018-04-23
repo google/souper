@@ -759,8 +759,10 @@ InstMapping Parser::parseInstMapping(std::string &ErrStr) {
   if (!SrcRep[1])
     return InstMapping();
 
-  if (!typeCheckOpsMatchingWidths(SrcRep, ErrStr))
+  if (!typeCheckOpsMatchingWidths(SrcRep, ErrStr)) {
+    ErrStr = makeErrStr(ErrStr);
     return InstMapping();
+  }
 
   return InstMapping(SrcRep[0], SrcRep[1]);
 }
