@@ -132,6 +132,9 @@ public:
                              const BlockPCs &BPCs,
                              const std::vector<InstMapping> &PCs,
                              Inst *TargetLHS, Inst *&RHS,
+                             const std::vector<Inst *> &Copies,
+                             const std::vector<InstMapping> &PCsCopy,
+                             const BlockPCs &BPCsCopy,
                              InstContext &IC, unsigned Timeout);
 
 private:
