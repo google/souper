@@ -24,6 +24,8 @@ hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
 llvm_branch=tags/RELEASE_600/final
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-6.0-patch
+z3_repo=https://github.com/Z3Prover/z3.git
+z3_commit=502d0e37dd2926c1c52e33fa3ae91353d1058e25
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
@@ -120,3 +122,17 @@ mkdir -p $hiredisdir/install/lib
 (cd $hiredisdir && git checkout $hiredis_commit && make libhiredis.a &&
  cp -r hiredis.h async.h read.h sds.h adapters install/include/hiredis &&
  cp libhiredis.a install/lib)
+
+z3dir=$(pwd)/third_party/z3
+
+if [ -d $z3dir/.git ] ; then
+  (cd $z3dir && git fetch)
+else
+  git clone $z3_repo $z3dir
+fi
+
+mkdir -p $z3dir/install
+
+(cd $z3dir && git checkout $z3_commit &&
+python scripts/mk_make.py --prefix=$z3dir/install &&
+cd build && make -j4 install)
