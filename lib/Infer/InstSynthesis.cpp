@@ -59,6 +59,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                           const BlockPCs &BPCs,
                                           const std::vector<InstMapping> &PCs,
                                           Inst *TargetLHS, Inst *&RHS,
+                                          const std::vector<Inst *> &LHSComps,
                                           InstContext &IC, unsigned Timeout) {
   std::error_code EC;
 
@@ -66,6 +67,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   LSMTSolver = SMTSolver;
   LBPCs = &BPCs;
   LPCs = &PCs;
+  LLHSComps = &LHSComps;
   LIC = &IC;
   LTimeout = Timeout;
 
@@ -91,7 +93,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   if (DebugLevel > 0) {
     llvm::outs() << "; starting synthesis for LHS\n";
-    PrintReplacementLHS(llvm::outs(), BPCs, PCs, LHS, Context);
+    PrintReplacementLHS(llvm::outs(), BPCs, PCs, LHS, Context, true);
     if (DebugLevel > 2)
       printInitInfo();
   }
@@ -322,7 +324,7 @@ void InstSynthesis::setCompLibrary() {
     for (auto KindStr : splitString(CmdUserCompKinds.c_str())) {
       Inst::Kind K = Inst::getKind(KindStr);
       if (KindStr == Inst::getKindName(Inst::Const)) // Special case
-        InitConstComps.push_back(Component{Inst::Const, 0, {}});
+        InitConstComps.push_back(Component{Inst::Const, 0, {}, 0, {}});
       else if (K == Inst::ZExt || K == Inst::SExt || K == Inst::Trunc)
         report_fatal_error("don't use zext/sext/trunc explicitly");
       else if (K == Inst::None)
@@ -338,13 +340,13 @@ void InstSynthesis::setCompLibrary() {
           InitComps.push_back(Comp);
   } else {
     InitComps = CompLibrary;
-    InitConstComps.push_back(Component{Inst::Const, 0, {}});
+    InitConstComps.push_back(Component{Inst::Const, 0, {}, 0, {}});
   }
   for (auto const &In : Inputs) {
     if (In->Width == DefaultWidth)
       continue;
-    Comps.push_back(Component{Inst::ZExt, DefaultWidth, {In->Width}});
-    Comps.push_back(Component{Inst::SExt, DefaultWidth, {In->Width}});
+    Comps.push_back(Component{Inst::ZExt, DefaultWidth, {In->Width}, 0, {}});
+    Comps.push_back(Component{Inst::SExt, DefaultWidth, {In->Width}, 0, {}});
   }
   // Second, for each input/constant create a component of DefaultWidth
   for (auto &Comp : InitComps) {
@@ -362,7 +364,23 @@ void InstSynthesis::setCompLibrary() {
   }
   // Third, create one trunc comp to match the output width if necessary
   if (LHS->Width < DefaultWidth)
-    Comps.push_back(Component{Inst::Trunc, LHS->Width, {DefaultWidth}});
+    Comps.push_back(Component{Inst::Trunc, LHS->Width, {DefaultWidth}, 0, {}});
+  // Finally, add LHS components (if provided) directly to Comps,
+  // their widths are already initialized.
+  for (auto I : *LLHSComps) {
+    // No support for the following Insts
+    switch (I->K) {
+    case Inst::Phi:
+    // TODO: Why do we get these as candidates?!
+    case Inst::Var:
+    case Inst::Const:
+    case Inst::UntypedConst:
+      continue;
+    default:
+      break;
+    }
+    Comps.push_back(getCompFromInst(I));
+  }
 }
 
 void InstSynthesis::initInputVars(InstContext &IC) {
@@ -438,10 +456,11 @@ void InstSynthesis::filterFixedWidthIntrinsicComps() {
 
 void InstSynthesis::initComponents(InstContext &IC) {
   for (unsigned J = 0; J < Comps.size(); ++J) {
-    auto const &Comp = Comps[J];
+    auto &Comp = Comps[J];
     std::string LocVarStr;
     // First, init component inputs
     std::vector<Inst *> CompOps;
+    std::map<Inst *, Inst *> OpsReplacements;
     std::vector<LocVar> OpsLocVar;
     for (unsigned K = 0; K < Comp.OpWidths.size(); ++K) {
       LocVar In = std::make_pair(J+1, K+1);
@@ -464,6 +483,11 @@ void InstSynthesis::initComponents(InstContext &IC) {
       CompInstMap[In] = OpInst;
       CompOps.push_back(OpInst);
       OpsLocVar.push_back(In);
+      // Update OpsReplacements
+      if (Comp.Origin) {
+        assert(Comp.OriginOps.size());
+        OpsReplacements.insert(std::make_pair(Comp.OriginOps[K], OpInst));
+      }
     }
     // Store all input locations
     CompOpLocVars.push_back(OpsLocVar);
@@ -479,13 +503,23 @@ void InstSynthesis::initComponents(InstContext &IC) {
     // Third, instantiate the component (aka Inst)
     assert(Comp.Width && "comp width not set");
     Inst *CompInst;
-    if (Comp.Kind == Inst::Select) {
-      Inst *C = IC.getInst(Inst::Trunc, 1, {CompOps[0]});
-      CompInst = IC.getInst(Comp.Kind, Comp.Width, {C, CompOps[1], CompOps[2]});
-    } else {
-      CompInst = IC.getInst(Comp.Kind, Comp.Width, CompOps);
+    if (Comp.Origin) {
+      assert(Comp.OriginOps.size() == CompOps.size());
+      CompInst = getInstCopy(Comp.Origin, *LIC, OpsReplacements);
       if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc)
         CompInst = IC.getInst(Inst::ZExt, DefaultWidth, {CompInst});
+      // Update LHS component
+      Comp.Origin = CompInst;
+      Comp.OriginOps = CompOps;
+    } else {
+      if (Comp.Kind == Inst::Select) {
+        Inst *C = IC.getInst(Inst::Trunc, 1, {CompOps[0]});
+        CompInst = IC.getInst(Comp.Kind, Comp.Width, {C, CompOps[1], CompOps[2]});
+      } else {
+        CompInst = IC.getInst(Comp.Kind, Comp.Width, CompOps);
+        if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc)
+          CompInst = IC.getInst(Inst::ZExt, DefaultWidth, {CompInst});
+      }
     }
     // Update CompInstMap map with concrete Inst
     CompInstMap[Out] = CompInst;
@@ -517,12 +551,14 @@ void InstSynthesis::printInitInfo() {
   llvm::outs() << "N: " << N << ", M: " << M << "\n";
   llvm::outs() << "default width: " << DefaultWidth << "\n";
   llvm::outs() << "output width: " << LHS->Width << "\n";
-  llvm::outs() << "component library: ";
+  llvm::outs() << "component library: " << Comps.size() << "\n";
   for (auto const &Comp : Comps) {
     llvm::outs() << Inst::getKindName(Comp.Kind) << " (" << Comp.Width << ", { ";
     for (auto const &Width : Comp.OpWidths)
       llvm::outs() << Width << " ";
-    llvm::outs() << "}); ";
+    llvm::outs() << "})\n";
+    if (Comp.Origin)
+      PrintReplacementRHS(llvm::outs(), Comp.Origin, Context, true);
   }
   if (Comps.size())
     llvm::outs() << "\n";
@@ -980,15 +1016,28 @@ Inst *InstSynthesis::createInstFromWiring(
     llvm::outs() << "- creating inst " << Inst::getKindName(Comp.Kind)
                  << ", width " << Comp.Width << "\n";
     llvm::outs() << "before junk removal:\n";
-    PrintReplacementRHS(llvm::outs(), IC.getInst(Comp.Kind, Comp.Width, Ops),
-                        Context);
+    if (Comp.Origin)
+      PrintReplacementRHS(llvm::outs(), Comp.Origin, Context);
+    else
+      PrintReplacementRHS(llvm::outs(), IC.getInst(Comp.Kind, Comp.Width, Ops),
+                          Context);
   }
   // Sanity checks
   if (Ops.size() == 2 && Ops[0]->K == Inst::Const && Ops[1]->K == Inst::Const)
     report_fatal_error("inst operands are constants!");
   assert(Comp.Width == 1 || Comp.Width == DefaultWidth ||
          Comp.Width == LHS->Width);
-  // Create instruction
+  // Instruction is a LHS component
+  if (Comp.Origin) {
+    assert(Comp.OriginOps.size() == Ops.size());
+    std::map<Inst *, Inst *> OpsReplacements;
+    for (unsigned J = 0; J < Ops.size(); ++J)
+      OpsReplacements.insert(std::make_pair(Comp.OriginOps[J], Ops[J]));
+    Inst *Copy = getInstCopy(Comp.Origin, *LIC, OpsReplacements);
+    // Update ops
+    Ops = Copy->Ops;
+  }
+  // Create instruction from a component
   if (Comp.Kind == Inst::Select) {
     Ops[0] = IC.getInst(Inst::Trunc, 1, {Ops[0]});
     return createCleanInst(Comp.Kind, Comp.Width, Ops, IC);
@@ -1212,6 +1261,18 @@ Inst *InstSynthesis::createCleanInst(Inst::Kind Kind, unsigned Width,
   }
 
   return IC.getInst(Kind, Width, Ops);
+}
+
+Component InstSynthesis::getCompFromInst(Inst *I) {
+  std::vector<Inst *> IV;
+  getInputVars(I, IV);
+  sort(IV.begin(), IV.end());
+  IV.erase(unique(IV.begin(), IV.end()), IV.end());
+  std::vector<unsigned> OpWidths;
+  for (auto In : IV)
+    OpWidths.push_back(In->Width);
+
+  return Component{I->K, I->Width, OpWidths, I, IV};
 }
 
 void InstSynthesis::getInputVars(Inst *I, std::vector<Inst *> &InputVars) {

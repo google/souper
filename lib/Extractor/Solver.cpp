@@ -206,8 +206,11 @@ public:
     }
 
     if (InferInsts && SMTSolver->supportsModels()) {
+      std::vector<Inst *> LHSComps;
+      findCands(LHS, LHSComps, IC, MaxNops);
       InstSynthesis IS;
-      EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
+      EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS,
+                         LHSComps, IC, Timeout);
       if (EC || RHS)
         return EC;
     }
