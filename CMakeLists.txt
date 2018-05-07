@@ -111,27 +111,17 @@ find_library(HIREDIS_LIBRARY
 
 find_path(Z3_INCLUDE_DIRECTORY
   NAMES
-  z3.h
+  z3++.h
   PATHS
-  /usr/include
-  /usr/local/include
-  /opt/local/include)
-if(Z3_INCLUDE_DIRECTORY STREQUAL "Z3_INCLUDE_DIRECTORY-NOTFOUND")
-  message(FATAL_ERROR "Can't find folder containing z3.h")
-endif()
+  third_party/z3/install/include)
 
 include_directories(${Z3_INCLUDE_DIRECTORY})
 
-find_library(Z3_LIBRARY_DIRECTORY
+find_library(Z3_LIBRARY
   NAMES
   z3
   PATHS
-  /usr/lib
-  /usr/local/lib
-  /opt/local/lib)
-if(Z3_LIBRARY_DIRECTORY STREQUAL "Z3_LIBRARY_DIRECTORY-NOTFOUND")
-  message(FATAL_ERROR "Can't find folder containing z3 library")
-endif()
+  third_party/z3/install/lib)
 
 set(SOUPER_CLANG_TOOL_FILES
   lib/ClangTool/Actions.cpp
