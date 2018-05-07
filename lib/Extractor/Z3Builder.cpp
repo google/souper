@@ -105,29 +105,36 @@ private:
      return c.bool_val(true);
   }
 
-#if 0
   expr buildAssoc(
-      std::function<ref<Expr>(ref<Expr>, ref<Expr>)> F,
+      std::function<expr(expr, expr)> F,
       llvm::ArrayRef<Inst *> Ops) {
-    ref<Expr> E = get(Ops[0]);
+    expr E = get(Ops[0]);
     for (Inst *I : llvm::ArrayRef<Inst *>(Ops.data()+1, Ops.size()-1)) {
       E = F(E, get(I));
     }
     return E;
-     return c.bool_val(true);
   }
-#endif
 
   expr build(Inst *I) {
-#if 0
     const std::vector<Inst *> &Ops = I->orderedOps();
     switch (I->K) {
     case Inst::UntypedConst:
       assert(0 && "unexpected kind");
-    case Inst::Const:
-      return klee::ConstantExpr::alloc(I->Val);
+    case Inst::Const: {
+      //return klee::ConstantExpr::alloc(I->Val);
+      if (I->Val.isNegative())
+        return c.bv_val((int)(I->Val.getSExtValue()), I->Width);
+      else
+        return c.bv_val((unsigned)(I->Val.getZExtValue()), I->Width);
+    }
     case Inst::Var:
-      return makeSizedArrayRead(I->Width, I->Name, I);
+      return makeSizedConst(I->Width, I->Name, I);
+    // REMOVE AFTER HECiIRE
+    default:
+      break;
+    }
+    //
+#if 0
     case Inst::Phi: {
       const auto &PredExpr = I->B->PredVars;
       assert((PredExpr.size() || Ops.size() == 1) && "there must be block predicates");
@@ -379,7 +386,7 @@ private:
     return E;
   }
   
-  expr makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin) {
+  expr makeSizedConst(unsigned Width, StringRef Name, Inst *Origin) {
     std::string NameStr;
     if (Name.empty())
       NameStr = "arr";
