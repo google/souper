@@ -75,7 +75,7 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
       if (KVForStaticProfile) {
         std::string Str;
         llvm::raw_string_ostream Loc(Str);
-        Instruction *I = Cand.Origin.getInstruction();
+        Instruction *I = Cand.Origin;
         I->getDebugLoc().print(Loc);
         std::string HField = "sprofile " + Loc.str();
         ReplacementContext Context;
@@ -139,7 +139,7 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
       }
       llvm::APInt ActualVal = Cand.Mapping.RHS->Val;
 
-      llvm::Instruction *Inst = Cand.Origin.getInstruction();
+      llvm::Instruction *Inst = Cand.Origin;
       llvm::MDNode *ExpectedMD = Inst->getMetadata(ExpectedID);
       if (!ExpectedMD) {
         llvm::errs() << "instruction:\n";
@@ -151,6 +151,7 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
         OK = false;
         continue;
       }
+
       if (ExpectedMD->getNumOperands() != 1 ||
           !mdconst::hasa<ConstantInt>(ExpectedMD->getOperand(0))) {
         llvm::errs() << "instruction:\n";

@@ -526,6 +526,7 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
                              bool NonNegative, bool PowOfTwo, bool Negative,
                              unsigned NumSignBits) {
+  // Create a new vector of Insts if Width is not found in VarInstsByWidth
   auto &InstList = VarInstsByWidth[Width];
   unsigned Number = InstList.size();
   auto I = new Inst;

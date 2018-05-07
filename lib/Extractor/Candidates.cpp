@@ -55,21 +55,15 @@ using namespace llvm;
 using namespace klee;
 using namespace souper;
 
-std::string InstOrigin::getFunctionName() const {
-  if (Inst) {
-    const Function *F = Inst->getParent()->getParent();
-    if (F->hasLocalLinkage()) {
-      return (F->getParent()->getModuleIdentifier() + ":" + F->getName()).str();
-    } else {
-      return F->getName();
-    }
-  }
-
-  return FunctionName;
-}
-
 void CandidateReplacement::printFunction(llvm::raw_ostream &Out) const {
-  Out << "; Function: " << Origin.getFunctionName() << '\n';
+  const Function *F = Origin->getParent()->getParent();
+  std::string N;
+  if (F->hasLocalLinkage()) {
+    N = (F->getParent()->getModuleIdentifier() + ":" + F->getName()).str();
+  } else {
+    N = F->getName();
+  }
+  Out << "; Function: " << N << '\n';
 }
 
 void CandidateReplacement::printLHS(llvm::raw_ostream &Out,
@@ -511,6 +505,7 @@ Inst *ExprBuilder::build(Value *V) {
 }
 
 Inst *ExprBuilder::get(Value *V) {
+  // Cache V if V is not found in InstMap
   Inst *&E = EBC.InstMap[V];
   if (!E) {
     E = build(V);
