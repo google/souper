@@ -28,7 +28,9 @@ static llvm::cl::opt<souper::ExprBuilder::Builder> SMTExprBuilder(
     llvm::cl::desc("SMT-LIBv2 expression builder (default=klee)"),
     llvm::cl::values(clEnumValN(souper::ExprBuilder::KLEE, "klee",
                                 "Use KLEE's Expr library")),
-    llvm::cl::init(souper::ExprBuilder::KLEE));
+    llvm::cl::values(clEnumValN(souper::ExprBuilder::Z3, "z3",
+                                "Use Z3 API")),
+    llvm::cl::init(souper::ExprBuilder::Z3));
 
 bool ExprBuilder::getUBPaths(Inst *I, UBPath *Current,
                              std::vector<std::unique_ptr<UBPath>> &Paths,
@@ -933,6 +935,9 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
   switch (SMTExprBuilder) {
   case ExprBuilder::KLEE:
     EB = createKLEEBuilder(IC);
+    break;
+  case ExprBuilder::Z3:
+    EB = createZ3Builder(IC);
     break;
   default:
     report_fatal_error("cannot reach here");

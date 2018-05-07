@@ -42,7 +42,8 @@ class ExprBuilder {
   const unsigned MAX_PHI_DEPTH = 25;
 public:
   enum Builder {
-    KLEE
+    KLEE,
+    Z3
   };
 
   virtual ~ExprBuilder() {};
@@ -109,6 +110,7 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
        std::vector<Inst *> *ModelVars, bool Negate=false);
 
 std::unique_ptr<ExprBuilder> createKLEEBuilder(InstContext &IC);
+std::unique_ptr<ExprBuilder> createZ3Builder(InstContext &IC);
 }
 
 #endif  // SOUPER_EXTRACTOR_EXPRBUILDER_H

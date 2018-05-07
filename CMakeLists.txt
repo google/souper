@@ -134,9 +134,10 @@ add_library(souperClangTool STATIC
 
 set(SOUPER_EXTRACTOR_FILES
   lib/Extractor/Candidates.cpp
-  lib/Extractor/KLEEBuilder.cpp
   lib/Extractor/ExprBuilder.cpp
+  lib/Extractor/KLEEBuilder.cpp
   lib/Extractor/Solver.cpp
+  lib/Extractor/Z3Builder.cpp
   include/souper/Extractor/Candidates.h
   include/souper/Extractor/ExprBuilder.h
   include/souper/Extractor/Solver.h
@@ -286,7 +287,7 @@ target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
 target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${Z3_LIBRARY})
-target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
+target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS} ${Z3_LIBRARY})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS})
 
