@@ -206,8 +206,24 @@ public:
     }
 
     if (InferInsts && SMTSolver->supportsModels()) {
+      std::vector<Inst *> LHSComps;
+      findCands(LHS, LHSComps, IC, MaxNops);
+
+      std::vector<Inst *> Copies;
+      std::vector<InstMapping> PCsCopy;
+      BlockPCs BPCsCopy;
+      for (auto I : LHSComps) {
+        // separate sub-expressions by copying vars
+        std::map<Inst *, Inst *> InstCache;
+        std::map<Block *, Block *> BlockCache;
+        Copies.push_back(getInstCopy(I, IC, InstCache, BlockCache));
+        separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC);
+        separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC);
+      }
+
       InstSynthesis IS;
-      EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
+      EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS,
+                         Copies, PCsCopy, BPCsCopy, IC, Timeout);
       if (EC || RHS)
         return EC;
     }
