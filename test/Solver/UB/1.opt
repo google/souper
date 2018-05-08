@@ -4,7 +4,6 @@
 ; RUN: FileCheck %s < %t
 
 ; CHECK-NOT: LGTM
-; XFAIL: *
 
                                ; example values illustrating buggy execution
 %0:i32 = var                   ; = 0
