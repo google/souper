@@ -90,17 +90,14 @@ public:
 
 private:
   expr countOnes(expr L) {
-#if 0
-     Expr::Width Width = L->getWidth();
-     ref<Expr> Count =  klee::ConstantExpr::alloc(llvm::APInt(Width, 0));
-     for (unsigned i=0; i<Width; i++) {
-       ref<Expr> Bit = ExtractExpr::create(L, i, Expr::Bool);
-       ref<Expr> BitExt = ZExtExpr::create(Bit, Width);
-       Count = AddExpr::create(Count, BitExt);
+     unsigned Width = L.get_sort().bv_size();
+     expr Count = c.bv_val(0, Width);
+     for (unsigned J=0; J<Width; J++) {
+       expr Bit = L.extract(c.bv_val(0, Width), c.bv_val(J, Width));
+       expr BitExt = expr(c, Z3_mk_zero_ext(c, Width, Bit));
+       Count = Count + BitExt;
      }
      return Count;
-#endif
-     return c.bool_val(true);
   }
 
   expr buildAssoc(
@@ -127,67 +124,56 @@ private:
     }
     case Inst::Var:
       return makeSizedConst(I->Width, I->Name, I);
-    // REMOVE AFTER HECiIRE
-    default:
-      break;
-    }
-    //
-#if 0
     case Inst::Phi: {
       const auto &PredExpr = I->B->PredVars;
       assert((PredExpr.size() || Ops.size() == 1) && "there must be block predicates");
-      ref<Expr> E = get(Ops[0]);
+      expr E = get(Ops[0]);
       // e.g. P2 ? (P1 ? Op1_Expr : Op2_Expr) : Op3_Expr
       for (unsigned J = 1; J < Ops.size(); ++J) {
-        E = SelectExpr::create(get(PredExpr[J-1]), E, get(Ops[J]));
+        E = ite(get(PredExpr[J-1]), E, get(Ops[J]));
       }
       return E;
     }
-    case Inst::Add:
-      return buildAssoc(AddExpr::create, Ops);
-    case Inst::AddNSW: {
-      ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      return Add;
+    case Inst::Add: {
+      //return buildAssoc(AddExpr::create, Ops);
+      expr E = get(Ops[0]);
+      for (auto Op : Ops) {
+        if (Op == Ops[0])
+          continue;
+        E = E + get(Op);
+      }
+      return E;
     }
-    case Inst::AddNUW: {
-      ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      return Add;
-    }
+    case Inst::AddNSW:
+    case Inst::AddNUW:
     case Inst::AddNW: {
-      ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
-      return Add;
+      //ref<Expr> Add = AddExpr::create(get(Ops[0]), get(Ops[1]));
+      return get(Ops[0]) + get(Ops[1]);
     }
     case Inst::Sub:
-      return SubExpr::create(get(Ops[0]), get(Ops[1]));
-    case Inst::SubNSW: {
-      ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      return Sub;
-    }
-    case Inst::SubNUW: {
-      ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      return Sub;
-    }
+    case Inst::SubNSW:
+    case Inst::SubNUW:
     case Inst::SubNW: {
-      ref<Expr> Sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
-      return Sub;
+      //return SubExpr::create(get(Ops[0]), get(Ops[1]));
+      return get(Ops[0]) - get(Ops[1]);
     }
-    case Inst::Mul:
-      return buildAssoc(MulExpr::create, Ops);
-    case Inst::MulNSW: {
-      ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      return Mul;
+    case Inst::Mul: {
+      //return buildAssoc(MulExpr::create, Ops);
+      expr E = get(Ops[0]);
+      for (auto Op : Ops) {
+        if (Op == Ops[0])
+          continue;
+        E = E * get(Op);
+      }
+      return E;
     }
-    case Inst::MulNUW: {
-      ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      return Mul;
-    }
+    case Inst::MulNSW:
+    case Inst::MulNUW:
     case Inst::MulNW: {
-      ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
-      return Mul;
+      //ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
+      return get(Ops[0]) * get(Ops[1]);
     }
-  
-    // We introduce these extra checks here because KLEE invokes llvm::APInt's
-    // div functions, which crash upon divide-by-zero.
+    // TODO: Handle divide-by-zero explicitly
     case Inst::UDiv:
     case Inst::SDiv:
     case Inst::UDivExact:
@@ -195,168 +181,216 @@ private:
     case Inst::URem:
     case Inst::SRem: { // Fall-through
       // If the second oprand is 0, then it definitely causes UB.
-      // There are quite a few cases where KLEE folds operations into zero,
-      // e.g., "sext i16 0 to i32", "0 + 0", "2 - 2", etc.  In all cases,
-      // we skip building the corresponding KLEE expressions and just return
-      // a constant zero.
-      ref<Expr> R = get(Ops[1]);
-      if (R->isZero()) {
-        return klee::ConstantExpr::create(0, Ops[1]->Width);
-      }
+      // Just return a constant zero.
+      if (Ops[1]->K == Inst::Const && Ops[1]->Val.isNullValue())
+        return c.bv_val(0, I->Width);
+
+      expr R = get(Ops[1]);
   
       switch (I->K) {
       default:
         break;
   
-      case Inst::UDiv: {
-        ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-        return Udiv;
-      }
-      case Inst::SDiv: {
-        ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-        return Sdiv;
-      }
+      case Inst::UDiv:
       case Inst::UDivExact: {
-        ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
-        return Udiv;
+        //ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
+        return expr(c, Z3_mk_bvudiv(c, get(Ops[0]), get(Ops[1])));
       }
+      case Inst::SDiv:
       case Inst::SDivExact: {
-        ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
-        return Sdiv;
+        //ref<Expr> Sdiv = SDivExpr::create(get(Ops[0]), R);
+        return expr(c, Z3_mk_bvsdiv(c, get(Ops[0]), get(Ops[1])));
       }
       case Inst::URem: {
-        ref<Expr> Urem = URemExpr::create(get(Ops[0]), R);
-        return Urem;
+        //ref<Expr> Urem = URemExpr::create(get(Ops[0]), R);
+        return expr(c, Z3_mk_bvurem(c, get(Ops[0]), get(Ops[1])));
       }
       case Inst::SRem: {
-        ref<Expr> Srem = SRemExpr::create(get(Ops[0]), R);
-        return Srem;
+        //ref<Expr> Srem = SRemExpr::create(get(Ops[0]), R);
+        return expr(c, Z3_mk_bvsrem(c, get(Ops[0]), get(Ops[1])));
       }
       llvm_unreachable("unknown kind");
     }
     }
   
-    case Inst::And:
-      return buildAssoc(AndExpr::create, Ops);
-    case Inst::Or:
-      return buildAssoc(OrExpr::create, Ops);
-    case Inst::Xor:
-      return buildAssoc(XorExpr::create, Ops);
-    case Inst::Shl: {
-      ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      return Result;
+    case Inst::And: {
+      //return buildAssoc(AndExpr::create, Ops);
+      expr E = get(Ops[0]);
+      for (auto Op : Ops) {
+        if (Op == Ops[0])
+          continue;
+        E = E & get(Op);
+      }
+      return E;
     }
-    case Inst::ShlNSW: {
-      ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      return Result;
+    case Inst::Or: {
+      //return buildAssoc(OrExpr::create, Ops);
+      expr E = get(Ops[0]);
+      for (auto Op : Ops) {
+        if (Op == Ops[0])
+          continue;
+        E = E | get(Op);
+      }
+      return E;
     }
-    case Inst::ShlNUW: {
-      ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      return Result;
+    case Inst::Xor: {
+      //return buildAssoc(XorExpr::create, Ops);
+      expr E = get(Ops[0]);
+      for (auto Op : Ops) {
+        if (Op == Ops[0])
+          continue;
+        E = E ^ get(Op);
+      }
+      return E;
     }
+    case Inst::Shl:
+    case Inst::ShlNSW:
+    case Inst::ShlNUW:
     case Inst::ShlNW: {
-      ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
-      return Result;
+      //ref<Expr> Result = ShlExpr::create(get(Ops[0]), get(Ops[1]));
+      return expr(c, Z3_mk_bvshl(c, get(Ops[0]), get(Ops[1])));
     }
-    case Inst::LShr: {
-      ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-      return Result;
-    }
+    case Inst::LShr:
     case Inst::LShrExact: {
-      ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
-      return Result;
+      //ref<Expr> Result = LShrExpr::create(get(Ops[0]), get(Ops[1]));
+      return expr(c, Z3_mk_bvlshr(c, get(Ops[0]), get(Ops[1])));
     }
-    case Inst::AShr: {
-      ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-      return Result;
-    }
+    case Inst::AShr:
     case Inst::AShrExact: {
-      ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
-      return Result;
+      //ref<Expr> Result = AShrExpr::create(get(Ops[0]), get(Ops[1]));
+      return expr(c, Z3_mk_bvashr(c, get(Ops[0]), get(Ops[1])));
     }
-    case Inst::Select:
-      return SelectExpr::create(get(Ops[0]), get(Ops[1]), get(Ops[2]));
-    case Inst::ZExt:
-      return ZExtExpr::create(get(Ops[0]), I->Width);
+    case Inst::Select: {
+      //return SelectExpr::create(get(Ops[0]), get(Ops[1]), get(Ops[2]));
+      return ite(get(Ops[0]), get(Ops[1]), get(Ops[2]));
+    }
+    case Inst::ZExt: {
+      //return ZExtExpr::create(get(Ops[0]), I->Width);
+      return expr(c, Z3_mk_zero_ext(c, I->Width, get(Ops[0])));
+    }
     case Inst::SExt:
-      return SExtExpr::create(get(Ops[0]), I->Width);
-    case Inst::Trunc:
-      return ExtractExpr::create(get(Ops[0]), 0, I->Width);
-    case Inst::Eq:
-      return EqExpr::create(get(Ops[0]), get(Ops[1]));
-    case Inst::Ne:
-      return NeExpr::create(get(Ops[0]), get(Ops[1]));
-    case Inst::Ult:
-      return UltExpr::create(get(Ops[0]), get(Ops[1]));
-    case Inst::Slt:
-      return SltExpr::create(get(Ops[0]), get(Ops[1]));
-    case Inst::Ule:
-      return UleExpr::create(get(Ops[0]), get(Ops[1]));
-    case Inst::Sle:
-      return SleExpr::create(get(Ops[0]), get(Ops[1]));
+      //return SExtExpr::create(get(Ops[0]), I->Width);
+      return expr(c, Z3_mk_sign_ext(c, I->Width, get(Ops[0])));
+    case Inst::Trunc: {
+      //return ExtractExpr::create(get(Ops[0]), 0, I->Width);
+      return get(Ops[0]).extract(0, I->Width);
+    }
+    case Inst::Eq: {
+      //return EqExpr::create(get(Ops[0]), get(Ops[1]));
+      return get(Ops[0]) == get(Ops[1]);
+    }
+    case Inst::Ne: {
+      //return NeExpr::create(get(Ops[0]), get(Ops[1]));
+      return get(Ops[0]) != get(Ops[1]);
+    }
+    case Inst::Ult: {
+      //return UltExpr::create(get(Ops[0]), get(Ops[1]));
+      return expr(c, Z3_mk_bvult(c, get(Ops[0]), get(Ops[1])));
+    }
+    case Inst::Slt: {
+      //return SltExpr::create(get(Ops[0]), get(Ops[1]));
+      return expr(c, Z3_mk_bvslt(c, get(Ops[0]), get(Ops[1])));
+    }
+    case Inst::Ule: {
+      //return UleExpr::create(get(Ops[0]), get(Ops[1]));
+      return expr(c, Z3_mk_bvule(c, get(Ops[0]), get(Ops[1])));
+    }
+    case Inst::Sle: {
+      //return SleExpr::create(get(Ops[0]), get(Ops[1]));
+      return expr(c, Z3_mk_bvsle(c, get(Ops[0]), get(Ops[1])));
+    }
     case Inst::CtPop:
       return countOnes(get(Ops[0]));
     case Inst::BSwap: {
-      ref<Expr> L = get(Ops[0]);
-      unsigned Width = L->getWidth();
+      expr L = get(Ops[0]);
+      unsigned Width = L.get_sort().bv_size();
+      expr_vector EV(c);
       if (Width == 16) {
-        return ConcatExpr::create(ExtractExpr::create(L, 0, 8),
-                                  ExtractExpr::create(L, 8, 8));
+        //return ConcatExpr::create(ExtractExpr::create(L, 0, 8),
+        //                          ExtractExpr::create(L, 8, 8));
+        EV.push_back(L.extract(c.bv_val(0, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(8, Width), c.bv_val(8, Width)));
       }
       else if (Width == 32) {
-        return ConcatExpr::create4(ExtractExpr::create(L, 0, 8),
-                                   ExtractExpr::create(L, 8, 8),
-                                   ExtractExpr::create(L, 16, 8),
-                                   ExtractExpr::create(L, 24, 8));
+        //return ConcatExpr::create4(ExtractExpr::create(L, 0, 8),
+        //                           ExtractExpr::create(L, 8, 8),
+        //                           ExtractExpr::create(L, 16, 8),
+        //                           ExtractExpr::create(L, 24, 8));
+        EV.push_back(L.extract(c.bv_val(0, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(8, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(16, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(24, Width), c.bv_val(8, Width)));
       }
       else if (Width == 64) {
-        return ConcatExpr::create8(ExtractExpr::create(L, 0, 8),
-                                   ExtractExpr::create(L, 8, 8),
-                                   ExtractExpr::create(L, 16, 8),
-                                   ExtractExpr::create(L, 24, 8),
-                                   ExtractExpr::create(L, 32, 8),
-                                   ExtractExpr::create(L, 40, 8),
-                                   ExtractExpr::create(L, 48, 8),
-                                   ExtractExpr::create(L, 56, 8));
+        //return ConcatExpr::create8(ExtractExpr::create(L, 0, 8),
+        //                           ExtractExpr::create(L, 8, 8),
+        //                           ExtractExpr::create(L, 16, 8),
+        //                           ExtractExpr::create(L, 24, 8),
+        //                           ExtractExpr::create(L, 32, 8),
+        //                           ExtractExpr::create(L, 40, 8),
+        //                           ExtractExpr::create(L, 48, 8),
+        //                           ExtractExpr::create(L, 56, 8));
+        EV.push_back(L.extract(c.bv_val(0, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(8, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(16, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(24, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(32, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(40, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(48, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(c.bv_val(56, Width), c.bv_val(8, Width)));
       }
-      break;
+      return concat(EV);
     }
     case Inst::Cttz: {
-      ref<Expr> L = get(Ops[0]);
-      unsigned Width = L->getWidth();
-      ref<Expr> Val = L;
+      expr Val = get(Ops[0]);
+      unsigned Width = Val.get_sort().bv_size();
       for (unsigned i=0, j=0; j<Width/2; i++) {
         j = 1<<i;
-        Val = OrExpr::create(Val, ShlExpr::create(Val,
-                             klee::ConstantExpr::create(j, Width)));
+        //Val = OrExpr::create(Val, ShlExpr::create(Val,
+        //                     klee::ConstantExpr::create(j, Width)));
+        Val = Val | expr(c, Z3_mk_bvshl(c, Val, c.bv_val(j, Width)));
       }
-      return SubExpr::create(klee::ConstantExpr::create(Width, Width),
-                             countOnes(Val));
+      //return SubExpr::create(klee::ConstantExpr::create(Width, Width),
+      //                       countOnes(Val));
+      return c.bv_val(Width, Width) - countOnes(Val);
     }
     case Inst::Ctlz: {
-      ref<Expr> L = get(Ops[0]);
-      unsigned Width = L->getWidth();
-      ref<Expr> Val = L;
+      expr Val = get(Ops[0]);
+      unsigned Width = Val.get_sort().bv_size();
       for (unsigned i=0, j=0; j<Width/2; i++) {
         j = 1<<i;
-        Val = OrExpr::create(Val, LShrExpr::create(Val,
-                             klee::ConstantExpr::create(j, Width)));
+        //Val = OrExpr::create(Val, LShrExpr::create(Val,
+        //                     klee::ConstantExpr::create(j, Width)));
+        Val = Val | expr(c, Z3_mk_bvlshr(c, Val, c.bv_val(j, Width)));
       }
-      return SubExpr::create(klee::ConstantExpr::create(Width, Width),
-                             countOnes(Val));
+      //return SubExpr::create(klee::ConstantExpr::create(Width, Width),
+      //                       countOnes(Val));
+      return c.bv_val(Width, Width) - countOnes(Val);
     }
-    case Inst::SAddO:
-      return XorExpr::create(get(addnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
-    case Inst::UAddO:
-      return XorExpr::create(get(addnuwUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
-    case Inst::SSubO:
-      return XorExpr::create(get(subnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
-    case Inst::USubO:
-      return XorExpr::create(get(subnuwUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
-    case Inst::SMulO:
-      return XorExpr::create(get(mulnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
-    case Inst::UMulO:
-      return XorExpr::create(get(mulnuwUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
+    case Inst::SAddO: {
+      //return XorExpr::create(get(addnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
+      return get(addnswUB(I)) ^ c.bv_val(1, 1);
+    }
+    case Inst::UAddO: {
+      //return XorExpr::create(get(addnuwUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
+      return get(addnuwUB(I)) ^ c.bv_val(1, 1);
+    }
+    case Inst::SSubO: {
+      //return XorExpr::create(get(subnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
+      return get(subnswUB(I)) ^ c.bv_val(1, 1);
+    }
+    case Inst::USubO: {
+      //return XorExpr::create(get(subnuwUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
+      return get(subnuwUB(I)) ^ c.bv_val(1, 1);
+    }
+    case Inst::SMulO: {
+      //return XorExpr::create(get(mulnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
+      return get(mulnswUB(I)) ^ c.bv_val(1, 1);
+    }
+    case Inst::UMulO: {
+      //return XorExpr::create(get(mulnuwUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
+      return get(mulnuwUB(I)) ^ c.bv_val(1, 1);
+    }
     case Inst::ExtractValue: {
       unsigned Index = Ops[1]->Val.getZExtValue();
       return get(Ops[0]->Ops[Index]);
@@ -371,8 +405,6 @@ private:
       break;
     }
     llvm_unreachable("unknown kind");
-#endif
-    return c.bool_val(true);
   }
   
   expr get(Inst *I) {
