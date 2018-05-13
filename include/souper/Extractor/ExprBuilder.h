@@ -46,6 +46,7 @@ public:
     Z3
   };
 
+  ExprBuilder(InstContext &IC) : LIC(&IC) {}
   virtual ~ExprBuilder() {};
 
   virtual std::string GetExprStr(const BlockPCs &BPCs,

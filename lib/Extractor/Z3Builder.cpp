@@ -31,9 +31,7 @@ class Z3Builder : public ExprBuilder {
   std::vector<Inst *> Vars;
 
 public:
-  Z3Builder(InstContext &IC) {
-    LIC = &IC;
-  }
+  Z3Builder(InstContext &IC) : ExprBuilder(IC) {}
 
   std::string GetExprStr(const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,

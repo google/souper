@@ -36,9 +36,7 @@ class KLEEBuilder : public ExprBuilder {
   std::vector<Inst *> Vars;
 
 public:
-  KLEEBuilder(InstContext &IC) {
-    LIC = &IC;
-  }
+  KLEEBuilder(InstContext &IC) : ExprBuilder(IC) {}
 
   std::string GetExprStr(const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,
