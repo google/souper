@@ -127,7 +127,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
     } else {
       bool Valid;
       std::vector<std::pair<Inst *, APInt>> Models;
-      if (std::error_code EC = S->isValid(Rep.BPCs, Rep.PCs,
+      if (std::error_code EC = S->isValid(IC, Rep.BPCs, Rep.PCs,
                                           Rep.Mapping, Valid, &Models)) {
         llvm::errs() << EC.message() << '\n';
         Ret = 1;
