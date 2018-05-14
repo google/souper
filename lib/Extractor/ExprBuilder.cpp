@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Copyright 2014 The Souper Authors. All rights reserved.
+=======
+// Copyright 2018 The Souper Authors. All rights reserved.
+>>>>>>> master
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +21,12 @@
 
 #include <queue>
 
+<<<<<<< HEAD
 using namespace llvm;
 using namespace souper;
 
+=======
+>>>>>>> master
 namespace souper {
 
 static llvm::cl::opt<souper::ExprBuilder::Builder> SMTExprBuilder(
@@ -28,9 +35,13 @@ static llvm::cl::opt<souper::ExprBuilder::Builder> SMTExprBuilder(
     llvm::cl::desc("SMT-LIBv2 expression builder (default=klee)"),
     llvm::cl::values(clEnumValN(souper::ExprBuilder::KLEE, "klee",
                                 "Use KLEE's Expr library")),
+<<<<<<< HEAD
     llvm::cl::values(clEnumValN(souper::ExprBuilder::Z3, "z3",
                                 "Use Z3 API")),
     llvm::cl::init(souper::ExprBuilder::Z3));
+=======
+    llvm::cl::init(souper::ExprBuilder::KLEE));
+>>>>>>> master
 
 bool ExprBuilder::getUBPaths(Inst *I, UBPath *Current,
                              std::vector<std::unique_ptr<UBPath>> &Paths,
@@ -86,7 +97,11 @@ bool ExprBuilder::getUBPaths(Inst *I, UBPath *Current,
       UBPath *New = new UBPath;
       *New = *Current;
       New->BlockConstraints[I->B] = J;
+<<<<<<< HEAD
       Paths.push_back(std::move(std::unique_ptr<UBPath>(New)));
+=======
+      Paths.push_back(std::unique_ptr<UBPath>(New));
+>>>>>>> master
       Tmp.push_back(New);
     }
     // Original path takes the first branch
@@ -182,7 +197,11 @@ Inst *ExprBuilder::createPathPred(
     std::map<Block *, unsigned> &BlockConstraints, Inst* PathInst,
     std::map<Inst *, bool> *SelectBranches) {
 
+<<<<<<< HEAD
   Inst *Pred = LIC->getConst(APInt(1, true));
+=======
+  Inst *Pred = LIC->getConst(llvm::APInt(1, true));
+>>>>>>> master
   if (PathInst->K == Inst::Phi) {
     unsigned Num = BlockConstraints[PathInst->B];
     const auto &PredExpr = PathInst->B->PredVars;
@@ -194,7 +213,12 @@ Inst *ExprBuilder::createPathPred(
     if (Num == 0)
       Pred = LIC->getInst(Inst::And, 1, {Pred, PredExpr[0]});
     else {
+<<<<<<< HEAD
       Inst *IsZero = LIC->getInst(Inst::Eq, 1, {PredExpr[Num-1], LIC->getConst(APInt(PredExpr[Num-1]->Width, 0))});
+=======
+      Inst *Zero = LIC->getConst(llvm::APInt(PredExpr[Num-1]->Width, 0));
+      Inst *IsZero = LIC->getInst(Inst::Eq, 1, {PredExpr[Num-1], Zero});
+>>>>>>> master
       Pred = LIC->getInst(Inst::And, 1, {Pred, IsZero});
     }
     for (unsigned B = Num; B < PredExpr.size(); ++B)
@@ -211,7 +235,12 @@ Inst *ExprBuilder::createPathPred(
     if (SI->second)
       Pred = LIC->getInst(Inst::And, 1, {Pred, SelectPred});
     else {
+<<<<<<< HEAD
       Inst *IsZero = LIC->getInst(Inst::Eq, 1, {SelectPred, LIC->getConst(APInt(SelectPred->Width, 0))});
+=======
+      Inst *Zero = LIC->getConst(llvm::APInt(SelectPred->Width, 0));
+      Inst *IsZero = LIC->getInst(Inst::Eq, 1, {SelectPred, Zero});
+>>>>>>> master
       Pred = LIC->getInst(Inst::And, 1, {Pred, IsZero});
     }
   }
@@ -278,7 +307,11 @@ Inst *ExprBuilder::getUBInstCondition(Inst *Root) {
   // encode the path and UB Inst predicates.
   UBPathInstMap CachedUBPathInsts;
   std::set<Inst *> UsedUBInsts;
+<<<<<<< HEAD
   Inst *Result = LIC->getConst(APInt(1, true));
+=======
+  Inst *Result = LIC->getConst(llvm::APInt(1, true));
+>>>>>>> master
   auto UBExprMap = getUBInstConstraints(Root);
   // For each Phi/Select instruction
   for (const auto &I : getUBPathInsts(Root)) {
@@ -290,14 +323,22 @@ Inst *ExprBuilder::getUBInstCondition(Inst *Root) {
     UBPath *Current = new UBPath;
     UBPaths.push_back(std::move(std::unique_ptr<UBPath>(Current)));
     if (!getUBPaths(I, Current, UBPaths, CachedUBPathInsts, 0))
+<<<<<<< HEAD
       return LIC->getConst(APInt(1, true));
+=======
+      return LIC->getConst(llvm::APInt(1, true));
+>>>>>>> master
     CachedUBPathInsts[I] = {};
     // For each found path
     for (const auto &Path : UBPaths) {
       if (!Path->UBInsts.size())
         continue;
       // Aggregate collected UB constraints
+<<<<<<< HEAD
       Inst *Ante = LIC->getConst(APInt(1, true));
+=======
+      Inst *Ante = LIC->getConst(llvm::APInt(1, true));
+>>>>>>> master
       for (const auto &I : Path->UBInsts) {
         auto Iter = UBExprMap.find(I);
         // It's possible that the instruction I is not in the map.
@@ -324,12 +365,17 @@ Inst *ExprBuilder::getUBInstCondition(Inst *Root) {
 }
 
 Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
+<<<<<<< HEAD
   Inst *Result = LIC->getConst(APInt(1, true));
+=======
+  Inst *Result = LIC->getConst(llvm::APInt(1, true));
+>>>>>>> master
 
   if (I->K != Inst::Var)
     return Result;
 
   unsigned Width = I->Width;
+<<<<<<< HEAD
   Inst *Zero = LIC->getConst(APInt(Width, 0));
   Inst *One = LIC->getConst(APInt(Width, 1));
 
@@ -337,6 +383,15 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
     Inst *NotZeros = LIC->getInst(Inst::Xor, Width,
                                   {LIC->getConst(I->KnownZeros),
                                    LIC->getConst(APInt::getAllOnesValue(Width))});
+=======
+  Inst *Zero = LIC->getConst(llvm::APInt(Width, 0));
+  Inst *One = LIC->getConst(llvm::APInt(Width, 1));
+
+  if (I->KnownZeros.getBoolValue()) {
+    Inst *AllOnes = LIC->getConst(llvm::APInt::getAllOnesValue(Width));
+    Inst *NotZeros = LIC->getInst(Inst::Xor, Width,
+                                  {LIC->getConst(I->KnownZeros), AllOnes});
+>>>>>>> master
     Inst *VarNotZero = LIC->getInst(Inst::Or, Width, {I, NotZeros});
     Inst *ZeroBits = LIC->getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
     Result = LIC->getInst(Inst::And, 1, {Result, ZeroBits});
@@ -368,11 +423,20 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
     Result = LIC->getInst(Inst::And, 1, {Result, NegBits});
   }
   if (I->NumSignBits > 1) {
+<<<<<<< HEAD
     Inst *Res = LIC->getInst(Inst::AShr, Width,
                              {I, LIC->getConst(APInt(Width, Width - I->NumSignBits))});
     Inst *TestOnes = LIC->getInst(Inst::AShr, Width,
                                   {LIC->getInst(Inst::Shl, Width, {One, LIC->getConst(APInt(Width, Width-1))}),
                                    LIC->getConst(APInt(Width, Width-1))});
+=======
+    Inst *Diff = LIC->getConst(llvm::APInt(Width, Width - I->NumSignBits));
+    Inst *Res = LIC->getInst(Inst::AShr, Width, {I, Diff});
+    Diff = LIC->getConst(llvm::APInt(Width, Width-1));
+    Inst *TestOnes = LIC->getInst(Inst::AShr, Width,
+                                  {LIC->getInst(Inst::Shl, Width, {One, Diff}),
+                                   LIC->getConst(llvm::APInt(Width, Width-1))});
+>>>>>>> master
     Inst *SignBits = LIC->getInst(Inst::Or, 1,
                                   {LIC->getInst(Inst::Eq, 1, {Res, TestOnes}),
                                    LIC->getInst(Inst::Eq, 1, {Res, Zero})});
@@ -390,7 +454,11 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
 Inst *ExprBuilder::getBlockPCs(Inst *Root) {
 
   UBPathInstMap CachedPhis;
+<<<<<<< HEAD
   Inst *Result = LIC->getConst(APInt(1, true));
+=======
+  Inst *Result = LIC->getConst(llvm::APInt(1, true));
+>>>>>>> master
   // For each Phi instruction
   for (const auto &I : getUBPathInsts(Root)) {
     if (CachedPhis.count(I) != 0)
@@ -407,7 +475,11 @@ Inst *ExprBuilder::getBlockPCs(Inst *Root) {
       if (!Path->PCs.size())
         continue;
       // Aggregate collected BlockPC constraints
+<<<<<<< HEAD
       Inst *Ante = LIC->getConst(APInt(1, true));
+=======
+      Inst *Ante = LIC->getConst(llvm::APInt(1, true));
+>>>>>>> master
       for (const auto &PC : Path->PCs)
         Ante = LIC->getInst(Inst::And, 1, {Ante, PC});
       // Create path predicate
@@ -439,7 +511,11 @@ Inst *ExprBuilder::createUBPathInstsPred(
     Inst *CurrentInst, std::vector<Inst *> &PathInsts,
     std::map<Block *, unsigned> &BlockConstraints,
     std::map<Inst *, bool> *SelectBranches, UBPathInstMap &CachedUBPathInsts) {
+<<<<<<< HEAD
   Inst *Pred = LIC->getConst(APInt(1, true));
+=======
+  Inst *Pred = LIC->getConst(llvm::APInt(1, true));
+>>>>>>> master
   for (const auto &PathInst : PathInsts) {
     if (PathInst->Ops.size() == 1)
       continue;
@@ -470,10 +546,17 @@ Inst *ExprBuilder::createUBPathInstsPred(
 
 Inst *ExprBuilder::getExtractInst(Inst *I, unsigned Offset, unsigned W) {
   if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
+<<<<<<< HEAD
     return LIC->getConst(APInt(I->Val.ashr(Offset)).zextOrTrunc(W));
   } else {
     Inst *AShr = LIC->getInst(Inst::AShr, I->Width,
                               {I, LIC->getConst(APInt(I->Width, Offset))});
+=======
+    return LIC->getConst(llvm::APInt(I->Val.ashr(Offset)).zextOrTrunc(W));
+  } else {
+    Inst *AShr = LIC->getInst(Inst::AShr, I->Width,
+                              {I, LIC->getConst(llvm::APInt(I->Width, Offset))});
+>>>>>>> master
     if (AShr->Width < W)
       return LIC->getInst(Inst::ZExt, W, {AShr});
     else if (AShr->Width > W)
@@ -484,8 +567,13 @@ Inst *ExprBuilder::getExtractInst(Inst *I, unsigned Offset, unsigned W) {
 }
 
 Inst *ExprBuilder::getImpliesInst(Inst *Ante, Inst *I) {
+<<<<<<< HEAD
   Inst *IsZero = LIC->getInst(Inst::Eq, 1,
                               {Ante, LIC->getConst(APInt(Ante->Width, 0))});
+=======
+  Inst *Zero = LIC->getConst(llvm::APInt(Ante->Width, 0));
+  Inst *IsZero = LIC->getInst(Inst::Eq, 1, {Ante, Zero});
+>>>>>>> master
   return LIC->getInst(Inst::Or, 1, {IsZero, I});
 }
 
@@ -511,7 +599,12 @@ Inst *ExprBuilder::addnuwUB(Inst *I) {
    Inst *Rext = LIC->getInst(Inst::ZExt, Width+1, {R});
    Inst *Add = LIC->getInst(Inst::Add, Width+1, {Lext, Rext});
    Inst *AddMSB = getExtractInst(Add, Width, 1);
+<<<<<<< HEAD
    return LIC->getInst(Inst::Eq, 1, {AddMSB, LIC->getConst(APInt(1, false))});
+=======
+   return LIC->getInst(Inst::Eq, 1,
+                       {AddMSB, LIC->getConst(llvm::APInt(1, false))});
+>>>>>>> master
 }
 
 Inst *ExprBuilder::subnswUB(Inst *I) {
@@ -536,7 +629,12 @@ Inst *ExprBuilder::subnuwUB(Inst *I) {
    Inst *Rext = LIC->getInst(Inst::ZExt, Width+1, {R});
    Inst *Sub = LIC->getInst(Inst::Sub, Width+1, {Lext, Rext});
    Inst *SubMSB = getExtractInst(Sub, Width, 1);
+<<<<<<< HEAD
    return LIC->getInst(Inst::Eq, 1, {SubMSB, LIC->getConst(APInt(1, false))});
+=======
+   return LIC->getInst(Inst::Eq, 1,
+                       {SubMSB, LIC->getConst(llvm::APInt(1, false))});
+>>>>>>> master
 }
 
 Inst *ExprBuilder::mulnswUB(Inst *I) {
@@ -565,13 +663,23 @@ Inst *ExprBuilder::mulnuwUB(Inst *I) {
    Inst *Rext = LIC->getInst(Inst::ZExt, 2*Width, {R});
    Inst *Mul = LIC->getInst(Inst::Mul, 2*Width, {Lext, Rext});
    Inst *HigherBits = getExtractInst(Mul, Width, Width);
+<<<<<<< HEAD
    return LIC->getInst(Inst::Eq, 1, {HigherBits, LIC->getConst(APInt(Width, 0))});
+=======
+   return LIC->getInst(Inst::Eq, 1,
+                       {HigherBits, LIC->getConst(llvm::APInt(Width, 0))});
+>>>>>>> master
 }
 
 Inst *ExprBuilder::udivUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    auto R = Ops[1];
+<<<<<<< HEAD
    return LIC->getInst(Inst::Ne, 1, {R, LIC->getConst(APInt(R->Width, 0))});
+=======
+   return LIC->getInst(Inst::Ne, 1,
+                       {R, LIC->getConst(llvm::APInt(R->Width, 0))});
+>>>>>>> master
 }
 
 Inst *ExprBuilder::udivExactUB(Inst *I) {
@@ -589,12 +697,21 @@ Inst *ExprBuilder::sdivUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
+<<<<<<< HEAD
    Inst *ShiftBy = LIC->getConst(APInt(Width, Width-1));
    Inst *IntMin = LIC->getInst(Inst::Shl, Width,
                                {LIC->getConst(APInt(Width, 1)), ShiftBy});
    Inst *NegOne = LIC->getInst(Inst::AShr, Width, {IntMin, ShiftBy});
    Inst *NeExpr = LIC->getInst(Inst::Ne, 1,
                                {R, LIC->getConst(APInt(R->Width, 0))});
+=======
+   Inst *ShiftBy = LIC->getConst(llvm::APInt(Width, Width-1));
+   Inst *IntMin = LIC->getInst(Inst::Shl, Width,
+                               {LIC->getConst(llvm::APInt(Width, 1)), ShiftBy});
+   Inst *NegOne = LIC->getInst(Inst::AShr, Width, {IntMin, ShiftBy});
+   Inst *NeExpr = LIC->getInst(Inst::Ne, 1,
+                               {R, LIC->getConst(llvm::APInt(R->Width, 0))});
+>>>>>>> master
    Inst *OrExpr = LIC->getInst(Inst::Or, 1,
                                {LIC->getInst(Inst::Ne, 1, {L, IntMin}),
                                 LIC->getInst(Inst::Ne, 1, {R, NegOne})});
@@ -616,7 +733,11 @@ Inst *ExprBuilder::shiftUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
+<<<<<<< HEAD
    Inst *Lwidth = LIC->getConst(APInt(Width, Width));
+=======
+   Inst *Lwidth = LIC->getConst(llvm::APInt(Width, Width));
+>>>>>>> master
    return LIC->getInst(Inst::Ult, 1, {R, Lwidth});
 }
 
@@ -723,8 +844,13 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
       // we skip building the corresponding expressions and just return
       // a constant zero.
       Inst *R = I->Ops[1];
+<<<<<<< HEAD
       if (R == LIC->getConst(APInt(R->Width, 0))) {
         Result.emplace(I, LIC->getConst(APInt(1, false)));
+=======
+      if (R == LIC->getConst(llvm::APInt(R->Width, 0))) {
+        Result.emplace(I, LIC->getConst(llvm::APInt(1, false)));
+>>>>>>> master
         return Result;
       }
 
@@ -746,7 +872,12 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
         break;
       }
       case Inst::SDivExact: {
+<<<<<<< HEAD
         Result.emplace(I, LIC->getInst(Inst::And, 1, {sdivUB(I), sdivExactUB(I)}));
+=======
+        Result.emplace(I, LIC->getInst(Inst::And, 1,
+                                       {sdivUB(I), sdivExactUB(I)}));
+>>>>>>> master
         break;
       }
       case Inst::URem: {
@@ -774,8 +905,13 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
       break;
     }
     case Inst::ShlNW: {
+<<<<<<< HEAD
       Result.emplace(I, LIC->getInst(Inst::And, 1,
                                      {shiftUB(I), LIC->getInst(Inst::And, 1, {shlnswUB(I), shlnuwUB(I)})}));
+=======
+      Inst *nwUB = LIC->getInst(Inst::And, 1, {shlnswUB(I), shlnuwUB(I)});
+      Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), nwUB}));
+>>>>>>> master
       break;
     }
     case Inst::LShr: {
@@ -860,7 +996,11 @@ std::vector<Inst *> ExprBuilder::getVarInsts(const std::vector<Inst *> Insts) {
   return Result;
 }
 
+<<<<<<< HEAD
 // Return a candidate Inst which must be proven valid for the candidate to apply.
+=======
+// Return a candidate which must be proven valid for the candidate to apply.
+>>>>>>> master
 Inst *ExprBuilder::GetCandidateExprForReplacement(
     const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
     InstMapping Mapping, bool Negate) {
@@ -868,7 +1008,11 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
 
   // Build LHS
   Inst *LHS = Mapping.LHS;
+<<<<<<< HEAD
   Inst *Ante = LIC->getConst(APInt(1, true));
+=======
+  Inst *Ante = LIC->getConst(llvm::APInt(1, true));
+>>>>>>> master
 
   // Get demanded bits
   Inst *DemandedBits = LIC->getConst(LHS->DemandedBits);
@@ -877,7 +1021,11 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
 
   // Get UB constraints of LHS
   Inst *LHSUB = getUBInstCondition(Mapping.LHS);
+<<<<<<< HEAD
   if (LHSUB == LIC->getConst(APInt(1, false)))
+=======
+  if (LHSUB == LIC->getConst(llvm::APInt(1, false)))
+>>>>>>> master
     return nullptr;
 
   // Build PCs
@@ -907,7 +1055,11 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
 
   // Get UB constraints of RHS
   Inst *RHSUB = getUBInstCondition(Mapping.RHS);
+<<<<<<< HEAD
   if (RHSUB == LIC->getConst(APInt(1, false)))
+=======
+  if (RHSUB == LIC->getConst(llvm::APInt(1, false)))
+>>>>>>> master
     return nullptr;
 
   if (Negate) // (LHS != RHS)
@@ -936,11 +1088,16 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
   case ExprBuilder::KLEE:
     EB = createKLEEBuilder(IC);
     break;
+<<<<<<< HEAD
   case ExprBuilder::Z3:
     EB = createZ3Builder(IC);
     break;
   default:
     report_fatal_error("cannot reach here");
+=======
+  default:
+    llvm::report_fatal_error("cannot reach here");
+>>>>>>> master
     break;
   }
 

@@ -18,7 +18,10 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "souper/Extractor/ExprBuilder.h"
 
+<<<<<<< HEAD
 using namespace llvm;
+=======
+>>>>>>> master
 using namespace klee;
 using namespace souper;
 
@@ -376,7 +379,11 @@ private:
     return E;
   }
   
+<<<<<<< HEAD
   ref<Expr> makeSizedArrayRead(unsigned Width, StringRef Name, Inst *Origin) {
+=======
+  ref<Expr> makeSizedArrayRead(unsigned Width, llvm::StringRef Name, Inst *Origin) {
+>>>>>>> master
     std::string NameStr;
     if (Name.empty())
       NameStr = "arr";

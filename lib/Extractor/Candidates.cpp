@@ -14,8 +14,6 @@
 
 #include "souper/Extractor/Candidates.h"
 
-#include "klee/Expr.h"
-#include "klee/util/Ref.h"
 #include "llvm/ADT/EquivalenceClasses.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/BasicBlock.h"
@@ -52,7 +50,6 @@ static llvm::cl::opt<bool> HarvestDemandedBits(
     llvm::cl::init(false));
 
 using namespace llvm;
-using namespace klee;
 using namespace souper;
 
 void CandidateReplacement::printFunction(llvm::raw_ostream &Out) const {
