@@ -25,6 +25,7 @@ namespace {
 
 class Z3Builder : public ExprBuilder {
   context c;
+  ReplacementContext Context;
   UniqueNameSet ConstNames;
   std::vector<expr> Consts;
   std::map<Inst *, expr> ExprMap;
@@ -59,13 +60,16 @@ public:
                          const std::vector<InstMapping> &PCs,
                          InstMapping Mapping,
                          std::vector<Inst *> *ModelVars, bool Negate) override {
-    std::string SMTStr;
-    llvm::raw_string_ostream SMTSS(SMTStr);
     Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
     if (!Cand)
       return std::string();
+    expr E = get(Cand);
+    solver s(c);
+    s.add(E);
+    llvm::outs() << s.to_smt2() << "\n";
 #if 0
-    ref<Expr> E = get(Cand);
+    std::string SMTStr;
+    llvm::raw_string_ostream SMTSS(SMTStr);
     ConstraintManager Manager;
     Query KQuery(Manager, E);
     ExprSMTLIBPrinter Printer;
@@ -93,7 +97,7 @@ private:
      unsigned Width = L.get_sort().bv_size();
      expr Count = c.bv_val(0, Width);
      for (unsigned J=0; J<Width; J++) {
-       expr Bit = L.extract(c.bv_val(0, Width), c.bv_val(J, Width));
+       expr Bit = L.extract(J, 0);
        expr BitExt = expr(c, Z3_mk_zero_ext(c, Width, Bit));
        Count = Count + BitExt;
      }
@@ -112,6 +116,7 @@ private:
 
   expr build(Inst *I) {
     const std::vector<Inst *> &Ops = I->orderedOps();
+    llvm::outs() << "## getting instruction: " << Inst::getKindName(I->K) << "\n";
     switch (I->K) {
     case Inst::UntypedConst:
       assert(0 && "unexpected kind");
@@ -273,15 +278,15 @@ private:
       return expr(c, Z3_mk_sign_ext(c, I->Width, get(Ops[0])));
     case Inst::Trunc: {
       //return ExtractExpr::create(get(Ops[0]), 0, I->Width);
-      return get(Ops[0]).extract(0, I->Width);
+      return get(Ops[0]).extract(I->Width-1, 0);
     }
     case Inst::Eq: {
       //return EqExpr::create(get(Ops[0]), get(Ops[1]));
-      return get(Ops[0]) == get(Ops[1]);
+      return ite(get(Ops[0]) == get(Ops[1]), c.bv_val(1, 1), c.bv_val(0, 1));
     }
     case Inst::Ne: {
       //return NeExpr::create(get(Ops[0]), get(Ops[1]));
-      return get(Ops[0]) != get(Ops[1]);
+      return ite(get(Ops[0]) != get(Ops[1]), c.bv_val(1, 1), c.bv_val(0, 1));
     }
     case Inst::Ult: {
       //return UltExpr::create(get(Ops[0]), get(Ops[1]));
@@ -308,18 +313,18 @@ private:
       if (Width == 16) {
         //return ConcatExpr::create(ExtractExpr::create(L, 0, 8),
         //                          ExtractExpr::create(L, 8, 8));
-        EV.push_back(L.extract(c.bv_val(0, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(8, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(7, 0));
+        EV.push_back(L.extract(15, 8));
       }
       else if (Width == 32) {
         //return ConcatExpr::create4(ExtractExpr::create(L, 0, 8),
         //                           ExtractExpr::create(L, 8, 8),
         //                           ExtractExpr::create(L, 16, 8),
         //                           ExtractExpr::create(L, 24, 8));
-        EV.push_back(L.extract(c.bv_val(0, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(8, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(16, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(24, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(7, 0));
+        EV.push_back(L.extract(15, 8));
+        EV.push_back(L.extract(23, 16));
+        EV.push_back(L.extract(31, 24));
       }
       else if (Width == 64) {
         //return ConcatExpr::create8(ExtractExpr::create(L, 0, 8),
@@ -330,14 +335,14 @@ private:
         //                           ExtractExpr::create(L, 40, 8),
         //                           ExtractExpr::create(L, 48, 8),
         //                           ExtractExpr::create(L, 56, 8));
-        EV.push_back(L.extract(c.bv_val(0, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(8, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(16, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(24, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(32, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(40, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(48, Width), c.bv_val(8, Width)));
-        EV.push_back(L.extract(c.bv_val(56, Width), c.bv_val(8, Width)));
+        EV.push_back(L.extract(7, 0));
+        EV.push_back(L.extract(15, 8));
+        EV.push_back(L.extract(23, 16));
+        EV.push_back(L.extract(31, 24));
+        EV.push_back(L.extract(39, 32));
+        EV.push_back(L.extract(47, 40));
+        EV.push_back(L.extract(55, 48));
+        EV.push_back(L.extract(63, 56));
       }
       return concat(EV);
     }
@@ -411,7 +416,11 @@ private:
     if (ExprMap.count(I)) 
       return ExprMap.at(I);
     expr E = build(I);
-    assert(E.get_sort().bv_size() == I->Width);
+    llvm::outs() << "@@@ sort kind for " << Inst::getKindName(I->K) << ": " << E.get_sort().sort_kind() << "\n";
+    ReplacementContext Context;
+    PrintReplacementRHS(llvm::outs(), I, Context);
+    //llvm::outs() << "@@@ sort name: " << E.get_sort().name() << "\n";
+    //assert(E.get_sort().bv_size() == I->Width);
     ExprMap.insert(std::make_pair(I, E));
     return E;
   }

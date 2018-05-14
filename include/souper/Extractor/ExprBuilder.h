@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-// Copyright 2014 The Souper Authors. All rights reserved.
-=======
 // Copyright 2018 The Souper Authors. All rights reserved.
->>>>>>> master
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,11 +19,6 @@
 #include "souper/Util/UniqueNameSet.h"
 #include <unordered_map>
 
-<<<<<<< HEAD
-using namespace souper;
-
-=======
->>>>>>> master
 namespace souper {
 
 class ExprBuilder {
@@ -49,12 +40,8 @@ class ExprBuilder {
   const unsigned MAX_PHI_DEPTH = 25;
 public:
   enum Builder {
-<<<<<<< HEAD
     KLEE,
     Z3
-=======
-    KLEE
->>>>>>> master
   };
 
   ExprBuilder(InstContext &IC) : LIC(&IC) {}
@@ -122,10 +109,7 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
        std::vector<Inst *> *ModelVars, bool Negate=false);
 
 std::unique_ptr<ExprBuilder> createKLEEBuilder(InstContext &IC);
-<<<<<<< HEAD
 std::unique_ptr<ExprBuilder> createZ3Builder(InstContext &IC);
-=======
->>>>>>> master
 }
 
 #endif  // SOUPER_EXTRACTOR_EXPRBUILDER_H
