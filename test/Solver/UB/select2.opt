@@ -3,7 +3,7 @@
 ; RUN: %souper-check %solver %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
-; CHECK-NOT: LGTM
+; CHECK: LGTM
 
 %0:i1 = var
 %1:i1 = var
