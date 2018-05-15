@@ -1,0 +1,9 @@
+sub
+mul
+sdiv
+udiv
+urem
+urem
+shl
+lshr
+ashr
