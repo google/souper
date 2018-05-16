@@ -1,0 +1,17 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+%x:i1 = var
+%y:i1 = var
+%add = add %x, %y
+infer %add
+%xor = xor %y, %x
+%and = and %y, %x
+%shl = shl %and, 1
+%add2 = add %shl, %xor
+result %add2
+
