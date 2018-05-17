@@ -249,7 +249,7 @@ private:
 
   /// Create a copy of instruction I replacing its input vars with vars
   /// in Replacements
-  Inst *getInstCopy(Inst *I, InstContext &IC,
+  Inst *replaceVars(Inst *I, InstContext &IC,
                     const std::map<Inst *, Inst *> &Replacements);
 
   /// A mapping from program locations (line numbers) to a set of component
