@@ -861,23 +861,31 @@ Inst *InstSynthesis::getComponentConstInputConstraint(InstContext &IC) {
 }
 
 Inst *InstSynthesis::replaceVars(Inst *I, InstContext &IC,
+                                 std::map<Inst *, Inst *> &InstCache,
                                  const std::map<Inst *, Inst *> &Replacements) {
+  if (InstCache.count(I))
+    return InstCache.at(I);
+
   std::vector<Inst *> Ops;
   for (auto const &Op : I->Ops)
-    Ops.push_back(replaceVars(Op, IC, Replacements));
+    Ops.push_back(replaceVars(Op, IC, InstCache, Replacements));
 
+  Inst *Replacement = 0;
   if (I->K == Inst::Var) {
-    if (!Replacements.count(I))
-      return I;
-    // Replace
-    return Replacements.at(I);
+    if (Replacements.count(I))
+      Replacement = Replacements.at(I);
+    else
+      Replacement = I;
   } else if (I->K == Inst::Phi) {
-    return IC.getPhi(I->B, Ops);
+    Replacement = IC.getPhi(I->B, Ops);
   } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
-    return I;
+    Replacement = I;
   } else {
-    return IC.getInst(I->K, I->Width, Ops);
+    Replacement = IC.getInst(I->K, I->Width, Ops);
   }
+  assert(Replacement);
+  InstCache[I] = Replacement;
+  return Replacement;
 }
 
 Inst *InstSynthesis::createInstFromModel(const SolverSolution &Solution,
@@ -1394,7 +1402,8 @@ Inst *InstSynthesis::initConcreteInputWirings(Inst *Query, Inst *WiringQuery,
         }
       }
     }
-    Inst *Copy = replaceVars(WiringQuery, *LIC, InputMap);
+    std::map<Inst *, Inst *> InstCache;
+    Inst *Copy = replaceVars(WiringQuery, *LIC, InstCache, InputMap);
     Query = LIC->getInst(Inst::And, 1, {Query, Copy});
     Query->DemandedBits = APInt::getAllOnesValue(Query->Width);
   }
