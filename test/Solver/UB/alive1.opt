@@ -5,13 +5,17 @@
 
 ; CHECK-NOT: LGTM
 
-%x:i1 = var
-%y:i1 = var
-%add = add %x, %y
-infer %add
-%xor = xor %y, %x
-%and = and %y, %x
-%shl = shl %and, 1
-%add2 = add %shl, %xor
-result %add2
+; let X = poison and C == 1
+; then a = X
+; r = -X
+; negC = -1
+; and r2 = UB (can't divide by -1)
 
+%C:i16 = var
+%X:i16 = var
+%a = sdiv %X, %C
+%r = sub 0, %a
+infer %r
+%negC = sub 0, %C
+%r2 = sdiv %X, %negC
+result %r2
