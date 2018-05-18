@@ -1,0 +1,19 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+; let %op0RHS = INT_MAX
+; %newICMP = false
+; %op0 = poison
+; %r2 = poison
+
+%op0RHS:i64 = var
+%newICMP = eq %op0RHS, 0
+%r:i64 = zext %newICMP
+infer %r
+%op0 = shl 1, %op0RHS
+%r2 = and %op0, 1
+result %r2

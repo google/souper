@@ -1,0 +1,13 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%0:i64 = var
+%1:i64 = var
+%2 = addnw %0, %1
+infer %2
+%3 = addnuw %0, %1
+result %3

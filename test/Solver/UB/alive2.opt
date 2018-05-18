@@ -1,0 +1,19 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+; let x = 0 and a = INT_MIN
+; then r = 0
+; na = poison
+; r2 = poison
+
+%x:i32 = var
+%a:i32 = var
+%r = addnsw %x, %a
+infer %r
+%na = subnsw 0, %a
+%r2 = subnsw %x, %na
+result %r2
