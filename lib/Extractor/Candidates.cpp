@@ -53,6 +53,7 @@ using namespace llvm;
 using namespace souper;
 
 void CandidateReplacement::printFunction(llvm::raw_ostream &Out) const {
+  assert(Mapping.LHS->hasOrigin(Origin));
   const Function *F = Origin->getParent()->getParent();
   std::string N;
   if (F->hasLocalLinkage()) {
@@ -504,10 +505,10 @@ Inst *ExprBuilder::build(Value *V) {
 Inst *ExprBuilder::get(Value *V) {
   // Cache V if V is not found in InstMap
   Inst *&E = EBC.InstMap[V];
-  if (!E) {
+  if (!E)
     E = build(V);
-  }
-  EBC.Origins.insert(std::pair<Inst *, Value *>(E, V));
+  if (E->K != Inst::Const && !E->hasOrigin(V))
+    E->Origins.push_back(V);
   E->DemandedBits = APInt::getAllOnesValue(E->Width);
   if (HarvestDemandedBits) {
     if (Instruction *I = dyn_cast<Instruction>(V))
@@ -736,8 +737,10 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
     for (auto &I : BB) {
-      if (I.getType()->isIntegerTy())
+      if (I.getType()->isIntegerTy()) {
         BCS->Replacements.emplace_back(&I, InstMapping(EB.get(&I), 0));
+        assert(EB.get(&I)->hasOrigin(&I));
+      }
     }
     if (!BCS->Replacements.empty()) {
       std::unordered_set<Block *> VisitedBlocks;
