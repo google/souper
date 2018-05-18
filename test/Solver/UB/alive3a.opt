@@ -5,7 +5,7 @@
 
 ; CHECK-NOT: LGTM
 
-; %op0RHS = INT_MAX
+; let %op0RHS = INT_MAX
 ; %newICMP = false
 ; %op0 = poison
 ; %r2 = poison

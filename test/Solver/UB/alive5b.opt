@@ -1,0 +1,15 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%a:i1 = var
+%b:i16 = var
+%nop0:i16 = sext %a
+%op0 = xor %nop0, -1
+%r2 = and %op0, %b
+infer %r2
+%r = select %a, 0, %b
+result %r
