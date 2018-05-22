@@ -1,0 +1,13 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+%Op1:i32 = var
+%cmp = ne %Op1, 1
+%r:i32 = zext %cmp
+infer %r
+%r2 = urem 1, %Op1
+result %r2

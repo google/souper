@@ -1,0 +1,17 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+; XFAIL: *
+
+; this is wrong when %C is poison
+
+%B:i1 = var
+%C:i1 = var
+%A = select %B, 0, %C
+infer %A
+%notb = xor %B, 1
+%A2 = and %notb, %C
+result %A2

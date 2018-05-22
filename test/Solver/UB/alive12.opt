@@ -1,0 +1,14 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+%A:i192 = var
+%x:i192 = var
+%B = sub 0, %A
+%C = subnsw %x, %B
+infer %C
+%C2 = addnsw %x, %A
+result %C2

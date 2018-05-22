@@ -1,0 +1,12 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%X:i32 = var
+%r = sdiv %X, -1
+infer %r
+%r2 = sub 0, %X
+result %r2

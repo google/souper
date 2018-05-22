@@ -1,0 +1,14 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+; XFAIL: *
+
+%0:i1 = var
+%1:i1 = var
+%2 = select %0, 1, %1
+infer %2
+%3 = or %0, %1
+result %3

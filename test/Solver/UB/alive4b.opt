@@ -1,0 +1,14 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%a:i1 = var
+%b:i100 = var
+%op0:i100 = sext %a
+%r2 = and %op0, %b
+infer %r2
+%r = select %a, %b, 0
+result %r
