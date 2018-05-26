@@ -1524,7 +1524,8 @@ void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
         for (auto Op : I->Ops)
           Q.push(std::make_tuple(Op, Benefit));
       }
-      if (Benefit > 1 && I->Available && I->K != Inst::Const && I->K != Inst::UntypedConst) {
+      if (Benefit > 1 && I->Available && I->K != Inst::Const
+          && I->K != Inst::UntypedConst) {
         if (WidthMustMatch && I->Width != Root->Width)
           continue;
         if (FilterVars && I->K == Inst::Var)
