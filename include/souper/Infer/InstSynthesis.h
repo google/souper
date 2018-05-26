@@ -324,7 +324,7 @@ private:
 };
 
 void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
-               int Max);
+               bool WidthMustMatch, bool FilterVars, int Max);
 
 Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Inst *, Inst *> &InstCache,

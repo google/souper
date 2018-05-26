@@ -48,7 +48,7 @@ static cl::opt<bool> InferNop("souper-infer-nop",
 static cl::opt<bool> StressNop("souper-stress-nop",
     cl::desc("stress-test big queries in nop synthesis by always performing all of the small queries (slow!) (default=false)"),
     cl::init(false));
-static cl::opt<int>MaxNops("souper-max-nops",
+static cl::opt<int>MaxCands("souper-max-cands",
     cl::desc("maximum number of values from the LHS to try to use as the RHS (default=20)"),
     cl::init(20));
 static cl::opt<bool> InferInts("souper-infer-iN",
@@ -145,7 +145,8 @@ public:
 
     if (InferNop) {
       std::vector<Inst *> Guesses;
-      findCands(LHS, Guesses, IC, MaxNops);
+      findCands(LHS, Guesses, IC, /*WidthMustMatch=*/true, /*FilterVars=*/false,
+                MaxCands);
 
       Inst *Ante = IC.getConst(APInt(1, true));
       BlockPCs BPCsCopy;
@@ -207,7 +208,8 @@ public:
 
     if (InferInsts && SMTSolver->supportsModels()) {
       std::vector<Inst *> LHSComps;
-      findCands(LHS, LHSComps, IC, MaxNops);
+      findCands(LHS, LHSComps, IC, /*WidthMustMatch=*/false, /*FilterVars=*/true,
+                MaxCands);
       InstSynthesis IS;
       EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS,
                          LHSComps, IC, Timeout);

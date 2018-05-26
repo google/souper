@@ -368,17 +368,8 @@ void InstSynthesis::setCompLibrary() {
   // Finally, add LHS components (if provided) directly to Comps,
   // their widths are already initialized.
   for (auto I : *LLHSComps) {
-    // No support for the following Insts
-    switch (I->K) {
-    case Inst::Phi:
-    // TODO: Why do we get these as candidates?!
-    case Inst::Var:
-    case Inst::Const:
-    case Inst::UntypedConst:
-      continue;
-    default:
-      break;
-    }
+    assert(I->K != Inst::Phi && I->K != Inst::Var && I->K != Inst::Const &&
+           I->K != Inst::UntypedConst);
     Comps.push_back(getCompFromInst(I));
   }
 }
@@ -1517,7 +1508,7 @@ void InstSynthesis::constrainConstWiring(const Inst *Cand,
 }
 
 void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
-               int Max) {
+               bool WidthMustMatch, bool FilterVars, int Max) {
   // breadth-first search
   std::set<Inst *> Visited;
   std::queue<std::tuple<Inst *,int>> Q;
@@ -1533,19 +1524,15 @@ void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
         for (auto Op : I->Ops)
           Q.push(std::make_tuple(Op, Benefit));
       }
-      if (Benefit > 1 && I->Width == Root->Width && I->Available)
+      if (Benefit > 1 && I->Available && I->K != Inst::Const && I->K != Inst::UntypedConst) {
+        if (WidthMustMatch && I->Width != Root->Width)
+          continue;
+        if (FilterVars && I->K == Inst::Var)
+          continue;
         Guesses.emplace_back(I);
-      // TODO: run experiments and see if it's worth doing these
-      if (0) {
-        if (Benefit > 2 && I->Width > Root->Width)
-          Guesses.emplace_back(IC.getInst(Inst::Trunc, Root->Width, {I}));
-        if (Benefit > 2 && I->Width < Root->Width) {
-          Guesses.emplace_back(IC.getInst(Inst::SExt, Root->Width, {I}));
-          Guesses.emplace_back(IC.getInst(Inst::ZExt, Root->Width, {I}));
-        }
+        if (Guesses.size() >= Max)
+          return;
       }
-      if (Guesses.size() >= Max)
-        return;
     }
   }
 }
