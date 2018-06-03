@@ -9,6 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_program(LLVM_CONFIG_EXECUTABLE HINTS ${CMAKE_SOURCE_DIR}/third_party/llvm/${CMAKE_BUILD_TYPE}/bin
+                                    HINTS ${CMAKE_LLVM_INSTALL_DIR}/bin
                                     NAMES llvm-config DOC "llvm-config executable")
 if(LLVM_CONFIG_EXECUTABLE STREQUAL "LLVM_CONFIG_EXECUTABLE-NOTFOUND")
   message(FATAL_ERROR "llvm-config could not be found!")

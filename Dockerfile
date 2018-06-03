@@ -28,9 +28,9 @@ add build_deps.sh /usr/src/souper/build_deps.sh
 add clone_and_test.sh /usr/src/souper/clone_and_test.sh
 
 run cd /usr/src/souper \
-#	&& ./build_deps.sh Debug \
+#	&& ./build_deps.sh --llvm-build-type=Debug \
 #       && rm -rf third_party/llvm/Debug-build \
-	&& ./build_deps.sh Release \
+	&& ./build_deps.sh --llvm-build-type=Release \
         && rm -rf third_party/llvm/Release-build \
 	&& rm -rf third_party/hiredis/install/lib/libhiredis.so*
 
