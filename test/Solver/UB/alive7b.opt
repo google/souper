@@ -1,0 +1,13 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%X:i16 = var
+%r2 = udiv 1, %X
+infer %r2
+%c = eq %X, 1
+%r:i16 = zext %c
+result %r

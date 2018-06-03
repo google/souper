@@ -1,0 +1,21 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+; XFAIL: *
+
+; let %a = 0
+; let %b = poison
+; %r = 0
+; %op0 = 0
+; %r2 = poison
+
+%a:i1 = var
+%b:i100 = var
+%r = select %a, %b, 0
+infer %r
+%op0:i100 = sext %a
+%r2 = and %op0, %b
+result %r2

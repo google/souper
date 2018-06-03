@@ -1,0 +1,12 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,add,sub,mul %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: RHS inferred successfully
+; CHECK: %3:i64 = add %0, %1
+
+%0:i64 = var
+%1:i64 = var
+%2 = addnsw %0, %1
+infer %2

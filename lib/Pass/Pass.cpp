@@ -106,8 +106,7 @@ public:
   void dynamicProfile(Function *F, CandidateReplacement &Cand) {
     std::string Str;
     llvm::raw_string_ostream Loc(Str);
-    auto I = Cand.Origin;
-    I->getDebugLoc().print(Loc);
+    Cand.Origin->getDebugLoc().print(Loc);
     ReplacementContext Context;
     std::string LHS = GetReplacementLHSString(Cand.BPCs, Cand.PCs,
                                               Cand.Mapping.LHS, Context);
@@ -159,124 +158,128 @@ public:
 
     appendToGlobalCtors(*M, Ctor, 0);
 
-    BasicBlock::iterator BI(I);
+    BasicBlock::iterator BI(Cand.Origin);
     while (isa<PHINode>(*BI))
       ++BI;
     new AtomicRMWInst(AtomicRMWInst::Add, CntVar,
                       ConstantInt::get(C, APInt(64, 1)), AtomicOrdering::Monotonic,
-                      SyncScope::System, I);
+                      SyncScope::System, Cand.Origin);
   }
 
   Value *getValue(Inst *I, Instruction *ReplacedInst,
                   ExprBuilderContext &EBC, DominatorTree &DT,
+                  std::map<Inst *, Value *> &ReplacedValues,
                   IRBuilder<> &Builder, Module *M) {
     Type *T = Type::getIntNTy(ReplacedInst->getContext(), I->Width);
-    if (I->K == Inst::Const) {
+    if (I->K == Inst::Const)
       return ConstantInt::get(T, I->Val);
-    } else if (EBC.Origins.count(I) != 0) {
+
+    if (ReplacedValues.find(I) != ReplacedValues.end())
+      return ReplacedValues[I];
+
+    if (I->Origins.size() > 0) {
       // if there's an Origin, we're connecting to existing code
-      auto It = EBC.Origins.equal_range(I);
-      for (auto O = It.first; O != It.second; ++O) {
-        Value *V = O->second;
+      for (auto V : I->Origins) {
         if (V->getType() != T)
-          continue;
+          continue; // TODO: can we assert this doesn't happen?
+        if (isa<Argument>(V) || isa<Constant>(V))
+          return V;
         if (auto IP = dyn_cast<Instruction>(V)) {
-          // Dominance check
           if (DT.dominates(IP, ReplacedInst)) {
             ++InstructionReplaced;
             return V;
           } else {
             ++DominanceCheckFailed;
           }
-        } else if (isa<Argument>(V) || isa<Constant>(V)) {
-          return V;
         } else {
           report_fatal_error("Unhandled LLVM instruction in getValue()");
         }
       }
       return 0;
-    } else {
-      // otherwise, recursively generate code
-      Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder, M);
-      if (!V0)
-        return 0;
-      switch (I->Ops.size()) {
-      case 1:
-        switch (I->K) {
-        case Inst::SExt:
-          return Builder.CreateSExt(V0, T);
-        case Inst::ZExt:
-          return Builder.CreateZExt(V0, T);
-        case Inst::Trunc:
-          return Builder.CreateTrunc(V0, T);
-        case Inst::CtPop:{
-          Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctpop, T);
-          return Builder.CreateCall(F, V0);
-        }
-        case Inst::BSwap:{
-          Function *F = Intrinsic::getDeclaration(M, Intrinsic::bswap, T);
-          return Builder.CreateCall(F, V0);
-        }
-        case Inst::Cttz:{
-          Function *F = Intrinsic::getDeclaration(M, Intrinsic::cttz, T);
-          // According to LLVM LangRef, the second argument of cttz i1 <is_zero_undef>
-          // must be a constant and is a flag to indicate whether the intrinsic should
-          // ensure that a zero as the first argument produces a defined result.
-          return Builder.CreateCall(F, {V0,
-                ConstantInt::get(V0->getContext(), APInt(1, 0))});
-        }
-        case Inst::Ctlz:{
-          // Ditto
-          Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctlz, T);
-          return Builder.CreateCall(F, {V0,
-                ConstantInt::get(V0->getContext(), APInt(1, 0))});
-        }
-        default:
-          break;
-        }
-      case 2:{
-        Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder, M);
-        if (!V1)
-          return 0;
-        switch (I->K) {
-        case Inst::And:
-          if (isa<Constant>(V0))
-            return Builder.CreateAnd(V1, V0);
-          return Builder.CreateAnd(V0, V1);
-        case Inst::Or:
-          if (isa<Constant>(V0))
-            return Builder.CreateOr(V1, V0);
-          return Builder.CreateOr(V0, V1);
-        case Inst::Xor:
-          if (isa<Constant>(V0))
-            return Builder.CreateXor(V1, V0);
-          return Builder.CreateXor(V0, V1);
-        case Inst::Add:
-          if (isa<Constant>(V0))
-            return Builder.CreateAdd(V1, V0);
-          return Builder.CreateAdd(V0, V1);
-        case Inst::Sub:
-          return Builder.CreateSub(V0, V1);
-        case Inst::Mul:
-          if (isa<Constant>(V0))
-            return Builder.CreateMul(V1, V0);
-          return Builder.CreateMul(V0, V1);
-        case Inst::Shl:
-          return Builder.CreateShl(V0, V1);
-        case Inst::AShr:
-          return Builder.CreateAShr(V0, V1);
-        case Inst::LShr:
-          return Builder.CreateLShr(V0, V1);
-        default:
-          break;
-        }
+    }
+
+    // otherwise, recursively generate code
+    Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, ReplacedValues,
+                         Builder, M);
+    if (!V0)
+      return 0;
+    switch (I->Ops.size()) {
+    case 1:
+      switch (I->K) {
+      case Inst::SExt:
+        return Builder.CreateSExt(V0, T);
+      case Inst::ZExt:
+        return Builder.CreateZExt(V0, T);
+      case Inst::Trunc:
+        return Builder.CreateTrunc(V0, T);
+      case Inst::CtPop:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctpop, T);
+        return Builder.CreateCall(F, V0);
+      }
+      case Inst::BSwap:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::bswap, T);
+        return Builder.CreateCall(F, V0);
+      }
+      case Inst::Cttz:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::cttz, T);
+        // According to LLVM LangRef, the second argument of cttz i1 <is_zero_undef>
+        // must be a constant and is a flag to indicate whether the intrinsic should
+        // ensure that a zero as the first argument produces a defined result.
+        return Builder.CreateCall(F, {V0,
+              ConstantInt::get(V0->getContext(), APInt(1, 0))});
+      }
+      case Inst::Ctlz:{
+        // Ditto
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctlz, T);
+        return Builder.CreateCall(F, {V0,
+              ConstantInt::get(V0->getContext(), APInt(1, 0))});
       }
       default:
         break;
       }
-      report_fatal_error((std::string)"Unhandled Souper instruction " +
-                         Inst::getKindName(I->K) + " in getValue()");
+    case 2:{
+      Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT,
+                           ReplacedValues, Builder, M);
+      if (!V1)
+        return 0;
+      switch (I->K) {
+      case Inst::And:
+        if (isa<Constant>(V0))
+          return Builder.CreateAnd(V1, V0);
+        return Builder.CreateAnd(V0, V1);
+      case Inst::Or:
+        if (isa<Constant>(V0))
+          return Builder.CreateOr(V1, V0);
+        return Builder.CreateOr(V0, V1);
+      case Inst::Xor:
+        if (isa<Constant>(V0))
+          return Builder.CreateXor(V1, V0);
+        return Builder.CreateXor(V0, V1);
+      case Inst::Add:
+        if (isa<Constant>(V0))
+          return Builder.CreateAdd(V1, V0);
+        return Builder.CreateAdd(V0, V1);
+      case Inst::Sub:
+        return Builder.CreateSub(V0, V1);
+      case Inst::Mul:
+        if (isa<Constant>(V0))
+          return Builder.CreateMul(V1, V0);
+        return Builder.CreateMul(V0, V1);
+      case Inst::Shl:
+        return Builder.CreateShl(V0, V1);
+      case Inst::AShr:
+        return Builder.CreateAShr(V0, V1);
+      case Inst::LShr:
+        return Builder.CreateLShr(V0, V1);
+      default:
+        break;
+      }
     }
+    default:
+      break;
+    }
+    report_fatal_error((std::string)"Unhandled Souper instruction " +
+                       Inst::getKindName(I->K) + " in getValue()");
   }
 
   bool runOnFunction(Function *F) {
@@ -284,6 +287,7 @@ public:
     InstContext IC;
     ExprBuilderContext EBC;
     CandidateMap CandMap;
+    std::map<Inst *, Value *> ReplacedValues;
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>(*F).getLoopInfo();
     if (!LI)
       report_fatal_error("getLoopInfo() failed");
@@ -359,15 +363,18 @@ public:
         continue;
 
       Instruction *I = Cand.Origin;
+      assert(Cand.Mapping.LHS->hasOrigin(I));
       IRBuilder<> Builder(I);
 
       Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
-                               Builder, F->getParent());
+                               ReplacedValues, Builder, F->getParent());
       if (!NewVal) {
         if (DebugSouperPass)
           errs() << "\"\n; replacement failed\n";
         continue;
       }
+
+      ReplacedValues[Cand.Mapping.LHS] = NewVal;
 
       if (DebugSouperPass) {
         errs() << "\n";
@@ -383,8 +390,6 @@ public:
         NewVal->print(errs());
         errs() << "\"\n";
       }
-      EBC.Origins.erase(Cand.Mapping.LHS);
-      EBC.Origins.insert(std::pair<Inst *, Value *>(Cand.Mapping.LHS, NewVal));
 
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
         if (DynamicProfile)

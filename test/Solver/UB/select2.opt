@@ -1,0 +1,13 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%0:i1 = var
+%1:i1 = var
+%2 = or %0, %1
+infer %2
+%3 = select %0, 1, %1
+result %3

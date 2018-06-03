@@ -887,11 +887,11 @@ Inst *InstSynthesis::getComponentConstInputConstraint(InstContext &IC) {
   return Ret;
 }
 
-Inst *InstSynthesis::getInstCopy(Inst *I, InstContext &IC,
+Inst *InstSynthesis::replaceVars(Inst *I, InstContext &IC,
                                  const std::map<Inst *, Inst *> &Replacements) {
   std::vector<Inst *> Ops;
   for (auto const &Op : I->Ops)
-    Ops.push_back(getInstCopy(Op, IC, Replacements));
+    Ops.push_back(replaceVars(Op, IC, Replacements));
 
   if (I->K == Inst::Var) {
     if (!Replacements.count(I))
@@ -1446,7 +1446,7 @@ Inst *InstSynthesis::initConcreteInputWirings(Inst *Query, Inst *WiringQuery,
         }
       }
     }
-    Inst *Copy = getInstCopy(WiringQuery, *LIC, InputMap);
+    Inst *Copy = replaceVars(WiringQuery, *LIC, InputMap);
     Query = LIC->getInst(Inst::And, 1, {Query, Copy});
     Query->DemandedBits = APInt::getAllOnesValue(Query->Width);
   }
@@ -1541,30 +1541,35 @@ void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
 Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Inst *, Inst *> &InstCache,
                   std::map<Block *, Block *> &BlockCache) {
+
+  if (InstCache.count(I))
+    return InstCache.at(I);
+
   std::vector<Inst *> Ops;
   for (auto const &Op : I->Ops)
     Ops.push_back(getInstCopy(Op, IC, InstCache, BlockCache));
 
+  Inst *Copy = 0;
   if (I->K == Inst::Var) {
-    if (!InstCache.count(I)) {
-      Inst *Copy = IC.createVar(I->Width, "copy", I->KnownZeros, I->KnownOnes,
-                                I->NonZero, I->NonNegative, I->PowOfTwo,
-                                I->Negative, I->NumSignBits);
-      InstCache[I] = Copy;
-      return Copy;
-    } else
-      return InstCache.at(I);
-  } else if (I->K == Inst::Phi)
+    Copy = IC.createVar(I->Width, "copy", I->KnownZeros, I->KnownOnes,
+                        I->NonZero, I->NonNegative, I->PowOfTwo,
+                        I->Negative, I->NumSignBits);
+  } else if (I->K == Inst::Phi) {
     if (!BlockCache.count(I->B)) {
       auto BlockCopy = IC.createBlock(I->B->Preds);
       BlockCache[I->B] = BlockCopy;
-      return IC.getPhi(BlockCopy, Ops);
-    } else
-      return IC.getPhi(BlockCache.at(I->B), Ops);
-  else if (I->K == Inst::Const || I->K == Inst::UntypedConst)
+      Copy = IC.getPhi(BlockCopy, Ops);
+    } else {
+      Copy = IC.getPhi(BlockCache.at(I->B), Ops);
+    }
+  } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
     return I;
-  else
-    return IC.getInst(I->K, I->Width, Ops);
+  } else {
+    Copy = IC.getInst(I->K, I->Width, Ops);
+  }
+  assert(Copy);
+  InstCache[I] = Copy;
+  return Copy;
 }
 
 void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,

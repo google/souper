@@ -95,7 +95,6 @@ struct BlockInfo {
 struct ExprBuilderContext {
   std::map<const llvm::Value *, Inst *> InstMap;
   std::map<llvm::BasicBlock *, BlockInfo> BlockMap;
-  std::multimap<Inst *, llvm::Value *> Origins;
 };
 
 FunctionCandidateSet ExtractCandidatesFromPass(

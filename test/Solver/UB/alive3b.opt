@@ -1,0 +1,14 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%op0RHS:i64 = var
+%op0 = shl 1, %op0RHS
+%r2 = and %op0, 1
+infer %r2
+%newICMP = eq %op0RHS, 0
+%r:i64 = zext %newICMP
+result %r
