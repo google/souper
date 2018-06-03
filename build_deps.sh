@@ -170,12 +170,22 @@ set -e
 mkdir -p $llvm_builddir
 cmake_flags="$llvm_dir -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DCMAKE_CXX_FLAGS=-DLLVM_ENABLE_STATS=true"
 
+# Whether to configure the project using cmake or not.
+cmake_generate=true;
+if [ -d $llvm_builddir/CMakeFiles ]; then
+  cmake_generate=false;
+fi
+
 if [ -n "`which ninja`" ] ; then
-  (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")
+  if [ "$cmake_generate" = true ]; then
+    (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")
+  fi
   ninja -C $llvm_builddir
   ninja -C $llvm_builddir install
 else
-  (cd $llvm_builddir && cmake $cmake_flags "$@")
+  if [ "$cmake_generate" = true ]; then
+    (cd $llvm_builddir && cmake $cmake_flags "$@")
+  fi
   make -C $llvm_builddir -j4
   make -C $llvm_builddir -j4 install
 fi
