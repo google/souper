@@ -23,11 +23,9 @@ $ go get github.com/garyburd/redigo/redis
 
 1. Download and build dependencies:
 ```
-$ ./build_deps.sh $buildtype $extra_cmake_flags
+$ ./build_deps.sh <options>
 ```
-   $buildtype is optional; it defaults to Release and may be set to any LLVM
-   build type.
-   $extra_cmake_flags is optional. It is passed to CMake.
+   See ./build_deps.sh --help for various optios.
 
 2. Run CMake from a build directory:
 ```
@@ -40,6 +38,12 @@ $ cmake -DCMAKE_BUILD_TYPE=$buildtype /path/to/souper
    to run Souper's full test suite, add this option to CMake (with the
    appropriate solver and path to the solver executable):
    -DTEST_SOLVER="-z3-path=/usr/bin/z3"
+
+   If you have used custom path for LLVM build and installed the
+   binaries in a non-standard location, you must mention following
+   option to CMake so that it can find the appropriate binaries during build time:
+
+   `-DCMAKE_LLVM_INSTALL_DIR=/your/custom/location/`
 
 3. Run 'make' from the build directory.
 
@@ -55,8 +59,9 @@ literals. You should build Souper using GCC 4.9+ or Clang.
 
 After following the above instructions, you will have a Souper
 executable in /path/to/souper-build/souper and a Clang executable in
-/path/to/souper/third_party/llvm/$buildtype/bin/clang.  You can use the
-Clang executable to create an LLVM bitcode file like this:
+your LLVM install directory (defaults to
+/path/to/souper/third_party/llvm/$buildtype/bin/clang).
+You can use the Clang executable to create an LLVM bitcode file like this:
 ```
 $ /path/to/clang -emit-llvm -c -o /path/to/file.bc /path/to/file.c
 ```
