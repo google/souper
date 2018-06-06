@@ -496,7 +496,7 @@ void InstSynthesis::initComponents(InstContext &IC) {
     Inst *CompInst;
     if (Comp.Origin) {
       assert(Comp.OriginOps.size() == CompOps.size());
-      CompInst = getInstCopy(Comp.Origin, *LIC, OpsReplacements);
+      CompInst = replaceVars(Comp.Origin, *LIC, OpsReplacements);
       if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc)
         CompInst = IC.getInst(Inst::ZExt, DefaultWidth, {CompInst});
       // Update LHS component
@@ -1024,7 +1024,7 @@ Inst *InstSynthesis::createInstFromWiring(
     std::map<Inst *, Inst *> OpsReplacements;
     for (unsigned J = 0; J < Ops.size(); ++J)
       OpsReplacements.insert(std::make_pair(Comp.OriginOps[J], Ops[J]));
-    Inst *Copy = getInstCopy(Comp.Origin, *LIC, OpsReplacements);
+    Inst *Copy = replaceVars(Comp.Origin, *LIC, OpsReplacements);
     // Update ops
     Ops = Copy->Ops;
   }
