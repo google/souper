@@ -1,0 +1,22 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-nop -souper-infer-inst -souper-synthesis-comps=and,or,xor %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK:      %10:i64 = xor %71, %72
+; CHECK-NEXT: result %10
+
+%71:i64 = var
+%72in:i64 = var
+%1 = block 2
+%junk:i64 = var
+%72 = phi %1, %72in, %junk
+%200 = xor %71, -1
+%201 = xor %72, -1
+%202 = and %71, %201
+%203 = and %72, %200
+%204 = or %202, %203
+infer %204 
+
+; %205 = xor %71, %72
+; result %205 
