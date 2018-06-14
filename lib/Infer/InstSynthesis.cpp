@@ -367,11 +367,8 @@ void InstSynthesis::setCompLibrary() {
     Comps.push_back(Component{Inst::Trunc, LHS->Width, {DefaultWidth}, 0, {}});
   // Finally, add LHS components (if provided) directly to Comps,
   // their widths are already initialized.
-  for (auto I : *LLHSComps) {
-    assert(I->K != Inst::Phi && I->K != Inst::Var && I->K != Inst::Const &&
-           I->K != Inst::UntypedConst);
+  for (auto I : *LLHSComps)
     Comps.push_back(getCompFromInst(I));
-  }
 }
 
 void InstSynthesis::initInputVars(InstContext &IC) {
@@ -1029,10 +1026,13 @@ Inst *InstSynthesis::createInstFromWiring(
     Ops = Copy->Ops;
   }
   // Create instruction from a component
-  if (Comp.Kind == Inst::Select) {
+  if (Comp.Kind == Inst::Phi) {
+    assert(Comp.Origin && "Phi support for LHS components only");
+    return IC.getPhi(Comp.Origin->B, Ops);
+  } else if (Comp.Kind == Inst::Select) {
     Ops[0] = IC.getInst(Inst::Trunc, 1, {Ops[0]});
     return createCleanInst(Comp.Kind, Comp.Width, Ops, IC);
-  } if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc) {
+  } else if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc) {
     Inst *Ret = createCleanInst(Comp.Kind, Comp.Width, Ops, IC);
     return IC.getInst(Inst::ZExt, DefaultWidth, {Ret});
   } else
