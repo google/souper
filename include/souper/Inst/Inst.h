@@ -42,6 +42,7 @@ struct Inst : llvm::FoldingSetNode {
   typedef enum {
     Const,
     UntypedConst,
+    Reserved,
     Var,
     Phi,
 
@@ -199,6 +200,7 @@ class InstContext {
 public:
   Inst *getConst(const llvm::APInt &I);
   Inst *getUntypedConst(const llvm::APInt &I);
+  Inst *getReserved();
 
   Inst *createVar(unsigned Width, llvm::StringRef Name,
                   llvm::APInt Zero=llvm::APInt(1, 0, false),

@@ -526,6 +526,23 @@ Inst *InstContext::getUntypedConst(const llvm::APInt &Val) {
   return N;
 }
 
+Inst *InstContext::getReserved() {
+  llvm::FoldingSetNodeID ID;
+  ID.AddInteger(Inst::Reserved);
+  ID.AddInteger(0);
+
+  void *IP = 0;
+  if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
+    return I;
+
+  auto N = new Inst;
+  Insts.emplace_back(N);
+  N->K = Inst::Reserved;
+  N->Width = 0;
+  InstSet.InsertNode(N, IP);
+  return N;
+}
+
 Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
                              bool NonNegative, bool PowOfTwo, bool Negative,
@@ -651,6 +668,10 @@ int Inst::getCost(Inst::Kind K) {
     case CtPop:
     case Cttz:
     case Ctlz:
+    case SDiv:
+    case UDiv:
+    case SRem:
+    case URem:
       return 5;
     default:
       return 1;

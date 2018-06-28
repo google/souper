@@ -26,8 +26,10 @@ eval { require Sys::CPU; Sys::CPU->import(); };
 
 my $NPROCS = 4;
 $NPROCS = Sys::CPU::cpu_count() if defined(&Sys::CPU::cpu_count);
+$NPROCS = 10;
 
 my $CPU_LIMIT = 15 * 60;
+my $RAM_LIMIT = 10 * 1024 * 1024 * 1024;
 
 sub usage() {
     print <<"END";
@@ -57,10 +59,12 @@ die $need_solver unless $solver;
 
 my $OPTS = "";
 $OPTS .= "-souper-infer-iN " if $ENV{"SOUPER_INFER_INT"};
+#$OPTS .= "-souper-infer-nop ";
+#$OPTS .= "-souper-infer-iN=false ";
 
-$OPTS .= "-souper-synthesis-wiring-iterations=30 ";
 $OPTS .= "-souper-infer-inst ";
-$OPTS .= "-souper-synthesis-comps=mul,select,const,const,shl,lshr,ashr,and,or,xor,add,sub,slt,ult,sle,ule,eq,ne";
+#$OPTS .= "-souper-synthesis-wiring-iterations=30 ";
+#$OPTS .= "-souper-synthesis-comps=and,or,xor,add,sub,const";
 
 my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15 ${solver}";
 
@@ -71,16 +75,20 @@ my @keys = $r->keys('*');
 sub infer($) {
     (my $k) = @_;
     (my $fh, my $tmpfn) = File::Temp::tempfile();
+    (my $fh2, my $tmpfn2) = File::Temp::tempfile();
     print $fh $k;
     my $cmd = "${check} -infer-rhs $OPTS";
-    print STDERR "\n$k\n\n";
-    print STDERR "$cmd\n";
+    my $extra = "\n-----------------------------------------------------------------\n";
+    $extra .= "\n$k\n\n";
+    $extra .= "$cmd\n";
     $fh->flush();
-    open INF, "$cmd < $tmpfn |";
+    system "$cmd < $tmpfn > $tmpfn2 2>&1";
     my $ok = 0;
     my $failed = 0;
     my $output = "";
+    open INF, "<$tmpfn2" or die;
     while (my $line = <INF>) {
+	$extra .= $line;
         if ($line =~ /Failed/) {
             $failed = 1;
             next;
@@ -91,7 +99,9 @@ sub infer($) {
         }
         $output .= $line;
     }
-    # exit 1 unless $ok || $failed;
+    if (!($ok || $failed)) {
+	print STDERR $extra;
+    }
     my $red = Redis->new();
     $red->ping || die "no server?";
     $red->hset($k, "cache-infer-tag" => $tag);
@@ -199,7 +209,9 @@ foreach my $k (sort byrank @keys) {
     my $pid = fork();
     die unless $pid >= 0;
     if ($pid == 0) {
-	die "setrlimit" unless setrlimit(RLIMIT_CPU, $CPU_LIMIT, $CPU_LIMIT);
+	die "setrlimit CPU" unless setrlimit(RLIMIT_CPU, $CPU_LIMIT, $CPU_LIMIT);
+	die "setrlimit VMEM" unless setrlimit(RLIMIT_VMEM, $RAM_LIMIT, $RAM_LIMIT);
+	die "setrlimit AS" unless setrlimit(RLIMIT_AS, $RAM_LIMIT, $RAM_LIMIT);
 	infer ($k);
 	# not reachable
     }
