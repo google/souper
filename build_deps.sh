@@ -21,7 +21,7 @@ fi
 
 # hiredis version 0.13.3
 hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
-llvm_branch=tags/RELEASE_600/final
+llvm_branch=tags/RELEASE_601/final
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-6.0-patch
 
