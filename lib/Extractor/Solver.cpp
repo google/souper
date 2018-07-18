@@ -290,6 +290,7 @@ public:
     // add constraints guarding against synthesizing dumb constants
     //   add x, 0; sub x, 0; shift x, 0; mul x, 0; mul x, 1, mul x, 2
     //   shift left by 1
+    //   sub x, c since we have add x, c
     // aggressively prune dumb instruction sequences
     //   trunc of trunc, sext of sext, zext of zext
     //   trunc to i1 vs. %w = and %v, 1; %x = icmp ne %w, 0
@@ -469,170 +470,149 @@ public:
         return EC;
       if (!BigQueryIsSat) {
 	llvm::outs() << "big query is unsat, all done\n";
-	goto done;
+	// FIXME
+	// goto done;
       }
       llvm::outs() << "big query is sat, looking at small queries\n";
       
-      bool SmallQueryIsSat = true;
-      if (StressNop || !BigQueryIsSat) {
-        // find the valid one
-	int unsat = 0;
-	int z = 0;
-        for (auto I : Guesses) {
-	  llvm::outs() << "\n\n--------------------------------------------\nguess " << z << "\n";
-	  ReplacementContext RC;
-	  RC.printInst(LHS, llvm::outs(), true);
-	  llvm::outs() << "\n";
-	  RC.printInst(I, llvm::outs(), true);
-	  z++;
-
-	  std::vector<Inst *> ConstList;
-	  hasConstant(I, ConstList);
-
-	  // if (ConstList.size() < 1) {
-	  if (false) {
+      // find the valid one
+      int unsat = 0;
+      int z = 0;
+      for (auto I : Guesses) {
+	llvm::outs() << "\n\n--------------------------------------------\nguess " << z << "\n";
+	ReplacementContext RC;
+	RC.printInst(LHS, llvm::outs(), true);
+	llvm::outs() << "\n";
+	RC.printInst(I, llvm::outs(), true);
+	z++;
+	
+	std::vector<Inst *> ConstList;
+	hasConstant(I, ConstList);
+	
+	// if (ConstList.size() < 1) {
+	if (false) {
 	    
-	    // FIXME!
+	  // FIXME!
 #if 1
-	    llvm::outs() << "skipping\n";
+	  llvm::outs() << "skipping\n";
 #else
-	    std::string Query3 = BuildQuery(IC, BPCs, PCs, Mapping, 0);
-	    if (Query3.empty()) {
-	      llvm::outs() << "mt!\n";
-	      continue;
-	    }
-	    bool z;
-	    EC = SMTSolver->isSatisfiable(Query3, z, 0, 0, Timeout);
-	    if (EC) {
-	      llvm::outs() << "oops!\n";
-	      return EC;
-	    }
-	    if (!z) {
-	      llvm::outs() << "with no constants, this works\n";
-	      RHS = I;
-	      reutrn EC;
-	    }
-#endif
+	  std::string Query3 = BuildQuery(IC, BPCs, PCs, Mapping, 0);
+	  if (Query3.empty()) {
+	    llvm::outs() << "mt!\n";
 	    continue;
 	  }
-	  if (ConstList.size() > 1)
-	    llvm::report_fatal_error("yeah this test needs to get deleted");
-	    
-	  std::vector<llvm::APInt> BadConsts;
-	  int Tries = 0;
-
-	again:
-	  if (Tries > 0)
-	    llvm::outs() << "\n\nagain:\n";
-
-	  Inst *Ante = IC.getInst(Inst::Eq, 1, {LHS, I});
-	  for (auto C : BadConsts) {
-	    Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(C), ConstList[0] });
-	    Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
-	  }
-	  InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
-	  std::vector<Inst *> ModelInsts;
-	  std::vector<llvm::APInt> ModelVals;
-          std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
-          if (Query.empty()) {
-	    llvm::outs() << "mt!\n";
-            continue;
-	  }
-          EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, ModelInsts.size(), &ModelVals, Timeout);
-          if (EC) {
+	  bool z;
+	  EC = SMTSolver->isSatisfiable(Query3, z, 0, 0, Timeout);
+	  if (EC) {
 	    llvm::outs() << "oops!\n";
-            return EC;
+	    return EC;
 	  }
-          if (!SmallQueryIsSat) {
-	    unsat++;
-	    llvm::outs() << "first query is unsat, all done with this guess\n";
-	  } else {
-	    llvm::outs() << "first query is sat\n";
-
-	    std::map<Inst *, llvm::APInt> ConstMap;
-	    
-	    // TODO optimization: preload with e.g. 4 examples of all constant inputs on LHS
-	    //   these can be chosen or random, but in that case we need to check path conditions
-	    //   or can come from the solver (Raimondas's approach)
-	    //   or we could explicltly try to drive different cases in the optimization
-	    // try alternatively adding a negative constant and one of these
-	    
-	    for (unsigned J = 0; J != ModelInsts.size(); ++J) {
-	      if (ModelInsts[J]->Name == "constant") {
-		auto Const = IC.getConst(ModelVals[J]);
-		BadConsts.push_back(Const->Val);
-		auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
-		llvm::outs() << "constant value = " << Const->Val << "\n";
-		if (!res.second)
-		  report_fatal_error("constant already in map");
-	      }
-	    }
-	    
-	    std::map<Inst *, Inst *> InstCache;
-	    std::map<Block *, Block *> BlockCache;
-	    BlockPCs BPCsCopy;
-	    std::vector<InstMapping> PCsCopy;
-	    auto I2 = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap, false);
-	    separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
-	    separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
-	    
-	    {
-	      llvm::outs() << "\n\nwith constant:\n";
-	      ReplacementContext RC;
-	      RC.printInst(LHS, llvm::outs(), true);
-	      llvm::outs() << "\n";
-	      RC.printInst(I2, llvm::outs(), true);
-	    }
-	    
-	    InstMapping Mapping2(LHS, I2);
-	    std::string Query2 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping2, 0);
-	    if (Query2.empty()) {
-	      llvm::outs() << "mt!\n";
-	      continue;
-	    }
-	    bool z;
-	    EC = SMTSolver->isSatisfiable(Query2, z, 0, 0, Timeout);
-	    if (EC) {
-	      llvm::outs() << "oops!\n";
-	      return EC;
-	    }
-	    if (z) {
-	      llvm::outs() << "second query is SAT-- constant doesn't work\n";
-	      Tries++;
-	      // TODO tune max tries
-	      if (Tries < 10)
-		goto again;
-	    } else {
-	      llvm::outs() << "second query is UNSAT-- works for all values of this constant\n";
-	      RHS = I2;
-	      return EC;
-	    }
-
-          }
-        }
-	llvm::outs() << unsat << " were unsat.\n";
-      }
-
-#if 0
-      // TODO reenable these once they make sense
-      if (!BigQueryIsSat && !SmallQueryIsSat) {
-        llvm::errs() << "*** oops ***\n";
-        ReplacementContext C;
-        llvm::errs() << GetReplacementLHSString(BPCs, PCs, LHS, C) << "\n";
-        report_fatal_error("big query indicated a result, but none was found");
-      }
-      if (BigQueryIsSat && SmallQueryIsSat) {
-        llvm::errs() << "*** oops ***\n";
-        ReplacementContext C;
-        llvm::errs() << GetReplacementLHSString(BPCs, PCs, LHS, C) << "\n";
-        report_fatal_error("big query did not indicate a result, but one was found");
-      }
-      if (SmallQueryIsSat) {
-	assert(souper::cost(RHS) < souper::cost(LHS));
-	llvm::outs() << "LHS cost = " << souper::cost(LHS) << ", RHS cost = " << souper::cost(RHS) << "\n";
-        return EC;
-      }
+	  if (!z) {
+	    llvm::outs() << "with no constants, this works\n";
+	    RHS = I;
+	    reutrn EC;
+	  }
 #endif
+	  continue;
+	}
+	if (ConstList.size() > 1)
+	  llvm::report_fatal_error("yeah this test needs to get deleted");
+	
+	std::vector<llvm::APInt> BadConsts;
+	int Tries = 0;
+	
+      again:
+	if (Tries > 0)
+	  llvm::outs() << "\n\nagain:\n";
+	
+	Inst *Ante = IC.getInst(Inst::Eq, 1, {LHS, I});
+	for (auto C : BadConsts) {
+	  Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(C), ConstList[0] });
+	  Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
+	}
+	InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
+	std::vector<Inst *> ModelInsts;
+	std::vector<llvm::APInt> ModelVals;
+	std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
+	if (Query.empty()) {
+	  llvm::outs() << "mt!\n";
+	  continue;
+	}
+	bool SmallQueryIsSat;
+	EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, ModelInsts.size(), &ModelVals, Timeout);
+	if (EC) {
+	  llvm::outs() << "oops!\n";
+	  return EC;
+	}
+	if (!SmallQueryIsSat) {
+	  unsat++;
+	  llvm::outs() << "first query is unsat, all done with this guess\n";
+	} else {
+	  llvm::outs() << "first query is sat\n";
+	  
+	  std::map<Inst *, llvm::APInt> ConstMap;
+	  
+	  // TODO optimization: preload with e.g. 4 examples of all constant inputs on LHS
+	  //   these can be chosen or random, but in that case we need to check path conditions
+	  //   or can come from the solver (Raimondas's approach)
+	  //   or we could explicltly try to drive different cases in the optimization
+	  // try alternatively adding a negative constant and one of these
+	  
+	  for (unsigned J = 0; J != ModelInsts.size(); ++J) {
+	    if (ModelInsts[J]->Name == "constant") {
+	      auto Const = IC.getConst(ModelVals[J]);
+	      BadConsts.push_back(Const->Val);
+	      auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
+	      llvm::outs() << "constant value = " << Const->Val << "\n";
+	      if (!res.second)
+		report_fatal_error("constant already in map");
+	    }
+	  }
+	  
+	  std::map<Inst *, Inst *> InstCache;
+	  std::map<Block *, Block *> BlockCache;
+	  BlockPCs BPCsCopy;
+	  std::vector<InstMapping> PCsCopy;
+	  auto I2 = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap, false);
+	  separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
+	  separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
+	  
+	  {
+	    llvm::outs() << "\n\nwith constant:\n";
+	    ReplacementContext RC;
+	    RC.printInst(LHS, llvm::outs(), true);
+	    llvm::outs() << "\n";
+	    RC.printInst(I2, llvm::outs(), true);
+	  }
+	    
+	  InstMapping Mapping2(LHS, I2);
+	  std::string Query2 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping2, 0);
+	  if (Query2.empty()) {
+	    llvm::outs() << "mt!\n";
+	    continue;
+	  }
+	  bool z;
+	  EC = SMTSolver->isSatisfiable(Query2, z, 0, 0, Timeout);
+	  if (EC) {
+	    llvm::outs() << "oops!\n";
+	    return EC;
+	  }
+	  if (z) {
+	    llvm::outs() << "second query is SAT-- constant doesn't work\n";
+	    Tries++;
+	    // TODO tune max tries
+	    if (Tries < 100)
+	      goto again;
+	  } else {
+	    llvm::outs() << "second query is UNSAT-- works for all values of this constant\n";
+	    RHS = I2;
+	    return EC;
+	  }
+	  
+	}
+      }
+      llvm::outs() << unsat << " were unsat.\n";
+      // TODO maybe add back consistency checks between big and small queries
     }
   done:
 
