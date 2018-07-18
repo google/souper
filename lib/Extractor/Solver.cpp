@@ -47,8 +47,8 @@ static cl::opt<bool> InferNop("souper-infer-nop",
     cl::desc("Infer that the output is the same as an input value (default=false)"),
     cl::init(false));
 static cl::opt<bool> StressNop("souper-stress-nop",
-    cl::desc("stress-test big queries in nop synthesis by always performing all of the small queries (slow!) (default=true)"),
-    cl::init(true));
+    cl::desc("stress-test big queries in nop synthesis by always performing all of the small queries (slow!) (default=false)"),
+    cl::init(false));
 static cl::opt<int>MaxNops("souper-max-nops",
     cl::desc("maximum number of values from the LHS to try to use as the RHS (default=20)"),
     cl::init(20));
@@ -215,6 +215,7 @@ public:
         separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0);
         separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0);
       }
+
       // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
       InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
       std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
