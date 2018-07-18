@@ -209,11 +209,11 @@ public:
         // separate sub-expressions by copying vars
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
-        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0),
-              getInstCopy(I, IC, InstCache, BlockCache, 0)});
+        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
+              getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
         Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
-        separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0);
-        separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0);
+        separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
+        separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
       }
 
       // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
@@ -448,11 +448,11 @@ public:
         // separate sub-expressions by copying vars
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
-        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0),
-              getInstCopy(I, IC, InstCache, BlockCache, 0)});
+        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
+              getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
         Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
-        separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0);
-        separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0);
+        separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
+        separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
       }
 
       llvm::outs() << "there were " << Guesses.size() << " guesses but ";
@@ -467,7 +467,12 @@ public:
       EC = SMTSolver->isSatisfiable(Query, BigQueryIsSat, 0, 0, Timeout);
       if (EC)
         return EC;
-
+      if (!BigQueryIsSat) {
+	llvm::outs() << "big query is unsat, all done\n";
+	goto done;
+      }
+      llvm::outs() << "big query is sat, looking at small queries\n";
+      
       bool SmallQueryIsSat = true;
       if (StressNop || !BigQueryIsSat) {
         // find the valid one
@@ -505,7 +510,7 @@ public:
 	    if (!z) {
 	      llvm::outs() << "with no constants, this works\n";
 	      RHS = I;
-	      break;
+	      reutrn EC;
 	    }
 #endif
 	    continue;
@@ -567,9 +572,9 @@ public:
 	    std::map<Block *, Block *> BlockCache;
 	    BlockPCs BPCsCopy;
 	    std::vector<InstMapping> PCsCopy;
-	    auto I2 = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap);
-	    separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap);
-	    separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap);
+	    auto I2 = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap, false);
+	    separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
+	    separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
 	    
 	    {
 	      llvm::outs() << "\n\nwith constant:\n";
@@ -593,14 +598,14 @@ public:
 	    }
 	    if (z) {
 	      llvm::outs() << "second query is SAT-- constant doesn't work\n";
-	      // FIXME -- only again if we haven't done too many guesses yet
 	      Tries++;
+	      // TODO tune max tries
 	      if (Tries < 10)
 		goto again;
 	    } else {
 	      llvm::outs() << "second query is UNSAT-- works for all values of this constant\n";
 	      RHS = I2;
-	      break;
+	      return EC;
 	    }
 
           }

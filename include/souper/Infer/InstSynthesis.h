@@ -324,20 +324,23 @@ void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
 Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Inst *, Inst *> &InstCache,
                   std::map<Block *, Block *> &BlockCache,
-		  std::map<Inst *, llvm::APInt> *ConstMap);
+		  std::map<Inst *, llvm::APInt> *ConstMap,
+		  bool CloneVars);
 
 void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                       std::map<Inst *, Inst *> &InstCache,
                       std::map<Block *, Block *> &BlockCache,
                       InstContext &IC,
-		      std::map<Inst *, llvm::APInt> *ConstMap);
+		      std::map<Inst *, llvm::APInt> *ConstMap,
+		      bool CloneVars);
 
 void separatePCs(const std::vector<InstMapping> &PCs,
                  std::vector<InstMapping> &PCsCopy,
                  std::map<Inst *, Inst *> &InstCache,
                  std::map<Block *, Block *> &BlockCache,
                  InstContext &IC,
-		 std::map<Inst *, llvm::APInt> *ConstMap);
+		 std::map<Inst *, llvm::APInt> *ConstMap,
+		 bool CloneVars);
 
 }
 

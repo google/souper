@@ -1489,14 +1489,15 @@ void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
 Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Inst *, Inst *> &InstCache,
                   std::map<Block *, Block *> &BlockCache,
-		  std::map<Inst *, llvm::APInt> *ConstMap) {
+		  std::map<Inst *, llvm::APInt> *ConstMap,
+		  bool CloneVars) {
 
   if (InstCache.count(I))
     return InstCache.at(I);
 
   std::vector<Inst *> Ops;
   for (auto const &Op : I->Ops)
-    Ops.push_back(getInstCopy(Op, IC, InstCache, BlockCache, ConstMap));
+    Ops.push_back(getInstCopy(Op, IC, InstCache, BlockCache, ConstMap, CloneVars));
 
   Inst *Copy = 0;
   if (I->K == Inst::Var) {
@@ -1511,10 +1512,14 @@ Inst *getInstCopy(Inst *I, InstContext &IC,
 	Copy = IC.getConst(it->second);
       }
     }
-    if (!Copy)
-      Copy = IC.createVar(I->Width, "copy", I->KnownZeros, I->KnownOnes,
-			  I->NonZero, I->NonNegative, I->PowOfTwo,
-			  I->Negative, I->NumSignBits);
+    if (!Copy) {
+      if (CloneVars)
+	Copy = IC.createVar(I->Width, "copy", I->KnownZeros, I->KnownOnes,
+			    I->NonZero, I->NonNegative, I->PowOfTwo,
+			    I->Negative, I->NumSignBits);
+      else
+	Copy = I;
+    }
   } else if (I->K == Inst::Phi) {
     if (!BlockCache.count(I->B)) {
       auto BlockCopy = IC.createBlock(I->B->Preds);
@@ -1537,12 +1542,13 @@ void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                       std::map<Inst *, Inst *> &InstCache,
                       std::map<Block *, Block *> &BlockCache,
                       InstContext &IC,
-		      std::map<Inst *, llvm::APInt> *ConstMap) {
+		      std::map<Inst *, llvm::APInt> *ConstMap,
+		      bool CloneVars) {
   for (const auto &BPC : BPCs) {
     auto BPCCopy = BPC;
     BPCCopy.B = BlockCache[BPC.B];
-    BPCCopy.PC = InstMapping(getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache, ConstMap),
-                             getInstCopy(BPC.PC.RHS, IC, InstCache, BlockCache, ConstMap));
+    BPCCopy.PC = InstMapping(getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache, ConstMap, CloneVars),
+                             getInstCopy(BPC.PC.RHS, IC, InstCache, BlockCache, ConstMap, CloneVars));
     BPCsCopy.emplace_back(BPCCopy);
   }
 }
@@ -1552,10 +1558,11 @@ void separatePCs(const std::vector<InstMapping> &PCs,
                  std::map<Inst *, Inst *> &InstCache,
                  std::map<Block *, Block *> &BlockCache,
                  InstContext &IC,
-		 std::map<Inst *, llvm::APInt> *ConstMap) {
+		 std::map<Inst *, llvm::APInt> *ConstMap,
+		 bool CloneVars) {
   for (const auto &PC : PCs)
-    PCsCopy.emplace_back(getInstCopy(PC.LHS, IC, InstCache, BlockCache, ConstMap),
-                         getInstCopy(PC.RHS, IC, InstCache, BlockCache, ConstMap));
+    PCsCopy.emplace_back(getInstCopy(PC.LHS, IC, InstCache, BlockCache, ConstMap, CloneVars),
+                         getInstCopy(PC.RHS, IC, InstCache, BlockCache, ConstMap, CloneVars));
 }
 
 }
