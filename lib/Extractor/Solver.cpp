@@ -489,13 +489,8 @@ public:
 	std::vector<Inst *> ConstList;
 	hasConstant(I, ConstList);
 	
-	// if (ConstList.size() < 1) {
-	if (false) {
-	    
-	  // FIXME!
-#if 1
-	  llvm::outs() << "skipping\n";
-#else
+	// FIXME!
+	if (false && ConstList.size() < 1) {
 	  std::string Query3 = BuildQuery(IC, BPCs, PCs, Mapping, 0);
 	  if (Query3.empty()) {
 	    llvm::outs() << "mt!\n";
@@ -510,11 +505,12 @@ public:
 	  if (!z) {
 	    llvm::outs() << "with no constants, this works\n";
 	    RHS = I;
-	    reutrn EC;
+	    return EC;
 	  }
-#endif
 	  continue;
 	}
+
+	// FIXME
 	if (ConstList.size() > 1)
 	  llvm::report_fatal_error("yeah this test needs to get deleted");
 	
@@ -525,12 +521,13 @@ public:
 	if (Tries > 0)
 	  llvm::outs() << "\n\nagain:\n";
 	
-	Inst *Ante = IC.getInst(Inst::Eq, 1, {LHS, I});
+	Inst *AvoidConsts = IC.getConst(APInt(1, true));
 	for (auto C : BadConsts) {
 	  Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(C), ConstList[0] });
-	  Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
+	  AvoidConsts = IC.getInst(Inst::And, 1, {AvoidConsts, Ne});
 	}
-	InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
+	InstMapping Mapping(IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})}),
+			    IC.getConst(APInt(1, true)));
 	std::vector<Inst *> ModelInsts;
 	std::vector<llvm::APInt> ModelVals;
 	std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
