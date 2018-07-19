@@ -526,6 +526,7 @@ public:
 	  Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(C), ConstList[0] });
 	  AvoidConsts = IC.getInst(Inst::And, 1, {AvoidConsts, Ne});
 	}
+	
 	InstMapping Mapping(IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})}),
 			    IC.getConst(APInt(1, true)));
 	std::vector<Inst *> ModelInsts;
@@ -544,68 +545,68 @@ public:
 	if (!SmallQueryIsSat) {
 	  unsat++;
 	  llvm::outs() << "first query is unsat, all done with this guess\n";
-	} else {
-	  llvm::outs() << "first query is sat\n";
+	  continue;
+	}
+
+	llvm::outs() << "first query is sat\n";
 	  
-	  std::map<Inst *, llvm::APInt> ConstMap;
+	std::map<Inst *, llvm::APInt> ConstMap;
 	  
-	  // TODO optimization: preload with e.g. 4 examples of all constant inputs on LHS
-	  //   these can be chosen or random, but in that case we need to check path conditions
-	  //   or can come from the solver (Raimondas's approach)
-	  //   or we could explicltly try to drive different cases in the optimization
-	  // try alternatively adding a negative constant and one of these
-	  
-	  for (unsigned J = 0; J != ModelInsts.size(); ++J) {
-	    if (ModelInsts[J]->Name == "constant") {
-	      auto Const = IC.getConst(ModelVals[J]);
-	      BadConsts.push_back(Const->Val);
-	      auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
-	      llvm::outs() << "constant value = " << Const->Val << "\n";
-	      if (!res.second)
-		report_fatal_error("constant already in map");
-	    }
+	// TODO optimization: preload with e.g. 4 examples of all constant inputs on LHS
+	//   these can be chosen or random, but in that case we need to check path conditions
+	//   or can come from the solver (Raimondas's approach)
+	//   or we could explicltly try to drive different cases in the optimization
+	// try alternatively adding a negative constant and one of these
+	
+	for (unsigned J = 0; J != ModelInsts.size(); ++J) {
+	  if (ModelInsts[J]->Name == "constant") {
+	    auto Const = IC.getConst(ModelVals[J]);
+	    BadConsts.push_back(Const->Val);
+	    auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
+	    llvm::outs() << "constant value = " << Const->Val << "\n";
+	    if (!res.second)
+	      report_fatal_error("constant already in map");
 	  }
+	}
 	  
-	  std::map<Inst *, Inst *> InstCache;
-	  std::map<Block *, Block *> BlockCache;
-	  BlockPCs BPCsCopy;
-	  std::vector<InstMapping> PCsCopy;
-	  auto I2 = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap, false);
-	  separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
-	  separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
+	std::map<Inst *, Inst *> InstCache;
+	std::map<Block *, Block *> BlockCache;
+	BlockPCs BPCsCopy;
+	std::vector<InstMapping> PCsCopy;
+	auto I2 = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap, false);
+	separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
+	separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
 	  
-	  {
-	    llvm::outs() << "\n\nwith constant:\n";
-	    ReplacementContext RC;
-	    RC.printInst(LHS, llvm::outs(), true);
-	    llvm::outs() << "\n";
-	    RC.printInst(I2, llvm::outs(), true);
-	  }
+	{
+	  llvm::outs() << "\n\nwith constant:\n";
+	  ReplacementContext RC;
+	  RC.printInst(LHS, llvm::outs(), true);
+	  llvm::outs() << "\n";
+	  RC.printInst(I2, llvm::outs(), true);
+	}
 	    
-	  InstMapping Mapping2(LHS, I2);
-	  std::string Query2 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping2, 0);
-	  if (Query2.empty()) {
-	    llvm::outs() << "mt!\n";
-	    continue;
-	  }
-	  bool z;
-	  EC = SMTSolver->isSatisfiable(Query2, z, 0, 0, Timeout);
-	  if (EC) {
-	    llvm::outs() << "oops!\n";
-	    return EC;
-	  }
-	  if (z) {
-	    llvm::outs() << "second query is SAT-- constant doesn't work\n";
-	    Tries++;
-	    // TODO tune max tries
-	    if (Tries < 100)
-	      goto again;
-	  } else {
-	    llvm::outs() << "second query is UNSAT-- works for all values of this constant\n";
-	    RHS = I2;
-	    return EC;
-	  }
-	  
+	InstMapping Mapping2(LHS, I2);
+	std::string Query2 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping2, 0);
+	if (Query2.empty()) {
+	  llvm::outs() << "mt!\n";
+	  continue;
+	}
+	bool z;
+	EC = SMTSolver->isSatisfiable(Query2, z, 0, 0, Timeout);
+	if (EC) {
+	  llvm::outs() << "oops!\n";
+	  return EC;
+	}
+	if (z) {
+	  llvm::outs() << "second query is SAT-- constant doesn't work\n";
+	  Tries++;
+	  // TODO tune max tries
+	  if (Tries < 100)
+	    goto again;
+	} else {
+	  llvm::outs() << "second query is UNSAT-- works for all values of this constant\n";
+	  RHS = I2;
+	  return EC;
 	}
       }
       llvm::outs() << unsat << " were unsat.\n";
