@@ -547,16 +547,9 @@ public:
 	  llvm::outs() << "first query is unsat, all done with this guess\n";
 	  continue;
 	}
-
 	llvm::outs() << "first query is sat\n";
 	  
 	std::map<Inst *, llvm::APInt> ConstMap;
-	  
-	// TODO optimization: preload with e.g. 4 examples of all constant inputs on LHS
-	//   these can be chosen or random, but in that case we need to check path conditions
-	//   or can come from the solver (Raimondas's approach)
-	//   or we could explicltly try to drive different cases in the optimization
-	// try alternatively adding a negative constant and one of these
 	
 	for (unsigned J = 0; J != ModelInsts.size(); ++J) {
 	  if (ModelInsts[J]->Name == "constant") {
