@@ -102,7 +102,6 @@ class BaseSolver : public Solver {
   // TODO small vector by reference?
   std::vector<Inst *> matchWidth(Inst *I, unsigned NewW, InstContext &IC) {
     int OldW = isCmp(I->K) ? 1 : I->Width;
-    // llvm::outs() << "match from " << OldW << " to " << NewW << "\n";
     if (OldW > NewW)
       return { IC.getInst(Inst::Trunc, NewW, { I }) };
     if (OldW < NewW)
@@ -176,7 +175,6 @@ class BaseSolver : public Solver {
     // experiment with synthesizing at reduced bitwidth, then expanding the result
     // aggressively avoid calling into the solver
 
-    std::error_code EC;
     std::vector<Inst *> Vars;
     findVars(LHS, Vars);
     std::vector<Inst *> Inputs;
@@ -199,8 +197,7 @@ class BaseSolver : public Solver {
     }
 
     // TODO enforce permitted widths
-    // TODO try both the source and dest width
-    // TODO be sure to avoid inputting a constant
+    // TODO try both the source and dest width, if they're different
     std::vector<Inst::Kind> Unary = {
       Inst::CtPop, Inst::BSwap, Inst::Cttz, Inst::Ctlz
     };
@@ -307,12 +304,13 @@ class BaseSolver : public Solver {
       }
     }
 
+    std::error_code EC;
     if (Guesses.size() < 1)
       return EC;
 
-    // N.B. one of the real advantages of this strategy vs CEGIS is
-    // that we can synthesize in precisely increasing cost order,
-    // and not try to somehow teach the solver how to do that
+    // one of the real advantages of this approach to synthesis vs
+    // CEGIS is that we can synthesize in precisely increasing cost
+    // order, and not try to somehow teach the solver how to do that
     std::sort(Guesses.begin(), Guesses.end(),
 	      [](Inst *a, Inst *b) -> bool {
 		return souper::cost(a) < souper::cost(b);
@@ -370,7 +368,7 @@ class BaseSolver : public Solver {
       std::vector<Inst *> ConstList;
       hasConstant(I, ConstList);
 
-#if 0 // FIXME!
+#if 0 // FIXME! need to create the mapping too
       if (ConstList.size() < 1) {
 	std::string Query3 = BuildQuery(IC, BPCs, PCs, Mapping, 0);
 	if (Query3.empty()) {
@@ -403,6 +401,11 @@ class BaseSolver : public Solver {
       if (Tries > 0)
 	llvm::outs() << "\n\nagain:\n";
 	
+      // this SAT query will give us possible constants
+
+      // FIXME fix values for vars
+
+      // avoid choices for constants that have not worked out in previous iterations
       Inst *AvoidConsts = IC.getConst(APInt(1, true));
       for (auto C : BadConsts) {
 	Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(C), ConstList[0] });
@@ -410,7 +413,7 @@ class BaseSolver : public Solver {
       }
 
       std::map<Inst *, llvm::APInt> ConstMap;
-      
+
       {
 	InstMapping Mapping(IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})}),
 			    IC.getConst(APInt(1, true)));
