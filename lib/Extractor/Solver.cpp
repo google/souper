@@ -448,7 +448,8 @@ public:
       BlockPCs BPCsCopy;
       std::vector<InstMapping> PCsCopy;
 
-      // FIXME skip this since it's sometimes missing optimizations
+      // FIXME if we skip this we're super slow but a bug somewhere else causes
+      // this fast test to sometimes miss optimizations
       goto skip; {
 
       for (auto I : Guesses) {
@@ -523,7 +524,7 @@ public:
 	}
 #endif
 
-	// FIXME
+	// FIXME delete this once we support multiple constants
 	if (ConstList.size() > 1)
 	  llvm::report_fatal_error("yeah this test needs to get deleted");
 
