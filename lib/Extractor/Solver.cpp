@@ -121,6 +121,23 @@ class BaseSolver : public Solver {
       TooExpensive++;
   }
 
+  void findVars(Inst *Root, std::vector<Inst *> &Vars) {
+    // breadth-first search
+    std::set<Inst *> Visited;
+    std::queue<Inst *> Q;
+    Q.push(Root);
+    while (!Q.empty()) {
+      Inst *I = Q.front();
+      Q.pop();
+      if (!Visited.insert(I).second)
+	continue;
+      if (I->K == Inst::Var)
+	Vars.push_back(I);
+      for (auto Op : I->Ops)
+	Q.push(Op);
+    }
+  }
+
   std::error_code exhaustiveSynthesize(const BlockPCs &BPCs,
 				       const std::vector<InstMapping> &PCs,
 				       Inst *LHS, Inst *&RHS,
@@ -160,12 +177,14 @@ class BaseSolver : public Solver {
     // aggressively avoid calling into the solver
 
     std::error_code EC;
-    //std::vector<Inst *> Vars;
-    //findVars(LHS, Vars, IC);
+    std::vector<Inst *> Vars;
+    findVars(LHS, Vars);
     std::vector<Inst *> Inputs;
     // TODO tune the number of candidate inputs
     findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, 15);
 
+    llvm::outs() << "LHS has " << Vars.size() << " vars\n";
+    
     int TooExpensive = 0;
     int LHSCost = souper::cost(LHS);
     std::vector<Inst *> Guesses;
