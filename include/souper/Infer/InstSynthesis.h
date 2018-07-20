@@ -318,7 +318,7 @@ private:
 
 };
 
-void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
+void findCands(Inst *Root, std::vector<Inst *> &Guesses,
                bool WidthMustMatch, bool FilterVars, int Max);
 
 Inst *getInstCopy(Inst *I, InstContext &IC,

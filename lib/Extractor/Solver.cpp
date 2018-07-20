@@ -125,17 +125,13 @@ class BaseSolver : public Solver {
 				       const std::vector<InstMapping> &PCs,
 				       Inst *LHS, Inst *&RHS,
 				       InstContext &IC) {
-    std::error_code EC;
-    
     // TODO
     // see and obey the ignore-cost command line flag
     // nove this code to its own file
     // constant synthesis
-    //   make sure we never have both inputs constant
-    //   do the trick of seeding with constraints due to constant inputs
     //   try to first make small constants? -128-255?
     // multiple instructions
-    //   make a fresh constant per new binary instruction
+    //   make a fresh constant per new binary/ternary instruction
     // call solver in batches -- need to work on batch size
     //   tune batch size -- can be a lot bigger for simple RHSs
     //   or look for feedback from solver, timeouts etc.
@@ -154,20 +150,21 @@ class BaseSolver : public Solver {
     //   trunc of trunc, sext of sext, zext of zext
     //   trunc to i1 vs. %w = and %v, 1; %x = icmp ne %w, 0
     //   a bloom filter or something
+    //   use the solver to recognize non-minimal instructions / instruction sequences?
     // we want to avoid guessing code that's already there on the LHS
     //   hashing?
     // test against CEGIS with LHS components
     // test the width matching stuff
     // take outside uses into account -- only in the cost model?
-    // synthesize undef/poison
-    // use the solver to recognize non-minimal instructions / instruction sequences
-    // use Alive2 interpreter to reject RHSs early
-    //   path conditions make this tricky
     // experiment with synthesizing at reduced bitwidth, then expanding the result
+    // aggressively avoid calling into the solver
 
+    std::error_code EC;
+    //std::vector<Inst *> Vars;
+    //findVars(LHS, Vars, IC);
     std::vector<Inst *> Inputs;
     // TODO tune the number of candidate inputs
-    findCands(LHS, Inputs, IC, /*WidthMustMatch=*/false, /*FilterVars=*/false, 15);
+    findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, 15);
 
     int TooExpensive = 0;
     int LHSCost = souper::cost(LHS);
@@ -557,7 +554,7 @@ public:
 
     if (1 && InferNop) {
       std::vector<Inst *> Guesses;
-      findCands(LHS, Guesses, IC, /*WidthMustMatch=*/true, /*FilterVars=*/false, MaxNops);
+      findCands(LHS, Guesses, /*WidthMustMatch=*/true, /*FilterVars=*/false, MaxNops);
 
       Inst *Ante = IC.getConst(APInt(1, true));
       BlockPCs BPCsCopy;

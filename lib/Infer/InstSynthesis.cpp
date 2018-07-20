@@ -1455,7 +1455,7 @@ void InstSynthesis::constrainConstWiring(const Inst *Cand,
   WiringPCs.emplace_back(Ante, LIC->getConst(APInt(1, false)));
 }
 
-void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
+void findCands(Inst *Root, std::vector<Inst *> &Guesses,
                bool WidthMustMatch, bool FilterVars, int Max) {
   // breadth-first search
   std::set<Inst *> Visited;
