@@ -28,6 +28,8 @@
 #include <sstream>
 #include <unordered_map>
 
+#pragma clang diagnostic warning "-Wshadow"
+
 STATISTIC(MemHitsInfer, "Number of internal cache hits for infer()");
 STATISTIC(MemMissesInfer, "Number of internal cache misses for infer()");
 STATISTIC(MemHitsIsValid, "Number of internal cache hits for isValid()");
@@ -513,11 +515,11 @@ public:
       std::vector<llvm::APInt> ModelVals;
       Inst *I = IC.createVar(LHS->Width, "constant");
       InstMapping Mapping(LHS, I);
-      std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
-      if (Query.empty())
+      std::string Query1 = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
+      if (Query1.empty())
         return std::make_error_code(std::errc::value_too_large);
       bool IsSat;
-      EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInsts.size(),
+      EC = SMTSolver->isSatisfiable(Query1, IsSat, ModelInsts.size(),
                                     &ModelVals, Timeout);
       if (EC)
         return EC;
@@ -534,10 +536,10 @@ public:
 	  report_fatal_error("there must be a model for the constant");
         // Check if the constant is valid for all inputs
         InstMapping ConstMapping(LHS, Const);
-        std::string Query = BuildQuery(IC, BPCs, PCs, ConstMapping, 0);
-        if (Query.empty())
+        std::string Query2 = BuildQuery(IC, BPCs, PCs, ConstMapping, 0);
+        if (Query2.empty())
           return std::make_error_code(std::errc::value_too_large);
-        EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
+        EC = SMTSolver->isSatisfiable(Query2, IsSat, 0, 0, Timeout);
         if (EC)
           return EC;
         if (!IsSat) {
@@ -566,12 +568,12 @@ public:
       }
 
       // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
-      InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
-      std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
-      if (Query.empty())
+      InstMapping Mapping1(Ante, IC.getConst(APInt(1, true)));
+      std::string Query3 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping1, 0, /*Negate=*/true);
+      if (Query3.empty())
         return std::make_error_code(std::errc::value_too_large);
       bool BigQueryIsSat;
-      EC = SMTSolver->isSatisfiable(Query, BigQueryIsSat, 0, 0, Timeout);
+      EC = SMTSolver->isSatisfiable(Query3, BigQueryIsSat, 0, 0, Timeout);
       if (EC)
         return EC;
 
@@ -585,11 +587,11 @@ public:
 	    llvm::outs() << "\n";
 	    RC.printInst(I, llvm::outs(), true);
 	  }
-          InstMapping Mapping(LHS, I);
-          std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0);
-          if (Query.empty())
+          InstMapping Mapping2(LHS, I);
+          std::string Query4 = BuildQuery(IC, BPCs, PCs, Mapping2, 0);
+          if (Query4.empty())
             continue;
-          EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, 0, 0, Timeout);
+          EC = SMTSolver->isSatisfiable(Query4, SmallQueryIsSat, 0, 0, Timeout);
           if (EC)
             return EC;
           if (!SmallQueryIsSat) {
@@ -638,7 +640,6 @@ public:
                           InstMapping Mapping, bool &IsValid,
                           std::vector<std::pair<Inst *, llvm::APInt>> *Model)
   override {
-    std::string Query;
     if (Model && SMTSolver->supportsModels()) {
       std::vector<Inst *> ModelInsts;
       std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts);
