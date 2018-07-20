@@ -121,11 +121,10 @@ class BaseSolver : public Solver {
       TooExpensive++;
   }
 
-  std::error_code exhaustiveSynthesize(SMTLIBSolver *SMTSolver,
-				       const BlockPCs &BPCs,
+  std::error_code exhaustiveSynthesize(const BlockPCs &BPCs,
 				       const std::vector<InstMapping> &PCs,
 				       Inst *LHS, Inst *&RHS,
-				       InstContext &IC, unsigned Timeout) {
+				       InstContext &IC) {
     std::error_code EC;
     
     // TODO
@@ -303,56 +302,60 @@ class BaseSolver : public Solver {
 		return souper::cost(a) < souper::cost(b);
 	      });
 
-    Inst *Ante = IC.getConst(APInt(1, true));
-    BlockPCs BPCsCopy;
-    std::vector<InstMapping> PCsCopy;
+    {
+      Inst *Ante = IC.getConst(APInt(1, true));
+      BlockPCs BPCsCopy;
+      std::vector<InstMapping> PCsCopy;
 
-    for (auto I : Guesses) {
-      // separate sub-expressions by copying vars
-      std::map<Inst *, Inst *> InstCache;
-      std::map<Block *, Block *> BlockCache;
-      Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
-	    getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
-      Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
-      separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
-      separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
+      for (auto I : Guesses) {
+	// separate sub-expressions by copying vars
+	std::map<Inst *, Inst *> InstCache;
+	std::map<Block *, Block *> BlockCache;
+	Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
+	      getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
+	Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
+	separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
+	separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
+      }
+
+      llvm::outs() << "there were " << Guesses.size() << " guesses but ";
+      llvm::outs() << TooExpensive << " were too expensive\n";
+
+      // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
+      InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
+      std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
+      if (Query.empty())
+	return std::make_error_code(std::errc::value_too_large);
+      bool BigQueryIsSat;
+      EC = SMTSolver->isSatisfiable(Query, BigQueryIsSat, 0, 0, Timeout);
+      if (EC)
+	return EC;
+      if (!BigQueryIsSat) {
+	llvm::outs() << "big query is unsat, all done\n";
+	// FIXME
+	// return;
+      }
+      llvm::outs() << "big query is sat, looking at small queries\n";
     }
 
-    llvm::outs() << "there were " << Guesses.size() << " guesses but ";
-    llvm::outs() << TooExpensive << " were too expensive\n";
-
-    // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
-    InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
-    std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
-    if (Query.empty())
-      return std::make_error_code(std::errc::value_too_large);
-    bool BigQueryIsSat;
-    EC = SMTSolver->isSatisfiable(Query, BigQueryIsSat, 0, 0, Timeout);
-    if (EC)
-      return EC;
-    if (!BigQueryIsSat) {
-      llvm::outs() << "big query is unsat, all done\n";
-      // FIXME
-      // return;
-    }
-    llvm::outs() << "big query is sat, looking at small queries\n";
-      
     // find the valid one
     int unsat = 0;
-    int z = 0;
+    int GuessIndex = -1;
     for (auto I : Guesses) {
-      llvm::outs() << "\n\n--------------------------------------------\nguess " << z << "\n";
-      ReplacementContext RC;
-      RC.printInst(LHS, llvm::outs(), true);
-      llvm::outs() << "\n";
-      RC.printInst(I, llvm::outs(), true);
-      z++;
+      GuessIndex++;
+      {
+	llvm::outs() << "\n\n--------------------------------------------\nguess " << GuessIndex << "\n";
+	ReplacementContext RC;
+	RC.printInst(LHS, llvm::outs(), true);
+	llvm::outs() << "\n";
+	RC.printInst(I, llvm::outs(), true);
+      }
 	
       std::vector<Inst *> ConstList;
       hasConstant(I, ConstList);
-	
-      // FIXME!
-      if (false && ConstList.size() < 1) {
+
+#if 0 // FIXME!
+      if (ConstList.size() < 1) {
 	std::string Query3 = BuildQuery(IC, BPCs, PCs, Mapping, 0);
 	if (Query3.empty()) {
 	  llvm::outs() << "mt!\n";
@@ -371,6 +374,7 @@ class BaseSolver : public Solver {
 	}
 	continue;
       }
+#endif
 
       // FIXME
       if (ConstList.size() > 1)
@@ -388,39 +392,41 @@ class BaseSolver : public Solver {
 	Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(C), ConstList[0] });
 	AvoidConsts = IC.getInst(Inst::And, 1, {AvoidConsts, Ne});
       }
-	
-      InstMapping Mapping(IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})}),
-			  IC.getConst(APInt(1, true)));
-      std::vector<Inst *> ModelInsts;
-      std::vector<llvm::APInt> ModelVals;
-      std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
-      if (Query.empty()) {
-	llvm::outs() << "mt!\n";
-	continue;
-      }
-      bool SmallQueryIsSat;
-      EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, ModelInsts.size(), &ModelVals, Timeout);
-      if (EC) {
-	llvm::outs() << "oops!\n";
-	return EC;
-      }
-      if (!SmallQueryIsSat) {
-	unsat++;
-	llvm::outs() << "first query is unsat, all done with this guess\n";
-	continue;
-      }
-      llvm::outs() << "first query is sat\n";
-	  
+
       std::map<Inst *, llvm::APInt> ConstMap;
+      
+      {
+	InstMapping Mapping(IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})}),
+			    IC.getConst(APInt(1, true)));
+	std::vector<Inst *> ModelInsts;
+	std::vector<llvm::APInt> ModelVals;
+	std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
+	if (Query.empty()) {
+	  llvm::outs() << "mt!\n";
+	  continue;
+	}
+	bool SmallQueryIsSat;
+	EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, ModelInsts.size(), &ModelVals, Timeout);
+	if (EC) {
+	  llvm::outs() << "oops!\n";
+	  return EC;
+	}
+	if (!SmallQueryIsSat) {
+	  unsat++;
+	  llvm::outs() << "first query is unsat, all done with this guess\n";
+	  continue;
+	}
+	llvm::outs() << "first query is sat\n";
 	
-      for (unsigned J = 0; J != ModelInsts.size(); ++J) {
-	if (ModelInsts[J]->Name == "constant") {
-	  auto Const = IC.getConst(ModelVals[J]);
-	  BadConsts.push_back(Const->Val);
-	  auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
-	  llvm::outs() << "constant value = " << Const->Val << "\n";
-	  if (!res.second)
-	    report_fatal_error("constant already in map");
+	for (unsigned J = 0; J != ModelInsts.size(); ++J) {
+	  if (ModelInsts[J]->Name == "constant") {
+	    auto Const = IC.getConst(ModelVals[J]);
+	    BadConsts.push_back(Const->Val);
+	    auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
+	    llvm::outs() << "constant value = " << Const->Val << "\n";
+	    if (!res.second)
+	      report_fatal_error("constant already in map");
+	  }
 	}
       }
 	  
@@ -439,7 +445,7 @@ class BaseSolver : public Solver {
 	llvm::outs() << "\n";
 	RC.printInst(I2, llvm::outs(), true);
       }
-	    
+
       InstMapping Mapping2(LHS, I2);
       std::string Query2 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping2, 0);
       if (Query2.empty()) {
@@ -619,7 +625,7 @@ public:
     }
 
     if (1 && InferInsts && SMTSolver->supportsModels()) {
-      EC = exhaustiveSynthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
+      EC = exhaustiveSynthesize(BPCs, PCs, LHS, RHS, IC);
       if (EC || RHS)
         return EC;
     }
