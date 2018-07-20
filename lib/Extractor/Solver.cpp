@@ -474,7 +474,7 @@ public:
 	// goto done;
       }
       llvm::outs() << "big query is sat, looking at small queries\n";
-      
+
       // find the valid one
       int unsat = 0;
       int z = 0;
@@ -485,10 +485,10 @@ public:
 	llvm::outs() << "\n";
 	RC.printInst(I, llvm::outs(), true);
 	z++;
-	
+
 	std::vector<Inst *> ConstList;
 	hasConstant(I, ConstList);
-	
+
 	// FIXME!
 	if (false && ConstList.size() < 1) {
 	  std::string Query3 = BuildQuery(IC, BPCs, PCs, Mapping, 0);
@@ -513,20 +513,20 @@ public:
 	// FIXME
 	if (ConstList.size() > 1)
 	  llvm::report_fatal_error("yeah this test needs to get deleted");
-	
+
 	std::vector<llvm::APInt> BadConsts;
 	int Tries = 0;
-	
+
       again:
 	if (Tries > 0)
 	  llvm::outs() << "\n\nagain:\n";
-	
+
 	Inst *AvoidConsts = IC.getConst(APInt(1, true));
 	for (auto C : BadConsts) {
 	  Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(C), ConstList[0] });
 	  AvoidConsts = IC.getInst(Inst::And, 1, {AvoidConsts, Ne});
 	}
-	
+
 	InstMapping Mapping(IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})}),
 			    IC.getConst(APInt(1, true)));
 	std::vector<Inst *> ModelInsts;
@@ -548,9 +548,9 @@ public:
 	  continue;
 	}
 	llvm::outs() << "first query is sat\n";
-	  
+
 	std::map<Inst *, llvm::APInt> ConstMap;
-	
+
 	for (unsigned J = 0; J != ModelInsts.size(); ++J) {
 	  if (ModelInsts[J]->Name == "constant") {
 	    auto Const = IC.getConst(ModelVals[J]);
@@ -561,7 +561,7 @@ public:
 	      report_fatal_error("constant already in map");
 	  }
 	}
-	  
+
 	std::map<Inst *, Inst *> InstCache;
 	std::map<Block *, Block *> BlockCache;
 	BlockPCs BPCsCopy;
@@ -569,7 +569,7 @@ public:
 	auto I2 = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap, false);
 	separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
 	separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
-	  
+
 	{
 	  llvm::outs() << "\n\nwith constant:\n";
 	  ReplacementContext RC;
@@ -577,7 +577,7 @@ public:
 	  llvm::outs() << "\n";
 	  RC.printInst(I2, llvm::outs(), true);
 	}
-	    
+
 	InstMapping Mapping2(LHS, I2);
 	std::string Query2 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping2, 0);
 	if (Query2.empty()) {
