@@ -65,7 +65,7 @@ public:
       return std::string();
     expr E = get(Cand);
     solver s(c);
-    s.add(E);
+    s.add(E == c.bv_val(1, E.get_sort().bv_size()));
     llvm::outs() << s.to_smt2() << "\n";
 #if 0
     std::string SMTStr;
