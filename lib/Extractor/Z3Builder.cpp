@@ -26,10 +26,9 @@ namespace {
 class Z3Builder : public ExprBuilder {
   context c;
   ReplacementContext Context;
-  UniqueNameSet ConstNames;
-  std::vector<expr> Consts;
-  std::map<Inst *, expr> ExprMap;
+  UniqueNameSet VarNames;
   std::vector<Inst *> Vars;
+  std::map<Inst *, expr> ExprMap;
 
 public:
   Z3Builder(InstContext &IC) : ExprBuilder(IC) {}
@@ -64,32 +63,30 @@ public:
     if (!Cand)
       return std::string();
     expr E = get(Cand);
+    E = E.simplify();
     solver s(c);
-    s.add(E == c.bv_val(1, E.get_sort().bv_size()));
-    llvm::outs() << s.to_smt2() << "\n";
-#if 0
+    s.add(E == c.bv_val(0, E.get_sort().bv_size()));
+    //
     std::string SMTStr;
-    llvm::raw_string_ostream SMTSS(SMTStr);
-    ConstraintManager Manager;
-    Query KQuery(Manager, E);
-    ExprSMTLIBPrinter Printer;
-    Printer.setOutput(SMTSS);
-    Printer.setQuery(KQuery);
-    std::vector<const klee::Array *> Arr;
-    if (ModelVars) {
-      for (unsigned I = 0; I != Vars.size(); ++I) {
-        if (Vars[I]) {
-          Arr.push_back(Arrays[I].get());
-          ModelVars->push_back(Vars[I]);
-        }
-      }
-      Printer.setArrayValuesToGet(Arr);
+    SMTStr += "(set-option :produce-models true)\n";
+    SMTStr += "(set-logic QF_BV )\n";
+    SMTStr += s.to_smt2();
+    /*
+    for (auto Str : Vars) {
+      SMTStr += "(get-value (" + Str + ") )\n";
     }
-    Printer.generateOutput();
-  
-    return SMTSS.str();
-#endif
-    return std::string();
+    */
+    if (ModelVars) {
+      for (auto Var : Vars) {
+        SMTStr += "(get-value (" + Var->Name + ") )\n";
+        ModelVars->push_back(Var);
+      }
+    }
+    SMTStr += "(exit)\n";
+
+    llvm::outs() << SMTStr << "\n";
+
+    return SMTStr;
   }
 
 private:
@@ -433,9 +430,10 @@ private:
       NameStr = ("a" + Name).str();
     else
       NameStr = Name;
-    expr E = c.bv_const(ConstNames.makeName(NameStr).c_str(), Width);
-    Consts.emplace_back(E);
-    Vars.push_back(Origin);
+    NameStr = VarNames.makeName(NameStr);
+    expr E = c.bv_const(NameStr.c_str(), Width);
+    Origin->Name = NameStr;
+    Vars.emplace_back(Origin);
   
     return E;
   }
