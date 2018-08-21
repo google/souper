@@ -40,19 +40,12 @@ public:
     Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
     if (!Cand)
       return std::string();
-#if 0
-    ref<Expr> E = get(Cand);
+    expr E = get(Cand);
+    E = E.simplify();
+    solver s(c);
+    s.add(E == c.bv_val(0, E.get_sort().bv_size()));
 
-    std::string SStr;
-    llvm::raw_string_ostream SS(SStr);
-    std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SS));
-    PP->setForceNoLineBreaks(true);
-    PP->scan(E);
-    PP->print(E);
-
-    return SS.str();
-#endif
-    return std::string();
+    return s.to_smt2();
   }
 
   std::string BuildQuery(const BlockPCs &BPCs,
@@ -63,7 +56,7 @@ public:
     if (!Cand)
       return std::string();
     expr E = get(Cand);
-    E = E.simplify();
+    //E = E.simplify();
     solver s(c);
     s.add(E == c.bv_val(0, E.get_sort().bv_size()));
     //
@@ -71,11 +64,6 @@ public:
     SMTStr += "(set-option :produce-models true)\n";
     SMTStr += "(set-logic QF_BV )\n";
     SMTStr += s.to_smt2();
-    /*
-    for (auto Str : Vars) {
-      SMTStr += "(get-value (" + Str + ") )\n";
-    }
-    */
     if (ModelVars) {
       for (auto Var : Vars) {
         SMTStr += "(get-value (" + Var->Name + ") )\n";
@@ -84,7 +72,7 @@ public:
     }
     SMTStr += "(exit)\n";
 
-    llvm::outs() << SMTStr << "\n";
+    //llvm::outs() << SMTStr << "\n";
 
     return SMTStr;
   }
@@ -113,7 +101,7 @@ private:
 
   expr build(Inst *I) {
     const std::vector<Inst *> &Ops = I->orderedOps();
-    llvm::outs() << "## getting instruction: " << Inst::getKindName(I->K) << "\n";
+    //llvm::outs() << "## getting instruction: " << Inst::getKindName(I->K) << "\n";
     switch (I->K) {
     case Inst::UntypedConst:
       assert(0 && "unexpected kind");
@@ -413,11 +401,13 @@ private:
     if (ExprMap.count(I)) 
       return ExprMap.at(I);
     expr E = build(I);
+#if 0
     llvm::outs() << "@@@ sort kind for " << Inst::getKindName(I->K) << ": " << E.get_sort().sort_kind() << "\n";
     ReplacementContext Context;
     PrintReplacementRHS(llvm::outs(), I, Context);
-    //llvm::outs() << "@@@ sort name: " << E.get_sort().name() << "\n";
-    //assert(E.get_sort().bv_size() == I->Width);
+    llvm::outs() << "@@@ sort name: " << E.get_sort().name() << "\n";
+#endif
+    assert(E.get_sort().bv_size() == I->Width);
     ExprMap.insert(std::make_pair(I, E));
     return E;
   }
