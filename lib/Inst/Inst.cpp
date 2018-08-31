@@ -382,24 +382,24 @@ const char *Inst::getKindName(Kind K) {
     return "ctlz";
   case ExtractValue:
     return "extractvalue";
+  case SAddO:
   case SAddWithOverflow:
     return "sadd.with.overflow";
+  case UAddO:
   case UAddWithOverflow:
     return "uadd.with.overflow";
+  case SSubO:
   case SSubWithOverflow:
     return "ssub.with.overflow";
+  case USubO:
   case USubWithOverflow:
     return "usub.with.overflow";
+  case SMulO:
   case SMulWithOverflow:
     return "smul.with.overflow";
+  case UMulO:
   case UMulWithOverflow:
     return "umul.with.overflow";
-  case SAddO:
-  case UAddO:
-  case SSubO:
-  case USubO:
-  case SMulO:
-  case UMulO:
   default:
     llvm_unreachable("all cases covered");
   }

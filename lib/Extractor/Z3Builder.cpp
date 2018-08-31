@@ -82,8 +82,8 @@ private:
      unsigned Width = L.get_sort().bv_size();
      expr Count = c.bv_val(0, Width);
      for (unsigned J=0; J<Width; J++) {
-       expr Bit = L.extract(J, 0);
-       expr BitExt = expr(c, Z3_mk_zero_ext(c, Width, Bit));
+       expr Bit = L.extract(J, J);
+       expr BitExt = zext(Bit, Width-1);
        Count = Count + BitExt;
      }
      return Count;
@@ -120,7 +120,7 @@ private:
       expr E = get(Ops[0]);
       // e.g. P2 ? (P1 ? Op1_Expr : Op2_Expr) : Op3_Expr
       for (unsigned J = 1; J < Ops.size(); ++J) {
-        E = ite(get(PredExpr[J-1]), E, get(Ops[J]));
+        E = ite(get(PredExpr[J-1]) == c.bv_val(1, 1), E, get(Ops[J]));
       }
       return E;
     }
@@ -252,15 +252,15 @@ private:
     }
     case Inst::Select: {
       //return SelectExpr::create(get(Ops[0]), get(Ops[1]), get(Ops[2]));
-      return ite(get(Ops[0]), get(Ops[1]), get(Ops[2]));
+      return ite(get(Ops[0]) == c.bv_val(1, 1), get(Ops[1]), get(Ops[2]));
     }
     case Inst::ZExt: {
       //return ZExtExpr::create(get(Ops[0]), I->Width);
-      return expr(c, Z3_mk_zero_ext(c, I->Width, get(Ops[0])));
+      return zext(get(Ops[0]), I->Width-Ops[0]->Width);
     }
     case Inst::SExt:
       //return SExtExpr::create(get(Ops[0]), I->Width);
-      return expr(c, Z3_mk_sign_ext(c, I->Width, get(Ops[0])));
+      return sext(get(Ops[0]), I->Width-Ops[0]->Width);
     case Inst::Trunc: {
       //return ExtractExpr::create(get(Ops[0]), 0, I->Width);
       return get(Ops[0]).extract(I->Width-1, 0);
@@ -275,19 +275,19 @@ private:
     }
     case Inst::Ult: {
       //return UltExpr::create(get(Ops[0]), get(Ops[1]));
-      return expr(c, Z3_mk_bvult(c, get(Ops[0]), get(Ops[1])));
+      return ite(expr(c, Z3_mk_bvult(c, get(Ops[0]), get(Ops[1]))), c.bv_val(1, 1), c.bv_val(0, 1));
     }
     case Inst::Slt: {
       //return SltExpr::create(get(Ops[0]), get(Ops[1]));
-      return expr(c, Z3_mk_bvslt(c, get(Ops[0]), get(Ops[1])));
+      return ite(expr(c, Z3_mk_bvslt(c, get(Ops[0]), get(Ops[1]))), c.bv_val(1, 1), c.bv_val(0, 1));
     }
     case Inst::Ule: {
       //return UleExpr::create(get(Ops[0]), get(Ops[1]));
-      return expr(c, Z3_mk_bvule(c, get(Ops[0]), get(Ops[1])));
+      return ite(expr(c, Z3_mk_bvule(c, get(Ops[0]), get(Ops[1]))), c.bv_val(1, 1), c.bv_val(0, 1));
     }
     case Inst::Sle: {
       //return SleExpr::create(get(Ops[0]), get(Ops[1]));
-      return expr(c, Z3_mk_bvsle(c, get(Ops[0]), get(Ops[1])));
+      return ite(expr(c, Z3_mk_bvsle(c, get(Ops[0]), get(Ops[1]))), c.bv_val(1, 1), c.bv_val(0, 1));
     }
     case Inst::CtPop:
       return countOnes(get(Ops[0]));
@@ -402,10 +402,10 @@ private:
       return ExprMap.at(I);
     expr E = build(I);
 #if 0
-    llvm::outs() << "@@@ sort kind for " << Inst::getKindName(I->K) << ": " << E.get_sort().sort_kind() << "\n";
+    llvm::outs() << "@@ sort kind for " << I->K << ", name: " << Inst::getKindName(I->K) << ": " << E.get_sort().sort_kind() << "\n";
     ReplacementContext Context;
     PrintReplacementRHS(llvm::outs(), I, Context);
-    llvm::outs() << "@@@ sort name: " << E.get_sort().name() << "\n";
+    llvm::outs() << "@@@ I->Width = " << I->Width << ", sort width = " << E.get_sort().bv_size() << "\n";
 #endif
     assert(E.get_sort().bv_size() == I->Width);
     ExprMap.insert(std::make_pair(I, E));
