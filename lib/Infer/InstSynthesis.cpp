@@ -1513,12 +1513,13 @@ Inst *getInstCopy(Inst *I, InstContext &IC,
       }
     }
     if (!Copy) {
-      if (CloneVars)
-	Copy = IC.createVar(I->Width, "copy", I->KnownZeros, I->KnownOnes,
-			    I->NonZero, I->NonNegative, I->PowOfTwo,
-			    I->Negative, I->NumSignBits);
-      else
-	Copy = I;
+      if (CloneVars && I->Name != "constant")
+        Copy = IC.createVar(I->Width, I->Name, I->KnownZeros, I->KnownOnes,
+                            I->NonZero, I->NonNegative, I->PowOfTwo,
+                            I->Negative, I->NumSignBits);
+      else {
+        Copy = I;
+      }
     }
   } else if (I->K == Inst::Phi) {
     if (!BlockCache.count(I->B)) {
