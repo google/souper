@@ -137,7 +137,7 @@ class BaseSolver : public Solver {
     }
   }
 
-  void updateVarsToConsts(Inst *Root, InstContext &IC, int Value) {
+  void specializeVars(Inst *Root, InstContext &IC, int Value) {
     std::set<Inst *> Visited;
     std::queue<Inst *> Q;
     Q.push(Root);
@@ -200,127 +200,10 @@ class BaseSolver : public Solver {
     findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, 15);
 
     llvm::outs() << "LHS has " << Vars.size() << " vars\n";
-    
-    int TooExpensive = 0;
-    int LHSCost = souper::cost(LHS);
+
     std::vector<Inst *> Guesses;
-
-    // start with the nops -- but not a constant since that is
-    // legitimately faster to synthesize using the special-purpose
-    // code above
-    for (auto I : Inputs) {
-      auto v = matchWidth(I, LHS->Width, IC);
-      for (auto N : v)
-        addGuess(N, LHSCost, Guesses, TooExpensive);
-    }
-
-    // TODO enforce permitted widths
-    // TODO try both the source and dest width, if they're different
-    std::vector<Inst::Kind> Unary = {
-      Inst::CtPop, Inst::BSwap, Inst::Cttz, Inst::Ctlz
-    };
-    if (LHS->Width > 1) {
-      for (auto K : Unary) {
-        for (auto I : Inputs) {
-          auto v1 = matchWidth(I, LHS->Width, IC);
-          for (auto v1i : v1) {
-            auto N = IC.getInst(K, LHS->Width, { v1i });
-            addGuess(N, LHSCost, Guesses, TooExpensive);
-          }
-        }
-      }
-    }
-
-    // binary and ternary instructions (TODO add div/rem)
-    std::vector<Inst::Kind> Kinds = {
-      Inst::Add, Inst::Sub, Inst::Mul,
-      Inst::And, Inst::Or, Inst::Xor,
-      Inst::Shl, Inst::AShr, Inst::LShr,
-      Inst::Eq, Inst::Ne, Inst::Ult,
-      Inst::Slt, Inst::Ule, Inst::Sle,
-      Inst::Select,
-    };
-
-    Inputs.push_back(IC.getReserved());
-
-    for (auto K : Kinds) {
-      for (auto I = Inputs.begin(); I != Inputs.end(); ++I) {
-        // PRUNE: don't try commutative operators both ways
-        auto Start = Inst::isCommutative(K) ? I : Inputs.begin();
-        for (auto J = Start; J != Inputs.end(); ++J) {
-          // PRUNE: never useful to div, rem, sub, and, or, xor,
-          // icmp, select a value against itself
-          if ((*I == *J) && (isCmp(K) || K == Inst::And || K == Inst::Or ||
-                             K == Inst::Xor || K == Inst::Sub || K == Inst::UDiv ||
-                             K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
-                             K == Inst::Select))
-            continue;
-          // PRUNE: never operate on two constants
-          if ((*I)->K == Inst::Reserved && (*J)->K == Inst::Reserved)
-            continue;
-          /*
-           * there are three obvious choices of width for an
-           * operator: left input, right input, or output, so try
-           * them all (in the future we'd also like to explore
-           * things like synthesizing double-width operations)
-           */
-          llvm::SmallSetVector<int, 4> Widths;
-          if ((*I)->K != Inst::Reserved)
-            Widths.insert((*I)->Width);
-          if ((*J)->K != Inst::Reserved)
-            Widths.insert((*J)->Width);
-          if (!isCmp(K))
-            Widths.insert(LHS->Width);
-          if (Widths.size() < 1)
-            report_fatal_error("no widths to work with");
-          for (auto OpWidth : Widths) {
-            if (OpWidth < 1)
-              report_fatal_error("bad width");
-            // PRUNE: one-bit shifts don't make sense
-            if (isShift(K) && OpWidth == 1)
-              continue;
-            
-            // see if we need to make a var representing a constant
-            // that we don't know yet
-            std::vector<Inst *> v1, v2;
-            if ((*I)->K == Inst::Reserved) {
-              auto C = IC.createVar(OpWidth, "constant");
-              v1.push_back(C);
-            } else {
-              v1 = matchWidth(*I, OpWidth, IC);
-            }
-            if ((*J)->K == Inst::Reserved) {
-              auto C = IC.createVar(OpWidth, "constant");
-              v2.push_back(C);
-            } else {
-              v2 = matchWidth(*J, OpWidth, IC);
-            }
-            for (auto v1i : v1) {
-              for (auto v2i : v2) {
-                if (K == Inst::Select) {
-                  for (auto L : Inputs) {
-                    // PRUNE: a select's control input should never be constant
-                    if (L->K == Inst::Reserved)
-                      continue;
-                    auto v3 = matchWidth(L, 1, IC);
-                    auto N = IC.getInst(Inst::Select, OpWidth, { v3[0], v1i, v2i });
-                    addGuess(N, LHSCost, Guesses, TooExpensive);
-                  }
-                } else {
-                  // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
-                  if (K == Inst::Sub && v2i->Name == "constant")
-                    continue;
-                  auto N = IC.getInst(K, isCmp(K) ? 1 : OpWidth, { v1i, v2i });
-                  auto v4 = matchWidth(N, LHS->Width, IC);
-                  for (auto v4i : v4)
-                    addGuess(v4i, LHSCost, Guesses, TooExpensive);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    int LHSCost = souper::cost(LHS);
+    getGuesses(Guesses, Vars, Inputs, LHS->Width ,LHSCost, IC);
     
     std::error_code EC;
     if (Guesses.size() < 1)
@@ -339,21 +222,30 @@ class BaseSolver : public Solver {
       BlockPCs BPCsCopy;
       std::vector<InstMapping> PCsCopy;
 
+      llvm::errs()<<Guesses.size();
       for (auto I : Guesses) {
+        llvm::errs()<<"Guess\n";
+        ReplacementContext RC;
+        RC.printInst(I, llvm::errs(), true);
+
         // separate sub-expressions by copying vars
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
 
-        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
-              getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
-        Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
-        //        ReplacementContext RC;
-        //        RC.printInst(Ante, llvm::outs(), true);
+        Inst *LHSPrime = getInstCopy(LHS, IC, InstCache, BlockCache, 0, true);
+        Inst *IPrime = getInstCopy(I, IC, InstCache, BlockCache, 0, true);
+
+        specializeVars(LHSPrime, IC, 1);
+        specializeVars(IPrime, IC, 1);
+        Inst *NePrime = IC.getInst(Inst::Ne, 1, {LHSPrime, IPrime});
+        Ante = IC.getInst(Inst::And, 1, {Ante, NePrime});
         separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
         separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
       }
 
-
+      llvm::errs()<<"BigQuery\n";
+      ReplacementContext RC;
+      RC.printInst(Ante, llvm::errs(), false);
       
       llvm::outs() << "there were " << Guesses.size() << " guesses but ";
       llvm::outs() << TooExpensive << " were too expensive\n";
@@ -370,10 +262,10 @@ class BaseSolver : public Solver {
         return EC;
       if (!BigQueryIsSat) {
         llvm::outs() << "big query is unsat, all done\n";
-        // FIXME
-        // return;
+        return EC;
+      } else {
+        llvm::outs() << "big query is sat, looking for small queries\n";
       }
-      llvm::outs() << "big query is sat, looking at small queries\n";
     }
     // find the valid one
     int unsat = 0;
@@ -443,22 +335,19 @@ class BaseSolver : public Solver {
         for (int i = -1; i <= 1 ; i ++){
           std::map<Inst *, Inst *> InstCache;
           std::map<Block *, Block *> BlockCache;
-
-          Inst *tryLHS = getInstCopy(LHS, IC, InstCache, BlockCache, 0, true);
-          Inst *tryI = getInstCopy(I, IC, InstCache, BlockCache, 0, true);
-          updateVarsToConsts(tryLHS, IC, i);
-          updateVarsToConsts(tryI, IC, i);
-          Ante = IC.getInst(Inst::And, 1, {Ante, IC.getInst(Inst::Eq, 1, {tryLHS, tryI})});
+          Inst *SpecializedLHS = getInstCopy(LHS, IC, InstCache, BlockCache, 0, true);
+          Inst *SpecializedI = getInstCopy(I, IC, InstCache, BlockCache, 0, true);
+          specializeVars(SpecializedLHS, IC, i);
+          specializeVars(SpecializedI, IC, i);
+          Ante = IC.getInst(Inst::And, 1, {Ante,
+          IC.getInst(Inst::Eq, 1, {SpecializedLHS, SpecializedI})});
         }
-
 
         Ante = IC.getInst(Inst::And, 1, {Ante, IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})})});
         RC.printInst(Ante, llvm::outs(), true);
         InstMapping Mapping(Ante,
                             IC.getConst(APInt(1, true)));
         
-        //        RC.printInst(Ante, llvm::outs(), true);
-
         std::vector<Inst *> ModelInsts;
         std::vector<llvm::APInt> ModelVals;
         std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
@@ -701,6 +590,138 @@ public:
 
     RHS = 0;
     return EC;
+  }
+
+  void getGuesses (std::vector<Inst *>& Guesses,
+                   std::vector<Inst* >& Vars,
+                   std::vector<Inst *>& Inputs,
+                   int Width, int LHSCost,
+                   InstContext &IC) {
+ 
+    int TooExpensive = 0;
+    // start with the nops -- but not a constant since that is
+    // legitimately faster to synthesize using the special-purpose
+    // code above
+    for (auto I : Inputs) {
+      auto v = matchWidth(I, Width, IC);
+      for (auto N : v)
+        addGuess(N, LHSCost, Guesses, TooExpensive);
+    }
+
+    // TODO enforce permitted widths
+    // TODO try both the source and dest width, if they're different
+    std::vector<Inst::Kind> Unary = {
+      Inst::CtPop, Inst::BSwap, Inst::Cttz, Inst::Ctlz
+    };
+    if (Width > 1) {
+      for (auto K : Unary) {
+        for (auto I : Inputs) {
+          auto v1 = matchWidth(I, Width, IC);
+          for (auto v1i : v1) {
+            auto N = IC.getInst(K, Width, { v1i });
+            addGuess(N, LHSCost, Guesses, TooExpensive);
+          }
+        }
+      }
+    }
+
+    // binary and ternary instructions (TODO add div/rem)
+    std::vector<Inst::Kind> Kinds = {
+      Inst::Add, Inst::Sub, Inst::Mul,
+      Inst::And, Inst::Or, Inst::Xor,
+      Inst::Shl, Inst::AShr, Inst::LShr,
+      Inst::Eq, Inst::Ne, Inst::Ult,
+      Inst::Slt, Inst::Ule, Inst::Sle,
+      Inst::Select,
+    };
+
+    Inputs.push_back(IC.getReserved());
+
+    for (auto K : Kinds) {
+      for (auto I = Inputs.begin(); I != Inputs.end(); ++I) {
+        // PRUNE: don't try commutative operators both ways
+        auto Start = Inst::isCommutative(K) ? I : Inputs.begin();
+        for (auto J = Start; J != Inputs.end(); ++J) {
+          // PRUNE: never useful to div, rem, sub, and, or, xor,
+          // icmp, select a value against itself
+          if ((*I == *J) && (isCmp(K) || K == Inst::And || K == Inst::Or ||
+                             K == Inst::Xor || K == Inst::Sub || K == Inst::UDiv ||
+                             K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
+                             K == Inst::Select))
+            continue;
+          // PRUNE: never operate on two constants
+          if ((*I)->K == Inst::Reserved && (*J)->K == Inst::Reserved)
+            continue;
+          /*
+           * there are three obvious choices of width for an
+           * operator: left input, right input, or output, so try
+           * them all (in the future we'd also like to explore
+           * things like synthesizing double-width operations)
+           */
+          llvm::SmallSetVector<int, 4> Widths;
+          if ((*I)->K != Inst::Reserved)
+            Widths.insert((*I)->Width);
+          if ((*J)->K != Inst::Reserved)
+            Widths.insert((*J)->Width);
+          if (!isCmp(K))
+            Widths.insert(Width);
+          if (Widths.size() < 1)
+            report_fatal_error("no widths to work with");
+          
+          for (auto OpWidth : Widths) {
+            if (OpWidth < 1)
+              report_fatal_error("bad width");
+            // PRUNE: one-bit shifts don't make sense
+            if (isShift(K) && OpWidth == 1)
+              continue;
+            
+            // see if we need to make a var representing a constant
+            // that we don't know yet
+            std::vector<Inst *> v1, v2;
+            if ((*I)->K == Inst::Reserved) {
+              auto C = IC.createVar(OpWidth, "constant");
+              v1.push_back(C);
+            } else {
+              v1 = matchWidth(*I, OpWidth, IC);
+            }
+            if ((*J)->K == Inst::Reserved) {
+              auto C = IC.createVar(OpWidth, "constant");
+              v2.push_back(C);
+            } else {
+              v2 = matchWidth(*J, OpWidth, IC);
+            }
+            
+            
+            for (auto v1i : v1) {
+              for (auto v2i : v2) {
+                if (K == Inst::Select) {
+                  for (auto L : Inputs) {
+                    // PRUNE: a select's control input should never be constant
+                    if (L->K == Inst::Reserved)
+                      continue;
+                    auto v3 = matchWidth(L, 1, IC);
+                    auto N = IC.getInst(Inst::Select, OpWidth, { v3[0], v1i, v2i });
+                    addGuess(N, LHSCost, Guesses, TooExpensive);
+                  }
+                } else {
+                  // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
+                  
+                  if (K == Inst::Sub && v2i->Name == "constant")
+                    continue;
+                  auto N = IC.getInst(K, isCmp(K) ? 1 : OpWidth, { v1i, v2i });
+                  auto v4 = matchWidth(N, Width, IC);
+                  for (auto v4i : v4) {
+                    addGuess(v4i, LHSCost, Guesses, TooExpensive);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+
   }
 
   std::error_code isValid(InstContext &IC, const BlockPCs &BPCs,
