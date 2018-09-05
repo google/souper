@@ -248,7 +248,7 @@ class BaseSolver : public Solver {
       RC.printInst(Ante, llvm::errs(), false);
       
       llvm::outs() << "there were " << Guesses.size() << " guesses but ";
-      llvm::outs() << TooExpensive << " were too expensive\n";
+      //      llvm::outs() << TooExpensive << " were too expensive\n";
 
       // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
       InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
@@ -258,6 +258,7 @@ class BaseSolver : public Solver {
         return std::make_error_code(std::errc::value_too_large);
       bool BigQueryIsSat;
       EC = SMTSolver->isSatisfiable(Query, BigQueryIsSat, 0, 0, Timeout);
+      BigQueryIsSat = true;
       if (EC)
         return EC;
       if (!BigQueryIsSat) {
@@ -329,10 +330,10 @@ class BaseSolver : public Solver {
         std::vector<Inst *> Vars;
         findVars(LHS, Vars);
         
-        ReplacementContext RC;
+
         
         Inst *Ante = IC.getConst(APInt(1, true));
-        for (int i = -1; i <= 1 ; i ++){
+        for (int i = 1; i <= 3 ; i ++){
           std::map<Inst *, Inst *> InstCache;
           std::map<Block *, Block *> BlockCache;
           Inst *SpecializedLHS = getInstCopy(LHS, IC, InstCache, BlockCache, 0, true);
@@ -343,8 +344,32 @@ class BaseSolver : public Solver {
           IC.getInst(Inst::Eq, 1, {SpecializedLHS, SpecializedI})});
         }
 
+
+        for (auto PC : PCs ) {
+          ReplacementContext RC;
+          RC.printInst(PC.LHS, llvm::errs(), true);
+          RC.printInst(PC.RHS, llvm::errs(), true);
+          std::vector<Inst *> ModelInsts;
+          std::string PCQuery = BuildQuery(IC, BPCs, {}, PC, &ModelInsts, /*Negate=*/false);
+          bool PCIsSat;
+          std::vector<llvm::APInt> ModelVals;
+          EC = SMTSolver->isSatisfiable(PCQuery, PCIsSat, ModelInsts.size(), &ModelVals, Timeout);
+
+          if (PCIsSat) {
+            llvm::errs()<<"FFF";
+            ModelVals[1].dump();
+            llvm::errs()<<"---";
+          }
+        }
+
+
+
+        
+        
         Ante = IC.getInst(Inst::And, 1, {Ante, IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})})});
+        ReplacementContext RC;
         RC.printInst(Ante, llvm::outs(), true);
+        break;
         InstMapping Mapping(Ante,
                             IC.getConst(APInt(1, true)));
         
@@ -602,14 +627,16 @@ public:
     // start with the nops -- but not a constant since that is
     // legitimately faster to synthesize using the special-purpose
     // code above
+    /*
     for (auto I : Inputs) {
       auto v = matchWidth(I, Width, IC);
       for (auto N : v)
         addGuess(N, LHSCost, Guesses, TooExpensive);
-    }
+        }*/
 
     // TODO enforce permitted widths
     // TODO try both the source and dest width, if they're different
+    /*
     std::vector<Inst::Kind> Unary = {
       Inst::CtPop, Inst::BSwap, Inst::Cttz, Inst::Ctlz
     };
@@ -624,6 +651,7 @@ public:
         }
       }
     }
+    */
 
     // binary and ternary instructions (TODO add div/rem)
     std::vector<Inst::Kind> Kinds = {
