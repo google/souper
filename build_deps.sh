@@ -21,9 +21,9 @@ fi
 
 # hiredis version 0.13.3
 hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
-llvm_branch=tags/RELEASE_600/final
+llvm_branch=tags/RELEASE_700/final
 klee_repo=https://github.com/rsas/klee
-klee_branch=pure-bv-qf-llvm-6.0-patch
+klee_branch=pure-bv-qf-llvm-7.0
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
@@ -80,7 +80,7 @@ cat <<EOF | patch $llvmdir/lib/Transforms/InstCombine/InstCombineSelect.cpp
 EOF
 mkdir -p $llvm_builddir
 
-cmake_flags=".. -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DCMAKE_CXX_FLAGS=-DLLVM_ENABLE_STATS=true"
+cmake_flags=".. -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type"
 
 if [ -n "`which ninja`" ] ; then
   (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")

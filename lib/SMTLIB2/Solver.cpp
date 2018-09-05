@@ -316,14 +316,11 @@ SolverProgram souper::makeExternalSolverProgram(StringRef Path) {
   return [PathStr](const std::vector<std::string> &Args, StringRef RedirectIn,
                    StringRef RedirectOut, StringRef RedirectErr,
                    unsigned Timeout) {
-    std::vector<const char *> ArgPtrs;
-    ArgPtrs.push_back(PathStr.c_str());
-    std::transform(Args.begin(), Args.end(), std::back_inserter(ArgPtrs),
-                   [](const std::string &Arg) { return Arg.c_str(); });
-    ArgPtrs.push_back(0);
-
+    std::vector<StringRef> ArgPtrs;
+    ArgPtrs.push_back(PathStr);
+    ArgPtrs.insert(ArgPtrs.end(), Args.begin(), Args.end());
     Optional<StringRef> Redirects[] = {RedirectIn, RedirectOut, RedirectErr};
-    return sys::ExecuteAndWait(PathStr, ArgPtrs.data(), 0, Redirects, Timeout);
+    return sys::ExecuteAndWait(PathStr, ArgPtrs, None, Redirects, Timeout);
   };
 }
 
