@@ -107,10 +107,8 @@ private:
       assert(0 && "unexpected kind");
     case Inst::Const: {
       //return klee::ConstantExpr::alloc(I->Val);
-      if (I->Val.isNegative())
-        return c.bv_val((int)(I->Val.getSExtValue()), I->Width);
-      else
-        return c.bv_val((unsigned)(I->Val.getZExtValue()), I->Width);
+      std::string ConstStr = I->Val.toString(10, true);
+      return c.bv_val(ConstStr.c_str(), I->Width);
     }
     case Inst::Var:
       return makeSizedConst(I->Width, I->Name, I);
