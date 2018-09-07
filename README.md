@@ -16,7 +16,7 @@ can use Z3, Boolector, CVC4, or STP. We recommend Z3.
 
 If you have Go installed, you will also need the Redigo Redis client:
 ```
-$ go get github.com/garyburd/redigo/redis
+$ go get github.com/gomodule/redigo/redis
 ```
 
 # Building Souper
