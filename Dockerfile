@@ -22,7 +22,7 @@ run cd /usr/src/redis \
 	&& make install
 
 run export GOPATH=/usr/src/go \
-	&& go get github.com/garyburd/redigo/redis
+	&& go get github.com/gomodule/redigo/redis
 
 add build_deps.sh /usr/src/souper/build_deps.sh
 add clone_and_test.sh /usr/src/souper/clone_and_test.sh
