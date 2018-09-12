@@ -60,6 +60,9 @@ static cl::opt<bool> InferInts("souper-infer-iN",
 static cl::opt<bool> InferInsts("souper-infer-inst",
     cl::desc("Infer instructions (default=false)"),
     cl::init(false));
+static cl::opt<bool> ExhaustiveSynthesis("souper-exhaustive-synthesis",
+    cl::desc("Use exaustive search for instruction synthesis (default=false)"),
+    cl::init(false));
 static cl::opt<int> MaxLHSSize("souper-max-lhs-size",
     cl::desc("Max size of LHS (in bytes) to put in external cache (default=1024)"),
     cl::init(1024));
@@ -600,17 +603,17 @@ public:
         return EC;
     }
 
-    if (1 && InferInsts && SMTSolver->supportsModels()) {
-      EC = exhaustiveSynthesize(BPCs, PCs, LHS, RHS, IC);
-      if (EC || RHS)
-        return EC;
-    }
-
-    if (0 && InferInsts && SMTSolver->supportsModels()) {
-      InstSynthesis IS;
-      EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
-      if (EC || RHS)
-        return EC;
+    if (InferInsts && SMTSolver->supportsModels()) {
+      if (ExhaustiveSynthesis) {
+        EC = exhaustiveSynthesize(BPCs, PCs, LHS, RHS, IC);
+        if (EC || RHS)
+          return EC;
+      } else {
+        InstSynthesis IS;
+        EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
+        if (EC || RHS)
+          return EC;
+      }
     }
 
     RHS = 0;
