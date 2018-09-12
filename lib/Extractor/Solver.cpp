@@ -235,13 +235,10 @@ class BaseSolver : public Solver {
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
 
-        Inst *LHSPrime = getInstCopy(LHS, IC, InstCache, BlockCache, 0, true);
-        Inst *IPrime = getInstCopy(I, IC, InstCache, BlockCache, 0, true);
+        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
+              getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
 
-        specializeVars(LHSPrime, IC, 1);
-        specializeVars(IPrime, IC, 1);
-        Inst *NePrime = IC.getInst(Inst::Ne, 1, {LHSPrime, IPrime});
-        Ante = IC.getInst(Inst::And, 1, {Ante, NePrime});
+        Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
         separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
         separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
       }
@@ -333,8 +330,6 @@ class BaseSolver : public Solver {
         std::vector<Inst *> Vars;
         findVars(LHS, Vars);
         
-
-        
         Inst *Ante = IC.getConst(APInt(1, true));
         for (int i = 1; i <= 3 ; i ++){
           std::map<Inst *, Inst *> InstCache;
@@ -357,18 +352,8 @@ class BaseSolver : public Solver {
           bool PCIsSat;
           std::vector<llvm::APInt> ModelVals;
           EC = SMTSolver->isSatisfiable(PCQuery, PCIsSat, ModelInsts.size(), &ModelVals, Timeout);
-
-          if (PCIsSat) {
-            llvm::errs()<<"FFF";
-            ModelVals[1].dump();
-            llvm::errs()<<"---";
-          }
         }
 
-
-
-        
-        
         Ante = IC.getInst(Inst::And, 1, {Ante, IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})})});
         ReplacementContext RC;
         RC.printInst(Ante, llvm::outs(), true);
