@@ -474,7 +474,7 @@ public:
      * guess a few constants that are likely to be cheap for the
      * backend to make
      */
-    if (InferInts && LHS->Width == 1) {
+    if (InferInts || LHS->Width == 1) {
       std::vector<Inst *>Guesses { IC.getConst(APInt(LHS->Width, 0)),
                                    IC.getConst(APInt(LHS->Width, 1)) };
       if (LHS->Width > 1)
@@ -534,7 +534,7 @@ public:
       }
     }
 
-    if (1 && InferNop) {
+    if (InferNop) {
       std::vector<Inst *> Guesses;
       findCands(LHS, Guesses, /*WidthMustMatch=*/true, /*FilterVars=*/false, MaxNops);
 
