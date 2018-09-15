@@ -23,6 +23,7 @@
 #include "souper/Inst/Inst.h"
 
 #include <string>
+#include <unordered_set>
 
 using namespace llvm;
 using namespace souper;
@@ -306,6 +307,7 @@ struct Parser {
   // set of blockpc(s) related to B. The map is used for error- and
   // type-checking.
   std::map<Block *, unsigned> BlockPCIdxMap;
+  std::unordered_set<Inst *> ExternalUsesSet;
   Inst *LHS = 0;
 
   std::string makeErrStr(const std::string &ErrStr) {
@@ -1053,7 +1055,8 @@ bool Parser::parseLine(std::string &ErrStr) {
       if (IK == Inst::Var) {
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
                     ConstOne(InstWidth, 1, false);
-        bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
+        bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false,
+          hasExternalUses = false;
         unsigned SignBits = 0;
         while (CurTok.K != Token::ValName && CurTok.K != Token::Ident && CurTok.K != Token::Eof) {
           if (CurTok.K == Token::OpenParen) {
@@ -1167,6 +1170,7 @@ bool Parser::parseLine(std::string &ErrStr) {
       }
 
       std::vector<Inst *> Ops;
+      bool hasExternalUses = false;
 
       while (1) {
         Inst *I = parseInst(ErrStr);
@@ -1175,7 +1179,26 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         Ops.push_back(I);
 
-        if (CurTok.K != Token::Comma) break;
+        if (CurTok.K != Token::Comma) {
+          if (CurTok.K == Token::OpenParen) {
+            if (!consumeToken(ErrStr))
+              return false;
+            if (CurTok.K != Token::Ident || CurTok.str() != "hasExternalUses") {
+              ErrStr = makeErrStr(TP, "expected hasExternalUses token");
+              return false;
+            }
+            if (!consumeToken(ErrStr))
+              return false;
+            if (CurTok.K != Token::CloseParen) {
+              ErrStr = makeErrStr(TP, "expected ')' to complete external uses string");
+              return false;
+            }
+            if (!consumeToken(ErrStr))
+              return false;
+            hasExternalUses = true;
+          }
+          break;
+        }
         if (!consumeToken(ErrStr)) return false;
       }
 
@@ -1223,6 +1246,10 @@ bool Parser::parseLine(std::string &ErrStr) {
         }
       }
 
+      if (hasExternalUses)
+        ExternalUsesSet.insert(I);
+      for (auto EU: ExternalUsesSet)
+        I->DepsWithExternalUses.insert(EU);
       Context.setInst(InstName, I);
       return true;
     }
