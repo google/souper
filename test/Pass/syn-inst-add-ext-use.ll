@@ -7,7 +7,9 @@
 ; not optimization instruction with outside uses smartly. This case shows this
 ; issue: %a, %b and %c all have external uses, and they should not be swiped
 ; out, thus synthesis a new instruction "add %x, 4" only for replacing %d is not
-; necessary. Now souper does this redundant optimization. 
+; necessary. Now souper does this redundant optimization.
+; This issue is now provisionally fixed by considering the cost of instructions
+; in the LHS with external uses to be 0.
 
 @amem = common global i32 0, align 4
 @bmem = common global i32 0, align 4
@@ -21,7 +23,7 @@ entry:
   store i32 %b, i32* @bmem, align 4
   %c = add i32 %b, 1
   store i32 %c, i32* @cmem, align 4
-  ;CHECK: add i32 %x, 4
+  ;CHECK-NOT: add i32 %x, 4
   %d = add i32 %c, 1
   ret i32 %d
 }

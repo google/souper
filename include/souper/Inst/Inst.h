@@ -216,7 +216,8 @@ public:
                 bool Available=true);
 };
 
-int cost(Inst *I);
+int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
+int benefit(Inst *LHS, Inst *RHS);
 
 void PrintReplacement(llvm::raw_ostream &Out, const BlockPCs &BPCs,
                       const std::vector<InstMapping> &PCs, InstMapping Mapping,
