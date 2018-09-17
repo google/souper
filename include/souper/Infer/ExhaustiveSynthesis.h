@@ -15,8 +15,12 @@
 #ifndef SOUPER_EXHAUSTIVE_SYNTHESIS_H
 #define SOUPER_EXHAUSTIVE_SYNTHESIS_H
 
+#include "llvm/ADT/APInt.h"
 #include "souper/Inst/Inst.h"
+#include "souper/Extractor/Solver.h"
+
 #include <utility>
+#include <system_error>
 
 namespace souper {
 
@@ -27,35 +31,9 @@ public:
                              const BlockPCs &BPCs,
                              const std::vector<InstMapping> &PCs,
                              Inst *TargetLHS, Inst *&RHS,
-                             InstContext &IC);
+                             InstContext &IC, unsigned Timeout);
 
 };
 }
-
-  /*void findCands(Inst *Root, std::vector<Inst *> &Guesses,
-               bool WidthMustMatch, bool FilterVars, int Max);
-
-Inst *getInstCopy(Inst *I, InstContext &IC,
-                  std::map<Inst *, Inst *> &InstCache,
-                  std::map<Block *, Block *> &BlockCache,
-		  std::map<Inst *, llvm::APInt> *ConstMap,
-		  bool CloneVars);
-
-void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
-                      std::map<Inst *, Inst *> &InstCache,
-                      std::map<Block *, Block *> &BlockCache,
-                      InstContext &IC,
-		      std::map<Inst *, llvm::APInt> *ConstMap,
-		      bool CloneVars);
-
-void separatePCs(const std::vector<InstMapping> &PCs,
-                 std::vector<InstMapping> &PCsCopy,
-                 std::map<Inst *, Inst *> &InstCache,
-                 std::map<Block *, Block *> &BlockCache,
-                 InstContext &IC,
-		 std::map<Inst *, llvm::APInt> *ConstMap,
-		 bool CloneVars);
-
-                 }*/
 
 #endif  // SOUPER_EXHAUSTIVE_SYNTHESIS_H

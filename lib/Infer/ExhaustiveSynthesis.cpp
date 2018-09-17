@@ -18,6 +18,7 @@
 #include <queue>
 
 using namespace souper;
+using namespace llvm;
 
 // TODO
 // see and obey the ignore-cost command line flag
@@ -280,7 +281,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const BlockPCs &BPCs,
                                 const std::vector<InstMapping> &PCs,
                                 Inst *LHS, Inst *&RHS,
-                                InstContext &IC) {
+                                InstContext &IC, unsigned Timeout) {
   std::vector<Inst *> Vars;
   findVars(LHS, Vars);
   std::vector<Inst *> Inputs;

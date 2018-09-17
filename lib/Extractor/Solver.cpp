@@ -217,7 +217,7 @@ public:
     if (InferInsts && SMTSolver->supportsModels()) {
       if (EnableExhaustiveSynthesis) {
         ExhaustiveSynthesis ES;
-        EC = ES.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC);
+        EC = ES.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
         if (EC || RHS)
           return EC;
       } else {
