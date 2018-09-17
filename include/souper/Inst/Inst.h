@@ -196,6 +196,7 @@ class InstContext {
 
   std::vector<std::unique_ptr<Inst>> Insts;
   llvm::FoldingSet<Inst> InstSet;
+  unsigned ReservedCounter= 0;
 
 public:
   Inst *getConst(const llvm::APInt &I);

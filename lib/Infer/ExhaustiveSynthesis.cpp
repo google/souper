@@ -68,7 +68,7 @@ const bool isShift(Inst::Kind K) {
 void hasConstantHelper(Inst *I, std::set<Inst *> &Visited,
                        std::vector<Inst *> &ConstList) {
   // FIXME this only works for one constant and keying by name is bad
-  if (I->K == Inst::Var && (I->Name.compare("constant") == 0)) {
+  if (I->K == Inst::Var && (I->Name.find("reserved_") != std::string::npos)) {
     // FIXME use a less stupid sentinel
     ConstList.push_back(I);
   } else {
@@ -179,17 +179,17 @@ void getGuesses (std::vector<Inst *>& Guesses,
   */
   
   // binary and ternary instructions (TODO add div/rem)
-  std::vector<Inst::Kind> Kinds = {
-                                   Inst::Add, Inst::Sub, Inst::Mul,
+  std::vector<Inst::Kind> Kinds = {Inst::Add, Inst::Sub, Inst::Mul,
                                    Inst::And, Inst::Or, Inst::Xor,
                                    Inst::Shl, Inst::AShr, Inst::LShr,
                                    Inst::Eq, Inst::Ne, Inst::Ult,
                                    Inst::Slt, Inst::Ule, Inst::Sle,
-                                   Inst::Select,
   };
 
   Inputs.push_back(IC.getReserved());
-  
+
+
+  // Binary and Unary operators
   for (auto K : Kinds) {
     for (auto I = Inputs.begin(); I != Inputs.end(); ++I) {
       // PRUNE: don't try commutative operators both ways
@@ -232,13 +232,13 @@ void getGuesses (std::vector<Inst *>& Guesses,
           // that we don't know yet
           std::vector<Inst *> v1, v2;
           if ((*I)->K == Inst::Reserved) {
-            auto C = IC.createVar(OpWidth, "constant");
+            auto C = IC.createVar(OpWidth, (*I)->Name);
             v1.push_back(C);
           } else {
             v1 = matchWidth(*I, OpWidth, IC);
           }
           if ((*J)->K == Inst::Reserved) {
-            auto C = IC.createVar(OpWidth, "constant");
+            auto C = IC.createVar(OpWidth, (*J)->Name);
             v2.push_back(C);
           } else {
             v2 = matchWidth(*J, OpWidth, IC);
@@ -247,25 +247,13 @@ void getGuesses (std::vector<Inst *>& Guesses,
           
           for (auto v1i : v1) {
             for (auto v2i : v2) {
-              if (K == Inst::Select) {
-                for (auto L : Inputs) {
-                  // PRUNE: a select's control input should never be constant
-                  if (L->K == Inst::Reserved)
-                    continue;
-                  auto v3 = matchWidth(L, 1, IC);
-                  auto N = IC.getInst(Inst::Select, OpWidth, { v3[0], v1i, v2i });
-                  addGuess(N, LHSCost, Guesses, TooExpensive);
-                }
-              } else {
-                // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
-                
-                if (K == Inst::Sub && v2i->Name == "constant")
-                  continue;
-                auto N = IC.getInst(K, isCmp(K) ? 1 : OpWidth, { v1i, v2i });
-                auto v4 = matchWidth(N, Width, IC);
-                for (auto v4i : v4) {
-                  addGuess(v4i, LHSCost, Guesses, TooExpensive);
-                }
+              // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
+              if (K == Inst::Sub && v2i->Name.find("reserved_") != std::string::npos)
+                continue;
+              auto N = IC.getInst(K, isCmp(K) ? 1 : OpWidth, { v1i, v2i });
+              auto v4 = matchWidth(N, Width, IC);
+              for (auto v4i : v4) {
+                addGuess(v4i, LHSCost, Guesses, TooExpensive);
               }
             }
           }
@@ -273,8 +261,43 @@ void getGuesses (std::vector<Inst *>& Guesses,
       }
     }
   }
-}
 
+  // Select
+  Inputs.push_back(IC.getReserved());
+  for (auto I = Inputs.begin(); I != Inputs.end(); ++I) {
+    for (auto J = Inputs.begin(); J != Inputs.end(); ++J) {
+      if (I == J) continue;
+      std::vector<Inst *> v1, v2;
+      if ((*I)->K == Inst::Reserved) {
+        auto C = IC.createVar(Width, (*I)->Name);
+        v1.push_back(C);
+      } else {
+        v1 = matchWidth(*I, Width, IC);
+      }
+      if ((*J)->K == Inst::Reserved) {
+        auto C = IC.createVar(Width, (*J)->Name);
+        v2.push_back(C);
+      } else {
+        v2 = matchWidth(*J, Width, IC);
+      }
+          
+
+      for (auto L : Inputs) {
+        for (auto v1i : v1) {
+          for (auto v2i : v2) {
+            
+            // PRUNE: a select's control input should never be constant
+            if (L->K == Inst::Reserved)
+              continue;
+            auto v3 = matchWidth(L, 1, IC);
+            auto N = IC.getInst(Inst::Select, Width, { v3[0], v1i, v2i });
+            addGuess(N, LHSCost, Guesses, TooExpensive);
+          }
+        }
+      }
+    }
+  }
+}
 
 std::error_code
 ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
@@ -292,7 +315,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   
   std::vector<Inst *> Guesses;
   int LHSCost = souper::cost(LHS);
-  getGuesses(Guesses, Vars, Inputs, LHS->Width ,LHSCost, IC);
+  getGuesses(Guesses, Vars, Inputs, LHS->Width, LHSCost, IC);
   
   std::error_code EC;
   if (Guesses.size() < 1)
@@ -305,7 +328,9 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
             [](Inst *a, Inst *b) -> bool {
               return souper::cost(a) < souper::cost(b);
             });
-  
+
+  // Big Query
+  #if 0
   {
     Inst *Ante = IC.getConst(APInt(1, true));
     BlockPCs BPCsCopy;
@@ -354,6 +379,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       llvm::outs() << "big query is sat, looking for small queries\n";
     }
   }
+  #endif
   // find the valid one
   int unsat = 0;
   int GuessIndex = -1;
@@ -390,10 +416,12 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 #endif
     
     // FIXME
+    /*
     if (ConstList.size() > 1)
       llvm::report_fatal_error("yeah this test needs to get deleted");
+    */
     
-    std::vector<llvm::APInt> BadConsts;
+    std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
     int Tries = 0;
     
   again:
@@ -405,11 +433,20 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     // FIXME fix values for vars
     
     // avoid choices for constants that have not worked out in previous iterations
+    // ((R1 != C11 ) \/ (R2 != C21 )) /\ ((R1 != C12 ) \/ (R2 != C22 )) /\ ...
     Inst *AvoidConsts = IC.getConst(APInt(1, true));
-    for (auto C : BadConsts) {
-      Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(C), ConstList[0] });
-      AvoidConsts = IC.getInst(Inst::And, 1, {AvoidConsts, Ne});
+    if (!BadConsts.empty()) {
+      for (unsigned i = 0; i < BadConsts[ConstList[0]].size(); ++i) {
+        Inst *Ante = IC.getConst(APInt(1, false));
+        for (auto C : ConstList) {
+          Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(BadConsts[C][i]), C });
+          Ante = IC.getInst(Inst::Or, 1, {Ante, Ne});
+        }
+        AvoidConsts = IC.getInst(Inst::And, 1, {Ante, AvoidConsts});
+      }
     }
+    
+    //    RC.printInst(AvoidConsts, llvm::errs(), true);
     std::map<Inst *, llvm::APInt> ConstMap;
     
     {
@@ -420,15 +457,15 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       for (int i = 1; i <= 3 ; i ++){
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
-        Inst *SpecializedLHS = getInstCopy(LHS, IC, InstCache, BlockCache, 0, true);
+        /*Inst *SpecializedLHS = getInstCopy(LHS, IC, InstCache, BlockCache, 0, true);
         Inst *SpecializedI = getInstCopy(I, IC, InstCache, BlockCache, 0, true);
         specializeVars(SpecializedLHS, IC, i);
-        specializeVars(SpecializedI, IC, i);
+        specializeVars(SpecializedI, IC, i);*/
         Ante = IC.getInst(Inst::And, 1, {Ante,
-                                         IC.getInst(Inst::Eq, 1, {SpecializedLHS, SpecializedI})});
+                                         IC.getInst(Inst::Eq, 1, {LHS, I})});
       }
-      
-      
+
+      #if 0
       for (auto PC : PCs ) {
         ReplacementContext RC;
         RC.printInst(PC.LHS, llvm::errs(), true);
@@ -439,11 +476,11 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         std::vector<llvm::APInt> ModelVals;
         EC = SMTSolver->isSatisfiable(PCQuery, PCIsSat, ModelInsts.size(), &ModelVals, Timeout);
       }
+      #endif
       
       Ante = IC.getInst(Inst::And, 1, {Ante, IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})})});
       ReplacementContext RC;
       RC.printInst(Ante, llvm::outs(), true);
-      break;
       InstMapping Mapping(Ante,
                           IC.getConst(APInt(1, true)));
       
@@ -455,13 +492,14 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         llvm::outs() << "mt!\n";
         continue;
       }
-      bool SmallQueryIsSat;
-      EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, ModelInsts.size(), &ModelVals, Timeout);
+      bool FirstSmallQueryIsSat;
+      EC = SMTSolver->isSatisfiable(Query, FirstSmallQueryIsSat,
+                                    ModelInsts.size(), &ModelVals, Timeout);
       if (EC) {
         llvm::outs() << "oops!\n";
         return EC;
       }
-      if (!SmallQueryIsSat) {
+      if (!FirstSmallQueryIsSat) {
         unsat++;
         llvm::outs() << "first query is unsat, all done with this guess\n";
         continue;
@@ -469,9 +507,9 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       llvm::outs() << "first query is sat\n";
       
       for (unsigned J = 0; J != ModelInsts.size(); ++J) {
-        if (ModelInsts[J]->Name == "constant") {
+        if (ModelInsts[J]->Name.find("reserved_") != std::string::npos) {
           auto Const = IC.getConst(ModelVals[J]);
-          BadConsts.push_back(Const->Val);
+          BadConsts[ModelInsts[J]].push_back(Const->Val);
           auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
           llvm::outs() << "constant value = " << Const->Val << "\n";
           if (!res.second)
@@ -488,27 +526,19 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
     separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
     
-    {
-      llvm::outs() << "\n\nwith constant:\n";
-      ReplacementContext RC;
-      RC.printInst(LHS, llvm::outs(), true);
-      llvm::outs() << "\n";
-      RC.printInst(I2, llvm::outs(), true);
-    }
-    
     InstMapping Mapping2(LHS, I2);
     std::string Query2 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping2, 0);
     if (Query2.empty()) {
       llvm::outs() << "mt!\n";
       continue;
     }
-    bool z;
-    EC = SMTSolver->isSatisfiable(Query2, z, 0, 0, Timeout);
+    bool SecondSmallQueryIsSat;
+    EC = SMTSolver->isSatisfiable(Query2, SecondSmallQueryIsSat, 0, 0, Timeout);
     if (EC) {
       llvm::outs() << "oops!\n";
       return EC;
     }
-    if (z) {
+    if (SecondSmallQueryIsSat) {
         llvm::outs() << "second query is SAT-- constant doesn't work\n";
         Tries++;
         // TODO tune max tries

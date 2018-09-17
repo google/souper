@@ -529,19 +529,11 @@ Inst *InstContext::getUntypedConst(const llvm::APInt &Val) {
 }
 
 Inst *InstContext::getReserved() {
-  llvm::FoldingSetNodeID ID;
-  ID.AddInteger(Inst::Reserved);
-  ID.AddInteger(0);
-
-  void *IP = 0;
-  if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
-    return I;
-
   auto N = new Inst;
   Insts.emplace_back(N);
   N->K = Inst::Reserved;
+  N->Name = "reserved_" + std::to_string(ReservedCounter++);
   N->Width = 0;
-  InstSet.InsertNode(N, IP);
   return N;
 }
 
@@ -826,7 +818,7 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
       }
     }
     if (!Copy) {
-      if (CloneVars && I->Name != "constant")
+      if (CloneVars && I->Name.find("reserved_") == std::string::npos)
         Copy = IC.createVar(I->Width, I->Name, I->KnownZeros, I->KnownOnes,
                             I->NonZero, I->NonNegative, I->PowOfTwo,
                             I->Negative, I->NumSignBits);

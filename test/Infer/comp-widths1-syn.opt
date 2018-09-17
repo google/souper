@@ -1,6 +1,7 @@
 ; REQUIRES: solver, solver-model
 
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=sub %s > %t1
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=sub %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK:      %5:i32 = sub %3, %1
