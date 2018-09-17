@@ -152,31 +152,28 @@ void getGuesses (std::vector<Inst *>& Guesses,
   // start with the nops -- but not a constant since that is
   // legitimately faster to synthesize using the special-purpose
   // code above
-  /*
-    for (auto I : Inputs) {
+  for (auto I : Inputs) {
     auto v = matchWidth(I, Width, IC);
     for (auto N : v)
-    addGuess(N, LHSCost, Guesses, TooExpensive);
-    }*/
+      addGuess(N, LHSCost, Guesses, TooExpensive);
+  }
   
   // TODO enforce permitted widths
   // TODO try both the source and dest width, if they're different
-  /*
-    std::vector<Inst::Kind> Unary = {
-    Inst::CtPop, Inst::BSwap, Inst::Cttz, Inst::Ctlz
-    };
-    if (Width > 1) {
+  std::vector<Inst::Kind> Unary = {
+                                   Inst::CtPop, Inst::BSwap, Inst::Cttz, Inst::Ctlz
+  };
+  if (Width > 1) {
     for (auto K : Unary) {
-    for (auto I : Inputs) {
-    auto v1 = matchWidth(I, Width, IC);
-    for (auto v1i : v1) {
-    auto N = IC.getInst(K, Width, { v1i });
-    addGuess(N, LHSCost, Guesses, TooExpensive);
+      for (auto I : Inputs) {
+        auto v1 = matchWidth(I, Width, IC);
+        for (auto v1i : v1) {
+          auto N = IC.getInst(K, Width, { v1i });
+          addGuess(N, LHSCost, Guesses, TooExpensive);
+        }
+      }
     }
-    }
-    }
-    }
-  */
+  }
   
   // binary and ternary instructions (TODO add div/rem)
   std::vector<Inst::Kind> Kinds = {Inst::Add, Inst::Sub, Inst::Mul,
@@ -298,6 +295,68 @@ void getGuesses (std::vector<Inst *>& Guesses,
     }
   }
 }
+APInt getNextInputVal(Inst *Var,
+                      const std::vector<InstMapping> &PCs,
+                      std::map<Inst*, std::vector<llvm::APInt>> &TriedVars,
+                      InstContext &IC,
+                      SMTLIBSolver *SMTSolver,
+                      unsigned Timeout,
+                      bool &HasNextInputValue) {
+
+  HasNextInputValue = true;
+  Inst *Ante = IC.getConst(APInt(1, true));
+  for (auto PC : PCs ) {
+    Inst* Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+  }
+
+  // If a variable is neither found in PCs or TriedVar, return APInt(0)
+  if (TriedVars.find(Var) == TriedVars.end()) {
+    std::vector<Inst *> VarsInPCs;
+    findVars(Ante, VarsInPCs);
+    if (std::find(VarsInPCs.begin(), VarsInPCs.end(), Var) == VarsInPCs.end()) {
+      TriedVars[Var].push_back(APInt(Var->Width, 0));
+      return APInt(Var->Width, 0);
+    }
+  }
+  
+  for (auto Value: TriedVars[Var]) {
+    Inst* Ne = IC.getInst(Inst::Ne, 1, {Var, IC.getConst(Value)});
+    Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
+  }
+
+
+  ReplacementContext RC;
+  RC.printInst(Ante, llvm::errs(), true);
+  InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
+
+  std::vector<Inst *> ModelInsts;
+  std::vector<llvm::APInt> ModelVals;
+  std::string Query = BuildQuery(IC, {}, {}, Mapping, &ModelInsts, /*Negate=*/ true);
+  llvm::errs()<<Query;
+
+  bool PCQueryIsSat;
+  std::error_code EC;
+  EC = SMTSolver->isSatisfiable(Query, PCQueryIsSat, ModelInsts.size(), &ModelVals, Timeout);
+
+  if (EC || !PCQueryIsSat) {
+    HasNextInputValue = false;
+    return APInt(Var->Width, 0);
+  }
+
+
+  llvm::errs()<<"SAT";
+  for (unsigned I = 0 ; I != ModelInsts.size(); I ++) {
+    if (ModelInsts[I] == Var) {
+      
+      TriedVars[Var].push_back(ModelVals[I]);
+      llvm::errs()<<"var value = " << ModelVals[I] <<"\n";
+      return ModelVals[I];
+    }
+  }
+
+  llvm::report_fatal_error("shouldn't be here");
+}
 
 std::error_code
 ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
@@ -330,7 +389,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
             });
 
   // Big Query
-  #if 0
   {
     Inst *Ante = IC.getConst(APInt(1, true));
     BlockPCs BPCsCopy;
@@ -358,9 +416,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     ReplacementContext RC;
     RC.printInst(Ante, llvm::errs(), false);
     
-    llvm::outs() << "there were " << Guesses.size() << " guesses but ";
-    //      llvm::outs() << TooExpensive << " were too expensive\n";
-    
     // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
     InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
     std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
@@ -379,7 +434,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       llvm::outs() << "big query is sat, looking for small queries\n";
     }
   }
-  #endif
   // find the valid one
   int unsat = 0;
   int GuessIndex = -1;
@@ -393,34 +447,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     std::vector<Inst *> ConstList;
     hasConstant(I, ConstList);
     
-#if 0 // FIXME! need to create the mapping too
-    if (ConstList.size() < 1) {
-      std::string Query3 = BuildQuery(IC, BPCs, PCs, Mapping, 0);
-      if (Query3.empty()) {
-        llvm::outs() << "mt!\n";
-        continue;
-      }
-      bool z;
-      EC = SMTSolver->isSatisfiable(Query3, z, 0, 0, Timeout);
-      if (EC) {
-        llvm::outs() << "oops!\n";
-        return EC;
-      }
-      if (!z) {
-        llvm::outs() << "with no constants, this works\n";
-        RHS = I;
-        return EC;
-      }
-      continue;
-    }
-#endif
-    
-    // FIXME
-    /*
-    if (ConstList.size() > 1)
-      llvm::report_fatal_error("yeah this test needs to get deleted");
-    */
-    
     std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
     int Tries = 0;
     
@@ -429,9 +455,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       llvm::outs() << "\n\nagain:\n";
     
     // this SAT query will give us possible constants
-    
-    // FIXME fix values for vars
-    
+
     // avoid choices for constants that have not worked out in previous iterations
     // ((R1 != C11 ) \/ (R2 != C21 )) /\ ((R1 != C12 ) \/ (R2 != C22 )) /\ ...
     Inst *AvoidConsts = IC.getConst(APInt(1, true));
@@ -445,40 +469,41 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         AvoidConsts = IC.getInst(Inst::And, 1, {Ante, AvoidConsts});
       }
     }
-    
-    //    RC.printInst(AvoidConsts, llvm::errs(), true);
+
+    std::vector<Inst *> Vars;
+    findVars(LHS, Vars);
+
+    std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
     std::map<Inst *, llvm::APInt> ConstMap;
     
     {
-      std::vector<Inst *> Vars;
-      findVars(LHS, Vars);
-      
       Inst *Ante = IC.getConst(APInt(1, true));
-      for (int i = 1; i <= 3 ; i ++){
-        std::map<Inst *, Inst *> InstCache;
-        std::map<Block *, Block *> BlockCache;
-        /*Inst *SpecializedLHS = getInstCopy(LHS, IC, InstCache, BlockCache, 0, true);
-        Inst *SpecializedI = getInstCopy(I, IC, InstCache, BlockCache, 0, true);
-        specializeVars(SpecializedLHS, IC, i);
-        specializeVars(SpecializedI, IC, i);*/
-        Ante = IC.getInst(Inst::And, 1, {Ante,
-                                         IC.getInst(Inst::Eq, 1, {LHS, I})});
-      }
+      if (!Vars.empty()) {
+        // Try three combinations of values at a time
+        for (unsigned It = 0; It < 2; It ++) {
+          bool HasNextInputValue = false;
 
-      #if 0
-      for (auto PC : PCs ) {
-        ReplacementContext RC;
-        RC.printInst(PC.LHS, llvm::errs(), true);
-        RC.printInst(PC.RHS, llvm::errs(), true);
-        std::vector<Inst *> ModelInsts;
-        std::string PCQuery = BuildQuery(IC, BPCs, {}, PC, &ModelInsts, /*Negate=*/false);
-        bool PCIsSat;
-        std::vector<llvm::APInt> ModelVals;
-        EC = SMTSolver->isSatisfiable(PCQuery, PCIsSat, ModelInsts.size(), &ModelVals, Timeout);
+          std::map<Inst *, llvm::APInt> VarMap;
+          for (auto Var: Vars) {
+            APInt NextInput = getNextInputVal(Var, PCs, TriedVars, IC,
+                                              SMTSolver, Timeout,
+                                              HasNextInputValue);
+            if (!HasNextInputValue) break;
+            VarMap.insert(std::pair<Inst *, llvm::APInt>(Var, NextInput));
+          }
+          if (!HasNextInputValue) break;
+
+          std::map<Inst *, Inst *> InstCache;
+          std::map<Block *, Block *> BlockCache;
+          Inst *Eq =
+            IC.getInst(Inst::Eq, 1,
+                       {getInstCopy(LHS, IC, InstCache, BlockCache, &VarMap, true),
+                        getInstCopy(I, IC, InstCache, BlockCache, &VarMap, true)});
+          Ante = IC.getInst(Inst::And, 1, {Eq, Ante});
+        }
       }
-      #endif
-      
-      Ante = IC.getInst(Inst::And, 1, {Ante, IC.getInst(Inst::And, 1, {AvoidConsts, IC.getInst(Inst::Eq, 1, {LHS, I})})});
+      Ante = IC.getInst(Inst::And, 1, {IC.getInst(Inst::Eq, 1, {LHS, I}), Ante});
+      Ante = IC.getInst(Inst::And, 1, {AvoidConsts, Ante});
       ReplacementContext RC;
       RC.printInst(Ante, llvm::outs(), true);
       InstMapping Mapping(Ante,
@@ -518,10 +543,10 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       }
     }
     
-    std::map<Inst *, Inst *> InstCache;
-    std::map<Block *, Block *> BlockCache;
     BlockPCs BPCsCopy;
     std::vector<InstMapping> PCsCopy;
+    std::map<Inst *, Inst *> InstCache;
+    std::map<Block *, Block *> BlockCache;
     auto I2 = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap, false);
     separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
     separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
