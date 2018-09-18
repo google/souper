@@ -4,7 +4,7 @@
 ; RUN: %FileCheck %s < %t1
 ; RUN: %FileCheck %s --check-prefix=SUCCESS < %t2
 ; CHECK: result %2
-; SUCCESS: %6:i1 = ule %1, %4
+; SUCCESS: RHS inferred successfully
 
 %0:i64 = var
 %1:i1 = eq 0:i64, %0
