@@ -811,8 +811,10 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
       if (it != ConstMap->end()) {
 	{
 	  llvm::APInt x = it->second;
+          /*
 	  llvm::outs() << "found a var to replace with a constant width " <<
 	    x.getBitWidth() << " and value " << x << "\n";
+          */
 	}
 	Copy = IC.getConst(it->second);
       }

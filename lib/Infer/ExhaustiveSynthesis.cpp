@@ -12,13 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "souper/Infer/ExhaustiveSynthesis.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SetVector.h"
+#include "llvm/Support/CommandLine.h"
+#include "souper/Infer/ExhaustiveSynthesis.h"
+
 #include <queue>
 
 using namespace souper;
 using namespace llvm;
+
+namespace {
+  static cl::opt<unsigned> DebugLevel("souper-exhaustive-synthesis-debug-level",
+    cl::desc("Synthesis debug level (default=0). "
+    "The larger the number is, the more fine-grained debug "
+    "information will be printed"),
+    cl::init(0));
+}
+
 
 // TODO
 // see and obey the ignore-cost command line flag
@@ -123,41 +134,22 @@ void findVars(Inst *Root, std::vector<Inst *> &Vars) {
   }
 }
 
-void specializeVars(Inst *Root, InstContext &IC, int Value) {
-  std::set<Inst *> Visited;
-  std::queue<Inst *> Q;
-  Q.push(Root);
-  while (!Q.empty()) {
-    Inst *I = Q.front();
-    Q.pop();
-    if (!Visited.insert(I).second)
-      continue;
-    for (unsigned i = 0;  i < I->Ops.size() ; i++) {
-      if (I->Ops[i]->K == Inst::Var && I->Ops[i]->Name.compare("constant"))
-        I->Ops[i] = IC.getConst(APInt(I->Ops[i]->Width, Value));
-      
-      Q.push(I->Ops[i]);
-    }
-  }
-}
 
+void getGuesses(std::vector<Inst *>& Guesses,
+                std::vector<Inst* >& Vars,
+                std::vector<Inst *>& Inputs,
+                int Width, int LHSCost,
+                InstContext &IC) {
 
-void getGuesses (std::vector<Inst *>& Guesses,
-                 std::vector<Inst* >& Vars,
-                 std::vector<Inst *>& Inputs,
-                 int Width, int LHSCost,
-                 InstContext &IC) {
-  
   int TooExpensive = 0;
   // start with the nops -- but not a constant since that is
-  // legitimately faster to synthesize using the special-purpose
-  // code above
+  // legitimately faster to synthesize using the special-purpose code
   for (auto I : Inputs) {
     auto v = matchWidth(I, Width, IC);
     for (auto N : v)
       addGuess(N, LHSCost, Guesses, TooExpensive);
   }
-  
+
   // TODO enforce permitted widths
   // TODO try both the source and dest width, if they're different
   std::vector<Inst::Kind> Unary = {
@@ -174,7 +166,7 @@ void getGuesses (std::vector<Inst *>& Guesses,
       }
     }
   }
-  
+
   // binary and ternary instructions (TODO add div/rem)
   std::vector<Inst::Kind> Kinds = {Inst::Add, Inst::Sub, Inst::Mul,
                                    Inst::And, Inst::Or, Inst::Xor,
@@ -184,7 +176,6 @@ void getGuesses (std::vector<Inst *>& Guesses,
   };
 
   Inputs.push_back(IC.getReserved());
-
 
   // Binary and Unary operators
   for (auto K : Kinds) {
@@ -259,7 +250,8 @@ void getGuesses (std::vector<Inst *>& Guesses,
     }
   }
 
-  // Select
+  // Deal with select instruction separately, since some guesses might
+  // need two reserved per select instruction
   Inputs.push_back(IC.getReserved());
   for (auto I = Inputs.begin(); I != Inputs.end(); ++I) {
     for (auto J = Inputs.begin(); J != Inputs.end(); ++J) {
@@ -277,12 +269,10 @@ void getGuesses (std::vector<Inst *>& Guesses,
       } else {
         v2 = matchWidth(*J, Width, IC);
       }
-          
 
       for (auto L : Inputs) {
         for (auto v1i : v1) {
           for (auto v2i : v2) {
-            
             // PRUNE: a select's control input should never be constant
             if (L->K == Inst::Reserved)
               continue;
@@ -325,15 +315,11 @@ APInt getNextInputVal(Inst *Var,
     Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
   }
 
-
-  ReplacementContext RC;
-  RC.printInst(Ante, llvm::errs(), true);
   InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
 
   std::vector<Inst *> ModelInsts;
   std::vector<llvm::APInt> ModelVals;
   std::string Query = BuildQuery(IC, {}, {}, Mapping, &ModelInsts, /*Negate=*/ true);
-  llvm::errs()<<Query;
 
   bool PCQueryIsSat;
   std::error_code EC;
@@ -343,14 +329,13 @@ APInt getNextInputVal(Inst *Var,
     HasNextInputValue = false;
     return APInt(Var->Width, 0);
   }
-
-
-  llvm::errs()<<"SAT";
+  if (DebugLevel > 2)
+    llvm::errs()<<"Variable Guess SAT";
   for (unsigned I = 0 ; I != ModelInsts.size(); I ++) {
     if (ModelInsts[I] == Var) {
-      
       TriedVars[Var].push_back(ModelVals[I]);
-      llvm::errs()<<"var value = " << ModelVals[I] <<"\n";
+      if (DebugLevel > 2)
+        llvm::errs()<<"var value = " << ModelVals[I] <<"\n";
       return ModelVals[I];
     }
   }
@@ -393,33 +378,38 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     Inst *Ante = IC.getConst(APInt(1, true));
     BlockPCs BPCsCopy;
     std::vector<InstMapping> PCsCopy;
-    
-    llvm::errs()<<Guesses.size();
+
+    if (DebugLevel > 2)    
+      llvm::errs()<<Guesses.size();
+
     for (auto I : Guesses) {
-      llvm::errs()<<"Guess\n";
-      ReplacementContext RC;
-      RC.printInst(I, llvm::errs(), true);
-      
+      if (DebugLevel > 2) {
+        llvm::errs()<<"Guess\n";
+        ReplacementContext RC;
+        RC.printInst(I, llvm::errs(), true);
+      }
+
       // separate sub-expressions by copying vars
       std::map<Inst *, Inst *> InstCache;
       std::map<Block *, Block *> BlockCache;
       
       Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
                                           getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
-      
+
       Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
       separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
       separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
     }
-    
-    llvm::errs()<<"BigQuery\n";
-    ReplacementContext RC;
-    RC.printInst(Ante, llvm::errs(), false);
-    
+
+    if (DebugLevel > 2) {
+      llvm::errs()<<"BigQuery\n";
+      ReplacementContext RC;
+      RC.printInst(Ante, llvm::errs(), false);
+    }
+
     // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
     InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
     std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
-    llvm::errs()<<Query<<"\n";
     if (Query.empty())
       return std::make_error_code(std::errc::value_too_large);
     bool BigQueryIsSat;
@@ -428,10 +418,12 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     if (EC)
       return EC;
     if (!BigQueryIsSat) {
-      llvm::outs() << "big query is unsat, all done\n";
+      if (DebugLevel > 2)
+        llvm::outs() << "big query is unsat, all done\n";
       return EC;
     } else {
-      llvm::outs() << "big query is sat, looking for small queries\n";
+      if (DebugLevel > 2)
+        llvm::outs() << "big query is sat, looking for small queries\n";
     }
   }
   // find the valid one
@@ -439,21 +431,21 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   int GuessIndex = -1;
   for (auto I : Guesses) {
     GuessIndex++;
-    {
+    if (DebugLevel > 2) {
       llvm::outs() << "\n\n--------------------------------------------\nguess " << GuessIndex << "\n";
       llvm::outs() << "\n";
     }
-    
+
     std::vector<Inst *> ConstList;
     hasConstant(I, ConstList);
-    
+
     std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
     int Tries = 0;
-    
+
   again:
-    if (Tries > 0)
+    if (Tries > 0 && DebugLevel > 2)
       llvm::outs() << "\n\nagain:\n";
-    
+
     // this SAT query will give us possible constants
 
     // avoid choices for constants that have not worked out in previous iterations
@@ -475,7 +467,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
     std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
     std::map<Inst *, llvm::APInt> ConstMap;
-    
+
     {
       Inst *Ante = IC.getConst(APInt(1, true));
       if (!Vars.empty()) {
@@ -504,45 +496,41 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       }
       Ante = IC.getInst(Inst::And, 1, {IC.getInst(Inst::Eq, 1, {LHS, I}), Ante});
       Ante = IC.getInst(Inst::And, 1, {AvoidConsts, Ante});
-      ReplacementContext RC;
-      RC.printInst(Ante, llvm::outs(), true);
       InstMapping Mapping(Ante,
                           IC.getConst(APInt(1, true)));
-      
+
       std::vector<Inst *> ModelInsts;
       std::vector<llvm::APInt> ModelVals;
       std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
-      
-      if (Query.empty()) {
-        llvm::outs() << "mt!\n";
-        continue;
-      }
+
       bool FirstSmallQueryIsSat;
       EC = SMTSolver->isSatisfiable(Query, FirstSmallQueryIsSat,
                                     ModelInsts.size(), &ModelVals, Timeout);
       if (EC) {
-        llvm::outs() << "oops!\n";
         return EC;
       }
       if (!FirstSmallQueryIsSat) {
         unsat++;
-        llvm::outs() << "first query is unsat, all done with this guess\n";
+        if (DebugLevel > 2)
+          llvm::outs() << "first query is unsat, all done with this guess\n";
         continue;
       }
-      llvm::outs() << "first query is sat\n";
-      
+      if (DebugLevel > 2)
+        llvm::outs() << "first query is sat\n";
+
       for (unsigned J = 0; J != ModelInsts.size(); ++J) {
         if (ModelInsts[J]->Name.find("reserved_") != std::string::npos) {
           auto Const = IC.getConst(ModelVals[J]);
           BadConsts[ModelInsts[J]].push_back(Const->Val);
           auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
-          llvm::outs() << "constant value = " << Const->Val << "\n";
+          if (DebugLevel > 2)
+            llvm::outs() << "constant value = " << Const->Val << "\n";
           if (!res.second)
             llvm::report_fatal_error("constant already in map");
         }
       }
     }
-    
+
     BlockPCs BPCsCopy;
     std::vector<InstMapping> PCsCopy;
     std::map<Inst *, Inst *> InstCache;
@@ -550,32 +538,31 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     auto I2 = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap, false);
     separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
     separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
-    
+
     InstMapping Mapping2(LHS, I2);
     std::string Query2 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping2, 0);
-    if (Query2.empty()) {
-      llvm::outs() << "mt!\n";
-      continue;
-    }
+
     bool SecondSmallQueryIsSat;
     EC = SMTSolver->isSatisfiable(Query2, SecondSmallQueryIsSat, 0, 0, Timeout);
     if (EC) {
-      llvm::outs() << "oops!\n";
       return EC;
     }
     if (SecondSmallQueryIsSat) {
+      if (DebugLevel > 2)
         llvm::outs() << "second query is SAT-- constant doesn't work\n";
-        Tries++;
-        // TODO tune max tries
-        if (Tries < 30)
-          goto again;
+      Tries++;
+      // TODO tune max tries
+      if (Tries < 30)
+        goto again;
     } else {
-      llvm::outs() << "second query is UNSAT-- works for all values of this constant\n";
+      if (DebugLevel > 2)
+        llvm::outs() << "second query is UNSAT-- works for all values of this constant\n";
       RHS = I2;
       return EC;
     }
   }
-  llvm::outs() << unsat << " were unsat.\n";
+  if (DebugLevel > 2)
+    llvm::outs() << unsat << " were unsat.\n";
   // TODO maybe add back consistency checks between big and small queries
   
   return EC;
