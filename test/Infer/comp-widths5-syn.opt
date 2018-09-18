@@ -1,5 +1,7 @@
 ; REQUIRES: solver, solver-model
 
+; Exhaustive search does not support this test, asymmetry undefined bahavior
+; model needed
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,eq,const,ashr %s > %t1
 ; RUN: %FileCheck %s < %t1
 

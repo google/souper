@@ -1,6 +1,10 @@
 ; REQUIRES: solver
-; RUN: %souper-check -infer-rhs -souper-infer-nop -souper-stress-nop %solver %s | %FileCheck %s
+; RUN: %souper-check -infer-rhs -souper-infer-nop -souper-stress-nop %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-exhaustive-synthesis %solver %s > %t2
+; RUN: %FileCheck %s < %t1
+; RUN: %FileCheck %s --check-prefix=SUCCESS < %t2
 ; CHECK: result %2
+; SUCCESS: %6:i1 = ule %1, %4
 
 %0:i64 = var
 %1:i1 = eq 0:i64, %0

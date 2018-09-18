@@ -134,7 +134,6 @@ void findVars(Inst *Root, std::vector<Inst *> &Vars) {
   }
 }
 
-
 void getGuesses(std::vector<Inst *>& Guesses,
                 std::vector<Inst* >& Vars,
                 std::vector<Inst *>& Inputs,
@@ -208,14 +207,14 @@ void getGuesses(std::vector<Inst *>& Guesses,
           Widths.insert(Width);
         if (Widths.size() < 1)
           llvm::report_fatal_error("no widths to work with");
-        
+
         for (auto OpWidth : Widths) {
           if (OpWidth < 1)
             llvm::report_fatal_error("bad width");
           // PRUNE: one-bit shifts don't make sense
           if (isShift(K) && OpWidth == 1)
             continue;
-          
+
           // see if we need to make a var representing a constant
           // that we don't know yet
           std::vector<Inst *> v1, v2;
@@ -231,8 +230,6 @@ void getGuesses(std::vector<Inst *>& Guesses,
           } else {
             v2 = matchWidth(*J, OpWidth, IC);
           }
-          
-          
           for (auto v1i : v1) {
             for (auto v2i : v2) {
               // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
@@ -309,8 +306,8 @@ APInt getNextInputVal(Inst *Var,
       return APInt(Var->Width, 0);
     }
   }
-  
-  for (auto Value: TriedVars[Var]) {
+
+  for (auto Value : TriedVars[Var]) {
     Inst* Ne = IC.getInst(Inst::Ne, 1, {Var, IC.getConst(Value)});
     Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
   }
@@ -330,7 +327,7 @@ APInt getNextInputVal(Inst *Var,
     return APInt(Var->Width, 0);
   }
   if (DebugLevel > 2)
-    llvm::errs()<<"Variable Guess SAT";
+    llvm::errs()<<"Variable Guess SAT\n";
   for (unsigned I = 0 ; I != ModelInsts.size(); I ++) {
     if (ModelInsts[I] == Var) {
       TriedVars[Var].push_back(ModelVals[I]);
@@ -354,17 +351,17 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::vector<Inst *> Inputs;
   // TODO tune the number of candidate inputs
   findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, 15);
-  
-  llvm::outs() << "LHS has " << Vars.size() << " vars\n";
-  
+
+  llvm::errs() << "LHS has " << Vars.size() << " vars\n";
+
   std::vector<Inst *> Guesses;
   int LHSCost = souper::cost(LHS);
   getGuesses(Guesses, Vars, Inputs, LHS->Width, LHSCost, IC);
-  
+
   std::error_code EC;
   if (Guesses.size() < 1)
     return EC;
-  
+
   // one of the real advantages of this approach to synthesis vs
   // CEGIS is that we can synthesize in precisely increasing cost
   // order, and not try to somehow teach the solver how to do that
@@ -379,51 +376,44 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     BlockPCs BPCsCopy;
     std::vector<InstMapping> PCsCopy;
 
-    if (DebugLevel > 2)    
-      llvm::errs()<<Guesses.size();
+    if (DebugLevel > 2)
+      llvm::errs()<<"There are "<<Guesses.size()<<" Guesses\n";
 
     for (auto I : Guesses) {
-      if (DebugLevel > 2) {
-        llvm::errs()<<"Guess\n";
-        ReplacementContext RC;
-        RC.printInst(I, llvm::errs(), true);
-      }
-
       // separate sub-expressions by copying vars
       std::map<Inst *, Inst *> InstCache;
       std::map<Block *, Block *> BlockCache;
-      
-      Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
+
+      Inst *Eq = IC.getInst(Inst::Eq, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
                                           getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
 
-      Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
+      Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
       separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
       separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
     }
 
     if (DebugLevel > 2) {
-      llvm::errs()<<"BigQuery\n";
+      llvm::errs() << "\n\n--------------------------------------------\nBigQuery\n";
       ReplacementContext RC;
       RC.printInst(Ante, llvm::errs(), false);
     }
 
     // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
     InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
-    std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
+    std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/false);
     if (Query.empty())
       return std::make_error_code(std::errc::value_too_large);
     bool BigQueryIsSat;
     EC = SMTSolver->isSatisfiable(Query, BigQueryIsSat, 0, 0, Timeout);
-    BigQueryIsSat = true;
     if (EC)
       return EC;
     if (!BigQueryIsSat) {
       if (DebugLevel > 2)
-        llvm::outs() << "big query is unsat, all done\n";
+        llvm::errs() << "big query is unsat, all done\n";
       return EC;
     } else {
       if (DebugLevel > 2)
-        llvm::outs() << "big query is sat, looking for small queries\n";
+        llvm::errs() << "big query is sat, looking for small queries\n";
     }
   }
   // find the valid one
@@ -432,8 +422,8 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   for (auto I : Guesses) {
     GuessIndex++;
     if (DebugLevel > 2) {
-      llvm::outs() << "\n\n--------------------------------------------\nguess " << GuessIndex << "\n";
-      llvm::outs() << "\n";
+      llvm::errs() << "\n\n--------------------------------------------\nguess " << GuessIndex << "\n";
+      llvm::errs() << "\n";
     }
 
     std::vector<Inst *> ConstList;
@@ -444,7 +434,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   again:
     if (Tries > 0 && DebugLevel > 2)
-      llvm::outs() << "\n\nagain:\n";
+      llvm::errs() << "\n\nagain:\n";
 
     // this SAT query will give us possible constants
 
@@ -496,6 +486,13 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       }
       Ante = IC.getInst(Inst::And, 1, {IC.getInst(Inst::Eq, 1, {LHS, I}), Ante});
       Ante = IC.getInst(Inst::And, 1, {AvoidConsts, Ante});
+      if (DebugLevel > 2) {
+        ReplacementContext RC;
+        RC.printInst(I, llvm::errs(), true);
+
+        llvm::errs()<<"\n";
+        RC.printInst(Ante, llvm::errs(), true);
+      }
       InstMapping Mapping(Ante,
                           IC.getConst(APInt(1, true)));
 
@@ -512,11 +509,11 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       if (!FirstSmallQueryIsSat) {
         unsat++;
         if (DebugLevel > 2)
-          llvm::outs() << "first query is unsat, all done with this guess\n";
+          llvm::errs() << "first query is unsat, all done with this guess\n";
         continue;
       }
       if (DebugLevel > 2)
-        llvm::outs() << "first query is sat\n";
+        llvm::errs() << "first query is sat\n";
 
       for (unsigned J = 0; J != ModelInsts.size(); ++J) {
         if (ModelInsts[J]->Name.find("reserved_") != std::string::npos) {
@@ -524,7 +521,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
           BadConsts[ModelInsts[J]].push_back(Const->Val);
           auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
           if (DebugLevel > 2)
-            llvm::outs() << "constant value = " << Const->Val << "\n";
+            llvm::errs() << "constant value = " << Const->Val << "\n";
           if (!res.second)
             llvm::report_fatal_error("constant already in map");
         }
@@ -549,22 +546,22 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     }
     if (SecondSmallQueryIsSat) {
       if (DebugLevel > 2)
-        llvm::outs() << "second query is SAT-- constant doesn't work\n";
+        llvm::errs() << "second query is SAT-- constant doesn't work\n";
       Tries++;
       // TODO tune max tries
       if (Tries < 30)
         goto again;
     } else {
       if (DebugLevel > 2)
-        llvm::outs() << "second query is UNSAT-- works for all values of this constant\n";
+        llvm::errs() << "second query is UNSAT-- works for all values of this constant\n";
       RHS = I2;
       return EC;
     }
   }
   if (DebugLevel > 2)
-    llvm::outs() << unsat << " were unsat.\n";
+    llvm::errs() << unsat << " were unsat.\n";
   // TODO maybe add back consistency checks between big and small queries
-  
+
   return EC;
 }
 

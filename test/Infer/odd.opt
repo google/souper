@@ -1,4 +1,6 @@
 ; REQUIRES: solver
+
+; Exhaustive search does not support this test, since we're not supporting urem
 ; RUN: %souper-check %solver %s | %FileCheck %s
 ; CHECK: LGTM
 

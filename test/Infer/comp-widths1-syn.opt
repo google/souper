@@ -1,6 +1,8 @@
 ; REQUIRES: solver, solver-model
 
-; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=sub %s > %t1
+; Exhaustive synthesis does not support this test, since result has more than
+; one instruction
+;
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=sub %s > %t1
 ; RUN: %FileCheck %s < %t1
 
