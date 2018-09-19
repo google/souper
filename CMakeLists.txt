@@ -20,7 +20,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -fno-exceptions -fno-rtti -DLLVM_ENABLE_STATS=true")
+set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -fno-exceptions -fno-rtti")
 
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --libs

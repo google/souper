@@ -1,4 +1,4 @@
-from ubuntu:16.04
+from ubuntu:18.04
 
 run set -x; \
         apt-get update -qq \
@@ -10,19 +10,19 @@ run set -x; \
 	&& git clone https://github.com/antirez/redis /usr/src/redis
 
 run cd /usr/src/z3 \
-	&& git checkout z3-4.6.0 \
+	&& git checkout z3-4.7.1 \
 	&& python scripts/mk_make.py --noomp \
 	&& cd build \
 	&& make -j10 \
 	&& make install
 
 run cd /usr/src/redis \
-	&& git checkout 4.0.8 \
-	&& make -j4 \
+	&& git checkout 4.0.11 \
+	&& make -j10 \
 	&& make install
 
 run export GOPATH=/usr/src/go \
-	&& go get github.com/garyburd/redigo/redis
+	&& go get github.com/gomodule/redigo/redis
 
 add build_deps.sh /usr/src/souper/build_deps.sh
 add clone_and_test.sh /usr/src/souper/clone_and_test.sh
