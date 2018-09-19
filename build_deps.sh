@@ -39,45 +39,7 @@ svn co https://llvm.org/svn/llvm-project/llvm/${llvm_branch} $llvmdir
 svn co https://llvm.org/svn/llvm-project/cfe/${llvm_branch} $llvmdir/tools/clang
 svn co https://llvm.org/svn/llvm-project/compiler-rt/${llvm_branch} $llvmdir/projects/compiler-rt
 # Disable the broken select -> logic optimizations
-cat <<EOF | patch $llvmdir/lib/Transforms/InstCombine/InstCombineSelect.cpp
---- lib/Transforms/InstCombine/InstCombineSelect.cpp    (revision 326856)
-+++ lib/Transforms/InstCombine/InstCombineSelect.cpp    (working copy)
-@@ -1334,7 +1334,7 @@
-     Worklist.Add(Cond);
-     return &SI;
-   }
--
-+#if 0
-   if (SelType->isIntOrIntVectorTy(1) &&
-       TrueVal->getType() == CondVal->getType()) {
-     if (match(TrueVal, m_One())) {
-@@ -1370,7 +1370,6 @@
-     if (match(FalseVal, m_Not(m_Specific(CondVal))))
-       return BinaryOperator::CreateOr(TrueVal, FalseVal);
-   }
--
-   // Selecting between two integer or vector splat integer constants?
-   //
-   // Note that we don't handle a scalar select of vectors:
-@@ -1378,7 +1377,8 @@
-   // because that may need 3 instructions to splat the condition value:
-   // extend, insertelement, shufflevector.
-   if (SelType->isIntOrIntVectorTy() &&
--      CondVal->getType()->isVectorTy() == SelType->isVectorTy()) {
-+      CondVal->getType()->isVectorTy() == SelType->isVectorTy() &&
-+      CondVal->getType()->getScalarSizeInBits() < SelType->getScalarSizeInBits()) {
-     // select C, 1, 0 -> zext C to int
-     if (match(TrueVal, m_One()) && match(FalseVal, m_Zero()))
-       return new ZExtInst(CondVal, SelType);
-@@ -1399,6 +1399,7 @@
-       return new SExtInst(NotCond, SelType);
-     }
-   }
-+#endif
-
-   // See if we are selecting two values based on a comparison of the two values.
-   if (FCmpInst *FCI = dyn_cast<FCmpInst>(CondVal)) {
-EOF
+patch $llvmdir/lib/Transforms/InstCombine/InstCombineSelect.cpp < patches/disable-instcombine-select-to-logic.patch
 mkdir -p $llvm_builddir
 
 cmake_flags=".. -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type"
