@@ -19,6 +19,7 @@
 #include "souper/SMTLIB2/Solver.h"
 
 #include <map>
+#include <queue>
 #include <set>
 #include <vector>
 #include <utility>
@@ -317,23 +318,29 @@ private:
 
 };
 
-void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
-               int Max);
+void findCands(Inst *Root, std::vector<Inst *> &Guesses,
+               bool WidthMustMatch, bool FilterVars, int Max);
 
 Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Inst *, Inst *> &InstCache,
-                  std::map<Block *, Block *> &BlockCache);
+                  std::map<Block *, Block *> &BlockCache,
+		  std::map<Inst *, llvm::APInt> *ConstMap,
+		  bool CloneVars);
 
 void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                       std::map<Inst *, Inst *> &InstCache,
                       std::map<Block *, Block *> &BlockCache,
-                      InstContext &IC);
+                      InstContext &IC,
+		      std::map<Inst *, llvm::APInt> *ConstMap,
+		      bool CloneVars);
 
 void separatePCs(const std::vector<InstMapping> &PCs,
                  std::vector<InstMapping> &PCsCopy,
                  std::map<Inst *, Inst *> &InstCache,
                  std::map<Block *, Block *> &BlockCache,
-                 InstContext &IC);
+                 InstContext &IC,
+		 std::map<Inst *, llvm::APInt> *ConstMap,
+		 bool CloneVars);
 
 }
 

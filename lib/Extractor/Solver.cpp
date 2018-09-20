@@ -15,16 +15,17 @@
 #define DEBUG_TYPE "souper"
 
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
 #include "souper/Infer/InstSynthesis.h"
+#include "souper/Infer/ExhaustiveSynthesis.h"
 #include "souper/KVStore/KVStore.h"
 #include "souper/Parser/Parser.h"
 
-#include <sstream>
 #include <unordered_map>
 
 STATISTIC(MemHitsInfer, "Number of internal cache hits for infer()");
@@ -56,6 +57,9 @@ static cl::opt<bool> InferInts("souper-infer-iN",
     cl::init(true));
 static cl::opt<bool> InferInsts("souper-infer-inst",
     cl::desc("Infer instructions (default=false)"),
+    cl::init(false));
+static cl::opt<bool> EnableExhaustiveSynthesis("souper-exhaustive-synthesis",
+    cl::desc("Use exaustive search for instruction synthesis (default=false)"),
     cl::init(false));
 static cl::opt<int> MaxLHSSize("souper-max-lhs-size",
     cl::desc("Max size of LHS (in bytes) to put in external cache (default=1024)"),
@@ -127,7 +131,8 @@ public:
             break;
           }
         }
-        assert(Const && "there must be a model for the constant");
+        if (!Const)
+	  report_fatal_error("there must be a model for the constant");
         // Check if the constant is valid for all inputs
         InstMapping ConstMapping(LHS, Const);
         std::string Query = BuildQuery(IC, BPCs, PCs, ConstMapping, 0);
@@ -145,7 +150,7 @@ public:
 
     if (InferNop) {
       std::vector<Inst *> Guesses;
-      findCands(LHS, Guesses, IC, MaxNops);
+      findCands(LHS, Guesses, /*WidthMustMatch=*/true, /*FilterVars=*/false, MaxNops);
 
       Inst *Ante = IC.getConst(APInt(1, true));
       BlockPCs BPCsCopy;
@@ -154,12 +159,13 @@ public:
         // separate sub-expressions by copying vars
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
-        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache),
-              getInstCopy(I, IC, InstCache, BlockCache)});
+        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
+              getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
         Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
-        separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC);
-        separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC);
+        separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
+        separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
       }
+
       // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
       InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
       std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
@@ -206,10 +212,17 @@ public:
     }
 
     if (InferInsts && SMTSolver->supportsModels()) {
-      InstSynthesis IS;
-      EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
-      if (EC || RHS)
-        return EC;
+      if (EnableExhaustiveSynthesis) {
+        ExhaustiveSynthesis ES;
+        EC = ES.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
+        if (EC || RHS)
+          return EC;
+      } else {
+        InstSynthesis IS;
+        EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
+        if (EC || RHS)
+          return EC;
+      }
     }
 
     RHS = 0;

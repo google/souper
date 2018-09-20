@@ -43,6 +43,7 @@ struct Inst : llvm::FoldingSetNode {
   typedef enum {
     Const,
     UntypedConst,
+    Reserved,
     Var,
     Phi,
 
@@ -198,10 +199,12 @@ class InstContext {
 
   std::vector<std::unique_ptr<Inst>> Insts;
   llvm::FoldingSet<Inst> InstSet;
+  unsigned ReservedCounter= 0;
 
 public:
   Inst *getConst(const llvm::APInt &I);
   Inst *getUntypedConst(const llvm::APInt &I);
+  Inst *getReserved();
 
   Inst *createVar(unsigned Width, llvm::StringRef Name,
                   llvm::APInt Zero=llvm::APInt(1, 0, false),
@@ -238,6 +241,30 @@ void PrintReplacementRHS(llvm::raw_ostream &Out, Inst *RHS,
                          bool printNames = false);
 std::string GetReplacementRHSString(Inst *RHS, ReplacementContext &Context,
                                     bool printNames = false);
+
+void findCands(Inst *Root, std::vector<Inst *> &Guesses,
+               bool WidthMustMatch, bool FilterVars, int Max);
+
+Inst *getInstCopy(Inst *I, InstContext &IC,
+                  std::map<Inst *, Inst *> &InstCache,
+                  std::map<Block *, Block *> &BlockCache,
+		  std::map<Inst *, llvm::APInt> *ConstMap,
+		  bool CloneVars);
+
+void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
+                      std::map<Inst *, Inst *> &InstCache,
+                      std::map<Block *, Block *> &BlockCache,
+                      InstContext &IC,
+                      std::map<Inst *, llvm::APInt> *ConstMap,
+                      bool CloneVars);
+
+void separatePCs(const std::vector<InstMapping> &PCs,
+                 std::vector<InstMapping> &PCsCopy,
+                 std::map<Inst *, Inst *> &InstCache,
+                 std::map<Block *, Block *> &BlockCache,
+                 InstContext &IC,
+                 std::map<Inst *, llvm::APInt> *ConstMap,
+                 bool CloneVars);
 
 }
 
