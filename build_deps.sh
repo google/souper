@@ -40,6 +40,9 @@ svn co https://llvm.org/svn/llvm-project/cfe/${llvm_branch} $llvmdir/tools/clang
 svn co https://llvm.org/svn/llvm-project/compiler-rt/${llvm_branch} $llvmdir/projects/compiler-rt
 # Disable the broken select -> logic optimizations
 patch $llvmdir/lib/Transforms/InstCombine/InstCombineSelect.cpp < patches/disable-instcombine-select-to-logic.patch
+# Apply instcombine switch patch
+patch -d $llvmdir -p0 -i $(pwd)/patches/enable-instcombine-switch.patch
+
 mkdir -p $llvm_builddir
 
 cmake_flags=".. -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type"

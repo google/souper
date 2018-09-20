@@ -108,6 +108,9 @@ SOUPER_STATIC_PROFILE -- During compilation, communicate with a running
 Redis instance in order to record the number of times each optimization
 was performed.
 
+LLVM_DISABLE_INSTRUCTION_COMBINER -- Disable the invocation of instruction
+combiner during compilation.
+
 SOUPER_STATS -- Ask LLVM to print statistics.
 
 EOF
@@ -220,6 +223,9 @@ if ($souper) {
     }
     if (exists $ENV{"SOUPER_HARVEST_DEMANDED_BITS"}) {
         push @ARGV, ("-mllvm", "-souper-harvest-demanded-bits");
+    }
+    if (exists $ENV{"LLVM_DISABLE_INSTRUCTION_COMBINER"}) {
+        push @ARGV, ("-mllvm", "-disable-instruction-combiner");
     }
 }
 
