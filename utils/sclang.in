@@ -137,7 +137,7 @@ if (defined $bitcodedir && -d $bitcodedir && fork() == 0) {
     die "bailing, exec failed";
 }
 
-die "$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp" 
+die "$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp"
     unless exists $ENV{"SOUPER_SOLVER"};
 my $solver = $ENV{"SOUPER_SOLVER"};
 
@@ -213,6 +213,14 @@ if ($souper) {
 
     if (exists $ENV{"SOUPER_INFER_NOP"}) {
       push @ARGV, ("-mllvm", "-souper-infer-nop");
+    }
+
+    if (exists $ENV{"SOUPER_INFER_INST"}) {
+      push @ARGV, ("-mllvm", "-souper-infer-inst");
+    }
+
+    if (exists $ENV{"SOUPER_EXHAUSTIVE_SYNTHESIS"}) {
+      push @ARGV, ("-mllvm", "-souper-exhaustive-synthesis");
     }
 
     if (exists $ENV{"SOUPER_STATS"}) {
