@@ -4,7 +4,7 @@ run set -x; \
         apt-get update -qq \
         && apt-get remove -y -qq clang llvm llvm-runtime \
 	&& apt-get install libgmp10 \
-	&& echo 'ca-certificates gcc g++ valgrind libc6-dev libgmp-dev cmake patch ninja-build make autoconf automake libtool golang-go python subversion git' > /usr/src/build-deps \
+	&& echo 'ca-certificates gcc g++ valgrind libc6-dev libgmp-dev cmake patch ninja-build make autoconf automake libtool golang-go python subversion git clang' > /usr/src/build-deps \
 	&& apt-get install -y $(cat /usr/src/build-deps) --no-install-recommends \
 	&& git clone https://github.com/Z3Prover/z3.git /usr/src/z3 \
 	&& git clone https://github.com/antirez/redis /usr/src/redis
@@ -26,6 +26,7 @@ run export GOPATH=/usr/src/go \
 
 add build_deps.sh /usr/src/souper/build_deps.sh
 add clone_and_test.sh /usr/src/souper/clone_and_test.sh
+add patches /usr/src/souper/patches
 
 run cd /usr/src/souper \
 #	&& ./build_deps.sh Debug \
