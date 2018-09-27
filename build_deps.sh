@@ -47,11 +47,6 @@ mkdir -p $llvm_builddir
 
 cmake_flags=".. -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type"
 
-# Use clang if available
-if [ -n "`which clang`" ] && [ -n "`which clang++`" ] ; then
-  cmake_flags="$cmake_flags -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang"
-fi
-
 if [ -n "`which ninja`" ] ; then
   (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")
   ninja -C $llvm_builddir
