@@ -667,18 +667,27 @@ int Inst::getCost(Inst::Kind K) {
   }
 }
 
-static int costHelper(Inst *I, std::set<Inst *> &Visited) {
+static int costHelper(Inst *I, Inst *Root, std::set<Inst *> &Visited,
+                      bool IgnoreDepsWithExternalUses) {
   if (!Visited.insert(I).second)
     return 0;
+  if (IgnoreDepsWithExternalUses && I != Root &&
+      Root->DepsWithExternalUses.find(I) != Root->DepsWithExternalUses.end()) {
+    return 0;
+  }
   int Cost = Inst::getCost(I->K);
   for (auto Op : I->Ops)
-    Cost += costHelper(Op, Visited);
+    Cost += costHelper(Op, Root, Visited, IgnoreDepsWithExternalUses);
   return Cost;
 }
 
-int souper::cost(Inst *I) {
+int souper::cost(Inst *I, bool IgnoreDepsWithExternalUses) {
   std::set<Inst *> Visited;
-  return costHelper(I, Visited);
+  return costHelper(I, I, Visited, IgnoreDepsWithExternalUses);
+}
+
+int souper::benefit(Inst *LHS, Inst *RHS) {
+  return cost(LHS, /*IgnoreDepsWithExternalUses=*/true) - cost(RHS);
 }
 
 void souper::PrintReplacement(llvm::raw_ostream &Out,

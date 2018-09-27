@@ -218,7 +218,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       // we forbid candidates that have no cost benefit and continue to search
       // for others
       int CandCost = cost(Cand);
-      int Benefit = LHSCost - CandCost;
+      int Benefit = benefit(LHS, Cand);
       if (!IgnoreCost && Benefit <= 0) {
         if (DebugLevel > 1)
           llvm::outs() << "candidate has no benefit\n";
