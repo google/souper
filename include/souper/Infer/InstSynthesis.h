@@ -70,10 +70,13 @@ typedef std::pair<unsigned, unsigned> LocVar;
 typedef std::pair<LocVar, Inst *> LocInst;
 
 /// A component is a fixed-width instruction kind
+/// or created from Origin
 struct Component {
   Inst::Kind Kind;
   unsigned Width;
   std::vector<unsigned> OpWidths;
+  Inst *Origin;
+  std::vector<Inst *> OriginOps;
 };
 
 /// Unsupported components kinds
@@ -94,35 +97,35 @@ static const std::set<Inst::Kind> UnsupportedCompKinds = {
 /// a component of that width is instantiated.
 /// Again, note that constants are treated as ordinary inputs
 static const std::vector<Component> CompLibrary = {
-  Component{Inst::Add, 0, {0,0}},
-  Component{Inst::Sub, 0, {0,0}},
-  Component{Inst::Mul, 0, {0,0}},
-  Component{Inst::UDiv, 0, {0,0}},
-  Component{Inst::SDiv, 0, {0,0}},
-  Component{Inst::UDivExact, 0, {0,0}},
-  Component{Inst::SDivExact, 0, {0,0}},
-  Component{Inst::URem, 0, {0,0}},
-  Component{Inst::SRem, 0, {0,0}},
-  Component{Inst::And, 0, {0,0}},
-  Component{Inst::Or, 0, {0,0}},
-  Component{Inst::Xor, 0, {0,0}},
-  Component{Inst::Shl, 0, {0,0}},
-  Component{Inst::LShr, 0, {0,0}},
-  Component{Inst::LShrExact, 0, {0,0}},
-  Component{Inst::AShr, 0, {0,0}},
-  Component{Inst::AShrExact, 0, {0,0}},
-  Component{Inst::Select, 0, {1,0,0}},
-  Component{Inst::Eq, 1, {0,0}},
-  Component{Inst::Ne, 1, {0,0}},
-  Component{Inst::Ult, 1, {0,0}},
-  Component{Inst::Slt, 1, {0,0}},
-  Component{Inst::Ule, 1, {0,0}},
-  Component{Inst::Sle, 1, {0,0}},
+  Component{Inst::Add, 0, {0,0}, 0, {}},
+  Component{Inst::Sub, 0, {0,0}, 0, {}},
+  Component{Inst::Mul, 0, {0,0}, 0, {}},
+  Component{Inst::UDiv, 0, {0,0}, 0, {}},
+  Component{Inst::SDiv, 0, {0,0}, 0, {}},
+  Component{Inst::UDivExact, 0, {0,0}, 0, {}},
+  Component{Inst::SDivExact, 0, {0,0}, 0, {}},
+  Component{Inst::URem, 0, {0,0}, 0, {}},
+  Component{Inst::SRem, 0, {0,0}, 0, {}},
+  Component{Inst::And, 0, {0,0}, 0, {}},
+  Component{Inst::Or, 0, {0,0}, 0, {}},
+  Component{Inst::Xor, 0, {0,0}, 0, {}},
+  Component{Inst::Shl, 0, {0,0}, 0, {}},
+  Component{Inst::LShr, 0, {0,0}, 0, {}},
+  Component{Inst::LShrExact, 0, {0,0}, 0, {}},
+  Component{Inst::AShr, 0, {0,0}, 0, {}},
+  Component{Inst::AShrExact, 0, {0,0}, 0, {}},
+  Component{Inst::Select, 0, {1,0,0}, 0, {}},
+  Component{Inst::Eq, 1, {0,0}, 0, {}},
+  Component{Inst::Ne, 1, {0,0}, 0, {}},
+  Component{Inst::Ult, 1, {0,0}, 0, {}},
+  Component{Inst::Slt, 1, {0,0}, 0, {}},
+  Component{Inst::Ule, 1, {0,0}, 0, {}},
+  Component{Inst::Sle, 1, {0,0}, 0, {}},
   //
-  Component{Inst::CtPop, 0, {0}},
-  Component{Inst::BSwap, 0, {0}},
-  Component{Inst::Cttz, 0, {0}},
-  Component{Inst::Ctlz, 0, {0}}
+  Component{Inst::CtPop, 0, {0}, 0, {}},
+  Component{Inst::BSwap, 0, {0}, 0, {}},
+  Component{Inst::Cttz, 0, {0}, 0, {}},
+  Component{Inst::Ctlz, 0, {0}, 0, {}}
 };
 
 class InstSynthesis {
@@ -132,6 +135,7 @@ public:
                              const BlockPCs &BPCs,
                              const std::vector<InstMapping> &PCs,
                              Inst *TargetLHS, Inst *&RHS,
+                             const std::vector<Inst *> &LHSComps,
                              InstContext &IC, unsigned Timeout);
 
 private:
@@ -139,6 +143,7 @@ private:
   SMTLIBSolver *LSMTSolver;
   const BlockPCs *LBPCs;
   const std::vector<InstMapping> *LPCs;
+  const std::vector<Inst *> *LLHSComps;
   InstContext *LIC;
   unsigned LTimeout;
 
@@ -291,6 +296,7 @@ private:
 
   /// Helper functions
   void filterFixedWidthIntrinsicComps();
+  Component getCompFromInst(Inst *);
   void getInputVars(Inst *I, std::vector<Inst *> &InputVars);
   std::string getLocVarStr(const LocVar &Loc, const std::string Prefix="");
   LocVar getLocVarFromStr(const std::string &Str);
@@ -318,7 +324,7 @@ private:
 };
 
 void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
-               int Max);
+               bool WidthMustMatch, bool FilterVars, int Max);
 
 Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Inst *, Inst *> &InstCache,
