@@ -271,6 +271,42 @@ public:
         return Builder.CreateAShr(V0, V1);
       case Inst::LShr:
         return Builder.CreateLShr(V0, V1);
+      case Inst::Ne:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpNE(V1, V0);
+        } else {
+          return Builder.CreateICmpNE(V0, V1);
+        }
+      case Inst::Eq:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpEQ(V1, V0);
+        } else {
+          return Builder.CreateICmpEQ(V0, V1);
+        }
+      case Inst::Ult:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpUGT(V1, V0);
+        } else {
+          return Builder.CreateICmpULT(V0, V1);
+        }
+      case Inst::Slt:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpSGT(V1, V0);
+        } else {
+          return Builder.CreateICmpSLT(V0, V1);
+        }
+      case Inst::Ule:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpUGE(V1, V0);
+        } else {
+          return Builder.CreateICmpULE(V0, V1);
+        }
+      case Inst::Sle:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpSGE(V1, V0);
+        } else {
+          return Builder.CreateICmpSLE(V0, V1);
+        }
       default:
         break;
       }

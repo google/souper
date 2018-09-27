@@ -27,16 +27,3 @@ define i32 @alive0_f1(i32) local_unnamed_addr #0 {
   ;CHECK: %4 = and i32 %3, 130872072
   ;CHECK: %5 = add i32 %4, -1696780520
 }
-
-define i1 @alive0_f2(i16, i16) local_unnamed_addr #0 {
-  %cmp1 = icmp ne i16 %0, 0
-  %cmp2 = icmp ne i16 %1, 0
-  %r = or i1 %cmp1, %cmp2
-  ret i1 %r
-
-  ;CHECK-NOT: %cmp1 = icmp ne i16 %0, 0
-  ;CHECK-NOT: %cmp2 = icmp ne i16 %1, 0
-  ;CHECK-NOT: %r = or i1 %cmp1, %cmp2
-  ;CHECK: %3 = or i16 %0, %1
-  ;CHECK: %4 = icmp ne i16 %3, 0
-}
