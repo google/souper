@@ -311,6 +311,20 @@ public:
         break;
       }
     }
+    case 3:{
+      Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT,
+                           ReplacedValues, Builder, M);
+      Value *V2 = getValue(I->Ops[2], ReplacedInst, EBC, DT,
+                           ReplacedValues, Builder, M);
+      if (!V1 || !V2)
+        return 0;
+      switch (I->K) {
+      case Inst::Select:
+        return Builder.CreateSelect(V0, V1, V2);
+      default:
+        break;
+      }
+    }
     default:
       break;
     }
