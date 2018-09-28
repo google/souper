@@ -1,6 +1,11 @@
 ; REQUIRES: solver
-; RUN: %souper-check -infer-rhs -souper-infer-nop -souper-stress-nop %solver %s | %FileCheck %s
+; RUN: %souper-check -infer-rhs -souper-infer-nop -souper-stress-nop %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis %solver %s > %t2
+; RUN: %FileCheck %s < %t1
+; RUN: %FileCheck %s --check-prefix=SUCCESS < %t2
+
 ; CHECK: Failed to infer RHS
+; SUCCESS: %5:i32 = add 1:i32, %a
 
 %a:i32 = var
 %b:i32 = var

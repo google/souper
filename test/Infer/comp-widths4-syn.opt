@@ -1,5 +1,8 @@
 ; REQUIRES: solver, solver-model
 
+; Exhaustive search does not support this test, the result is too expensive
+; under the cost model
+
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,const,select %s > %t1
 ; RUN: %FileCheck %s < %t1
 

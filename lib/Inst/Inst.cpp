@@ -18,6 +18,8 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <queue>
+
 using namespace souper;
 
 bool Inst::hasOrigin(llvm::Value *V) const {
@@ -536,6 +538,15 @@ Inst *InstContext::getUntypedConst(const llvm::APInt &Val) {
   return N;
 }
 
+Inst *InstContext::getReserved() {
+  auto N = new Inst;
+  Insts.emplace_back(N);
+  N->K = Inst::Reserved;
+  N->Name = "reserved_" + std::to_string(ReservedCounter++);
+  N->Width = 0;
+  return N;
+}
+
 Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
                              bool NonNegative, bool PowOfTwo, bool Negative,
@@ -661,6 +672,10 @@ int Inst::getCost(Inst::Kind K) {
     case CtPop:
     case Cttz:
     case Ctlz:
+    case SDiv:
+    case UDiv:
+    case SRem:
+    case URem:
       return 5;
     default:
       return 1;
@@ -762,4 +777,117 @@ std::string souper::GetReplacementRHSString(Inst *RHS,
   llvm::raw_string_ostream SS(Str);
   PrintReplacementRHS(SS, RHS, Context, printNames);
   return SS.str();
+}
+
+void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
+               bool WidthMustMatch, bool FilterVars, int Max) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::queue<std::tuple<Inst *,int>> Q;
+  Q.push(std::make_tuple(Root, 0));
+  while (!Q.empty()) {
+    Inst *I;
+    int Benefit;
+    std::tie(I, Benefit) = Q.front();
+    Q.pop();
+    ++Benefit;
+    if (Visited.insert(I).second) {
+      if (I->K != Inst::Phi) {
+        for (auto Op : I->Ops)
+          Q.push(std::make_tuple(Op, Benefit));
+      }
+      if (Benefit > 1 && I->Available && I->K != Inst::Const
+          && I->K != Inst::UntypedConst) {
+        if (WidthMustMatch && I->Width != Root->Width)
+          continue;
+        if (FilterVars && I->K == Inst::Var)
+          continue;
+        Guesses.emplace_back(I);
+        if (Guesses.size() >= Max)
+          return;
+      }
+    }
+  }
+}
+
+Inst *souper::getInstCopy(Inst *I, InstContext &IC,
+                          std::map<Inst *, Inst *> &InstCache,
+                          std::map<Block *, Block *> &BlockCache,
+                          std::map<Inst *, llvm::APInt> *ConstMap,
+                          bool CloneVars) {
+
+  if (InstCache.count(I))
+    return InstCache.at(I);
+
+  std::vector<Inst *> Ops;
+  for (auto const &Op : I->Ops)
+    Ops.push_back(getInstCopy(Op, IC, InstCache, BlockCache, ConstMap, CloneVars));
+
+  Inst *Copy = 0;
+  if (I->K == Inst::Var) {
+    if (ConstMap) {
+      auto it = ConstMap->find(I);
+      if (it != ConstMap->end()) {
+	{
+	  llvm::APInt x = it->second;
+          /*
+	  llvm::outs() << "found a var to replace with a constant width " <<
+	    x.getBitWidth() << " and value " << x << "\n";
+          */
+	}
+	Copy = IC.getConst(it->second);
+      }
+    }
+    if (!Copy) {
+      if (CloneVars && I->Name.find("reserved_") == std::string::npos)
+        Copy = IC.createVar(I->Width, I->Name, I->KnownZeros, I->KnownOnes,
+                            I->NonZero, I->NonNegative, I->PowOfTwo,
+                            I->Negative, I->NumSignBits);
+      else {
+        Copy = I;
+      }
+    }
+  } else if (I->K == Inst::Phi) {
+    if (!BlockCache.count(I->B)) {
+      auto BlockCopy = IC.createBlock(I->B->Preds);
+      BlockCache[I->B] = BlockCopy;
+      Copy = IC.getPhi(BlockCopy, Ops);
+    } else {
+      Copy = IC.getPhi(BlockCache.at(I->B), Ops);
+    }
+  } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
+    return I;
+  } else {
+    Copy = IC.getInst(I->K, I->Width, Ops);
+  }
+  assert(Copy);
+  InstCache[I] = Copy;
+  return Copy;
+}
+
+void souper::separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
+                              std::map<Inst *, Inst *> &InstCache,
+                              std::map<Block *, Block *> &BlockCache,
+                              InstContext &IC,
+                              std::map<Inst *, llvm::APInt> *ConstMap,
+                              bool CloneVars) {
+  for (const auto &BPC : BPCs) {
+    auto BPCCopy = BPC;
+    BPCCopy.B = BlockCache[BPC.B];
+    BPCCopy.PC = InstMapping(getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache, ConstMap, CloneVars),
+                             getInstCopy(BPC.PC.RHS, IC, InstCache, BlockCache, ConstMap, CloneVars));
+    BPCsCopy.emplace_back(BPCCopy);
+  }
+}
+
+void souper::separatePCs(const std::vector<InstMapping> &PCs,
+                         std::vector<InstMapping> &PCsCopy,
+                         std::map<Inst *, Inst *> &InstCache,
+                         std::map<Block *, Block *> &BlockCache,
+                         InstContext &IC,
+                         std::map<Inst *, llvm::APInt> *ConstMap,
+                         bool CloneVars) {
+  for (const auto &PC : PCs)
+    PCsCopy.emplace_back(getInstCopy(PC.LHS, IC, InstCache, BlockCache, ConstMap, CloneVars),
+                         getInstCopy(PC.RHS, IC, InstCache, BlockCache, ConstMap, CloneVars));
 }
