@@ -19,8 +19,9 @@
 
 #include <queue>
 
-static const unsigned MAX_TRIES = 30;
-static const unsigned MAX_INPUT_SPECIALIZATION_TRIES = 2;
+static const unsigned MaxTries = 30;
+static const unsigned MaxInputSpecializationTries = 2;
+static const unsigned MaxLHSCands = 15;
 
 using namespace souper;
 using namespace llvm;
@@ -33,8 +34,8 @@ namespace {
     cl::init(0));
 }
 
-
 // TODO
+// tune the constants at the top of the file
 // see and obey the ignore-cost command line flag
 // constant synthesis
 //   try to first make small constants? -128-255?
@@ -119,6 +120,7 @@ void addGuess(Inst *RHS, int MaxCost, std::vector<Inst *> &Guesses,
     TooExpensive++;
 }
 
+/* TODO call findCands instead */
 void findVars(Inst *Root, std::vector<Inst *> &Vars) {
   // breadth-first search
   std::set<Inst *> Visited;
@@ -137,7 +139,6 @@ void findVars(Inst *Root, std::vector<Inst *> &Vars) {
 }
 
 void getGuesses(std::vector<Inst *> &Guesses,
-                std::vector<Inst *> &Vars,
                 std::vector<Inst *> &Inputs,
                 int Width, int LHSCost,
                 InstContext &IC) {
@@ -283,6 +284,10 @@ void getGuesses(std::vector<Inst *> &Guesses,
       }
     }
   }
+
+  if (DebugLevel >= 2)
+    llvm::errs() << "generated " << Guesses.size() << " guesses and skipped " <<
+      TooExpensive << " that were too expensive\n";
 }
 
 // TODO
@@ -360,17 +365,14 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const std::vector<InstMapping> &PCs,
                                 Inst *LHS, Inst *&RHS,
                                 InstContext &IC, unsigned Timeout) {
-  std::vector<Inst *> Vars;
-  findVars(LHS, Vars);
   std::vector<Inst *> Inputs;
-  // TODO tune the number of candidate inputs
-  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, 15);
-
-  llvm::errs() << "LHS has " << Vars.size() << " vars\n";
+  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+  if (DebugLevel > 1)
+    llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
 
   std::vector<Inst *> Guesses;
   int LHSCost = souper::cost(LHS);
-  getGuesses(Guesses, Vars, Inputs, LHS->Width, LHSCost, IC);
+  getGuesses(Guesses, Inputs, LHS->Width, LHSCost, IC);
 
   std::error_code EC;
   if (Guesses.size() < 1)
@@ -476,7 +478,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       Inst *Ante = IC.getConst(APInt(1, true));
       if (!Vars.empty()) {
 
-        // Currently MAX_INPUT_SPECIALIZATION_TRIES can be set to any
+        // Currently MaxInputSpecializationTries can be set to any
         // non-negative number. However, a limitation here is: since the current
         // implementation of getNextInputVal() does not specialize a input
         // variable with two same value, if some program has input type
@@ -484,7 +486,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         // be only two specialized input combinations, such as (false, C_1) and
         // (true, C_2).
         // TODO: getNextInputVal() need to be more flexible
-        for (unsigned It = 0; It < MAX_INPUT_SPECIALIZATION_TRIES; It++) {
+        for (unsigned It = 0; It < MaxInputSpecializationTries; It++) {
           bool HasNextInputValue = false;
 
           std::map<Inst *, llvm::APInt> VarMap;
@@ -573,7 +575,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         llvm::errs() << "second query is SAT-- constant doesn't work\n";
       Tries++;
       // TODO tune max tries
-      if (Tries < MAX_TRIES)
+      if (Tries < MaxTries)
         goto again;
     } else {
       if (DebugLevel > 2)
