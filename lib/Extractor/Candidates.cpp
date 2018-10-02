@@ -219,21 +219,25 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
 
 void ExprBuilder::markExternalUses (Inst *I) {
   std::map<Inst *, unsigned> UsesCount;
+  std::unordered_set<Inst *> Visited;
   std::vector<Inst *> Stack;
   Stack.push_back(I);
   while(!Stack.empty()) {
     Inst* T = Stack.back();
     Stack.pop_back();
-    if (I != T) {
-      if (UsesCount.find(T) == UsesCount.end())
-        UsesCount[T] = 1;
-      else
-        UsesCount[T]++;
-    }
     for (auto Op: T->Ops) {
       if (Op->K != Inst::Const && Op->K != Inst::Var
-          && Op->K != Inst::UntypedConst && Op->K != Inst::Phi)
-        Stack.push_back(Op);
+          && Op->K != Inst::UntypedConst && Op->K != Inst::Phi) {
+
+        if (UsesCount.find(Op) == UsesCount.end())
+          UsesCount[Op] = 1;
+        else
+          UsesCount[Op]++;
+
+        if (Visited.insert(Op).second) {
+          Stack.push_back(Op);
+        }
+      }
     }
   }
   for (auto U : UsesCount)
