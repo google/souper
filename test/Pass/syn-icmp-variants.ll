@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=ne,eq,ule,sle,ult,slt -S -o - %s | %FileCheck %s
+; RUN: %opt -load %pass -souper -dce %solver -souper-exhaustive-synthesis -S -o - %s | %FileCheck %s
 
 define i1 @syn_eq(i32 %x, i32 %y) #0 {
   %a = icmp slt i32 %x, %y
@@ -63,8 +63,9 @@ define i1 @syn_ule(i32 %x, i32 %y) #0 {
 }
 
 define i1 @syn_ugt(i32 %x) #0 {
-  %a = icmp ugt i32 1, %x
-  %b = xor i1 %a, true
-  ; CHECK: icmp ugt i32 %x, 0
-  ret i1 %b
+  %a = icmp ugt i32 %x, 1
+  %b = icmp ugt i32 %x, 2
+  %c = and i1 %a, %b
+  ; CHECK: icmp ugt i32 %x, 2
+  ret i1 %c
 }
