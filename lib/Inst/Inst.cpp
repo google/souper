@@ -662,6 +662,15 @@ bool Inst::isCommutative(Inst::Kind K) {
   }
 }
 
+bool Inst::isCmp(Inst::Kind K) {
+  return K == Inst::Eq || K == Inst::Ne || K == Inst::Ult ||
+    K == Inst::Slt || K == Inst::Ule || K == Inst::Sle;
+}
+
+bool Inst::isShift(Inst::Kind K) {
+  return K == Inst::Shl || K == Inst::AShr || K == Inst::LShr;
+}
+
 int Inst::getCost(Inst::Kind K) {
   switch (K) {
     case Var:
