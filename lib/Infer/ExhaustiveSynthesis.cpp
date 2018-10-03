@@ -32,6 +32,9 @@ namespace {
     "The larger the number is, the more fine-grained debug "
     "information will be printed"),
     cl::init(0));
+  static cl::opt<bool> NoBigQuery("souper-exhaustive-synthesis-no-big-query",
+    cl::desc("Disable big query in exhaustive synthesis (default=false)"),
+    cl::init(false));
 }
 
 // TODO
@@ -374,8 +377,12 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const std::vector<InstMapping> &PCs,
                                 Inst *LHS, Inst *&RHS,
                                 InstContext &IC, unsigned Timeout) {
-  std::vector<Inst *> Inputs;
-  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+  std::vector<Inst *> Vars;
+  findVars(LHS, Vars);
+
+  std::vector<Inst *> Inputs(Vars);
+  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/true, MaxLHSCands);
+
   if (DebugLevel > 1)
     llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
 
@@ -397,7 +404,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   // Big Query
   // TODO: Need to check if big query actually saves us time or just wastes time
-  {
+  if (!NoBigQuery) {
     Inst *Ante = IC.getConst(APInt(1, true));
     BlockPCs BPCsCopy;
     std::vector<InstMapping> PCsCopy;
@@ -477,9 +484,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         AvoidConsts = IC.getInst(Inst::And, 1, {Ante, AvoidConsts});
       }
     }
-
-    std::vector<Inst *> Vars;
-    findVars(LHS, Vars);
 
     std::map<Inst *, llvm::APInt> ConstMap;
 
