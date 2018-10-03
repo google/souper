@@ -12,7 +12,7 @@ define i32 @alive0_0(i32, i32) local_unnamed_addr #0 {
   ;CHECK-NOT: %Op0 = or i32 %0, %1
   ;CHECK-NOT: %Op1 = xor i32 %0, %1
   ;CHECK-NOT: %r = sub i32 %Op0, %Op1
-  ;CHECK: %3 = and i32 %0, %1
+  ;CHECK: %3 = and i32 {{(%0, %1)|(%1, %0)}}
 
 }
 

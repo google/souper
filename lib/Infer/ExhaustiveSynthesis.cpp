@@ -290,9 +290,6 @@ void getGuesses(std::vector<Inst *> &Guesses,
       TooExpensive << " that were too expensive\n";
 }
 
-// TODO
-// Generate new guesses after each constant guess fail.
-
 APInt getNextInputVal(Inst *Var,
                       const BlockPCs &BPCs,
                       const std::vector<InstMapping> &PCs,
@@ -317,7 +314,8 @@ APInt getNextInputVal(Inst *Var,
   }
 
   // If a variable is neither found in PCs or TriedVar, return APInt(0)
-  if (TriedVars.find(Var) == TriedVars.end()) {
+  bool VarHasTried = TriedVars.find(Var) != TriedVars.end();
+  if (!VarHasTried) {
     std::vector<Inst *> VarsInPCs;
     findVars(Ante, VarsInPCs);
     if (std::find(VarsInPCs.begin(), VarsInPCs.end(), Var) == VarsInPCs.end()) {
@@ -342,8 +340,19 @@ APInt getNextInputVal(Inst *Var,
   EC = SMTSolver->isSatisfiable(Query, PCQueryIsSat, ModelInsts.size(), &ModelVals, Timeout);
 
   if (EC || !PCQueryIsSat) {
-    HasNextInputValue = false;
-    return APInt(Var->Width, 0);
+    if (VarHasTried) {
+      // If we previously generated guesses on Var, and the query becomes
+      // unsat, then clear the state and call the getNextInputVal() again to
+      // get a new guess
+      TriedVars.erase(Var);
+      return getNextInputVal(Var, BPCs, PCs, TriedVars, IC,
+                             SMTSolver, Timeout, HasNextInputValue);
+    } else {
+      // No guess record for Var found and query tells unsat, we can conclude
+      // that no possible guess there
+      HasNextInputValue = false;
+      return APInt(Var->Width, 0);
+    }
   }
   if (DebugLevel > 2)
     llvm::errs() << "Input guess SAT\n";
@@ -445,6 +454,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     std::vector<Inst *> ConstList;
     hasConstant(I, ConstList);
 
+    std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
     std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
     int Tries = 0;
 
@@ -471,7 +481,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     std::vector<Inst *> Vars;
     findVars(LHS, Vars);
 
-    std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
     std::map<Inst *, llvm::APInt> ConstMap;
 
     {
@@ -578,8 +587,10 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       if (Tries < MaxTries)
         goto again;
     } else {
-      if (DebugLevel > 2)
+      if (DebugLevel > 2) {
         llvm::errs() << "second query is UNSAT-- works for all values of this constant\n";
+        llvm::errs() << Tries <<  " tries were made for synthesizing constants\n";
+      }
       RHS = I2;
       return EC;
     }
