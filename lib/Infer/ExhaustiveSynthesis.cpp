@@ -68,17 +68,6 @@ namespace {
 // experiment with synthesizing at reduced bitwidth, then expanding the result
 // aggressively avoid calling into the solver
 
-// TODO move this to Inst
-const bool isCmp(Inst::Kind K) {
-  return K == Inst::Eq || K == Inst::Ne || K == Inst::Ult ||
-    K == Inst::Slt || K == Inst::Ule || K == Inst::Sle;
-}
-
-// TODO move this to Inst
-const bool isShift(Inst::Kind K) {
-  return K == Inst::Shl || K == Inst::AShr || K == Inst::LShr;
-}
-
 void hasConstantHelper(Inst *I, std::set<Inst *> &Visited,
                        std::vector<Inst *> &ConstList) {
   // FIXME this only works for one constant and keying by name is bad
@@ -101,7 +90,7 @@ void hasConstant(Inst *I, std::vector<Inst *> &ConstList) {
 
 // TODO small vector by reference?
 std::vector<Inst *> matchWidth(Inst *I, unsigned NewW, InstContext &IC) {
-  int OldW = isCmp(I->K) ? 1 : I->Width;
+  int OldW = Inst::isCmp(I->K) ? 1 : I->Width;
   if (OldW > NewW)
     return { IC.getInst(Inst::Trunc, NewW, { I }) };
   if (OldW < NewW)
@@ -185,7 +174,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
       for (auto J = Start; J != Inputs.end(); ++J) {
         // PRUNE: never useful to div, rem, sub, and, or, xor,
         // icmp, select a value against itself
-        if ((*I == *J) && (isCmp(K) || K == Inst::And || K == Inst::Or ||
+        if ((*I == *J) && (Inst::isCmp(K) || K == Inst::And || K == Inst::Or ||
                            K == Inst::Xor || K == Inst::Sub || K == Inst::UDiv ||
                            K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
                            K == Inst::Select))
@@ -204,7 +193,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
           Widths.insert((*I)->Width);
         if ((*J)->K != Inst::Reserved)
           Widths.insert((*J)->Width);
-        if (!isCmp(K))
+        if (!Inst::isCmp(K))
           Widths.insert(Width);
         if (Widths.size() < 1)
           llvm::report_fatal_error("no widths to work with");
@@ -213,7 +202,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
           if (OpWidth < 1)
             llvm::report_fatal_error("bad width");
           // PRUNE: one-bit shifts don't make sense
-          if (isShift(K) && OpWidth == 1)
+          if (Inst::isShift(K) && OpWidth == 1)
             continue;
 
           // see if we need to make a var representing a constant
@@ -236,7 +225,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
               // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
               if (K == Inst::Sub && V2i->Name.find("reserved_") != std::string::npos)
                 continue;
-              auto NewGuess = IC.getInst(K, isCmp(K) ? 1 : OpWidth, { V1i, V2i });
+              auto NewGuess = IC.getInst(K, Inst::isCmp(K) ? 1 : OpWidth, { V1i, V2i });
               auto MatchedWidth = matchWidth(NewGuess, Width, IC);
               for (auto MWi : MatchedWidth) {
                 addGuess(MWi, LHSCost, Guesses, TooExpensive);
@@ -445,6 +434,10 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   // find the valid one
   int Unsat = 0;
   int GuessIndex = -1;
+
+  std::vector<Inst *> Vars;
+  findVars(LHS, Vars);
+
   for (auto I : Guesses) {
     GuessIndex++;
     if (DebugLevel > 2) {
@@ -477,9 +470,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         AvoidConsts = IC.getInst(Inst::And, 1, {Ante, AvoidConsts});
       }
     }
-
-    std::vector<Inst *> Vars;
-    findVars(LHS, Vars);
 
     std::map<Inst *, llvm::APInt> ConstMap;
 
