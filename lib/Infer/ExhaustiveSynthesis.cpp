@@ -377,11 +377,9 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const std::vector<InstMapping> &PCs,
                                 Inst *LHS, Inst *&RHS,
                                 InstContext &IC, unsigned Timeout) {
-  std::vector<Inst *> Vars;
-  findVars(LHS, Vars);
 
-  std::vector<Inst *> Inputs(Vars);
-  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/true, MaxLHSCands);
+  std::vector<Inst *> Inputs;
+  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
 
   if (DebugLevel > 1)
     llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
@@ -452,6 +450,10 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   // find the valid one
   int Unsat = 0;
   int GuessIndex = -1;
+
+  std::vector<Inst *> Vars;
+  findVars(LHS, Vars);
+
   for (auto I : Guesses) {
     GuessIndex++;
     if (DebugLevel > 2) {
