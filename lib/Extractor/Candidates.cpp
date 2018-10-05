@@ -46,8 +46,8 @@ static llvm::cl::opt<bool> HarvestDataFlowFacts(
     llvm::cl::init(true));
 static llvm::cl::opt<bool> HarvestDemandedBits(
     "souper-harvest-demanded-bits",
-    llvm::cl::desc("Perform demanded bits analysis (default=false)"),
-    llvm::cl::init(false));
+    llvm::cl::desc("Perform demanded bits analysis (default=true)"),
+    llvm::cl::init(true));
 
 using namespace llvm;
 using namespace souper;
