@@ -133,6 +133,8 @@ if (defined $bitcodedir && -d $bitcodedir && fork() == 0) {
     }
     print OUTF "\n";
     close OUTF;
+    open STDOUT, '>/dev/null';
+    open STDERR, '>/dev/null';
     exec @ARGV;
     die "bailing, exec failed";
 }
