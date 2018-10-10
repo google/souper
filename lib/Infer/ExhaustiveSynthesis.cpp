@@ -386,7 +386,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   // Big Query
   // TODO: Need to check if big query actually saves us time or just wastes time
-  {
+  if (0) {
     Inst *Ante = IC.getConst(APInt(1, true));
     BlockPCs BPCsCopy;
     std::vector<InstMapping> PCsCopy;
