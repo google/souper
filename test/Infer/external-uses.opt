@@ -1,0 +1,14 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -reinfer-rhs -souper-exhaustive-synthesis %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+;CHECK-NOT: ; RHS inferred successfully, no cost regression (Old= 2, New= 2, LHS= 3)
+;CHECK: ; Failed to infer RHS
+%0:i32 = var
+%1:i32 = and 1:i32, %0
+%2:i1 = ne 0:i32, %1 (hasExternalUses)
+%3:i1 = xor 1:i1, %2
+infer %3
+%4:i1 = slt %1, 1:i32
+result %4
