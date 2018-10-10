@@ -22,6 +22,7 @@
 static const unsigned MaxTries = 30;
 static const unsigned MaxInputSpecializationTries = 2;
 static const unsigned MaxLHSCands = 15;
+static const unsigned MaxRHS = 1;
 
 using namespace souper;
 using namespace llvm;
@@ -361,7 +362,7 @@ std::error_code
 ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const BlockPCs &BPCs,
                                 const std::vector<InstMapping> &PCs,
-                                Inst *LHS, Inst *&RHS,
+                                Inst *LHS, std::vector<Inst *> &RHSs,
                                 InstContext &IC, unsigned Timeout) {
   std::vector<Inst *> Inputs;
   findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
@@ -438,6 +439,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::vector<Inst *> Vars;
   findVars(LHS, Vars);
 
+  unsigned ValidRHS = 0;
   for (auto I : Guesses) {
     GuessIndex++;
     if (DebugLevel > 2) {
@@ -577,12 +579,14 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       if (Tries < MaxTries)
         goto again;
     } else {
+      ++ValidRHS;
       if (DebugLevel > 2) {
         llvm::errs() << "second query is UNSAT-- works for all values of this constant\n";
         llvm::errs() << Tries <<  " tries were made for synthesizing constants\n";
       }
-      RHS = I2;
-      return EC;
+      RHSs.emplace_back(I2);
+      if (ValidRHS >= MaxRHS)
+        return EC;
     }
   }
   if (DebugLevel > 2)

@@ -83,16 +83,16 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
             Cand.PCs, Cand.Mapping.LHS, Context), HField, 1);
       }
 
-      Inst *RHS;
+      std::vector<Inst *> RHSs;
       if (std::error_code EC =
-              S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
+          S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, RHSs, IC)) {
         llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
         return false;
       }
-      if (RHS) {
+      if (!RHSs.empty()) {
         OS << '\n';
         OS << "; Static profile " << Profile[I] << '\n';
-        Cand.Mapping.RHS = RHS;
+        Cand.Mapping.RHS = RHSs.front();
         Cand.printFunction(OS);
         Cand.print(OS);
       }
@@ -121,14 +121,14 @@ bool CheckCandidateMap(llvm::Module &Mod, CandidateMap &M, Solver *S,
 
   bool OK = true;
   for (auto &Cand : M) {
-    Inst *RHS;
+    std::vector<Inst *> RHSs;
     if (std::error_code EC =
-            S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
+            S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, RHSs, IC)) {
       llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
       return false;
     }
-    if (RHS) {
-      Cand.Mapping.RHS = RHS;
+    if (!RHSs.empty()) {
+      Cand.Mapping.RHS = RHSs.front();
       if (Cand.Mapping.RHS->K != Inst::Const) {
         llvm::errs() << "found replacement:\n";
         Cand.printFunction(llvm::errs());
