@@ -412,37 +412,38 @@ public:
       if (!Cand.Mapping.RHS)
         continue;
 
-      Instruction *I = Cand.Origin;
-      assert(Cand.Mapping.LHS->hasOrigin(I));
-      IRBuilder<> Builder(I);
-
-      Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
-                               ReplacedValues, Builder, F->getParent());
-      if (!NewVal) {
-        if (DebugSouperPass)
-          errs() << "\"\n; replacement failed\n";
-        continue;
-      }
-
-      ReplacedValues[Cand.Mapping.LHS] = NewVal;
-
-      if (DebugSouperPass) {
-        errs() << "\n";
-        errs() << "; Replacing \"";
-        I->print(errs());
-        errs() << "\"\n; from \"";
-        I->getDebugLoc().print(errs());
-        errs() << "\"\n; with \"";
-        NewVal->print(errs());
-        errs() << "\" in:\n";
-        PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
-        errs() << "\"\n; with \"";
-        NewVal->print(errs());
-        errs() << "\"\n";
-      }
-
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
-        if (DynamicProfile)
+
+	Instruction *I = Cand.Origin;
+	assert(Cand.Mapping.LHS->hasOrigin(I));
+	IRBuilder<> Builder(I);
+
+	Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
+                               ReplacedValues, Builder, F->getParent());
+	if (!NewVal) {
+	  if (DebugSouperPass)
+	    errs() << "\"\n; replacement failed\n";
+	  continue;
+	}
+
+	ReplacedValues[Cand.Mapping.LHS] = NewVal;
+
+	if (DebugSouperPass) {
+	  errs() << "\n";
+	  errs() << "; Replacing \"";
+	  I->print(errs());
+	  errs() << "\"\n; from \"";
+	  I->getDebugLoc().print(errs());
+	  errs() << "\"\n; with \"";
+	  NewVal->print(errs());
+	  errs() << "\" in:\n";
+	  PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
+	  errs() << "\"\n; with \"";
+	  NewVal->print(errs());
+	  errs() << "\"\n";
+	}
+
+	if (DynamicProfile)
           dynamicProfile(F, Cand);
         I->replaceAllUsesWith(NewVal);
         Changed = true;
