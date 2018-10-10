@@ -419,9 +419,7 @@ public:
       Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
                                ReplacedValues, Builder, F->getParent());
       if (!NewVal) {
-        if (DebugSouperPass)
-          errs() << "\"\n; replacement failed\n";
-        continue;
+        report_fatal_error("Unable to find corresponding LLVM IR");
       }
 
       ReplacedValues[Cand.Mapping.LHS] = NewVal;
