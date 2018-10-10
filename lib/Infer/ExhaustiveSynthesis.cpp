@@ -369,7 +369,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
 
   std::vector<Inst *> Guesses;
-  int LHSCost = souper::cost(LHS);
+  int LHSCost = souper::cost(LHS, /*IgnoreDepsWithExternalUses=*/true);
   getGuesses(Guesses, Inputs, LHS->Width, LHSCost, IC);
 
   std::error_code EC;
