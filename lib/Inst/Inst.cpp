@@ -792,8 +792,16 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
                bool WidthMustMatch, bool FilterVars, int Max) {
   // breadth-first search
   std::set<Inst *> Visited;
-  std::queue<std::tuple<Inst *,int>> Q;
-  Q.push(std::make_tuple(Root, 0));
+  std::queue<std::pair<Inst *,int>> Q;
+  auto Comp = [](const std::pair<Inst *,int> A, const std::pair<Inst *,int> B)
+              {
+                return A.second < B.second;
+              };
+  std::priority_queue<std::pair<Inst *, int>,
+                      std::vector<std::pair<Inst *,int>>,
+                      decltype(Comp)> GuessesPQ(Comp);
+
+  Q.push(std::make_pair(Root, 0));
   while (!Q.empty()) {
     Inst *I;
     int Benefit;
@@ -803,7 +811,7 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
     if (Visited.insert(I).second) {
       if (I->K != Inst::Phi) {
         for (auto Op : I->Ops)
-          Q.push(std::make_tuple(Op, Benefit));
+          Q.push(std::make_pair(Op, Benefit));
       }
       if (Benefit > 1 && I->Available && I->K != Inst::Const
           && I->K != Inst::UntypedConst) {
@@ -811,11 +819,15 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
           continue;
         if (FilterVars && I->K == Inst::Var)
           continue;
-        Guesses.emplace_back(I);
-        if (Guesses.size() >= Max)
-          return;
+        GuessesPQ.push(std::make_pair(I, Benefit));
       }
     }
+  }
+  unsigned Size = GuessesPQ.size();
+  for (unsigned T = 0 ; T < Max && T < Size ; T++) {
+    Inst *I = GuessesPQ.top().first;
+    GuessesPQ.pop();
+    Guesses.emplace_back(I);
   }
 }
 
