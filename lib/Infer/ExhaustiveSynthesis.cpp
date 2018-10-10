@@ -439,7 +439,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::vector<Inst *> Vars;
   findVars(LHS, Vars);
 
-  unsigned ValidRHS = 0;
   for (auto I : Guesses) {
     GuessIndex++;
     if (DebugLevel > 2) {
@@ -579,13 +578,12 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       if (Tries < MaxTries)
         goto again;
     } else {
-      ++ValidRHS;
       if (DebugLevel > 2) {
         llvm::errs() << "second query is UNSAT-- works for all values of this constant\n";
         llvm::errs() << Tries <<  " tries were made for synthesizing constants\n";
       }
       RHSs.emplace_back(I2);
-      if (ValidRHS >= MaxRHS)
+      if (RHSs.size() >= MaxRHS)
         return EC;
     }
   }
