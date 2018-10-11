@@ -446,6 +446,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
     std::vector<Inst *> ConstList;
     hasConstant(I, ConstList);
+    bool GuessHasConstant = !ConstList.empty();
 
     int Tries = 0;
 
@@ -459,7 +460,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     // ((R1 != C11 ) \/ (R2 != C21 )) /\ ((R1 != C12 ) \/ (R2 != C22 )) /\ ...
     std::map<Inst *, llvm::APInt> ConstMap;
 
-    if (!ConstList.empty()) {
+    if (GuessHasConstant) {
       std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
       std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
 
@@ -575,7 +576,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         llvm::errs() << "second query is SAT-- constant doesn't work\n";
       Tries++;
       // TODO tune max tries
-      if (Tries < MaxTries)
+      if (GuessHasConstant && Tries < MaxTries)
         goto again;
     } else {
       if (DebugLevel > 2) {
