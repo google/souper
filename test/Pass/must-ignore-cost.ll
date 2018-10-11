@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=and,or,ne,xor,const,add,sub,ashr -S -o - %s | %FileCheck %s
 
 define i1 @alive0_f2(i16, i16) local_unnamed_addr #0 {

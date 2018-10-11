@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=ctpop -S -o - %s | %FileCheck %s
 
 ; Translated from test/Infer/popcount6-syn.opt

@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check -souper-infer-iN=false %t
 
 ; ModuleID = 'overflow4.ll'

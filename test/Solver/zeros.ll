@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check -souper-infer-iN=false %t
 
 declare i32 @llvm.ctlz.i32(i32) nounwind readnone

@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %opt -load %pass -souper %solver -souper-infer-inst -souper-synthesis-comps=add,const -S -o - %s | %FileCheck %s
 
 ; Investigation and improvement are needed. Current instruction synthesis can
