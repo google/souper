@@ -447,8 +447,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     std::vector<Inst *> ConstList;
     hasConstant(I, ConstList);
 
-    std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
-    std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
     int Tries = 0;
 
   again:
@@ -459,21 +457,24 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
     // avoid choices for constants that have not worked out in previous iterations
     // ((R1 != C11 ) \/ (R2 != C21 )) /\ ((R1 != C12 ) \/ (R2 != C22 )) /\ ...
-    Inst *AvoidConsts = IC.getConst(APInt(1, true));
-    if (!BadConsts.empty()) {
-      for (unsigned i = 0; i < BadConsts[ConstList[0]].size(); ++i) {
-        Inst *Ante = IC.getConst(APInt(1, false));
-        for (auto C : ConstList) {
-          Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(BadConsts[C][i]), C });
-          Ante = IC.getInst(Inst::Or, 1, {Ante, Ne});
-        }
-        AvoidConsts = IC.getInst(Inst::And, 1, {Ante, AvoidConsts});
-      }
-    }
-
     std::map<Inst *, llvm::APInt> ConstMap;
 
-    {
+    if (!ConstList.empty()) {
+      std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
+      std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
+
+      Inst *AvoidConsts = IC.getConst(APInt(1, true));
+      if (!BadConsts.empty()) {
+        for (unsigned i = 0; i < BadConsts[ConstList[0]].size(); ++i) {
+          Inst *Ante = IC.getConst(APInt(1, false));
+          for (auto C : ConstList) {
+            Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(BadConsts[C][i]), C });
+            Ante = IC.getInst(Inst::Or, 1, {Ante, Ne});
+          }
+          AvoidConsts = IC.getInst(Inst::And, 1, {Ante, AvoidConsts});
+        }
+      }
+
       Inst *Ante = IC.getConst(APInt(1, true));
       if (!Vars.empty()) {
 
