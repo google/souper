@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check -souper-infer-iN=false %t
 
 define i32 @mul(i32 %a, i32 %b) #0 {

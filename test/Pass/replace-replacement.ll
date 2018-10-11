@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %opt -load %pass -souper %solver -souper-infer-nop -souper-stress-nop -S -stats -o - %s 2>&1 | %FileCheck %s
 
 ; CHECK: store i32 %cond.i

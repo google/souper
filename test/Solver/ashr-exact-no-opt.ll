@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check %t
 
 define void @fn1(i32 %x, i32 %y) #0 {

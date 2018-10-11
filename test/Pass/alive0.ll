@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-comps=and,or,ne,const,xor,add,sub,ashr -S -o - %s | %FileCheck %s
 
 define i32 @alive0_0(i32, i32) local_unnamed_addr #0 {

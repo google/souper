@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %opt -load %pass -souper -dce %solver -souper-infer-iN=false -souper-infer-inst -souper-synthesis-comps=select,const,add -S -o - %s | %FileCheck %s
 
 

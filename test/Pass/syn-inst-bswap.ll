@@ -1,6 +1,5 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
 ; RUN: %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-comps=bswap -S -o - %s | %FileCheck %s
 
 define i64 @foo(i64 %x) {
