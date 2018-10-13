@@ -29,6 +29,7 @@
 namespace souper {
 
 const unsigned MaxPreds = 100000;
+const std::string ReservedConstPrefix = "reservedconst_";
 
 struct Inst;
 
@@ -43,7 +44,6 @@ struct Inst : llvm::FoldingSetNode {
   typedef enum {
     Const,
     UntypedConst,
-    Reserved,
     Var,
     Phi,
 
@@ -103,6 +103,9 @@ struct Inst : llvm::FoldingSetNode {
     SMulO,
     UMulWithOverflow,
     UMulO,
+
+    ReservedConst,
+    ReservedInst,
 
     None,
 } Kind;
@@ -201,12 +204,13 @@ class InstContext {
 
   std::vector<std::unique_ptr<Inst>> Insts;
   llvm::FoldingSet<Inst> InstSet;
-  unsigned ReservedCounter = 0;
+  unsigned ReservedConstCounter = 0;
 
 public:
   Inst *getConst(const llvm::APInt &I);
   Inst *getUntypedConst(const llvm::APInt &I);
-  Inst *getReserved();
+  Inst *getReservedConst();
+  Inst *getReservedInst(int Width);
 
   Inst *createVar(unsigned Width, llvm::StringRef Name,
                   llvm::APInt Zero=llvm::APInt(1, 0, false),
@@ -222,6 +226,7 @@ public:
 };
 
 int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
+int instCount(Inst *I);
 int benefit(Inst *LHS, Inst *RHS);
 
 void PrintReplacement(llvm::raw_ostream &Out, const BlockPCs &BPCs,
@@ -253,6 +258,14 @@ Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Block *, Block *> &BlockCache,
                   std::map<Inst *, llvm::APInt> *ConstMap,
                   bool CloneVars);
+
+Inst *instJoin(Inst *I, Inst *Reserved, Inst *NewInst,
+               std::map<Inst *, Inst *> &InstCache, InstContext &IC);
+
+void findVars(Inst *Root, std::vector<Inst *> &Vars);
+
+bool hasReservedInst(Inst *Root);
+void getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts);
 
 void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                       std::map<Inst *, Inst *> &InstCache,

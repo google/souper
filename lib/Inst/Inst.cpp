@@ -19,6 +19,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <queue>
+#include <set>
 
 using namespace souper;
 
@@ -410,6 +411,10 @@ const char *Inst::getKindName(Kind K) {
     return "smul.with.overflow";
   case UMulWithOverflow:
     return "umul.with.overflow";
+  case ReservedConst:
+    return "reservedconst";
+  case ReservedInst:
+    return "reservedinst";
   case SAddO:
   case UAddO:
   case SSubO:
@@ -538,12 +543,20 @@ Inst *InstContext::getUntypedConst(const llvm::APInt &Val) {
   return N;
 }
 
-Inst *InstContext::getReserved() {
+Inst *InstContext::getReservedConst() {
   auto N = new Inst;
   Insts.emplace_back(N);
-  N->K = Inst::Reserved;
-  N->Name = "reserved_" + std::to_string(ReservedCounter++);
+  N->K = Inst::ReservedConst;
+  N->Name = ReservedConstPrefix + std::to_string(ReservedConstCounter++);
   N->Width = 0;
+  return N;
+}
+
+Inst *InstContext::getReservedInst(int Width) {
+  auto N = new Inst;
+  Insts.emplace_back(N);
+  N->K = Inst::ReservedInst;
+  N->Width = Width;
   return N;
 }
 
@@ -712,6 +725,28 @@ int souper::cost(Inst *I, bool IgnoreDepsWithExternalUses) {
   return costHelper(I, I, Visited, IgnoreDepsWithExternalUses);
 }
 
+
+static int countHelper(Inst *I, std::set<Inst *> &Visited) {
+  if (!Visited.insert(I).second)
+    return 0;
+
+  int Count;
+
+  if (I->K == Inst::Var || I->K == Inst::Const || I->K == Inst::ReservedInst)
+    Count = 0;
+  else
+    Count = 1;
+
+  for (auto Op : I->Ops)
+    Count += countHelper(Op, Visited);
+  return Count;
+}
+
+int souper::instCount(Inst *I) {
+  std::set<Inst *> Visited;
+  return countHelper(I, Visited);
+}
+
 int souper::benefit(Inst *LHS, Inst *RHS) {
   return cost(LHS, /*IgnoreDepsWithExternalUses=*/true) - cost(RHS);
 }
@@ -821,6 +856,63 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
   }
 }
 
+/* TODO call findCands instead */
+void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::queue<Inst *> Q;
+  Q.push(Root);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    if (!Visited.insert(I).second)
+      continue;
+    if (I->K == Inst::Var &&
+        I->Name.find(ReservedConstPrefix) == std::string::npos) {
+      Vars.push_back(I);
+    }
+    for (auto Op : I->Ops)
+      Q.push(Op);
+  }
+}
+
+void souper::getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::queue<Inst *> Q;
+  Q.push(Root);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    if (!Visited.insert(I).second)
+      continue;
+    if (I->K == Inst::ReservedInst) {
+      assert(I->Width > 0);
+      ReservedInsts.push_back(I);
+    }
+    for (auto Op : I->Ops)
+      Q.push(Op);
+  }
+}
+
+bool souper::hasReservedInst(Inst *Root) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::queue<Inst *> Q;
+  Q.push(Root);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    if (I->K == Inst::ReservedInst)
+      return true;
+    if (!Visited.insert(I).second)
+      continue;
+    for (auto Op : I->Ops)
+      Q.push(Op);
+  }
+  return false;
+}
+
 Inst *souper::getInstCopy(Inst *I, InstContext &IC,
                           std::map<Inst *, Inst *> &InstCache,
                           std::map<Block *, Block *> &BlockCache,
@@ -850,7 +942,8 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
       }
     }
     if (!Copy) {
-      if (CloneVars && I->Name.find("reserved_") == std::string::npos)
+      if (CloneVars &&
+          I->Name.find(ReservedConstPrefix) == std::string::npos)
         Copy = IC.createVar(I->Width, I->Name, I->KnownZeros, I->KnownOnes,
                             I->NonZero, I->NonNegative, I->PowOfTwo,
                             I->Negative, I->NumSignBits);
@@ -873,6 +966,28 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
   }
   assert(Copy);
   InstCache[I] = Copy;
+  return Copy;
+}
+
+Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
+                       std::map<Inst *, Inst *> &InstCache,
+                       InstContext &IC) {
+  std::vector<Inst *> Ops;
+
+  for (auto const &Op : I->Ops) {
+    auto NewOp = instJoin(Op, EmptyInst, NewInst, InstCache, IC);
+    Ops.push_back(NewOp);
+  }
+
+  Inst *Copy = 0;
+  if (I == EmptyInst) {
+    Copy = NewInst;
+  } else if (I->K == Inst::Var) {
+    Copy = I;
+  } else {
+    Copy = IC.getInst(I->K, I->Width, Ops);
+  }
+
   return Copy;
 }
 

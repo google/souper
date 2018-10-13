@@ -1,0 +1,14 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-exhaustive-synthesis-num-instructions=2 %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; test trunk insertion.
+%0:i8 = var
+%1:i8 = urem %0, 2
+%2:i1 = eq %1, 0
+%3:i8 = select %2, 42:i8, %0
+%4:i8 = add %3, %0
+infer %4
+; CHECK: %5:i1 = trunc %0
+; CHECK: %6:i8 = select %5, %0, 42:i8
+; CHECK: %7:i8 = add %0, %6
