@@ -686,6 +686,8 @@ int Inst::getCost(Inst::Kind K) {
     case SRem:
     case URem:
       return 5;
+    case Select:
+      return 3;
     default:
       return 1;
   }
