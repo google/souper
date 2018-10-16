@@ -83,12 +83,14 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
         OldCost = cost(Rep.Mapping.RHS);
         Rep.Mapping.RHS = 0;
       }
+      std::vector<Inst *> RHSs;
       if (std::error_code EC = S->infer(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
-                                        Rep.Mapping.RHS, IC)) {
+                                        RHSs, IC)) {
         llvm::errs() << EC.message() << '\n';
         Ret = 1;
         ++Error;
       }
+      Rep.Mapping.RHS = RHSs.empty() ? 0 : RHSs.front();
       if (Rep.Mapping.RHS) {
         ++Success;
         if (ReInferRHS) {

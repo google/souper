@@ -399,9 +399,10 @@ public:
         Changed = true;
         continue;
       }
+      std::vector<Inst *> RHSs;
       if (std::error_code EC =
           S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
-                   Cand.Mapping.RHS, IC)) {
+                   RHSs, IC)) {
         if (EC == std::errc::timed_out ||
             EC == std::errc::value_too_large) {
           continue;
@@ -409,6 +410,7 @@ public:
           report_fatal_error("Unable to query solver: " + EC.message() + "\n");
         }
       }
+      Cand.Mapping.RHS = RHSs.empty() ? 0 : RHSs.front();
       if (!Cand.Mapping.RHS)
         continue;
 

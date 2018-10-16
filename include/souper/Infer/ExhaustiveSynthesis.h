@@ -30,7 +30,7 @@ public:
   std::error_code synthesize(SMTLIBSolver *SMTSolver,
                              const BlockPCs &BPCs,
                              const std::vector<InstMapping> &PCs,
-                             Inst *TargetLHS, Inst *&RHS,
+                             Inst *TargetLHS, std::vector<Inst *> &RHS,
                              InstContext &IC, unsigned Timeout);
 
 };
