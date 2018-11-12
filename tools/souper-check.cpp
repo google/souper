@@ -84,7 +84,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
         Rep.Mapping.RHS = 0;
       }
       if (std::error_code EC = S->infer(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
-                                        Rep.Mapping.RHS, IC)) {
+                                        Rep.Mapping.RHS, IC, CandidateType::HarvestedFromDef)) {
         llvm::errs() << EC.message() << '\n';
         Ret = 1;
         ++Error;

@@ -30,8 +30,8 @@ class Solver {
 public:
   virtual ~Solver();
   virtual std::error_code
-  infer(const BlockPCs &BPCs, const std::vector<InstMapping> &PCs, 
-        Inst *LHS, Inst *&RHS, InstContext &IC) = 0;
+  infer(const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+        Inst *LHS, Inst *&RHS, InstContext &IC, CandidateType T) = 0;
   virtual std::error_code
   isValid(InstContext &IC, const BlockPCs &BPCs,
           const std::vector<InstMapping> &PCs, 
