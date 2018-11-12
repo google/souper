@@ -94,6 +94,8 @@ analyses when harvesting.
 SOUPER_HARVEST_DEMANDED_BITS -- Query LLVM's demanded bits dataflow
 analysis when harvesting.
 
+SOUPER_HARVEST_USES -- This option enables the harvest of LLVM uses.
+
 SOUPER_NO_INFER -- Don't run inference at all; used for populating the
 cache.
 
@@ -239,6 +241,9 @@ if ($souper) {
     }
     if (exists $ENV{"SOUPER_HARVEST_DEMANDED_BITS"}) {
         push @ARGV, ("-mllvm", "-souper-harvest-demanded-bits");
+    }
+    if (exists $ENV{"SOUPER_HARVEST_USES"}) {
+        push @ARGV, ("-mllvm", "-souper-harvest-uses");
     }
     if (exists $ENV{"LLVM_DISABLE_INSTRUCTION_COMBINER"}) {
         push @ARGV, ("-mllvm", "-disable-instruction-combiner");
