@@ -6,6 +6,7 @@
 declare i64 @llvm.ctpop.i64(i64) nounwind readnone
 declare i64 @llvm.ctlz.i64(i64) nounwind readnone
 declare i64 @llvm.cttz.i64(i64) nounwind readnone
+declare void @sink(i1) nounwind readnone
 
 define void @foo(i64 %x) {
 entry:
@@ -23,10 +24,14 @@ entry:
 ispower2:
   %cmp1 = icmp eq i64 %pop, 1, !expected !1
   %cmp2 = icmp eq i64 %add, 63, !expected !1
+  call void @sink(i1 %cmp1)
+  call void @sink(i1 %cmp2)
   ret void
 notpower2:
   %cmp3 = icmp eq i64 %pop, 1, !expected !0
   %cmp4 = icmp eq i64 %add, 63, !expected !0
+  call void @sink(i1 %cmp3)
+  call void @sink(i1 %cmp4)
   ret void
 }
 

@@ -3,7 +3,7 @@
 ; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check %t
 
-define void @fermat(i20 %a, i20 %b, i20 %c) #0 {
+define i1 @fermat(i20 %a, i20 %b, i20 %c) #0 {
 entry:
   %ainc = add nuw i20 %a, 1
   %asqr = mul nuw i20 %ainc, %ainc
@@ -16,7 +16,7 @@ entry:
   %ccub = mul nuw i20 %cinc, %csqr
   %abcub = add nuw i20 %acub, %bcub
   %cmp = icmp eq i20 %abcub, %ccub, !expected !0
-  ret void
+  ret i1 %cmp
 }
 
 !0 = !{i1 0}

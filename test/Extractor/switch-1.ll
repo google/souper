@@ -17,11 +17,11 @@ default:                                    ; preds = %entry
 
 bb1:                                        ; preds = %default
   %cmp2 = icmp ne i32 %a, 1, !expected !1
-  br i1 %cmp1, label %bb2, label %bb5
+  br i1 %cmp2, label %bb2, label %bb5
 
 bb2:                                        ; preds = %bb1
   %cmp3 = icmp ne i32 %a, 2, !expected !1
-  br i1 %cmp1, label %bb3, label %bb5
+  br i1 %cmp3, label %bb3, label %bb5
 
 bb3:                                        ; preds = %bb2
   br label %bb5

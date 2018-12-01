@@ -39,7 +39,7 @@ cont6:
   br i1 %cmp7, label %cont7, label %out
 cont7:
   %res = add i10 %x, 0
-  ret i10 %x
+  ret i10 %res
 out:
   ret i10 0
 }
