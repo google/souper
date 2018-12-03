@@ -767,12 +767,14 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
     for (auto &I : BB) {
-      if (I.getType()->isIntegerTy()) {
-        Inst *In = EB.get(&I);
-        EB.markExternalUses(In);
-        BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
-        assert(EB.get(&I)->hasOrigin(&I));
-      }
+      if (!I.getType()->isIntegerTy())
+        continue;
+      if (I.hasNUses(0))
+        continue;
+      Inst *In = EB.get(&I);
+      EB.markExternalUses(In);
+      BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
+      assert(EB.get(&I)->hasOrigin(&I));
     }
     if (!BCS->Replacements.empty()) {
       std::unordered_set<Block *> VisitedBlocks;

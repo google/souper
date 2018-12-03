@@ -4,7 +4,7 @@
 ; RUN: %souper %solver -check %t 2> %t2 || true
 ; RUN: %FileCheck %s < %t2
 
-define void @foo() {
+define i1 @foo() {
 entry:
   ; CHECK: instruction:
   ; CHECK-NEXT: icmp eq i32 0, 0
@@ -13,5 +13,5 @@ entry:
   ; CHECK-NEXT: %0:i1 = eq 0:i32, 0:i32
   ; CHECK-NEXT: cand %0 1:i1
   %cmp = icmp eq i32 0, 0
-  ret void
+  ret i1 %cmp
 }

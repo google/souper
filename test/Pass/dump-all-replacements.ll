@@ -7,8 +7,8 @@
 
 ; CHECK: Listing all replacements for foo
 ; CHECK: 0:i1 = eq 1:i32, 1:i32
-define void @foo() {
+define i1 @foo() {
 entry:
   %t = icmp eq i32 1, 1
-  ret void
+  ret i1 %t
 }

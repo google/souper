@@ -13,7 +13,8 @@ entry:
   %bit = extractvalue { i32, i1 } %add, 1
   %cmp = icmp ugt i32 %sum, 0
   %res = or i1 %bit, %cmp, !expected !1
-  %conv = zext i1 %cmp to i32
+  %conv = zext i1 %res to i32, !expected !132
   ret i32 %conv
 }
 !1 = !{ i1 1 }
+!132 = !{ i32 1 }
