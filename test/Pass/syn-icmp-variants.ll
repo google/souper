@@ -27,10 +27,10 @@ define i1 @syn_slt(i32 %x, i32 %y) #0 {
   ret i1 %b
 }
 
-define i1 @syn_sgt(i32 %x) #0 {
+define i1 @syn_sg(i32 %x) #0 {
   %a = icmp sge i32 0, %x
   %b = xor i1 %a, true
-  ; CHECK: icmp sgt i32 %x, 0
+  ; CHECK: icmp {{sge i32 %x, 1|sgt i32 %x, 0}}
   ret i1 %b
 }
 
@@ -41,10 +41,10 @@ define i1 @syn_sle(i32 %x, i32 %y) #0 {
   ret i1 %b
 }
 
-define i1 @syn_sgt2(i32 %x) #0 {
+define i1 @syn_sg2(i32 %x) #0 {
   %a = icmp sgt i32 1, %x
   %b = xor i1 %a, true
-  ; CHECK: icmp sgt i32 %x, 0
+  ; CHECK: icmp {{sge i32 %x, 1|sgt i32 %x, 0}}
   ret i1 %b
 }
 
