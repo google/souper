@@ -379,10 +379,10 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   // one of the real advantages of this approach to synthesis vs
   // CEGIS is that we can synthesize in precisely increasing cost
   // order, and not try to somehow teach the solver how to do that
-  std::sort(Guesses.begin(), Guesses.end(),
-            [](Inst *a, Inst *b) -> bool {
-              return souper::cost(a) < souper::cost(b);
-            });
+  std::stable_sort(Guesses.begin(), Guesses.end(),
+                   [](Inst *a, Inst *b) -> bool {
+                     return souper::cost(a) < souper::cost(b);
+                   });
 
   // Big Query
   // TODO: Need to check if big query actually saves us time or just wastes time
