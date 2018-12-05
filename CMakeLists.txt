@@ -286,7 +286,7 @@ endif()
 
 set(TEST_SOLVER "" CACHE STRING "Solver command line argument to use in tests, e.g. -stp-path=/path/to/stp")
 set(TEST_SYNTHESIS "" CACHE STRING "Enable additional, computationally intensive synthesis tests")
-set(TEST_LONG_DURATION_SYNTHESIS "" CACHE STRING "Enable long duration (> 10 min) synthesis")
+set(TEST_LONG_DURATION_SYNTHESIS "" CACHE STRING "Enable long duration (> 10 min) synthesis tests")
 
 configure_file(
   ${CMAKE_SOURCE_DIR}/test/lit.site.cfg.in
