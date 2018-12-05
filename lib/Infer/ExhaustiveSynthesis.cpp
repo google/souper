@@ -333,8 +333,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
       JoinedGuess = I;
     else {
       // plugin the new guess I to PrevInst
-      std::map<Inst *, Inst *> InstCache;
-      JoinedGuess = instJoin(PrevInst, PrevSlot, I, InstCache, IC);
+      JoinedGuess = instJoin(PrevInst, PrevSlot, I, IC);
     }
 
     // get all empty slots from the newly plugged inst

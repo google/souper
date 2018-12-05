@@ -970,12 +970,11 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
 }
 
 Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
-                       std::map<Inst *, Inst *> &InstCache,
                        InstContext &IC) {
   std::vector<Inst *> Ops;
 
   for (auto const &Op : I->Ops) {
-    auto NewOp = instJoin(Op, EmptyInst, NewInst, InstCache, IC);
+    auto NewOp = instJoin(Op, EmptyInst, NewInst, IC);
     Ops.push_back(NewOp);
   }
 

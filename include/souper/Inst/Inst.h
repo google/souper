@@ -259,8 +259,7 @@ Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Inst *, llvm::APInt> *ConstMap,
                   bool CloneVars);
 
-Inst *instJoin(Inst *I, Inst *Reserved, Inst *NewInst,
-               std::map<Inst *, Inst *> &InstCache, InstContext &IC);
+Inst *instJoin(Inst *I, Inst *Reserved, Inst *NewInst, InstContext &IC);
 
 void findVars(Inst *Root, std::vector<Inst *> &Vars);
 
