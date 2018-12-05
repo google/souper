@@ -6,7 +6,7 @@
 ; CHECK-NOT: LGTM
 ; XFAIL: *
 
-; optimziation is wrong when b is poison
+; optimization is wrong when b is poison
 
 %a:i1 = var
 %b:i16 = var
