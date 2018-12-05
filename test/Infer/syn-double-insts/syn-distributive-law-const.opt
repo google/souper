@@ -1,0 +1,13 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-exhaustive-synthesis-num-instructions=2 %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; synthesis add/mul with constant (distributive law)
+%0:i4 = var
+%1:i4 = var
+%2:i4 = mul %0, 7:i4
+%3:i4 = mul %1, 7:i4
+%4:i4 = add %2, %3
+infer %4
+; CHECK: %5:i4 = add %0, %1
+; CHECK: %6:i4 = mul 7:i4, %5

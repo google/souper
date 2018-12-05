@@ -2,5 +2,6 @@ config.builddir = "@CMAKE_BINARY_DIR@"
 config.llvm_bindir = "@LLVM_BINDIR@"
 config.solver = "@TEST_SOLVER@"
 config.synthesis = "@TEST_SYNTHESIS@"
+config.long_duration_synthesis = "@TEST_LONG_DURATION_SYNTHESIS@"
 
 lit_config.load_config(config, "@CMAKE_SOURCE_DIR@/test/lit.cfg")
