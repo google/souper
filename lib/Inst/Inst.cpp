@@ -621,6 +621,7 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
 
 Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
                            const std::vector<Inst *> &Ops,
+                           llvm::APInt DemandedBits,
                            bool Available) {
   std::vector<Inst *> OrderedOps;
 
@@ -633,9 +634,13 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
     InstOps = &Ops;
   }
 
+  //llvm::APInt AllOnesDB = llvm::APInt::getAllOnesValue(Width);
+
   llvm::FoldingSetNodeID ID;
   ID.AddInteger(K);
   ID.AddInteger(Width);
+  //ID.Add(AllOnesDB);
+  ID.Add(DemandedBits);
   for (auto O : *InstOps)
     ID.AddPointer(O);
 
@@ -648,7 +653,8 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   N->K = K;
   N->Width = Width;
   N->Ops = *InstOps;
-  N->DemandedBits = llvm::APInt::getAllOnesValue(Width);
+  //N->DemandedBits = AllOnesDB;
+  N->DemandedBits = DemandedBits;
   N->Available = Available;
   InstSet.InsertNode(N, IP);
   return N;
@@ -962,7 +968,7 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
   } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
     return I;
   } else {
-    Copy = IC.getInst(I->K, I->Width, Ops);
+    Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits);
   }
   assert(Copy);
   InstCache[I] = Copy;
@@ -984,7 +990,7 @@ Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
   } else if (I->K == Inst::Var) {
     Copy = I;
   } else {
-    Copy = IC.getInst(I->K, I->Width, Ops);
+    Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits);
   }
 
   return Copy;

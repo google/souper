@@ -178,6 +178,7 @@ Inst *ExprBuilder::createPathPred(
     std::map<Inst *, bool> *SelectBranches) {
 
   Inst *Pred = LIC->getConst(llvm::APInt(1, true));
+  llvm::APInt DefaultDBVal = llvm::APInt::getAllOnesValue(1);
   if (PathInst->K == Inst::Phi) {
     unsigned Num = BlockConstraints[PathInst->B];
     const auto &PredExpr = PathInst->B->PredVars;
@@ -187,14 +188,14 @@ Inst *ExprBuilder::createPathPred(
            "phi predicate size mismatch");
     // Add the predicate(s)
     if (Num == 0)
-      Pred = LIC->getInst(Inst::And, 1, {Pred, PredExpr[0]});
+      Pred = LIC->getInst(Inst::And, 1, {Pred, PredExpr[0]}, DefaultDBVal);
     else {
       Inst *Zero = LIC->getConst(llvm::APInt(PredExpr[Num-1]->Width, 0));
-      Inst *IsZero = LIC->getInst(Inst::Eq, 1, {PredExpr[Num-1], Zero});
-      Pred = LIC->getInst(Inst::And, 1, {Pred, IsZero});
+      Inst *IsZero = LIC->getInst(Inst::Eq, 1, {PredExpr[Num-1], Zero}, DefaultDBVal);
+      Pred = LIC->getInst(Inst::And, 1, {Pred, IsZero}, DefaultDBVal);
     }
     for (unsigned B = Num; B < PredExpr.size(); ++B)
-      Pred = LIC->getInst(Inst::And, 1, {Pred, PredExpr[B]});
+      Pred = LIC->getInst(Inst::And, 1, {Pred, PredExpr[B]}, DefaultDBVal);
   }
   else if (PathInst->K == Inst::Select) {
     Inst *SelectPred = PathInst->orderedOps()[0];
@@ -205,11 +206,11 @@ Inst *ExprBuilder::createPathPred(
       return Pred;
     }
     if (SI->second)
-      Pred = LIC->getInst(Inst::And, 1, {Pred, SelectPred});
+      Pred = LIC->getInst(Inst::And, 1, {Pred, SelectPred}, DefaultDBVal);
     else {
       Inst *Zero = LIC->getConst(llvm::APInt(SelectPred->Width, 0));
-      Inst *IsZero = LIC->getInst(Inst::Eq, 1, {SelectPred, Zero});
-      Pred = LIC->getInst(Inst::And, 1, {Pred, IsZero});
+      Inst *IsZero = LIC->getInst(Inst::Eq, 1, {SelectPred, Zero}, DefaultDBVal);
+      Pred = LIC->getInst(Inst::And, 1, {Pred, IsZero}, DefaultDBVal);
     }
   }
   else {
@@ -277,6 +278,9 @@ Inst *ExprBuilder::getUBInstCondition(Inst *Root) {
   std::set<Inst *> UsedUBInsts;
   Inst *Result = LIC->getConst(llvm::APInt(1, true));
   auto UBExprMap = getUBInstConstraints(Root);
+
+  llvm::APInt DefaultDBVal = llvm::APInt::getAllOnesValue(1);
+
   // For each Phi/Select instruction
   for (const auto &I : getUBPathInsts(Root)) {
     if (CachedUBPathInsts.count(I) != 0)
@@ -301,7 +305,7 @@ Inst *ExprBuilder::getUBInstCondition(Inst *Root) {
         // For example, it may come from a blockpc which doesn't
         // have any preconditions.
         if (Iter != UBExprMap.end())
-          Ante = LIC->getInst(Inst::And, 1, {Ante, Iter->second});
+          Ante = LIC->getInst(Inst::And, 1, {Ante, Iter->second}, DefaultDBVal);
         UsedUBInsts.insert(I);
       }
       // Create path predicate
@@ -309,13 +313,13 @@ Inst *ExprBuilder::getUBInstCondition(Inst *Root) {
         createUBPathInstsPred(I, Path->Insts, Path->BlockConstraints,
                               &Path->SelectBranches, CachedUBPathInsts);
       // Add predicate->UB constraint
-      Result = LIC->getInst(Inst::And, 1, {Result, getImpliesInst(Pred, Ante)});
+      Result = LIC->getInst(Inst::And, 1, {Result, getImpliesInst(Pred, Ante)}, DefaultDBVal);
     }
   }
   // Add the unconditional UB constraints at the top level
   for (const auto &Entry: UBExprMap)
     if (!UsedUBInsts.count(Entry.first))
-      Result = LIC->getInst(Inst::And, 1, {Result, Entry.second});
+      Result = LIC->getInst(Inst::And, 1, {Result, Entry.second}, DefaultDBVal);
 
   return Result;
 }
@@ -333,48 +337,52 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
   if (I->KnownZeros.getBoolValue()) {
     Inst *AllOnes = LIC->getConst(llvm::APInt::getAllOnesValue(Width));
     Inst *NotZeros = LIC->getInst(Inst::Xor, Width,
-                                  {LIC->getConst(I->KnownZeros), AllOnes});
-    Inst *VarNotZero = LIC->getInst(Inst::Or, Width, {I, NotZeros});
-    Inst *ZeroBits = LIC->getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
-    Result = LIC->getInst(Inst::And, 1, {Result, ZeroBits});
+                                  {LIC->getConst(I->KnownZeros), AllOnes},
+                                  llvm::APInt::getAllOnesValue(Width));
+    Inst *VarNotZero = LIC->getInst(Inst::Or, Width, {I, NotZeros}, llvm::APInt::getAllOnesValue(Width));
+    Inst *ZeroBits = LIC->getInst(Inst::Eq, 1, {VarNotZero, NotZeros}, llvm::APInt::getAllOnesValue(1));
+    Result = LIC->getInst(Inst::And, 1, {Result, ZeroBits}, llvm::APInt::getAllOnesValue(1));
   }
   if (I->KnownOnes.getBoolValue()) {
     Inst *Ones = LIC->getConst(I->KnownOnes);
-    Inst *VarAndOnes = LIC->getInst(Inst::And, Width, {I, Ones});
-    Inst *OneBits = LIC->getInst(Inst::Eq, 1, {VarAndOnes, Ones});
-    Result = LIC->getInst(Inst::And, 1, {Result, OneBits});
+    Inst *VarAndOnes = LIC->getInst(Inst::And, Width, {I, Ones}, llvm::APInt::getAllOnesValue(Width));
+    Inst *OneBits = LIC->getInst(Inst::Eq, 1, {VarAndOnes, Ones}, llvm::APInt::getAllOnesValue(1));
+    Result = LIC->getInst(Inst::And, 1, {Result, OneBits}, llvm::APInt::getAllOnesValue(1));
   }
   if (I->NonZero) {
-    Inst *NonZeroBits = LIC->getInst(Inst::Ne, 1, {I, Zero});
-    Result = LIC->getInst(Inst::And, 1, {Result, NonZeroBits});
+    Inst *NonZeroBits = LIC->getInst(Inst::Ne, 1, {I, Zero}, llvm::APInt::getAllOnesValue(1));
+    Result = LIC->getInst(Inst::And, 1, {Result, NonZeroBits}, llvm::APInt::getAllOnesValue(1));
   }
   if (I->NonNegative) {
-    Inst *NonNegBits = LIC->getInst(Inst::Sle, 1, {Zero, I});
-    Result = LIC->getInst(Inst::And, 1, {Result, NonNegBits});
+    Inst *NonNegBits = LIC->getInst(Inst::Sle, 1, {Zero, I}, llvm::APInt::getAllOnesValue(1));
+    Result = LIC->getInst(Inst::And, 1, {Result, NonNegBits}, llvm::APInt::getAllOnesValue(1));
   }
   if (I->PowOfTwo) {
     Inst *And = LIC->getInst(Inst::And, Width,
-                             {I, LIC->getInst(Inst::Sub, Width, {I, One})});
+                             {I, LIC->getInst(Inst::Sub, Width, {I, One}, llvm::APInt::getAllOnesValue(Width))},
+                             llvm::APInt::getAllOnesValue(Width));
     Inst *PowerTwoBits = LIC->getInst(Inst::And, 1,
-                                      {LIC->getInst(Inst::Ne, 1, {I, Zero}),
-                                       LIC->getInst(Inst::Eq, 1, {And, Zero})});
-    Result = LIC->getInst(Inst::And, 1, {Result, PowerTwoBits});
+                                      {LIC->getInst(Inst::Ne, 1, {I, Zero}, llvm::APInt::getAllOnesValue(1)),
+                                       LIC->getInst(Inst::Eq, 1, {And, Zero}, llvm::APInt::getAllOnesValue(1))},
+                                       llvm::APInt::getAllOnesValue(1));
+    Result = LIC->getInst(Inst::And, 1, {Result, PowerTwoBits}, llvm::APInt::getAllOnesValue(1));
   }
   if (I->Negative) {
-    Inst *NegBits = LIC->getInst(Inst::Slt, 1, {I, Zero});
-    Result = LIC->getInst(Inst::And, 1, {Result, NegBits});
+    Inst *NegBits = LIC->getInst(Inst::Slt, 1, {I, Zero}, llvm::APInt::getAllOnesValue(1));
+    Result = LIC->getInst(Inst::And, 1, {Result, NegBits}, llvm::APInt::getAllOnesValue(1));
   }
   if (I->NumSignBits > 1) {
     Inst *Diff = LIC->getConst(llvm::APInt(Width, Width - I->NumSignBits));
-    Inst *Res = LIC->getInst(Inst::AShr, Width, {I, Diff});
+    Inst *Res = LIC->getInst(Inst::AShr, Width, {I, Diff}, llvm::APInt::getAllOnesValue(Width));
     Diff = LIC->getConst(llvm::APInt(Width, Width-1));
     Inst *TestOnes = LIC->getInst(Inst::AShr, Width,
-                                  {LIC->getInst(Inst::Shl, Width, {One, Diff}),
-                                   LIC->getConst(llvm::APInt(Width, Width-1))});
+                                  {LIC->getInst(Inst::Shl, Width, {One, Diff}, llvm::APInt::getAllOnesValue(Width)),
+                                   LIC->getConst(llvm::APInt(Width, Width-1))}, llvm::APInt::getAllOnesValue(Width));
     Inst *SignBits = LIC->getInst(Inst::Or, 1,
-                                  {LIC->getInst(Inst::Eq, 1, {Res, TestOnes}),
-                                   LIC->getInst(Inst::Eq, 1, {Res, Zero})});
-    Result = LIC->getInst(Inst::And, 1, {Result, SignBits});
+                                  {LIC->getInst(Inst::Eq, 1, {Res, TestOnes}, llvm::APInt::getAllOnesValue(1)),
+                                   LIC->getInst(Inst::Eq, 1, {Res, Zero}, llvm::APInt::getAllOnesValue(1))},
+                                   llvm::APInt::getAllOnesValue(1));
+    Result = LIC->getInst(Inst::And, 1, {Result, SignBits}, llvm::APInt::getAllOnesValue(1));
   }
 
   return Result;
@@ -407,13 +415,13 @@ Inst *ExprBuilder::getBlockPCs(Inst *Root) {
       // Aggregate collected BlockPC constraints
       Inst *Ante = LIC->getConst(llvm::APInt(1, true));
       for (const auto &PC : Path->PCs)
-        Ante = LIC->getInst(Inst::And, 1, {Ante, PC});
+        Ante = LIC->getInst(Inst::And, 1, {Ante, PC}, llvm::APInt::getAllOnesValue(1));
       // Create path predicate
       Inst *Pred =
         createUBPathInstsPred(I, Path->Phis, Path->BlockConstraints,
                               /*SelectBranches=*/nullptr, CachedPhis);
       // Add predicate->UB constraint
-      Result = LIC->getInst(Inst::And, 1, {Result, getImpliesInst(Pred, Ante)});
+      Result = LIC->getInst(Inst::And, 1, {Result, getImpliesInst(Pred, Ante)}, llvm::APInt::getAllOnesValue(1));
     }
   }
 
@@ -425,11 +433,11 @@ void ExprBuilder::setBlockPCMap(const BlockPCs &BPCs) {
     assert(BPC.B && "Block is NULL!");
     BlockPCPredMap &PCMap = BlockPCMap[BPC.B];
     auto I = PCMap.find(BPC.PredIdx);
-    Inst *PE = LIC->getInst(Inst::Eq, 1, {BPC.PC.LHS, BPC.PC.RHS});
+    Inst *PE = LIC->getInst(Inst::Eq, 1, {BPC.PC.LHS, BPC.PC.RHS}, llvm::APInt::getAllOnesValue(1));
     if (I == PCMap.end())
       PCMap[BPC.PredIdx] = PE;
     else
-      PCMap[BPC.PredIdx] = LIC->getInst(Inst::And, 1, {I->second, PE});
+      PCMap[BPC.PredIdx] = LIC->getInst(Inst::And, 1, {I->second, PE}, llvm::APInt::getAllOnesValue(1));
   }
 }
 
@@ -452,14 +460,14 @@ Inst *ExprBuilder::createUBPathInstsPred(
       // Use cached Expr along each path which has UB Insts,
       // and cache the expanded Expr for the current working Phi
       for (auto CE : PI->second) {
-        InstPred = LIC->getInst(Inst::And, 1, {CE, InstPred});
+        InstPred = LIC->getInst(Inst::And, 1, {CE, InstPred}, llvm::APInt::getAllOnesValue(1));
         CachedUBPathInsts[CurrentInst].push_back(InstPred);
-        Pred = LIC->getInst(Inst::And, 1, {Pred, InstPred});
+        Pred = LIC->getInst(Inst::And, 1, {Pred, InstPred}, llvm::APInt::getAllOnesValue(1));
       }
     }
     else {
       CachedUBPathInsts[CurrentInst].push_back(InstPred);
-      Pred = LIC->getInst(Inst::And, 1, {Pred, InstPred});
+      Pred = LIC->getInst(Inst::And, 1, {Pred, InstPred}, llvm::APInt::getAllOnesValue(1));
     }
   }
 
@@ -471,11 +479,12 @@ Inst *ExprBuilder::getExtractInst(Inst *I, unsigned Offset, unsigned W) {
     return LIC->getConst(llvm::APInt(I->Val.ashr(Offset)).zextOrTrunc(W));
   } else {
     Inst *AShr = LIC->getInst(Inst::AShr, I->Width,
-                              {I, LIC->getConst(llvm::APInt(I->Width, Offset))});
+                              {I, LIC->getConst(llvm::APInt(I->Width, Offset))},
+                              llvm::APInt::getAllOnesValue(I->Width));
     if (AShr->Width < W)
-      return LIC->getInst(Inst::ZExt, W, {AShr});
+      return LIC->getInst(Inst::ZExt, W, {AShr}, llvm::APInt::getAllOnesValue(W));
     else if (AShr->Width > W)
-      return LIC->getInst(Inst::Trunc, W, {AShr});
+      return LIC->getInst(Inst::Trunc, W, {AShr}, llvm::APInt::getAllOnesValue(W));
     else
       return AShr;
   }
@@ -483,8 +492,8 @@ Inst *ExprBuilder::getExtractInst(Inst *I, unsigned Offset, unsigned W) {
 
 Inst *ExprBuilder::getImpliesInst(Inst *Ante, Inst *I) {
   Inst *Zero = LIC->getConst(llvm::APInt(Ante->Width, 0));
-  Inst *IsZero = LIC->getInst(Inst::Eq, 1, {Ante, Zero});
-  return LIC->getInst(Inst::Or, 1, {IsZero, I});
+  Inst *IsZero = LIC->getInst(Inst::Eq, 1, {Ante, Zero}, llvm::APInt::getAllOnesValue(1));
+  return LIC->getInst(Inst::Or, 1, {IsZero, I}, llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::addnswUB(Inst *I) {
@@ -492,12 +501,12 @@ Inst *ExprBuilder::addnswUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Add = LIC->getInst(Inst::Add, Width, {L, R});
+   Inst *Add = LIC->getInst(Inst::Add, Width, {L, R}, llvm::APInt::getAllOnesValue(Width));
    Inst *LMSB = getExtractInst(L, Width-1, 1);
    Inst *RMSB = getExtractInst(R, Width-1, 1);
    Inst *AddMSB = getExtractInst(Add, Width-1, 1);
-   return getImpliesInst(LIC->getInst(Inst::Eq, 1, {LMSB, RMSB}),
-                         LIC->getInst(Inst::Eq, 1, {LMSB, AddMSB}));
+   return getImpliesInst(LIC->getInst(Inst::Eq, 1, {LMSB, RMSB}, llvm::APInt::getAllOnesValue(1)),
+                         LIC->getInst(Inst::Eq, 1, {LMSB, AddMSB}, llvm::APInt::getAllOnesValue(1)));
 }
 
 Inst *ExprBuilder::addnuwUB(Inst *I) {
@@ -505,12 +514,13 @@ Inst *ExprBuilder::addnuwUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Lext = LIC->getInst(Inst::ZExt, Width+1, {L});
-   Inst *Rext = LIC->getInst(Inst::ZExt, Width+1, {R});
-   Inst *Add = LIC->getInst(Inst::Add, Width+1, {Lext, Rext});
+   Inst *Lext = LIC->getInst(Inst::ZExt, Width+1, {L}, llvm::APInt::getAllOnesValue(Width+1));
+   Inst *Rext = LIC->getInst(Inst::ZExt, Width+1, {R}, llvm::APInt::getAllOnesValue(Width+1));
+   Inst *Add = LIC->getInst(Inst::Add, Width+1, {Lext, Rext}, llvm::APInt::getAllOnesValue(Width+1));
    Inst *AddMSB = getExtractInst(Add, Width, 1);
    return LIC->getInst(Inst::Eq, 1,
-                       {AddMSB, LIC->getConst(llvm::APInt(1, false))});
+                       {AddMSB, LIC->getConst(llvm::APInt(1, false))},
+                       llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::subnswUB(Inst *I) {
@@ -518,12 +528,12 @@ Inst *ExprBuilder::subnswUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Sub = LIC->getInst(Inst::Sub, Width, {L, R});
+   Inst *Sub = LIC->getInst(Inst::Sub, Width, {L, R}, llvm::APInt::getAllOnesValue(1));
    Inst *LMSB = getExtractInst(L, Width-1, 1);
    Inst *RMSB = getExtractInst(R, Width-1, 1);
    Inst *SubMSB = getExtractInst(Sub, Width-1, 1);
-   return getImpliesInst(LIC->getInst(Inst::Ne, 1, {LMSB, RMSB}),
-                         LIC->getInst(Inst::Eq, 1, {LMSB, SubMSB}));
+   return getImpliesInst(LIC->getInst(Inst::Ne, 1, {LMSB, RMSB}, llvm::APInt::getAllOnesValue(1)),
+                         LIC->getInst(Inst::Eq, 1, {LMSB, SubMSB}, llvm::APInt::getAllOnesValue(1)));
 }
 
 Inst *ExprBuilder::subnuwUB(Inst *I) {
@@ -531,12 +541,12 @@ Inst *ExprBuilder::subnuwUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Lext = LIC->getInst(Inst::ZExt, Width+1, {L});
-   Inst *Rext = LIC->getInst(Inst::ZExt, Width+1, {R});
-   Inst *Sub = LIC->getInst(Inst::Sub, Width+1, {Lext, Rext});
+   Inst *Lext = LIC->getInst(Inst::ZExt, Width+1, {L}, llvm::APInt::getAllOnesValue(Width+1));
+   Inst *Rext = LIC->getInst(Inst::ZExt, Width+1, {R}, llvm::APInt::getAllOnesValue(Width+1));
+   Inst *Sub = LIC->getInst(Inst::Sub, Width+1, {Lext, Rext}, llvm::APInt::getAllOnesValue(Width+1));
    Inst *SubMSB = getExtractInst(Sub, Width, 1);
    return LIC->getInst(Inst::Eq, 1,
-                       {SubMSB, LIC->getConst(llvm::APInt(1, false))});
+                       {SubMSB, LIC->getConst(llvm::APInt(1, false))}, llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::mulnswUB(Inst *I) {
@@ -548,12 +558,12 @@ Inst *ExprBuilder::mulnswUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   L = LIC->getInst(Inst::SExt, 2*Width, {L});
-   R = LIC->getInst(Inst::SExt, 2*Width, {R});
-   Inst *Mul = LIC->getInst(Inst::Mul, 2*Width, {L, R});
+   L = LIC->getInst(Inst::SExt, 2*Width, {L}, llvm::APInt::getAllOnesValue(2*Width));
+   R = LIC->getInst(Inst::SExt, 2*Width, {R}, llvm::APInt::getAllOnesValue(2*Width));
+   Inst *Mul = LIC->getInst(Inst::Mul, 2*Width, {L, R}, llvm::APInt::getAllOnesValue(2*Width));
    Inst *LowerBits = getExtractInst(Mul, 0, Width);
-   Inst *LowerBitsExt = LIC->getInst(Inst::SExt, 2*Width, {LowerBits});
-   return LIC->getInst(Inst::Eq, 1, {Mul, LowerBitsExt});
+   Inst *LowerBitsExt = LIC->getInst(Inst::SExt, 2*Width, {LowerBits}, llvm::APInt::getAllOnesValue(2*Width));
+   return LIC->getInst(Inst::Eq, 1, {Mul, LowerBitsExt}, llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::mulnuwUB(Inst *I) {
@@ -561,19 +571,21 @@ Inst *ExprBuilder::mulnuwUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Lext = LIC->getInst(Inst::ZExt, 2*Width, {L});
-   Inst *Rext = LIC->getInst(Inst::ZExt, 2*Width, {R});
-   Inst *Mul = LIC->getInst(Inst::Mul, 2*Width, {Lext, Rext});
+   Inst *Lext = LIC->getInst(Inst::ZExt, 2*Width, {L}, llvm::APInt::getAllOnesValue(2*Width));
+   Inst *Rext = LIC->getInst(Inst::ZExt, 2*Width, {R}, llvm::APInt::getAllOnesValue(2*Width));
+   Inst *Mul = LIC->getInst(Inst::Mul, 2*Width, {Lext, Rext}, llvm::APInt::getAllOnesValue(2*Width));
    Inst *HigherBits = getExtractInst(Mul, Width, Width);
    return LIC->getInst(Inst::Eq, 1,
-                       {HigherBits, LIC->getConst(llvm::APInt(Width, 0))});
+                       {HigherBits, LIC->getConst(llvm::APInt(Width, 0))},
+                       llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::udivUB(Inst *I) {
    const std::vector<Inst *> &Ops = I->orderedOps();
    auto R = Ops[1];
    return LIC->getInst(Inst::Ne, 1,
-                       {R, LIC->getConst(llvm::APInt(R->Width, 0))});
+                       {R, LIC->getConst(llvm::APInt(R->Width, 0))},
+                       llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::udivExactUB(Inst *I) {
@@ -581,9 +593,10 @@ Inst *ExprBuilder::udivExactUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Udiv = LIC->getInst(Inst::UDiv, Width, {L, R});
+   Inst *Udiv = LIC->getInst(Inst::UDiv, Width, {L, R}, llvm::APInt::getAllOnesValue(Width));
    return LIC->getInst(Inst::Eq, 1,
-                       {L, LIC->getInst(Inst::Mul, Width, {R, Udiv})});
+                       {L, LIC->getInst(Inst::Mul, Width, {R, Udiv}, llvm::APInt::getAllOnesValue(Width))},
+                       llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::sdivUB(Inst *I) {
@@ -593,14 +606,15 @@ Inst *ExprBuilder::sdivUB(Inst *I) {
    unsigned Width = L->Width;
    Inst *ShiftBy = LIC->getConst(llvm::APInt(Width, Width-1));
    Inst *IntMin = LIC->getInst(Inst::Shl, Width,
-                               {LIC->getConst(llvm::APInt(Width, 1)), ShiftBy});
-   Inst *NegOne = LIC->getInst(Inst::AShr, Width, {IntMin, ShiftBy});
+                               {LIC->getConst(llvm::APInt(Width, 1)), ShiftBy}, llvm::APInt::getAllOnesValue(Width));
+   Inst *NegOne = LIC->getInst(Inst::AShr, Width, {IntMin, ShiftBy}, llvm::APInt::getAllOnesValue(Width));
    Inst *NeExpr = LIC->getInst(Inst::Ne, 1,
-                               {R, LIC->getConst(llvm::APInt(R->Width, 0))});
+                               {R, LIC->getConst(llvm::APInt(R->Width, 0))}, llvm::APInt::getAllOnesValue(1));
    Inst *OrExpr = LIC->getInst(Inst::Or, 1,
-                               {LIC->getInst(Inst::Ne, 1, {L, IntMin}),
-                                LIC->getInst(Inst::Ne, 1, {R, NegOne})});
-   return LIC->getInst(Inst::And, 1, {NeExpr, OrExpr});
+                               {LIC->getInst(Inst::Ne, 1, {L, IntMin}, llvm::APInt::getAllOnesValue(1)),
+                                LIC->getInst(Inst::Ne, 1, {R, NegOne}, llvm::APInt::getAllOnesValue(1))},
+                                llvm::APInt::getAllOnesValue(1));
+   return LIC->getInst(Inst::And, 1, {NeExpr, OrExpr}, llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::sdivExactUB(Inst *I) {
@@ -608,9 +622,10 @@ Inst *ExprBuilder::sdivExactUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Sdiv = LIC->getInst(Inst::SDiv, Width, {L, R});
+   Inst *Sdiv = LIC->getInst(Inst::SDiv, Width, {L, R}, llvm::APInt::getAllOnesValue(Width));
    return LIC->getInst(Inst::Eq, 1,
-                       {L, LIC->getInst(Inst::Mul, Width, {R, Sdiv})});
+                       {L, LIC->getInst(Inst::Mul, Width, {R, Sdiv}, llvm::APInt::getAllOnesValue(Width))},
+                       llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::shiftUB(Inst *I) {
@@ -619,7 +634,7 @@ Inst *ExprBuilder::shiftUB(Inst *I) {
    auto R = Ops[1];
    unsigned Width = L->Width;
    Inst *Lwidth = LIC->getConst(llvm::APInt(Width, Width));
-   return LIC->getInst(Inst::Ult, 1, {R, Lwidth});
+   return LIC->getInst(Inst::Ult, 1, {R, Lwidth}, llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::shlnswUB(Inst *I) {
@@ -627,9 +642,9 @@ Inst *ExprBuilder::shlnswUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Result = LIC->getInst(Inst::Shl, Width, {L, R});
-   Inst *RShift = LIC->getInst(Inst::AShr, Width, {Result, R});
-   return LIC->getInst(Inst::Eq, 1, {RShift, L});
+   Inst *Result = LIC->getInst(Inst::Shl, Width, {L, R}, llvm::APInt::getAllOnesValue(Width));
+   Inst *RShift = LIC->getInst(Inst::AShr, Width, {Result, R}, llvm::APInt::getAllOnesValue(Width));
+   return LIC->getInst(Inst::Eq, 1, {RShift, L}, llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::shlnuwUB(Inst *I) {
@@ -637,9 +652,9 @@ Inst *ExprBuilder::shlnuwUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Result = LIC->getInst(Inst::Shl, Width, {L, R});
-   Inst *RShift = LIC->getInst(Inst::LShr, Width, {Result, R});
-   return LIC->getInst(Inst::Eq, 1, {RShift, L});
+   Inst *Result = LIC->getInst(Inst::Shl, Width, {L, R}, llvm::APInt::getAllOnesValue(Width));
+   Inst *RShift = LIC->getInst(Inst::LShr, Width, {Result, R}, llvm::APInt::getAllOnesValue(Width));
+   return LIC->getInst(Inst::Eq, 1, {RShift, L}, llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::lshrExactUB(Inst *I) {
@@ -647,9 +662,9 @@ Inst *ExprBuilder::lshrExactUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Result = LIC->getInst(Inst::LShr, Width, {L, R});
-   Inst *LShift = LIC->getInst(Inst::Shl, Width, {Result, R});
-   return LIC->getInst(Inst::Eq, 1, {LShift, L});
+   Inst *Result = LIC->getInst(Inst::LShr, Width, {L, R}, llvm::APInt::getAllOnesValue(Width));
+   Inst *LShift = LIC->getInst(Inst::Shl, Width, {Result, R}, llvm::APInt::getAllOnesValue(Width));
+   return LIC->getInst(Inst::Eq, 1, {LShift, L}, llvm::APInt::getAllOnesValue(1));
 }
 
 Inst *ExprBuilder::ashrExactUB(Inst *I) {
@@ -657,9 +672,9 @@ Inst *ExprBuilder::ashrExactUB(Inst *I) {
    auto L = Ops[0];
    auto R = Ops[1];
    unsigned Width = L->Width;
-   Inst *Result = LIC->getInst(Inst::AShr, Width, {L, R});
-   Inst *LShift = LIC->getInst(Inst::Shl, Width, {Result, R});
-   return LIC->getInst(Inst::Eq, 1, {LShift, L});
+   Inst *Result = LIC->getInst(Inst::AShr, Width, {L, R}, llvm::APInt::getAllOnesValue(Width));
+   Inst *LShift = LIC->getInst(Inst::Shl, Width, {Result, R}, llvm::APInt::getAllOnesValue(Width));
+   return LIC->getInst(Inst::Eq, 1, {LShift, L}, llvm::APInt::getAllOnesValue(1));
 }
 
 std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
@@ -683,7 +698,8 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
     }
     case Inst::AddNW: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
-                                     {addnswUB(I), addnuwUB(I)}));
+                                     {addnswUB(I), addnuwUB(I)},
+                                     llvm::APInt::getAllOnesValue(1)));
       break;
     }
     case Inst::SubNSW: {
@@ -696,7 +712,8 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
     }
     case Inst::SubNW: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
-                                     {subnswUB(I), subnuwUB(I)}));
+                                     {subnswUB(I), subnuwUB(I)},
+                                     llvm::APInt::getAllOnesValue(1)));
       break;
     }
     case Inst::MulNSW: {
@@ -709,7 +726,8 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
     }
     case Inst::MulNW: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
-                                     {mulnswUB(I), mulnuwUB(I)}));
+                                     {mulnswUB(I), mulnuwUB(I)},
+                                     llvm::APInt::getAllOnesValue(1)));
       break;
     }
 
@@ -744,12 +762,14 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
       }
       case Inst::UDivExact: {
         Result.emplace(I, LIC->getInst(Inst::And, 1,
-                                       {udivUB(I), udivExactUB(I)}));
+                                       {udivUB(I), udivExactUB(I)},
+                                       llvm::APInt::getAllOnesValue(1)));
         break;
       }
       case Inst::SDivExact: {
         Result.emplace(I, LIC->getInst(Inst::And, 1,
-                                       {sdivUB(I), sdivExactUB(I)}));
+                                       {sdivUB(I), sdivExactUB(I)},
+                                       llvm::APInt::getAllOnesValue(1)));
         break;
       }
       case Inst::URem: {
@@ -769,16 +789,16 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
       break;
     }
     case Inst::ShlNSW: {
-      Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnswUB(I)}));
+      Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnswUB(I)}, llvm::APInt::getAllOnesValue(1)));
       break;
     }
     case Inst::ShlNUW: {
-      Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnuwUB(I)}));
+      Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), shlnuwUB(I)}, llvm::APInt::getAllOnesValue(1)));
       break;
     }
     case Inst::ShlNW: {
-      Inst *nwUB = LIC->getInst(Inst::And, 1, {shlnswUB(I), shlnuwUB(I)});
-      Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), nwUB}));
+      Inst *nwUB = LIC->getInst(Inst::And, 1, {shlnswUB(I), shlnuwUB(I)}, llvm::APInt::getAllOnesValue(1));
+      Result.emplace(I, LIC->getInst(Inst::And, 1, {shiftUB(I), nwUB}, llvm::APInt::getAllOnesValue(1)));
       break;
     }
     case Inst::LShr: {
@@ -787,7 +807,8 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
     }
     case Inst::LShrExact: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
-                                     {shiftUB(I), lshrExactUB(I)}));
+                                     {shiftUB(I), lshrExactUB(I)},
+                                     llvm::APInt::getAllOnesValue(1)));
       break;
     }
     case Inst::AShr: {
@@ -796,7 +817,8 @@ std::map<Inst *, Inst *> ExprBuilder::getUBInstConstraints(Inst *Root) {
     }
     case Inst::AShrExact: {
       Result.emplace(I, LIC->getInst(Inst::And, 1,
-                                     {shiftUB(I), ashrExactUB(I)}));
+                                     {shiftUB(I), ashrExactUB(I)},
+                                     llvm::APInt::getAllOnesValue(1)));
       break;
     }
     default:
@@ -876,7 +898,7 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
   // Get demanded bits
   Inst *DemandedBits = LIC->getConst(LHS->DemandedBits);
   if (!LHS->DemandedBits.isAllOnesValue())
-    LHS = LIC->getInst(Inst::And, LHS->Width, {LHS, DemandedBits});
+    LHS = LIC->getInst(Inst::And, LHS->Width, {LHS, DemandedBits}, llvm::APInt::getAllOnesValue(LHS->Width));
 
   // Get UB constraints of LHS
   Inst *LHSUB = getUBInstCondition(Mapping.LHS);
@@ -885,16 +907,16 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
 
   // Build PCs
   for (const auto &PC : PCs) {
-    Inst *Eq = LIC->getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
-    Ante = LIC->getInst(Inst::And, 1, {Ante, Eq});
+    Inst *Eq = LIC->getInst(Inst::Eq, 1, {PC.LHS, PC.RHS}, llvm::APInt::getAllOnesValue(1));
+    Ante = LIC->getInst(Inst::And, 1, {Ante, Eq}, llvm::APInt::getAllOnesValue(1));
     // Get UB constraints of PC
-    LHSUB = LIC->getInst(Inst::And, 1, {LHSUB, getUBInstCondition(Eq)});
+    LHSUB = LIC->getInst(Inst::And, 1, {LHSUB, getUBInstCondition(Eq)}, llvm::APInt::getAllOnesValue(1));
   }
 
   // Build BPCs
   if (BPCs.size()) {
     setBlockPCMap(BPCs);
-    Ante = LIC->getInst(Inst::And, 1, {Ante, getBlockPCs(Mapping.LHS)});
+    Ante = LIC->getInst(Inst::And, 1, {Ante, getBlockPCs(Mapping.LHS)}, llvm::APInt::getAllOnesValue(1));
   }
 
   // Build RHS
@@ -902,11 +924,11 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
 
   // Get demanded bits
   if (!Mapping.LHS->DemandedBits.isAllOnesValue())
-    RHS = LIC->getInst(Inst::And, RHS->Width, {RHS, DemandedBits});
+    RHS = LIC->getInst(Inst::And, RHS->Width, {RHS, DemandedBits}, llvm::APInt::getAllOnesValue(RHS->Width));
 
   // Get known bit constraints
   for (const auto &I : getVarInsts({Mapping.LHS, Mapping.RHS}))
-    Ante = LIC->getInst(Inst::And, 1, {Ante, getDemandedBitsCondition(I)});
+    Ante = LIC->getInst(Inst::And, 1, {Ante, getDemandedBitsCondition(I)}, llvm::APInt::getAllOnesValue(1));
 
   // Get UB constraints of RHS
   Inst *RHSUB = getUBInstCondition(Mapping.RHS);
@@ -914,16 +936,16 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
     return nullptr;
 
   if (Negate) // (LHS != RHS)
-    Result = LIC->getInst(Inst::Ne, 1, {LHS, RHS});
+    Result = LIC->getInst(Inst::Ne, 1, {LHS, RHS}, llvm::APInt::getAllOnesValue(1));
   else        // (LHS == RHS)
-    Result = LIC->getInst(Inst::Eq, 1, {LHS, RHS});
+    Result = LIC->getInst(Inst::Eq, 1, {LHS, RHS}, llvm::APInt::getAllOnesValue(1));
 
   // Result && RHS UB
   if (Mapping.RHS->K != Inst::Const)
-    Result = LIC->getInst(Inst::And, 1, {Result, RHSUB});
+    Result = LIC->getInst(Inst::And, 1, {Result, RHSUB}, llvm::APInt::getAllOnesValue(1));
 
   // (B)PCs && && LHS UB && (B)PCs UB
-  Ante = LIC->getInst(Inst::And, 1, {Ante, LHSUB});
+  Ante = LIC->getInst(Inst::And, 1, {Ante, LHSUB}, llvm::APInt::getAllOnesValue(1));
 
   // ((B)PCs && LHS UB && (B)PCs UB) => Result && RHS UB
   Result = getImpliesInst(Ante, Result);

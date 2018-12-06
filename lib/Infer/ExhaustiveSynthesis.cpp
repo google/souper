@@ -110,11 +110,11 @@ void hasConstant(Inst *I, std::vector<Inst *> &ConstList) {
 std::vector<Inst *> matchWidth(Inst *I, unsigned NewW, InstContext &IC) {
   int OldW = Inst::isCmp(I->K) ? 1 : I->Width;
   if (OldW > NewW)
-    return { IC.getInst(Inst::Trunc, NewW, { I }) };
+    return { IC.getInst(Inst::Trunc, NewW, { I }, llvm::APInt::getAllOnesValue(NewW)) };
   if (OldW < NewW)
     return {
-            IC.getInst(Inst::SExt, NewW, { I }),
-            IC.getInst(Inst::ZExt, NewW, { I }),
+            IC.getInst(Inst::SExt, NewW, { I }, llvm::APInt::getAllOnesValue(NewW)),
+            IC.getInst(Inst::ZExt, NewW, { I }, llvm::APInt::getAllOnesValue(NewW)),
     };
   return { I };
 }
@@ -176,7 +176,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
         }
 
         for (auto V : matchWidth(Comp, Width, IC)) {
-          auto N = IC.getInst(K, Width, { V });
+          auto N = IC.getInst(K, Width, { V }, llvm::APInt::getAllOnesValue(Width));
           addGuess(N, LHSCost, PartialGuesses, TooExpensive);
         }
       }
@@ -262,7 +262,15 @@ void getGuesses(std::vector<Inst *> &Guesses,
               // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
               if (K == Inst::Sub && V2i->Name.find(ReservedConstPrefix) != std::string::npos)
                 continue;
-              auto N = IC.getInst(K, Inst::isCmp(K) ? 1 : OpWidth, { V1i, V2i });
+              //auto N = IC.getInst(K, Inst::isCmp(K) ? 1 : OpWidth, { V1i, V2i });
+              unsigned W = 0;
+              if (Inst::isCmp(K))
+                W = 1;
+              else
+                W = OpWidth;
+              
+              auto N = IC.getInst(K, W, { V1i, V2i }, llvm::APInt::getAllOnesValue(W));
+
               for (auto MatchedWidthN : matchWidth(N, Width, IC)) {
                 addGuess(MatchedWidthN, LHSCost, PartialGuesses, TooExpensive);
               }
@@ -317,7 +325,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
             auto MatchedWidthL = matchWidth(L, 1, IC);
             auto SelectInst = IC.getInst(Inst::Select,
-                                         Width, { MatchedWidthL[0], V1i, V2i });
+                                         Width, { MatchedWidthL[0], V1i, V2i }, llvm::APInt::getAllOnesValue(Width));
             addGuess(SelectInst, LHSCost, PartialGuesses, TooExpensive);
           }
         }
@@ -375,8 +383,8 @@ APInt getNextInputVal(Inst *Var,
   HasNextInputValue = true;
   Inst *Ante = IC.getConst(APInt(1, true));
   for (auto PC : PCs ) {
-    Inst* Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
-    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+    Inst* Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS}, llvm::APInt::getAllOnesValue(1));
+    Ante = IC.getInst(Inst::And, 1, {Ante, Eq}, llvm::APInt::getAllOnesValue(1));
   }
 
   // If a variable is neither found in PCs or TriedVar, return APInt(0)
@@ -391,8 +399,8 @@ APInt getNextInputVal(Inst *Var,
   }
 
   for (auto Value : TriedVars[Var]) {
-    Inst* Ne = IC.getInst(Inst::Ne, 1, {Var, IC.getConst(Value)});
-    Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
+    Inst* Ne = IC.getInst(Inst::Ne, 1, {Var, IC.getConst(Value)}, llvm::APInt::getAllOnesValue(1));
+    Ante = IC.getInst(Inst::And, 1, {Ante, Ne}, llvm::APInt::getAllOnesValue(1));
   }
 
   InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
@@ -488,9 +496,9 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       std::map<Block *, Block *> BlockCache;
 
       Inst *Eq = IC.getInst(Inst::Eq, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
-                                          getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
+                                          getInstCopy(I, IC, InstCache, BlockCache, 0, true)}, llvm::APInt::getAllOnesValue(1));
 
-      Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+      Ante = IC.getInst(Inst::And, 1, {Ante, Eq}, llvm::APInt::getAllOnesValue(1));
       separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
       separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
     }
@@ -557,10 +565,10 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         for (unsigned i = 0; i < BadConsts[ConstList[0]].size(); ++i) {
           Inst *Ante = IC.getConst(APInt(1, false));
           for (auto C : ConstList) {
-            Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(BadConsts[C][i]), C });
-            Ante = IC.getInst(Inst::Or, 1, {Ante, Ne});
+            Inst *Ne = IC.getInst(Inst::Ne, 1, {IC.getConst(BadConsts[C][i]), C }, llvm::APInt::getAllOnesValue(1));
+            Ante = IC.getInst(Inst::Or, 1, {Ante, Ne}, llvm::APInt::getAllOnesValue(1));
           }
-          AvoidConsts = IC.getInst(Inst::And, 1, {Ante, AvoidConsts});
+          AvoidConsts = IC.getInst(Inst::And, 1, {Ante, AvoidConsts}, llvm::APInt::getAllOnesValue(1));
         }
       }
 
@@ -595,12 +603,12 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
           Inst *Eq =
             IC.getInst(Inst::Eq, 1,
                        {getInstCopy(LHS, IC, InstCache, BlockCache, &VarMap, true),
-                        getInstCopy(I, IC, InstCache, BlockCache, &VarMap, true)});
-          Ante = IC.getInst(Inst::And, 1, {Eq, Ante});
+                        getInstCopy(I, IC, InstCache, BlockCache, &VarMap, true)}, llvm::APInt::getAllOnesValue(1));
+          Ante = IC.getInst(Inst::And, 1, {Eq, Ante}, llvm::APInt::getAllOnesValue(1));
         }
       }
-      Ante = IC.getInst(Inst::And, 1, {IC.getInst(Inst::Eq, 1, {LHS, I}), Ante});
-      Ante = IC.getInst(Inst::And, 1, {AvoidConsts, Ante});
+      Ante = IC.getInst(Inst::And, 1, {IC.getInst(Inst::Eq, 1, {LHS, I}, llvm::APInt::getAllOnesValue(1)), Ante}, llvm::APInt::getAllOnesValue(1));
+      Ante = IC.getInst(Inst::And, 1, {AvoidConsts, Ante}, llvm::APInt::getAllOnesValue(1));
       if (DebugLevel > 2) {
         ReplacementContext RC;
         RC.printInst(I, llvm::errs(), true);

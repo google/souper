@@ -99,7 +99,7 @@ struct ExprBuilder {
   Inst *makeArrayRead(Value *V);
   Inst *buildConstant(Constant *c);
   Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
-  Inst *build(Value *V);
+  Inst *build(Value *V, DemandedBits *DB);
   void addPC(BasicBlock *BB, BasicBlock *Pred, std::vector<InstMapping> &PCs);
   void addPathConditions(BlockPCs &BPCs, std::vector<InstMapping> &PCs,
                          std::unordered_set<Block *> &VisitedBlocks,
@@ -192,6 +192,10 @@ Inst *ExprBuilder::buildConstant(Constant *c) {
 Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
                             gep_type_iterator end) {
   unsigned PSize = DL.getPointerSizeInBits();
+
+  // set demanded bits value to default all ones
+  llvm::APInt DefaultDBVal = llvm::APInt::getAllOnesValue(PSize);
+
   for (auto i = begin; i != end; ++i) {
     if (StructType *ST = i.getStructTypeOrNull()) {
       const StructLayout *SL = DL.getStructLayout(ST);
@@ -199,7 +203,7 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
       uint64_t Addend = SL->getElementOffset((unsigned) CI->getZExtValue());
       if (Addend != 0) {
         Ptr = IC.getInst(Inst::Add, PSize,
-                         {Ptr, IC.getConst(APInt(PSize, Addend))});
+                         {Ptr, IC.getConst(APInt(PSize, Addend))}, DefaultDBVal);
       }
     } else {
       SequentialType *SET = cast<SequentialType>(i.getIndexedType());
@@ -208,10 +212,11 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
       Value *Operand = i.getOperand();
       Inst *Index = get(Operand);
       if (PSize > Index->Width)
-        Index = IC.getInst(Inst::SExt, PSize, {Index});
+        Index = IC.getInst(Inst::SExt, PSize, {Index}, DefaultDBVal);
       Inst *Addend = IC.getInst(
-          Inst::Mul, PSize, {Index, IC.getConst(APInt(PSize, ElementSize))});
-      Ptr = IC.getInst(Inst::Add, PSize, {Ptr, Addend});
+          Inst::Mul, PSize, {Index, IC.getConst(APInt(PSize, ElementSize))},
+          DefaultDBVal);
+      Ptr = IC.getInst(Inst::Add, PSize, {Ptr, Addend}, DefaultDBVal);
     }
   }
   return Ptr;
@@ -246,7 +251,7 @@ void ExprBuilder::markExternalUses (Inst *I) {
         I->DepsWithExternalUses.insert(U.first);
 }
 
-Inst *ExprBuilder::build(Value *V) {
+Inst *ExprBuilder::build(Value *V, DemandedBits *DB) {
   if (auto C = dyn_cast<Constant>(V)) {
     return buildConstant(C);
   } else if (auto ICI = dyn_cast<ICmpInst>(V)) {
@@ -254,27 +259,30 @@ Inst *ExprBuilder::build(Value *V) {
       return makeArrayRead(V); // could be a vector operation
 
     Inst *L = get(ICI->getOperand(0)), *R = get(ICI->getOperand(1));
+
+    llvm::APInt DemandedBitsVal = DB->getDemandedBits(ICI);
+
     switch (ICI->getPredicate()) {
       case ICmpInst::ICMP_EQ:
-        return IC.getInst(Inst::Eq, 1, {L, R});
+        return IC.getInst(Inst::Eq, 1, {L, R}, DemandedBitsVal);
       case ICmpInst::ICMP_NE:
-        return IC.getInst(Inst::Ne, 1, {L, R});
+        return IC.getInst(Inst::Ne, 1, {L, R}, DemandedBitsVal);
       case ICmpInst::ICMP_UGT:
-        return IC.getInst(Inst::Ult, 1, {R, L});
+        return IC.getInst(Inst::Ult, 1, {R, L}, DemandedBitsVal);
       case ICmpInst::ICMP_UGE:
-        return IC.getInst(Inst::Ule, 1, {R, L});
+        return IC.getInst(Inst::Ule, 1, {R, L}, DemandedBitsVal);
       case ICmpInst::ICMP_ULT:
-        return IC.getInst(Inst::Ult, 1, {L, R});
+        return IC.getInst(Inst::Ult, 1, {L, R}, DemandedBitsVal);
       case ICmpInst::ICMP_ULE:
-        return IC.getInst(Inst::Ule, 1, {L, R});
+        return IC.getInst(Inst::Ule, 1, {L, R}, DemandedBitsVal);
       case ICmpInst::ICMP_SGT:
-        return IC.getInst(Inst::Slt, 1, {R, L});
+        return IC.getInst(Inst::Slt, 1, {R, L}, DemandedBitsVal);
       case ICmpInst::ICMP_SGE:
-        return IC.getInst(Inst::Sle, 1, {R, L});
+        return IC.getInst(Inst::Sle, 1, {R, L}, DemandedBitsVal);
       case ICmpInst::ICMP_SLT:
-        return IC.getInst(Inst::Slt, 1, {L, R});
+        return IC.getInst(Inst::Slt, 1, {L, R}, DemandedBitsVal);
       case ICmpInst::ICMP_SLE:
-        return IC.getInst(Inst::Sle, 1, {L, R});
+        return IC.getInst(Inst::Sle, 1, {L, R}, DemandedBitsVal);
       default:
         llvm_unreachable("not ICmp");
     }
@@ -283,6 +291,9 @@ Inst *ExprBuilder::build(Value *V) {
       return makeArrayRead(V); // could be a vector operation
 
     Inst *L = get(BO->getOperand(0)), *R = get(BO->getOperand(1));
+
+    llvm::APInt DemandedBitsVal = DB->getDemandedBits(BO);
+
     Inst::Kind K;
     switch (BO->getOpcode()) {
       case Instruction::Add:
@@ -367,16 +378,21 @@ Inst *ExprBuilder::build(Value *V) {
       default:
         llvm_unreachable("not BinOp");
     }
-    return IC.getInst(K, L->Width, {L, R});
+    return IC.getInst(K, L->Width, {L, R}, DemandedBitsVal);
   } else if (auto Sel = dyn_cast<SelectInst>(V)) {
     if (!isa<IntegerType>(Sel->getType()))
       return makeArrayRead(V); // could be a vector operation
     Inst *C = get(Sel->getCondition()), *T = get(Sel->getTrueValue()),
          *F = get(Sel->getFalseValue());
-    return IC.getInst(Inst::Select, T->Width, {C, T, F});
+
+    llvm::APInt DemandedBitsVal = DB->getDemandedBits(Sel);
+
+    return IC.getInst(Inst::Select, T->Width, {C, T, F}, DemandedBitsVal);
   } else if (auto Cast = dyn_cast<CastInst>(V)) {
     Inst *Op = get(Cast->getOperand(0));
     unsigned DestSize = DL.getTypeSizeInBits(Cast->getType());
+
+    llvm::APInt DemandedBitsVal = DB->getDemandedBits(Cast);
 
     switch (Cast->getOpcode()) {
     case Instruction::BitCast:
@@ -385,26 +401,26 @@ Inst *ExprBuilder::build(Value *V) {
     case Instruction::IntToPtr:
     case Instruction::PtrToInt:
       if (Op->Width > DestSize)
-        return IC.getInst(Inst::Trunc, DestSize, {Op});
+        return IC.getInst(Inst::Trunc, DestSize, {Op}, DemandedBitsVal);
       else if (Op->Width < DestSize)
-        return IC.getInst(Inst::ZExt, DestSize, {Op});
+        return IC.getInst(Inst::ZExt, DestSize, {Op}, DemandedBitsVal);
       else
         return Op;
 
     case Instruction::ZExt:
       if (!isa<IntegerType>(Cast->getType()))
         break; // could be a vector operation
-      return IC.getInst(Inst::ZExt, DestSize, {Op});
+      return IC.getInst(Inst::ZExt, DestSize, {Op}, DemandedBitsVal);
 
     case Instruction::SExt:
       if (!isa<IntegerType>(Cast->getType()))
         break; // could be a vector operation
-      return IC.getInst(Inst::SExt, DestSize, {Op});
+      return IC.getInst(Inst::SExt, DestSize, {Op}, DemandedBitsVal);
 
     case Instruction::Trunc:
       if (!isa<IntegerType>(Cast->getType()))
         break; // could be a vector operation
-      return IC.getInst(Inst::Trunc, DestSize, {Op});
+      return IC.getInst(Inst::Trunc, DestSize, {Op}, DemandedBitsVal);
 
     default:
       ; // fallthrough to return below
@@ -446,6 +462,9 @@ Inst *ExprBuilder::build(Value *V) {
     // extracted value comes from an overflow instruction. Otherwise, we simply
     // create a var.
     Inst *R = IC.getConst(APInt(32, Idx[0]));
+
+    llvm::APInt DemandedBitsVal = DB->getDemandedBits(EV);
+
     switch (L->K) {
       default:
         return makeArrayRead(V);
@@ -456,71 +475,78 @@ Inst *ExprBuilder::build(Value *V) {
       case Inst::SMulWithOverflow:
       case Inst::UMulWithOverflow: {
         unsigned WidthExtracted = L->Ops[Idx[0]]->Width;
-        return IC.getInst(Inst::ExtractValue, WidthExtracted, {L, R});
+        return IC.getInst(Inst::ExtractValue, WidthExtracted, {L, R},
+                          DemandedBitsVal);
       }
     }
   } else if (auto Call = dyn_cast<CallInst>(V)) {
     LibFunc Func;
     if (auto II = dyn_cast<IntrinsicInst>(Call)) {
       Inst *L = get(II->getOperand(0));
+
+    llvm::APInt DemandedBitsVal = DB->getDemandedBits(II);
+
       switch (II->getIntrinsicID()) {
         default:
           break;
         case Intrinsic::ctpop:
-          return IC.getInst(Inst::CtPop, L->Width, {L});
+          return IC.getInst(Inst::CtPop, L->Width, {L}, DemandedBitsVal);
         case Intrinsic::bswap:
-          return IC.getInst(Inst::BSwap, L->Width, {L});
+          return IC.getInst(Inst::BSwap, L->Width, {L}, DemandedBitsVal);
         case Intrinsic::cttz:
-          return IC.getInst(Inst::Cttz, L->Width, {L});
+          return IC.getInst(Inst::Cttz, L->Width, {L}, DemandedBitsVal);
         case Intrinsic::ctlz:
-          return IC.getInst(Inst::Ctlz, L->Width, {L});
+          return IC.getInst(Inst::Ctlz, L->Width, {L}, DemandedBitsVal);
         case Intrinsic::sadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R}, /*Available=*/false);
-          return IC.getInst(Inst::SAddWithOverflow, L->Width+1, {Add, Overflow});
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          return IC.getInst(Inst::SAddWithOverflow, L->Width+1, {Add, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::uadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R}, /*Available=*/false);
-          return IC.getInst(Inst::UAddWithOverflow, L->Width+1, {Add, Overflow});
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          return IC.getInst(Inst::UAddWithOverflow, L->Width+1, {Add, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::ssub_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R}, /*Available=*/false);
-          return IC.getInst(Inst::SSubWithOverflow, L->Width+1, {Sub, Overflow});
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          return IC.getInst(Inst::SSubWithOverflow, L->Width+1, {Sub, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::usub_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R}, /*Available=*/false);
-          return IC.getInst(Inst::USubWithOverflow, L->Width+1, {Sub, Overflow});
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          return IC.getInst(Inst::USubWithOverflow, L->Width+1, {Sub, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::smul_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R}, /*Available=*/false);
-          return IC.getInst(Inst::SMulWithOverflow, L->Width+1, {Mul, Overflow});
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          return IC.getInst(Inst::SMulWithOverflow, L->Width+1, {Mul, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::umul_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R}, /*Available=*/false);
-          return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow}, DemandedBitsVal);
         }
       }
     } else {
       Function* F = Call->getCalledFunction();
+
+      llvm::APInt DemandedBitsVal = DB->getDemandedBits(Call);
+
       if(F && TLI->getLibFunc(*F, Func) && TLI->has(Func)) {
         switch (Func) {
           case LibFunc_abs: {
             Inst *A = get(Call->getOperand(0));
             Inst *Z = IC.getConst(APInt(A->Width, 0));
-            Inst *NegA = IC.getInst(Inst::SubNSW, A->Width, {Z, A}, /*Available=*/false);
-            Inst *Cmp = IC.getInst(Inst::Slt, 1, {Z, A}, /*Available=*/false);
-            return IC.getInst(Inst::Select, A->Width, {Cmp, A, NegA});
+            Inst *NegA = IC.getInst(Inst::SubNSW, A->Width, {Z, A}, DemandedBitsVal, /*Available=*/false);
+            Inst *Cmp = IC.getInst(Inst::Slt, 1, {Z, A}, DemandedBitsVal, /*Available=*/false);
+            return IC.getInst(Inst::Select, A->Width, {Cmp, A, NegA}, DemandedBitsVal);
           }
           default:
             break;
@@ -536,7 +562,7 @@ Inst *ExprBuilder::get(Value *V) {
   // Cache V if V is not found in InstMap
   Inst *&E = EBC.InstMap[V];
   if (!E)
-    E = build(V);
+    E = build(V, DB);
   if (E->K != Inst::Const && !E->hasOrigin(V))
     E->Origins.push_back(V);
   E->DemandedBits = APInt::getAllOnesValue(E->Width);
@@ -563,6 +589,9 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
           IC.getConst(APInt(1, Branch->getSuccessor(0) == BB)));
     }
   } else if (auto Switch = dyn_cast<SwitchInst>(Pred->getTerminator())) {
+
+    llvm::APInt DemandedBitsVal = DB->getDemandedBits(Switch);
+
     Inst *Cond = get(Switch->getCondition());
     ConstantInt *Case = Switch->findCaseDest(BB);
     if (Case) {
@@ -572,7 +601,7 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
       Inst *DI = IC.getConst(APInt(1, true));
       for (auto I = Switch->case_begin(), E = Switch->case_end(); I != E;
            ++I) {
-        Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I->getCaseValue())});
+        Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I->getCaseValue())}, DemandedBitsVal);
         emplace_back_dedup(PCs, CI, DI);
       }
     }
@@ -772,6 +801,8 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       if (I.hasNUses(0))
         continue;
       Inst *In = EB.get(&I);
+      //errs() << Inst::getKindName(In->K) << " ";
+      //errs() << In->DemandedBits << "\n";
       EB.markExternalUses(In);
       BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
       assert(EB.get(&I)->hasOrigin(&I));
