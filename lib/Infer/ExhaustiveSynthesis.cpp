@@ -17,8 +17,10 @@
 #include "llvm/Support/CommandLine.h"
 #include "souper/Infer/ExhaustiveSynthesis.h"
 #include "souper/Infer/AliveDriver.h"
+#include "souper/Infer/DataflowPruning.h"
 
 #include <queue>
+#include <functional>
 
 static const unsigned MaxTries = 30;
 static const unsigned MaxInputSpecializationTries = 2;
@@ -59,6 +61,12 @@ namespace {
   static cl::opt<bool> LSBPruning("souper-lsb-pruning",
     cl::desc("Try to prune guesses by looking for a difference in LSB"),
     cl::init(false));
+  static cl::opt<bool> EnableDataflowPruning("souper-dataflow-pruning",
+    cl::desc("Enable pruning based on dataflow analysis (default=true)"),
+    cl::init(false));
+  static cl::opt<unsigned> DataflowPruningStatsLevel("souper-dataflow-pruning-stats-level",
+    cl::desc("Print pruning statistics (default=0)"),
+    cl::init(0));
 }
 
 // TODO
@@ -136,12 +144,32 @@ void addGuess(Inst *RHS, int MaxCost, std::vector<Inst *> &Guesses,
     TooExpensive++;
 }
 
-// most naive prune algorithm ever
-bool prune (Inst *I, std::vector<Inst *> &ReservedInsts) {
-  if (instCount(I) >= MaxNumInstructions)
+typedef std::function<bool(Inst *, std::vector<Inst *> &)> PruneFunc;
+
+// Does a short-circuiting AND operation
+PruneFunc MkPruneFunc(std::vector<PruneFunc> Funcs) {
+  return [Funcs](Inst *I, std::vector<Inst *> &RI) {
+    for (auto F : Funcs) {
+      if (!F(I, RI)) {
+        return false;
+      }
+    }
+    return true;
+  };
+}
+
+// return false if successfully proved infeasible
+bool CostPrune(Inst *I, std::vector<Inst *> &ReservedInsts) {
+
+  // Cost exceeds LHS
+  if (!ReservedInsts.empty() && instCount(I) >= MaxNumInstructions)
     return false;
-  if (ReservedInsts.empty())
-    return false;
+
+//   if (ReservedInsts.empty() && instCount(I) > MaxNumInstructions)
+//     return false;
+// TODO : Handle this logic here instead of comparing against TooExpensive
+//  at arbitrary places in the synthesis algorithm
+
   return true;
 }
 
@@ -158,7 +186,8 @@ void getGuesses(std::vector<Inst *> &Guesses,
                 const std::vector<Inst *> &Inputs,
                 int Width, int LHSCost,
                 InstContext &IC, Inst *PrevInst, Inst *PrevSlot,
-                int &TooExpensive) {
+                int &TooExpensive,
+                PruneFunc prune) {
 
   std::vector<Inst *> PartialGuesses;
 
@@ -360,7 +389,10 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
     // if no empty slot, then push the guess to the result list
     if (CurrSlots.empty()) {
-      Guesses.push_back(JoinedGuess);
+      std::vector<Inst *> empty;
+      if (prune(JoinedGuess, empty)) {
+        Guesses.push_back(JoinedGuess);
+      }
       continue;
     }
 
@@ -369,7 +401,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
     if (prune(JoinedGuess, CurrSlots)) {
       for (auto S : CurrSlots)
         getGuesses(Guesses, Inputs, S->Width,
-                   LHSCost, IC, JoinedGuess, S, TooExpensive);
+                   LHSCost, IC, JoinedGuess, S, TooExpensive, prune);
     }
   }
 }
@@ -609,12 +641,28 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS,
   if (DebugLevel > 1)
     llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
 
-
   int LHSCost = souper::cost(LHS, /*IgnoreDepsWithExternalUses=*/true);
 
   int TooExpensive = 0;
+
+  dataflow::DataflowPruningManager DataflowPruning
+    (LHS, Inputs, DataflowPruningStatsLevel);
+  // Cheaper tests go first
+  std::vector<PruneFunc> PruneFuncs = {CostPrune};
+  if (EnableDataflowPruning) {
+    PruneFuncs.push_back(DataflowPruning.getPruneFunc());
+  }
+  auto PruneCallback = MkPruneFunc(PruneFuncs);
+  // TODO(zhengyangl): Refactor the syntactic pruning into a
+  // prune function here, between Cost and Dataflow
+  // TODO(manasij7479) : If RHS is concrete, evaluate both sides
+  // TODO(regehr?) : Solver assisted pruning (should be the last component)
+
   getGuesses(Guesses, Inputs, LHS->Width,
-             LHSCost, IC, nullptr, nullptr, TooExpensive);
+             LHSCost, IC, nullptr, nullptr, TooExpensive, PruneCallback);
+  if (DataflowPruningStatsLevel == 1) {
+    DataflowPruning.printStats(llvm::outs());
+  }
 
   // add nops guesses separately
   for (auto I : Inputs) {

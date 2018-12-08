@@ -192,6 +192,8 @@ set(SOUPER_INFER_FILES
   include/souper/Infer/ExhaustiveSynthesis.h
   lib/Infer/AliveDriver.cpp
   include/souper/Infer/AliveDriver.h
+  lib/Infer/DataflowPruning.cpp
+  include/souper/Infer/DataflowPruning.h
 )
 
 add_library(souperInfer STATIC
