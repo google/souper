@@ -222,8 +222,10 @@ public:
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
 
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
-                llvm::APInt DemandedBits,
                 bool Available=true);
+
+  Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
+                llvm::APInt DemandedBits, bool Available=true);
 };
 
 int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);

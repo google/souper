@@ -33,13 +33,13 @@ TEST(InstTest, Fold) {
   ASSERT_NE(I4, I1);
   ASSERT_NE(I4, I3);
 
-  Inst *I1AI3 = IC.getInst(Inst::Add, 64, {I1, I3}, llvm::APInt::getAllOnesValue(64));
-  Inst *I3AI1 = IC.getInst(Inst::Add, 64, {I3, I1}, llvm::APInt::getAllOnesValue(64));
+  Inst *I1AI3 = IC.getInst(Inst::Add, 64, {I1, I3});
+  Inst *I3AI1 = IC.getInst(Inst::Add, 64, {I3, I1});
 
   ASSERT_EQ(I1AI3, I3AI1);
 
-  Inst *I1SI3 = IC.getInst(Inst::Sub, 64, {I1, I3}, llvm::APInt::getAllOnesValue(64));
-  Inst *I3SI1 = IC.getInst(Inst::Sub, 64, {I3, I1}, llvm::APInt::getAllOnesValue(64));
+  Inst *I1SI3 = IC.getInst(Inst::Sub, 64, {I1, I3});
+  Inst *I3SI1 = IC.getInst(Inst::Sub, 64, {I3, I1});
 
   ASSERT_NE(I1SI3, I3SI1);
 }
@@ -54,8 +54,8 @@ TEST(InstTest, Print) {
   Inst *I2 = IC.getConst(llvm::APInt(64, 2));
   Inst *I3 = IC.getConst(llvm::APInt(64, 3));
 
-  Inst *I1AI2 = IC.getInst(Inst::Add, 64, {I1, I2}, llvm::APInt::getAllOnesValue(64));
-  Inst *I1AI2MI3 = IC.getInst(Inst::Mul, 64, {I1AI2, I3}, llvm::APInt::getAllOnesValue(64));
+  Inst *I1AI2 = IC.getInst(Inst::Add, 64, {I1, I2});
+  Inst *I1AI2MI3 = IC.getInst(Inst::Mul, 64, {I1AI2, I3});
   ReplacementContext Context;
 
   EXPECT_EQ("%1", Context.printInst(I1AI2MI3, SS, /*printNames=*/false));

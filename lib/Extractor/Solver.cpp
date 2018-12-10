@@ -160,8 +160,8 @@ public:
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
         Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
-              getInstCopy(I, IC, InstCache, BlockCache, 0, true)}, llvm::APInt::getAllOnesValue(1));
-        Ante = IC.getInst(Inst::And, 1, {Ante, Ne}, llvm::APInt::getAllOnesValue(1));
+              getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
+        Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
         separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
         separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
       }

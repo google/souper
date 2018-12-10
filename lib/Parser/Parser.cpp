@@ -1215,37 +1215,33 @@ bool Parser::parseLine(std::string &ErrStr) {
           ErrStr = makeErrStr(TP, ErrStr);
           return false;
         }
-
-        // set the demanded bits value to default all ones
-        llvm::APInt DefaultDBVal = llvm::APInt::getAllOnesValue(InstWidth);
-
         switch (IK) {
           case Inst::SAddWithOverflow:
-            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Add, Ops[0]->Width, Ops, llvm::APInt::getAllOnesValue(Ops[0]->Width)),
-                           IC.getInst(Inst::SAddO, 1, Ops, llvm::APInt::getAllOnesValue(1))}, DefaultDBVal);
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Add, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::SAddO, 1, Ops)});
             break;
           case Inst::UAddWithOverflow:
-            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Add, Ops[0]->Width, Ops, llvm::APInt::getAllOnesValue(Ops[0]->Width)),
-                           IC.getInst(Inst::UAddO, 1, Ops, llvm::APInt::getAllOnesValue(1))}, DefaultDBVal);
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Add, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::UAddO, 1, Ops)});
             break;
           case Inst::SSubWithOverflow:
-            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Sub, Ops[0]->Width, Ops, llvm::APInt::getAllOnesValue(Ops[0]->Width)),
-                           IC.getInst(Inst::SSubO, 1, Ops, llvm::APInt::getAllOnesValue(1))}, DefaultDBVal);
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Sub, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::SSubO, 1, Ops)});
             break;
           case Inst::USubWithOverflow:
-            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Sub, Ops[0]->Width, Ops, llvm::APInt::getAllOnesValue(Ops[0]->Width)),
-                           IC.getInst(Inst::USubO, 1, Ops, llvm::APInt::getAllOnesValue(1))}, DefaultDBVal);
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Sub, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::USubO, 1, Ops)});
             break;
           case Inst::SMulWithOverflow:
-            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Mul, Ops[0]->Width, Ops, llvm::APInt::getAllOnesValue(Ops[0]->Width)),
-                           IC.getInst(Inst::SMulO, 1, Ops, llvm::APInt::getAllOnesValue(1))}, DefaultDBVal);
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Mul, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::SMulO, 1, Ops)});
             break;
           case Inst::UMulWithOverflow:
-            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Mul, Ops[0]->Width, Ops, llvm::APInt::getAllOnesValue(Ops[0]->Width)),
-                           IC.getInst(Inst::UMulO, 1, Ops,  llvm::APInt::getAllOnesValue(1))}, DefaultDBVal);
+            I = IC.getInst(IK, InstWidth, {IC.getInst(Inst::Mul, Ops[0]->Width, Ops),
+                           IC.getInst(Inst::UMulO, 1, Ops)});
             break;
           default:
-            I = IC.getInst(IK, InstWidth, Ops, DefaultDBVal);
+            I = IC.getInst(IK, InstWidth, Ops);
             break;
         }
       }
