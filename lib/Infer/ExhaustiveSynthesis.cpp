@@ -21,7 +21,7 @@
 
 static const unsigned MaxTries = 30;
 static const unsigned MaxInputSpecializationTries = 2;
-static const unsigned MaxLHSCands = 5;
+static const unsigned MaxLHSCands = 15;
 
 using namespace souper;
 using namespace llvm;
