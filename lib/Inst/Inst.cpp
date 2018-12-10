@@ -999,7 +999,7 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
   } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
     return I;
   } else {
-    Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits);
+    Copy = IC.getInst(I->K, I->Width, Ops);
   }
   assert(Copy);
   InstCache[I] = Copy;
@@ -1021,7 +1021,7 @@ Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
   } else if (I->K == Inst::Var) {
     Copy = I;
   } else {
-    Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits);
+    Copy = IC.getInst(I->K, I->Width, Ops);
   }
 
   return Copy;
