@@ -801,8 +801,8 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       if (I.hasNUses(0))
         continue;
       Inst *In = EB.get(&I);
-      //errs() << Inst::getKindName(In->K) << " ";
-      //errs() << In->DemandedBits << "\n";
+      errs() << Inst::getKindName(In->K) << " ";
+      errs() << In->DemandedBits << "\n";
       EB.markExternalUses(In);
       BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
       assert(EB.get(&I)->hasOrigin(&I));
