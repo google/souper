@@ -193,9 +193,6 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
                             gep_type_iterator end) {
   unsigned PSize = DL.getPointerSizeInBits();
 
-  // set demanded bits value to default all ones
-  llvm::APInt DefaultDBVal = llvm::APInt::getAllOnesValue(PSize);
-
   for (auto i = begin; i != end; ++i) {
     if (StructType *ST = i.getStructTypeOrNull()) {
       const StructLayout *SL = DL.getStructLayout(ST);
@@ -203,7 +200,7 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
       uint64_t Addend = SL->getElementOffset((unsigned) CI->getZExtValue());
       if (Addend != 0) {
         Ptr = IC.getInst(Inst::Add, PSize,
-                         {Ptr, IC.getConst(APInt(PSize, Addend))}, DefaultDBVal);
+                         {Ptr, IC.getConst(APInt(PSize, Addend))});
       }
     } else {
       SequentialType *SET = cast<SequentialType>(i.getIndexedType());
@@ -212,11 +209,10 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
       Value *Operand = i.getOperand();
       Inst *Index = get(Operand);
       if (PSize > Index->Width)
-        Index = IC.getInst(Inst::SExt, PSize, {Index}, DefaultDBVal);
+        Index = IC.getInst(Inst::SExt, PSize, {Index});
       Inst *Addend = IC.getInst(
-          Inst::Mul, PSize, {Index, IC.getConst(APInt(PSize, ElementSize))},
-          DefaultDBVal);
-      Ptr = IC.getInst(Inst::Add, PSize, {Ptr, Addend}, DefaultDBVal);
+          Inst::Mul, PSize, {Index, IC.getConst(APInt(PSize, ElementSize))});
+      Ptr = IC.getInst(Inst::Add, PSize, {Ptr, Addend});
     }
   }
   return Ptr;
