@@ -529,7 +529,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   for (auto I : Guesses) {
     GuessIndex++;
     if (DebugLevel > 2) {
-      llvm::errs() << "\n\n--------------------------------------------\nguess " << GuessIndex << "\n\n";
+      llvm::errs() << "\n--------------------------------------------\nguess " << GuessIndex << "\n\n";
       ReplacementContext RC;
       RC.printInst(I, llvm::errs(), /*printNames=*/true);
       llvm::errs() << "\n";
@@ -672,17 +672,24 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         goto again;
     } else {
       if (DebugLevel > 2) {
-        llvm::errs() << "second query is UNSAT-- works for all values of this constant\n";
-        llvm::errs() << Tries <<  " tries were made for synthesizing constants\n";
+        if (GuessHasConstant) {
+          llvm::errs() << "second query is UNSAT-- works for all values of this constant\n";
+          llvm::errs() << Tries <<  " tries were made for synthesizing constants\n";
+        } else {
+          assert(Tries == 1);
+          llvm::errs() << "second query is UNSAT-- this guess works\n";
+        }
       }
       RHS = I2;
       return EC;
     }
     if (DebugLevel > 2) {
-      if (GuessHasConstant)
+      if (GuessHasConstant) {
         llvm::errs() << "constant synthesis failed after " << Tries <<  " tries\n";
-      else
-        llvm::errs() << "guess doesn't work (" << Tries << " tries)\n";
+      } else {
+        assert(Tries == 1);
+        llvm::errs() << "refinement check fails for RHS with no constants\n";
+      }
     }
   }
   if (DebugLevel > 2)
