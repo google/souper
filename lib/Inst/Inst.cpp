@@ -486,7 +486,6 @@ Inst::Kind Inst::getKind(std::string Name) {
 void Inst::Profile(llvm::FoldingSetNodeID &ID) const {
   ID.AddInteger(K);
   ID.AddInteger(Width);
-  ID.Add(DemandedBits);
 
   switch (K) {
   case Const:

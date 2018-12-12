@@ -192,7 +192,6 @@ Inst *ExprBuilder::buildConstant(Constant *c) {
 Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
                             gep_type_iterator end) {
   unsigned PSize = DL.getPointerSizeInBits();
-
   for (auto i = begin; i != end; ++i) {
     if (StructType *ST = i.getStructTypeOrNull()) {
       const StructLayout *SL = DL.getStructLayout(ST);

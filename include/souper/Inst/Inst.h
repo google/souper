@@ -148,7 +148,6 @@ struct Inst : llvm::FoldingSetNode {
   bool Negative;
   unsigned NumSignBits;
   llvm::APInt DemandedBits;
-
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
