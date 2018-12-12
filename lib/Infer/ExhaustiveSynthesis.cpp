@@ -540,6 +540,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     bool GuessHasConstant = !ConstList.empty();
 
     int Tries = 0;
+    std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
 
   again:
     if (Tries > 0 && DebugLevel > 3)
@@ -553,7 +554,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
     if (GuessHasConstant) {
       std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
-      std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
 
       Inst *AvoidConsts = IC.getConst(APInt(1, true));
       if (!BadConsts.empty()) {
