@@ -67,7 +67,7 @@ def parseConst(c):
     tmp = c.split(':')
     constant = tmp[0]
     width = tmp[1]
-    assert width[0] == "i", "wront type format %s" % width
+    assert width[0] == "i", "wrong type format %s" % width
     return [constant, width]
 
 def parseOps(ops):

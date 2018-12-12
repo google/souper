@@ -42,7 +42,7 @@ Options:
   -parse       Ensure that each LHS in the cache parses as Souper
   -sort=size|sprofile|dprofile|combined
                Sort optimizations by increasing size (default), decreasing
-               static profile count, or descreasing dynamic profile count
+               static profile count, or decreasing dynamic profile count
   -raw         Dump all keys and values and exit, ignoring all other options
   -reduce      Attempt to reduce the size of each optimization
   -triage      Attempt to avoid reporting optimizations that LLVM can do

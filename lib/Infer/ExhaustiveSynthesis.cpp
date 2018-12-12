@@ -420,12 +420,12 @@ APInt getNextInputVal(Inst *Var,
       return APInt(Var->Width, 0);
     }
   }
-  if (DebugLevel > 2)
+  if (DebugLevel > 3)
     llvm::errs() << "Input guess SAT\n";
   for (unsigned I = 0 ; I != ModelInsts.size(); I++) {
     if (ModelInsts[I] == Var) {
       TriedVars[Var].push_back(ModelVals[I]);
-      if (DebugLevel > 2)
+      if (DebugLevel > 3)
         llvm::errs() << "Guess input value = " << ModelVals[I] << "\n";
       return ModelVals[I];
     }
@@ -471,7 +471,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                      return souper::cost(a) < souper::cost(b);
                    });
 
-  if (DebugLevel > 2)
+  if (DebugLevel > 1)
     llvm::errs() << "There are " << Guesses.size() << " Guesses\n";
 
 
@@ -529,7 +529,10 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   for (auto I : Guesses) {
     GuessIndex++;
     if (DebugLevel > 2) {
-      llvm::errs() << "\n\n--------------------------------------------\nguess " << GuessIndex << "\n\n";
+      llvm::errs() << "\n--------------------------------------------\nguess " << GuessIndex << "\n\n";
+      ReplacementContext RC;
+      RC.printInst(I, llvm::errs(), /*printNames=*/true);
+      llvm::errs() << "\n";
     }
 
     std::vector<Inst *> ConstList;
@@ -537,9 +540,11 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     bool GuessHasConstant = !ConstList.empty();
 
     int Tries = 0;
+    std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
+    std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
 
   again:
-    if (Tries > 0 && DebugLevel > 2)
+    if (Tries > 0 && DebugLevel > 3)
       llvm::errs() << "\n\nagain:\n";
 
     // this SAT query will give us possible constants
@@ -549,9 +554,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     std::map<Inst *, llvm::APInt> ConstMap;
 
     if (GuessHasConstant) {
-      std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
-      std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
-
       Inst *AvoidConsts = IC.getConst(APInt(1, true));
       if (!BadConsts.empty()) {
         for (unsigned i = 0; i < BadConsts[ConstList[0]].size(); ++i) {
@@ -601,7 +603,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       }
       Ante = IC.getInst(Inst::And, 1, {IC.getInst(Inst::Eq, 1, {LHS, I}), Ante});
       Ante = IC.getInst(Inst::And, 1, {AvoidConsts, Ante});
-      if (DebugLevel > 2) {
+      if (DebugLevel > 3) {
         ReplacementContext RC;
         RC.printInst(I, llvm::errs(), true);
       }
@@ -616,6 +618,8 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       EC = SMTSolver->isSatisfiable(Query, FirstSmallQueryIsSat,
                                     ModelInsts.size(), &ModelVals, Timeout);
       if (EC) {
+        if (DebugLevel > 1)
+          llvm::errs() << "error!\n";
         return EC;
       }
       if (!FirstSmallQueryIsSat) {
@@ -624,7 +628,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
           llvm::errs() << "first query is unsat, all done with this guess\n";
         continue;
       }
-      if (DebugLevel > 2)
+      if (DebugLevel > 3)
         llvm::errs() << "first query is sat\n";
 
       for (unsigned J = 0; J != ModelInsts.size(); ++J) {
@@ -632,7 +636,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
           auto Const = IC.getConst(ModelVals[J]);
           BadConsts[ModelInsts[J]].push_back(Const->Val);
           auto res = ConstMap.insert(std::pair<Inst *, llvm::APInt>(ModelInsts[J], Const->Val));
-          if (DebugLevel > 2)
+          if (DebugLevel > 3)
             llvm::errs() << "constant value = " << Const->Val << "\n";
           if (!res.second)
             llvm::report_fatal_error("constant already in map");
@@ -654,10 +658,12 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     bool SecondSmallQueryIsSat;
     EC = SMTSolver->isSatisfiable(Query2, SecondSmallQueryIsSat, 0, 0, Timeout);
     if (EC) {
+      if (DebugLevel > 1)
+        llvm::errs() << "error!\n";
       return EC;
     }
     if (SecondSmallQueryIsSat) {
-      if (DebugLevel > 2)
+      if (DebugLevel > 3)
         llvm::errs() << "second query is SAT-- constant doesn't work\n";
       Tries++;
       // TODO tune max tries
@@ -665,11 +671,24 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         goto again;
     } else {
       if (DebugLevel > 2) {
-        llvm::errs() << "second query is UNSAT-- works for all values of this constant\n";
-        llvm::errs() << Tries <<  " tries were made for synthesizing constants\n";
+        if (GuessHasConstant) {
+          llvm::errs() << "second query is UNSAT-- works for all values of this constant\n";
+          llvm::errs() << Tries <<  " tries were made for synthesizing constants\n";
+        } else {
+          assert(Tries == 1);
+          llvm::errs() << "second query is UNSAT-- this guess works\n";
+        }
       }
       RHS = I2;
       return EC;
+    }
+    if (DebugLevel > 2) {
+      if (GuessHasConstant) {
+        llvm::errs() << "constant synthesis failed after " << Tries <<  " tries\n";
+      } else {
+        assert(Tries == 1);
+        llvm::errs() << "refinement check fails for RHS with no constants\n";
+      }
     }
   }
   if (DebugLevel > 2)
