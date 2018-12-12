@@ -1266,7 +1266,7 @@ std::vector<LocVar> InstSynthesis::getOpLocs(const LocVar &Loc) {
   // Inputs have no operands
   if (Loc.first == 0)
     return Res;
-  assert(Loc.first >= 1 && "invalid locatoin variable");
+  assert(Loc.first >= 1 && "invalid location variable");
   auto const &Comp = Comps[Loc.first-1];
   for (unsigned J = 0; J < Comp.OpWidths.size(); ++J) {
     LocVar Tmp = std::make_pair(Loc.first, J+1);
