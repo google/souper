@@ -1,4 +1,4 @@
-; REQUIRES: solver
+; REQUIRES: solver, synthesis
 ; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis %solver %s > %t1
 ; RUN: %FileCheck %s < %t1
 ; CHECK: select %2, 17:i32, 21:i32
