@@ -149,9 +149,6 @@ struct Inst : llvm::FoldingSetNode {
   unsigned NumSignBits;
   llvm::APInt DemandedBits;
 
-  Inst() {
-    DemandedBits = llvm::APInt::getAllOnesValue(Width);
-  }
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a

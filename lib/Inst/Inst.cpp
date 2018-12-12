@@ -623,8 +623,36 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
 Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
                            const std::vector<Inst *> &Ops,
                            bool Available) {
-  llvm::APInt DemandedBits = llvm::APInt::getAllOnesValue(Width);
-  return getInst(K, Width, Ops, DemandedBits, Available);
+  std::vector<Inst *> OrderedOps;
+
+  const std::vector<Inst *> *InstOps;
+  if (Inst::isCommutative(K)) {
+    OrderedOps = Ops;
+    std::sort(OrderedOps.begin(), OrderedOps.end());
+    InstOps = &OrderedOps;
+  } else {
+    InstOps = &Ops;
+  }
+
+  llvm::FoldingSetNodeID ID;
+  ID.AddInteger(K);
+  ID.AddInteger(Width);
+  for (auto O : *InstOps)
+    ID.AddPointer(O);
+
+  void *IP = 0;
+  if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
+    return I;
+
+  auto N = new Inst;
+  Insts.emplace_back(N);
+  N->K = K;
+  N->Width = Width;
+  N->Ops = *InstOps;
+  N->DemandedBits = llvm::APInt::getAllOnesValue(Width);
+  N->Available = Available;
+  InstSet.InsertNode(N, IP);
+  return N;
 }
 
 Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
