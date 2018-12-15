@@ -1140,7 +1140,7 @@ bool Parser::parseLine(std::string &ErrStr) {
               return false;
           }
         }
-        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero,
+        Inst *I = IC.createVar(InstWidth, InstName, llvm::ConstantRange(InstWidth, true), Zero, One, NonZero,
                                NonNegative, PowOfTwo, Negative, SignBits);
         Context.setInst(InstName, I);
         return true;

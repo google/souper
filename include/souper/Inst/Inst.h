@@ -18,6 +18,7 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
+#include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Value.h"
 #include <map>
 #include <memory>
@@ -148,6 +149,7 @@ struct Inst : llvm::FoldingSetNode {
   bool Negative;
   unsigned NumSignBits;
   llvm::APInt DemandedBits;
+  llvm::ConstantRange Range;
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
@@ -213,6 +215,7 @@ public:
   Inst *getReservedInst(int Width);
 
   Inst *createVar(unsigned Width, llvm::StringRef Name,
+                  llvm::ConstantRange Range=llvm::ConstantRange(1, true),
                   llvm::APInt Zero=llvm::APInt(1, 0, false),
                   llvm::APInt One=llvm::APInt(1, 0, false), bool NonZero=false,
                   bool NonNegative=false, bool PowOfTwo=false, bool Negative=false,

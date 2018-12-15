@@ -561,6 +561,7 @@ Inst *InstContext::getReservedInst(int Width) {
 }
 
 Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
+                             llvm::ConstantRange Range,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
                              bool NonNegative, bool PowOfTwo, bool Negative,
                              unsigned NumSignBits) {
@@ -581,6 +582,7 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   I->PowOfTwo = PowOfTwo;
   I->Negative = Negative;
   I->NumSignBits = NumSignBits;
+  I->Range = Range;
   return I;
 }
 
@@ -593,7 +595,7 @@ Block *InstContext::createBlock(unsigned Preds) {
   B->Number = Number;
   B->Preds = Preds;
   for (unsigned J = 0; J < Preds-1; ++J)
-    B->PredVars.push_back(createVar(1, "blockpred"));
+    B->PredVars.push_back(createVar(1, "blockpred", llvm::ConstanrRange(1, true)));
   return B;
 }
 
@@ -944,9 +946,9 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
     if (!Copy) {
       if (CloneVars &&
           I->Name.find(ReservedConstPrefix) == std::string::npos)
-        Copy = IC.createVar(I->Width, I->Name, I->KnownZeros, I->KnownOnes,
-                            I->NonZero, I->NonNegative, I->PowOfTwo,
-                            I->Negative, I->NumSignBits);
+        Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
+                            I->KnownOnes, I->NonZero, I->NonNegative,
+                            I->PowOfTwo, I->Negative, I->NumSignBits);
       else {
         Copy = I;
       }

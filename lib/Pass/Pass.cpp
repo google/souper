@@ -338,10 +338,16 @@ public:
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>(*F).getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
+    LazyValueInfo *LVI = &getAnalysis<LazyValueInfoWrapperPass>().getLVI();
+    if (!LVI)
+      report_fatal_error("getLVI() failed");
+    ScalarEvolution *SE = &getAnalysis<ScalarEvolutionWrapperPass>().getSE();
+    if (!SE)
+      report_fatal_error("getSE() failed");
     TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
     if (!TLI)
       report_fatal_error("getTLI() failed");
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, TLI, IC, EBC);
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, LVI, SE, TLI, IC, EBC);
 
     std::string FunctionName;
     if (F->hasLocalLinkage()) {
@@ -490,6 +496,8 @@ INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(LazyValueInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 
