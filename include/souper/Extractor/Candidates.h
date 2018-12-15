@@ -17,6 +17,8 @@
 
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Analysis/DemandedBits.h"
+#include "llvm/Analysis/LazyValueInfo.h"
+#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Inst/Inst.h"
@@ -99,6 +101,7 @@ struct ExprBuilderContext {
 
 FunctionCandidateSet ExtractCandidatesFromPass(
     llvm::Function *F, const llvm::LoopInfo *LI, llvm::DemandedBits *DB,
+    llvm::LazyValueInfo *LVI, llvm::ScalarEvolution *SE,
     llvm::TargetLibraryInfo *TLI, InstContext &IC, ExprBuilderContext &EBC,
     const ExprBuilderOptions &Opts = ExprBuilderOptions());
 

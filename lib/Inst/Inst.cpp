@@ -184,6 +184,9 @@ std::string ReplacementContext::printInstImpl(Inst *I, llvm::raw_ostream &Out,
           Out << " (powerOfTwo)";
         if (I->NumSignBits > 1)
           Out << " (signBits=" << I->NumSignBits << ")";
+        if (!I->Range.isFullSet())
+          Out << " (range=[" << I->Range.getLower()
+              << "," << I->Range.getUpper() << "))";
       }
       Out << OpsSS.str();
 
@@ -561,6 +564,7 @@ Inst *InstContext::getReservedInst(int Width) {
 }
 
 Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
+                             llvm::ConstantRange Range,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
                              bool NonNegative, bool PowOfTwo, bool Negative,
                              unsigned NumSignBits) {
@@ -569,11 +573,13 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   unsigned Number = InstList.size();
   auto I = new Inst;
   InstList.emplace_back(I);
+  assert(Range.getBitWidth() == Width && Zero.getBitWidth() == Width && One.getBitWidth() == Width);
 
   I->K = Inst::Var;
   I->Number = Number;
   I->Width = Width;
   I->Name = Name;
+  I->Range = Range;
   I->KnownZeros = Zero;
   I->KnownOnes = One;
   I->NonZero = NonZero;
@@ -582,6 +588,13 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   I->Negative = Negative;
   I->NumSignBits = NumSignBits;
   return I;
+}
+
+Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
+  return createVar(Width, Name, /*Range=*/llvm::ConstantRange(Width, /*isFullSet=*/ true),
+                   /*KnownZero=*/ llvm::APInt(Width, 0), /*KnownOne=*/ llvm::APInt(Width, 0),
+                   /*NonZero=*/ false, /*NonNegative=*/ false, /*PowerOfTwo=*/ false,
+                   /*Negative=*/ false, /*SignBits=*/ 1);
 }
 
 Block *InstContext::createBlock(unsigned Preds) {
@@ -953,9 +966,9 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
     if (!Copy) {
       if (CloneVars &&
           I->Name.find(ReservedConstPrefix) == std::string::npos)
-        Copy = IC.createVar(I->Width, I->Name, I->KnownZeros, I->KnownOnes,
-                            I->NonZero, I->NonNegative, I->PowOfTwo,
-                            I->Negative, I->NumSignBits);
+        Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
+                            I->KnownOnes, I->NonZero, I->NonNegative,
+                            I->PowOfTwo, I->Negative, I->NumSignBits);
       else {
         Copy = I;
       }

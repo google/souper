@@ -1,0 +1,16 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; Range with upper value as isMinSignedValue() when sign-extended,
+; its upper value is zero-extended because the given range is not really
+; wrapped around
+; CHECK: LGTM
+
+%0:i8 = var (range=[10,-128))
+%1:i16 = sext %0
+%2:i1 = ult %1, 128
+%3:i1 = ule 10, %1
+%4:i1 = or %2, %3
+cand %4 1
