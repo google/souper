@@ -575,6 +575,7 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   I->Number = Number;
   I->Width = Width;
   I->Name = Name;
+  I->Range = Range;
   I->KnownZeros = Zero;
   I->KnownOnes = One;
   I->NonZero = NonZero;
@@ -582,7 +583,6 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   I->PowOfTwo = PowOfTwo;
   I->Negative = Negative;
   I->NumSignBits = NumSignBits;
-  I->Range = Range;
   return I;
 }
 
@@ -595,7 +595,7 @@ Block *InstContext::createBlock(unsigned Preds) {
   B->Number = Number;
   B->Preds = Preds;
   for (unsigned J = 0; J < Preds-1; ++J)
-    B->PredVars.push_back(createVar(1, "blockpred", llvm::ConstanrRange(1, true)));
+    B->PredVars.push_back(createVar(1, "blockpred", llvm::ConstantRange(1, true)));
   return B;
 }
 
