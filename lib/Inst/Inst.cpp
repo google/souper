@@ -595,7 +595,7 @@ Block *InstContext::createBlock(unsigned Preds) {
   B->Number = Number;
   B->Preds = Preds;
   for (unsigned J = 0; J < Preds-1; ++J)
-    B->PredVars.push_back(createVar(1, "blockpred", llvm::ConstantRange(1, true)));
+    B->PredVars.push_back(createVar(1, "blockpred"));
   return B;
 }
 
