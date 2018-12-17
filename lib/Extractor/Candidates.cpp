@@ -584,9 +584,6 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
           IC.getConst(APInt(1, Branch->getSuccessor(0) == BB)));
     }
   } else if (auto Switch = dyn_cast<SwitchInst>(Pred->getTerminator())) {
-
-    llvm::APInt DemandedBitsVal = DB->getDemandedBits(Switch);
-
     Inst *Cond = get(Switch->getCondition());
     ConstantInt *Case = Switch->findCaseDest(BB);
     if (Case) {
@@ -596,7 +593,7 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
       Inst *DI = IC.getConst(APInt(1, true));
       for (auto I = Switch->case_begin(), E = Switch->case_end(); I != E;
            ++I) {
-        Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I->getCaseValue())}, DemandedBitsVal);
+        Inst *CI = IC.getInst(Inst::Ne, 1, {Cond, get(I->getCaseValue())});
         emplace_back_dedup(PCs, CI, DI);
       }
     }
