@@ -478,9 +478,7 @@ Inst *ExprBuilder::build(Value *V, DemandedBits *DB) {
     LibFunc Func;
     if (auto II = dyn_cast<IntrinsicInst>(Call)) {
       Inst *L = get(II->getOperand(0));
-
-    llvm::APInt DemandedBitsVal = DB->getDemandedBits(II);
-
+      llvm::APInt DemandedBitsVal = DB->getDemandedBits(II);
       switch (II->getIntrinsicID()) {
         default:
           break;
@@ -494,38 +492,50 @@ Inst *ExprBuilder::build(Value *V, DemandedBits *DB) {
           return IC.getInst(Inst::Ctlz, L->Width, {L}, DemandedBitsVal);
         case Intrinsic::sadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          //Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
+          //Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SAddWithOverflow, L->Width+1, {Add, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::uadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          //Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
+          //Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::UAddWithOverflow, L->Width+1, {Add, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::ssub_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          //Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
+          //Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SSubWithOverflow, L->Width+1, {Sub, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::usub_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          //Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
+          //Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::USubWithOverflow, L->Width+1, {Sub, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::smul_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          //Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
+          //Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SMulWithOverflow, L->Width+1, {Mul, Overflow}, DemandedBitsVal);
         }
         case Intrinsic::umul_with_overflow: {
           Inst *R = get(II->getOperand(1));
-          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
-          Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          //Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
+          //Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R}, DemandedBitsVal, /*Available=*/false);
+          Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow}, DemandedBitsVal);
         }
       }
