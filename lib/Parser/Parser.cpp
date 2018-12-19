@@ -1245,7 +1245,6 @@ bool Parser::parseLine(std::string &ErrStr) {
               return false;
           }
         }
-        llvm::outs() << "Parser: call createVar\n";
         Inst *I = IC.createVar(InstWidth, InstName, llvm::ConstantRange(Lower, Upper), Zero, One, NonZero,
                                NonNegative, PowOfTwo, Negative, SignBits);
         Context.setInst(InstName, I);
