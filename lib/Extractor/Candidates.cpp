@@ -15,8 +15,8 @@
 #include "souper/Extractor/Candidates.h"
 
 #include "llvm/ADT/EquivalenceClasses.h"
-#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LazyValueInfo.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/ConstantRange.h"
