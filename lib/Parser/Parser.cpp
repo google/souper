@@ -1194,11 +1194,14 @@ bool Parser::parseLine(std::string &ErrStr) {
                   // look for untypedconst
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K != Token::UntypedInt) {
+                  if (CurTok.K != Token::Int) {
                     ErrStr = makeErrStr(TP, "expected lower bound of range");
                     return false;
                   }
+                  // we get untyped int for lower and upper bounds, so we set the width
+                  // of this token to inst width
                   Lower = CurTok.Val;
+                  llvm::outs() << "Parser: Lower = " << Lower << ", width = " << Lower.getBitWidth() << "\n";
                   // TODO: do we perform a check on APInt value to amke sure it satisfies bitwidth?
                   // look for comma
                   if (!consumeToken(ErrStr))
@@ -1210,11 +1213,12 @@ bool Parser::parseLine(std::string &ErrStr) {
                   // look for untypedconst
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K != Token::UntypedInt) {
+                  if (CurTok.K != Token::Int) {
                     ErrStr = makeErrStr(TP, "expected upper bound of range");
                     return false;
                   }
                   Upper = CurTok.Val;
+                  llvm::outs() << "Parser: Upper = " << Upper <<  ", width = " << Upper.getBitWidth() << "\n";
                   // TODO: do we perform a check on APInt value to amke sure it satisfies bitwidth?
                   // look for closeparen )
                   if (!consumeToken(ErrStr))
@@ -1223,6 +1227,8 @@ bool Parser::parseLine(std::string &ErrStr) {
                     ErrStr = makeErrStr(TP, "expected ')' after upper bound of range");
                     return false;
                   }
+                  if (!consumeToken(ErrStr))
+                    return false;
                 } else {
                   ErrStr = makeErrStr(TP, "invalid data flow fact type");
                   return false;
@@ -1241,6 +1247,7 @@ bool Parser::parseLine(std::string &ErrStr) {
               return false;
           }
         }
+        llvm::outs() << "Parser: call createVar\n";
         Inst *I = IC.createVar(InstWidth, InstName, llvm::ConstantRange(Lower, Upper), Zero, One, NonZero,
                                NonNegative, PowOfTwo, Negative, SignBits);
         Context.setInst(InstName, I);
