@@ -1195,13 +1195,12 @@ bool Parser::parseLine(std::string &ErrStr) {
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::Int) {
-                    ErrStr = makeErrStr(TP, "expected lower bound of range");
+                    ErrStr = makeErrStr(TP, "expected lower bound of range with width");
                     return false;
                   }
                   // we get untyped int for lower and upper bounds, so we set the width
                   // of this token to inst width
                   Lower = CurTok.Val;
-                  llvm::outs() << "Parser: Lower = " << Lower << ", width = " << Lower.getBitWidth() << "\n";
                   // TODO: do we perform a check on APInt value to amke sure it satisfies bitwidth?
                   // look for comma
                   if (!consumeToken(ErrStr))
@@ -1214,11 +1213,10 @@ bool Parser::parseLine(std::string &ErrStr) {
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::Int) {
-                    ErrStr = makeErrStr(TP, "expected upper bound of range");
+                    ErrStr = makeErrStr(TP, "expected upper bound of range with width");
                     return false;
                   }
                   Upper = CurTok.Val;
-                  llvm::outs() << "Parser: Upper = " << Upper <<  ", width = " << Upper.getBitWidth() << "\n";
                   // TODO: do we perform a check on APInt value to amke sure it satisfies bitwidth?
                   // look for closeparen )
                   if (!consumeToken(ErrStr))
