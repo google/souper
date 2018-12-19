@@ -377,22 +377,23 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
     Result = LIC->getInst(Inst::And, 1, {Result, SignBits});
   }
   if (!I->Range.isEmptySet() && !I->Range.isFullSet()) {
-    llvm::outs() << "ExprBuilder: range\n";
     Inst *Lower = LIC->getConst(I->Range.getLower());
     Inst *Upper = LIC->getConst(I->Range.getUpper());
     Inst *NonWrappedRange = LIC->getConst(llvm::APInt(1, 0));
     Inst *WrappedRange = LIC->getConst(llvm::APInt(1, 0));
  
+    // sign wrapped set: contains MIN and MAX
+    // if (I->Range.isSignWrappedSet()) {
+    //   llvm::outs() << "*** signed wrapped set ***\n";
+    // }
     // not wrapped set: x >= Lower && x <= Upper
     if (!I->Range.isWrappedSet()) {
-      llvm::outs() << "ExprBuilder: NOT wrapped set\n";
       NonWrappedRange = LIC->getInst(Inst::And, 1,
                                         {LIC->getInst(Inst::Ule, 1, {Lower, I}),
                                          LIC->getInst(Inst::Ult, 1, {I, Upper})});
     }
     // wrapped set: x >= Lower || x <= Upper
     if (I->Range.isWrappedSet()) {
-      llvm::outs() << "ExprBuilder: wrapped set\n";
       WrappedRange = LIC->getInst(Inst::Or, 1,
                                         {LIC->getInst(Inst::Ule, 1, {Lower, I}),
                                          LIC->getInst(Inst::Ult, 1, {I, Upper})});
