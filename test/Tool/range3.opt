@@ -1,0 +1,12 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+%0:i32 = var (range=[2:i32, 5:i32))
+%1:i32 = var (range=[3:i32, 5:i32))
+%2:i1 = ule 0, %0
+%3:i1 = ult %0, 5
+%4:i1 = and %2, %3
+cand %4 1:i1
