@@ -184,7 +184,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
 
     // constant range
     ConstantRange Range = llvm::ConstantRange(Width, true);
-    if (HarvestConstantRange)
+    if (HarvestConstantRange) {
       if (V->getType()->isIntegerTy()) {
         // TODO: Find out a better way to get the current basic block
         // with this approach, we might be restricting the constant
@@ -200,6 +200,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
           Range = R1.intersectWith(R2);
         }
       }
+    }
 
   return IC.createVar(Width, Name, Range, Known.Zero, Known.One, NonZero, NonNegative,
                       PowOfTwo, Negative, NumSignBits);

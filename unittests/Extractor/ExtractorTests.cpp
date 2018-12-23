@@ -172,7 +172,7 @@ cont:
 }
 )m"));
 
-  EXPECT_TRUE(hasCandidate(R"c(%0:i32 = var ; phi
+  EXPECT_TRUE(hasCandidate(R"c(%0:i32 = var (range=[0:i32,42:i32)) ; phi
 %1:i32 = add 1:i32, %0 (hasExternalUses)
 %2:i1 = eq 42:i32, %1
 cand %2 1:i1
