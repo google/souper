@@ -185,8 +185,8 @@ std::string ReplacementContext::printInstImpl(Inst *I, llvm::raw_ostream &Out,
         if (I->NumSignBits > 1)
           Out << " (signBits=" << I->NumSignBits << ")";
         if (!I->Range.isEmptySet() && !I->Range.isFullSet())
-          Out << " (range=[" << I->Range.getLower() << ":i" << I->Width
-              << "," << I->Range.getUpper() << ":i" << I->Width << "))";
+          Out << " (range=[" << I->Range.getLower()
+              << "," << I->Range.getUpper() << "))";
       }
       Out << OpsSS.str();
 

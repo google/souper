@@ -8,8 +8,8 @@
 ; min = 1024 - 2048 [lower_1 - upper_2]
 ; max = 4096 - (-1024) [upper_1 - lower2]
 
-%0:i32 = var (range=[1024:i32,4097:i32))
-%1:i32 = var (range=[-1024:i32,2049:i32))
+%0:i32 = var (range=[1024,4097))
+%1:i32 = var (range=[-1024,2049))
 %2:i32 = subnw %0, %1
 %3:i1 = sle -1024, %2
 %4:i1 = slt %2, 5120

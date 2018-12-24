@@ -176,6 +176,18 @@ TEST(ParserTest, Errors) {
         "%1:i1 = extractvalue 42, 1 (hasSomethingElse\n"
         "infer %1\n",
         "<input>:2:1: expected hasExternalUses token" },
+      { "%0:i8 = var (range[2,90))\n",
+        "<input>:1:1: expected '=' for range as 'range='" },
+      { "%0:i32 = var (range=2,90))\n",
+        "<input>:1:1: expected '[' to specify lower bound of range" },
+      { "%0:i32 = var (range=[2:i32,90:i32))\n",
+        "<input>:1:1: expected lower bound of range without width" },
+      { "%0:i32 = var (range=[2,90:i32))\n",
+        "<input>:1:1: expected upper bound of range without width" },
+      { "%0:i32 = var (range=[2 90))\n",
+        "<input>:1:1: expected ',' after lower bound of range without width" },
+      { "%0:i32 = var (range=[2,90)\n",
+        "<input>:1:1: expected ')' to complete data flow fact string" },
 
       // type checking
       { "%0 = add 1:i32\n",

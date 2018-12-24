@@ -4,8 +4,8 @@
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i32 = var (range=[-512:i32,1256:i32))
-%1:i32 = var (range=[12:i32, 100:i32))
+%0:i32 = var (range=[-512,1256))
+%1:i32 = var (range=[12, 100))
 %2:i32 = addnsw %0, %1
 %3:i1 = sle -500, %2
 %4:i1 = slt %2, 1356

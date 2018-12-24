@@ -4,7 +4,7 @@
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i16 = var (range=[100:i16, 10:i16))
+%0:i16 = var (range=[100, 10))
 %1:i1 = ule %0, 100
 %2:i1 = ult 10, %0
 %3:i1 = or %1, %2

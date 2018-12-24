@@ -186,51 +186,6 @@ FoundChar:
       }
       return Token{Token::KnownBits, TokenBegin, size_t(Begin - TokenBegin), APInt(),
                    "", 0, StringRef(PatternBegin, Begin - PatternBegin)};
-//    } else if (DataFlowFact == "range") {
-//      if (*Begin != '=') {
-//        ErrStr = "expected '=' for range";
-//        return Token{Token::Error, Begin, 0, APInt()};
-//      }
-//      ++Begin;
-//      if(*Begin != '[') {
-//        ErrStr = "expected '[' to specify the lower bound of range";
-//        return Token{Token::Error, Begin, 0, APInt()};
-//      }
-//      ++Begin;
-//      if (*Begin == '-' || (*Begin >= '0' && *Begin <= '9')) {
-//        const char *LowerBegin = Begin;
-//        do {
-//          ++Begin;
-//        } while (Begin != End && *Begin >= '0' && *Begin <= '9');
-//        const char *LowerEnd = Begin;
-//        if ((LowerEnd - LowerBegin) == 1 && *LowerBegin == '-') {
-//          ErrStr = "unexpected character following a negative sign in lower bound of range";
-//          return Token{Token::Error, Begin, 0, APInt()};
-//        }
-//      }
-//      if (*Begin != ',') {
-//        ErrStr = "expected ',' splitter after lower bound of range";
-//        return Token{Token::Error, Begin, 0, APInt()};
-//      }
-//      ++Begin;
-//      if (*Begin == '-' || (*Begin >= '0' && *Begin <= '9')) {
-//        const char *UpperBegin = Begin;
-//        do {
-//          ++Begin;
-//        } while (Begin != End && *Begin >= '0' && *Begin <= '9');
-//        const char *UpperEnd = Begin;
-//        if ((UpperEnd - UpperBegin) == 1 && *UpperBegin == '-') {
-//          ErrStr = "unexpected character following a negative sign in upper bound of range";
-//          return Token{Token::Error, Begin, 0, APInt()};
-//        }
-//      }
-//      if (*Begin != ')') {
-//        ErrStr = "expected ')' to specify at the end of upper bound of range";
-//        return Token{Token::Error, Begin, 0, APInt()};
-//      }
-//      ++Begin;
-//      return Token{Token::KnownBits, TokenBegin, size_t(Begin - TokenBegin), APInt(),
-//                   "", 0, StringRef(PatternBegin, Begin - PatternBegin)};
     } else
       return Token{Token::Ident, TokenBegin, size_t(Begin - TokenBegin), APInt()};
   }
@@ -459,8 +414,9 @@ bool Parser::typeCheckOpsMatchingWidths(llvm::MutableArrayRef<Inst *> Ops,
                                         std::string &ErrStr) {
   unsigned Width = 0;
   for (auto Op : Ops) {
-    if (Width == 0)
+    if (Width == 0) {
       Width = Op->Width;
+    }
     if (Width != 0 && Op->Width != 0 && Width != Op->Width) {
       ErrStr = "operands have different widths";
       return false;
@@ -1181,9 +1137,10 @@ bool Parser::parseLine(std::string &ErrStr) {
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::Eq) {
-                    ErrStr = makeErrStr(TP, "expected '=' for range");
+                    ErrStr = makeErrStr(TP, "expected '=' for range as 'range='");
                     return false;
                   }
+
                   // look for [ (inclusive paren)
                   if (!consumeToken(ErrStr))
                     return false;
@@ -1191,33 +1148,41 @@ bool Parser::parseLine(std::string &ErrStr) {
                     ErrStr = makeErrStr(TP, "expected '[' to specify lower bound of range");
                     return false;
                   }
+
                   // look for untypedconst
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K != Token::Int) {
-                    ErrStr = makeErrStr(TP, "expected lower bound of range with width");
+                  if (CurTok.K != Token::UntypedInt) {
+                    ErrStr = makeErrStr(TP, "expected lower bound of range without width");
                     return false;
                   }
-                  // we get untyped int for lower and upper bounds, so we set the width
-                  // of this token to inst width
                   Lower = CurTok.Val;
-                  // TODO: do we perform a check on APInt value to amke sure it satisfies bitwidth?
+
+                  if (Lower.getBitWidth() != InstWidth) {
+                    Lower = Lower.sextOrTrunc(InstWidth);
+                  }
+
                   // look for comma
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::Comma) {
-                    ErrStr = makeErrStr(TP, "expected ',' after lower bound of range");
+                    ErrStr = makeErrStr(TP, "expected ',' after lower bound of range without width");
                     return false;
                   }
+
                   // look for untypedconst
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K != Token::Int) {
-                    ErrStr = makeErrStr(TP, "expected upper bound of range with width");
+                  if (CurTok.K != Token::UntypedInt) {
+                    ErrStr = makeErrStr(TP, "expected upper bound of range without width");
                     return false;
                   }
                   Upper = CurTok.Val;
-                  // TODO: do we perform a check on APInt value to amke sure it satisfies bitwidth?
+
+                  if (Upper.getBitWidth() != InstWidth) {
+                    Upper = Upper.sextOrTrunc(InstWidth);
+                  }
+
                   // look for closeparen )
                   if (!consumeToken(ErrStr))
                     return false;

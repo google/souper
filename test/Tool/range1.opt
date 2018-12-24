@@ -4,7 +4,7 @@
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i32 = var (range=[2:i32,20:i32))
+%0:i32 = var (range=[2,20))
 %1:i1 = ule 2, %0
 %2:i1 = ult %0, 20
 %3:i1 = and %1, %2

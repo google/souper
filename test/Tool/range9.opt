@@ -4,6 +4,6 @@
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i32 = var (range=[2:i32,9:i32)) (powerOfTwo)
+%0:i32 = var (range=[2,9)) (powerOfTwo)
 %1:i32 = urem %0, 2
 cand %1 0:i32

@@ -7,8 +7,8 @@
 
 ; non overlapping ranges difference will never be equal to zero
 
-%0:i32 = var (range=[10:i32,50:i32))
-%1:i32 = var (range=[70:i32,120:i32))
+%0:i32 = var (range=[10,50))
+%1:i32 = var (range=[70,120))
 %2:i32 = subnw %0, %1
 %4:i1 = ne %2, 0
 cand %4 1:i1

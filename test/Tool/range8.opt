@@ -7,7 +7,7 @@
 
 ; square of a negative range is always positive
 
-%0:i32 = var (range=[-200:i32,-10:i32))
+%0:i32 = var (range=[-200,-10))
 %1:i32 = mulnsw %0, %0
 %2:i1 = ult 0, %1
 cand %2 1:i1
