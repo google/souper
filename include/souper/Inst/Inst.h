@@ -150,8 +150,6 @@ struct Inst : llvm::FoldingSetNode {
   unsigned NumSignBits;
   llvm::APInt DemandedBits;
   llvm::ConstantRange Range=llvm::ConstantRange(1);
-
-//  Inst() : Range(1) {}
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
