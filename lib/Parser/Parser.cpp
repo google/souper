@@ -43,7 +43,7 @@ struct Token {
     KnownBits,
     OpenParen,
     CloseParen,
-    RangeOpenParen,
+    OpenBracket,
     Eof,
   };
 
@@ -246,7 +246,7 @@ FoundChar:
 
   if (*Begin == '[') {
     ++Begin;
-    return Token{Token::RangeOpenParen, Begin-1, 1, APInt()};
+    return Token{Token::OpenBracket, Begin-1, 1, APInt()};
   }
 
   ErrStr = std::string("unexpected '") + *Begin + "'";
@@ -414,9 +414,8 @@ bool Parser::typeCheckOpsMatchingWidths(llvm::MutableArrayRef<Inst *> Ops,
                                         std::string &ErrStr) {
   unsigned Width = 0;
   for (auto Op : Ops) {
-    if (Width == 0) {
+    if (Width == 0)
       Width = Op->Width;
-    }
     if (Width != 0 && Op->Width != 0 && Width != Op->Width) {
       ErrStr = "operands have different widths";
       return false;
@@ -1144,7 +1143,7 @@ bool Parser::parseLine(std::string &ErrStr) {
                   // look for [ (inclusive paren)
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K != Token::RangeOpenParen) {
+                  if (CurTok.K != Token::OpenBracket) {
                     ErrStr = makeErrStr(TP, "expected '[' to specify lower bound of range");
                     return false;
                   }
@@ -1152,8 +1151,12 @@ bool Parser::parseLine(std::string &ErrStr) {
                   // look for untypedconst
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K != Token::UntypedInt) {
+                  if (CurTok.K != Token::UntypedInt && CurTok.K == Token::Int) {
                     ErrStr = makeErrStr(TP, "expected lower bound of range without width");
+                    return false;
+                  }
+                  if (CurTok.K != Token::UntypedInt) {
+                    ErrStr = makeErrStr(TP, "expected lower bound of range");
                     return false;
                   }
                   Lower = CurTok.Val;
@@ -1166,15 +1169,19 @@ bool Parser::parseLine(std::string &ErrStr) {
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::Comma) {
-                    ErrStr = makeErrStr(TP, "expected ',' after lower bound of range without width");
+                    ErrStr = makeErrStr(TP, "expected ',' after lower bound of range");
                     return false;
                   }
 
                   // look for untypedconst
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K != Token::UntypedInt) {
+                  if (CurTok.K != Token::UntypedInt && CurTok.K == Token::Int) {
                     ErrStr = makeErrStr(TP, "expected upper bound of range without width");
+                    return false;
+                  }
+                  if (CurTok.K != Token::UntypedInt) {
+                    ErrStr = makeErrStr(TP, "expected upper bound of range");
                     return false;
                   }
                   Upper = CurTok.Val;

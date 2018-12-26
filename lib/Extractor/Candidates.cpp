@@ -182,8 +182,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
       NumSignBits = ComputeNumSignBits(V, DL);
     }
 
-    // constant range
-    ConstantRange Range = llvm::ConstantRange(Width, true);
+    ConstantRange Range = llvm::ConstantRange(Width, /*isFullSet=*/true);
     if (HarvestConstantRange && V->getType()->isIntegerTy()) {
       // TODO: Find out a better way to get the current basic block
       // with this approach, we might be restricting the constant

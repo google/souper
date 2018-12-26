@@ -185,7 +185,7 @@ TEST(ParserTest, Errors) {
       { "%0:i32 = var (range=[2,90:i32))\n",
         "<input>:1:1: expected upper bound of range without width" },
       { "%0:i32 = var (range=[2 90))\n",
-        "<input>:1:1: expected ',' after lower bound of range without width" },
+        "<input>:1:1: expected ',' after lower bound of range" },
       { "%0:i32 = var (range=[2,90)\n",
         "<input>:1:1: expected ')' to complete data flow fact string" },
 

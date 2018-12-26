@@ -382,10 +382,6 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
     Inst *NonWrappedRange = LIC->getConst(llvm::APInt(1, 0));
     Inst *WrappedRange = LIC->getConst(llvm::APInt(1, 0));
  
-    // sign wrapped set: contains MIN and MAX
-    // if (I->Range.isSignWrappedSet()) {
-    //   llvm::outs() << "*** signed wrapped set ***\n";
-    // }
     // not wrapped set: x >= Lower && x <= Upper
     if (!I->Range.isWrappedSet()) {
       NonWrappedRange = LIC->getInst(Inst::And, 1,
@@ -399,7 +395,7 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
                                          LIC->getInst(Inst::Ult, 1, {I, Upper})});
     }
     Result = LIC->getInst(Inst::And, 1, {Result,
-                                         LIC->getInst(Inst::Or, 1, {NonWrappedRange, WrappedRange})});
+                                         LIC->getInst(Inst::Xor, 1, {NonWrappedRange, WrappedRange})});
   }
 
   return Result;
