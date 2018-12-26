@@ -379,23 +379,18 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
   if (!I->Range.isEmptySet() && !I->Range.isFullSet()) {
     Inst *Lower = LIC->getConst(I->Range.getLower());
     Inst *Upper = LIC->getConst(I->Range.getUpper());
-    Inst *NonWrappedRange = LIC->getConst(llvm::APInt(1, 0));
-    Inst *WrappedRange = LIC->getConst(llvm::APInt(1, 0));
  
     // not wrapped set: x >= Lower && x <= Upper
-    if (!I->Range.isWrappedSet()) {
-      NonWrappedRange = LIC->getInst(Inst::And, 1,
-                                        {LIC->getInst(Inst::Ule, 1, {Lower, I}),
-                                         LIC->getInst(Inst::Ult, 1, {I, Upper})});
-    }
     // wrapped set: x >= Lower || x <= Upper
-    if (I->Range.isWrappedSet()) {
-      WrappedRange = LIC->getInst(Inst::Or, 1,
-                                        {LIC->getInst(Inst::Ule, 1, {Lower, I}),
-                                         LIC->getInst(Inst::Ult, 1, {I, Upper})});
+    if (!I->Range.isWrappedSet()) {
+      Result = LIC->getInst(Inst::And, 1, {Result, LIC->getInst(Inst::And, 1,
+                            {LIC->getInst(Inst::Ule, 1, {Lower, I}),
+                             LIC->getInst(Inst::Ult, 1, {I, Upper})})});
+    } else if (I->Range.isWrappedSet()) {
+      Result = LIC->getInst(Inst::And, 1, {Result, LIC->getInst(Inst::Or, 1,
+                            {LIC->getInst(Inst::Ule, 1, {Lower, I}),
+                             LIC->getInst(Inst::Ult, 1, {I, Upper})})});
     }
-    Result = LIC->getInst(Inst::And, 1, {Result,
-                                         LIC->getInst(Inst::Xor, 1, {NonWrappedRange, WrappedRange})});
   }
 
   return Result;
