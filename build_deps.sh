@@ -19,9 +19,9 @@ if [ -d "third_party" ]; then
   exit 1;
 fi
 
-# hiredis version 0.13.3
-hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
-llvm_branch=tags/RELEASE_700/final
+# hiredis version 0.14.0
+hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
+llvm_branch=tags/RELEASE_800/final
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=6292493642a70a5246fb2bc8d52bf9e5dfd93854
