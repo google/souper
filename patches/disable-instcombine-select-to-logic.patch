@@ -1,8 +1,8 @@
 Index: lib/Transforms/InstCombine/InstCombineSelect.cpp
 ===================================================================
---- lib/Transforms/InstCombine/InstCombineSelect.cpp	(revision 342524)
-+++ lib/Transforms/InstCombine/InstCombineSelect.cpp	(working copy)
-@@ -1548,7 +1548,7 @@
+--- lib/Transforms/InstCombine/InstCombineSelect.cpp    (revision 354644)
++++ lib/Transforms/InstCombine/InstCombineSelect.cpp    (working copy)
+@@ -1652,7 +1652,7 @@
      Worklist.Add(Cond);
      return &SI;
    }
@@ -11,11 +11,12 @@ Index: lib/Transforms/InstCombine/InstCombineSelect.cpp
    if (SelType->isIntOrIntVectorTy(1) &&
        TrueVal->getType() == CondVal->getType()) {
      if (match(TrueVal, m_One())) {
-@@ -1613,6 +1613,7 @@
+@@ -1717,7 +1717,7 @@
        return new SExtInst(NotCond, SelType);
      }
    }
+-
 +#endif
-
    // See if we are selecting two values based on a comparison of the two values.
    if (FCmpInst *FCI = dyn_cast<FCmpInst>(CondVal)) {
+     if (FCI->getOperand(0) == TrueVal && FCI->getOperand(1) == FalseVal) {

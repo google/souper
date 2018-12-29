@@ -28,38 +28,32 @@
 
 #include <stdlib.h>
 
-volatile int opaque;
+volatile unsigned opaque;
 
 // this is fragile: any code where Souper can find an optimization that LLVM
 // misses
-void souper_opt (void)
-{
-  int a = opaque;
-  int b = opaque;
-  if (a==b) {
-    if (a>b) {
+void souper_opt(void) {
+  unsigned a = opaque & 0xf;
+  if (__builtin_popcount(a) + __builtin_popcount(~a) == 32)
       ++opaque;
-    }
-  }
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
   if (argc != 2)
     abort();
   long arg = strtol(argv[1], 0, 10);
-  if (arg<0 || arg>7)
+  if (arg < 0 || arg > 7)
     abort();
 
-  if (arg&1)
+  if (arg & 1)
     souper_opt();
   int i;
-  for (i=0; i<100; ++i) {
-    if (arg&2)
+  for (i = 0; i < 100; ++i) {
+    if (arg & 2)
       souper_opt();
     int j;
-    for (j=0; j<100; ++j) {
-      if (arg&4)
+    for (j = 0; j < 100; ++j) {
+      if (arg & 4)
         souper_opt();
     }
   }
