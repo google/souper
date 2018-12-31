@@ -1,0 +1,11 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -reinfer-rhs -souper-exhaustive-synthesis -souper-exhaustive-synthesis-num-instructions=1 -souper-cost-model=heuristics %s > %t
+; RUN: %FileCheck %s < %t
+
+%b:i64 = var
+%a = add %b, %b
+infer %a
+%r2 = shl %b, 1
+result %r2
+; CHECK: RHS inferred successfully, no cost regression
