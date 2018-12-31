@@ -4,7 +4,10 @@
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i16 = var (range=[0, 16384))
-%1:i17 = sadd.with.overflow %0, %0
-%2:i1 = extractvalue %1, 1
-cand %2 0
+
+%0:i8 = var (range=[10,9))
+%1:i16 = zext %0
+%2:i1 = ult %1, 9
+%3:i1 = ule 10, %1
+%4:i1 = or %2, %3
+cand %4 1

@@ -4,7 +4,7 @@
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: LGTM
-%0:i16 = var (range=[0, 16384))
+%0:i16 = var (range=[-16384, 16384))
 %1:i17 = sadd.with.overflow %0, %0
 %2:i1 = extractvalue %1, 1
 cand %2 0

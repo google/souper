@@ -1059,8 +1059,6 @@ bool Parser::parseLine(std::string &ErrStr) {
       Block *B = 0;
 
       if (IK == Inst::Var) {
-        // TODO: Maybe, we should initialize lower bound and upper bound to min/max value
-        // of int range w.r.t. width. for now, its initialized to 0.
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
                     ConstOne(InstWidth, 1, false), Lower(InstWidth, 0, false),
                     Upper(InstWidth, 0, false);
@@ -1132,7 +1130,6 @@ bool Parser::parseLine(std::string &ErrStr) {
                   if (!consumeToken(ErrStr))
                     return false;
                 } else if (CurTok.str() == "range") {
-                  // look for =
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::Eq) {
@@ -1140,7 +1137,6 @@ bool Parser::parseLine(std::string &ErrStr) {
                     return false;
                   }
 
-                  // look for [ (inclusive paren)
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::OpenBracket) {
@@ -1148,10 +1144,9 @@ bool Parser::parseLine(std::string &ErrStr) {
                     return false;
                   }
 
-                  // look for untypedconst
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K != Token::UntypedInt && CurTok.K == Token::Int) {
+                  if (CurTok.K == Token::Int) {
                     ErrStr = makeErrStr(TP, "expected lower bound of range without width");
                     return false;
                   }
@@ -1162,10 +1157,26 @@ bool Parser::parseLine(std::string &ErrStr) {
                   Lower = CurTok.Val;
 
                   if (Lower.getBitWidth() != InstWidth) {
-                    Lower = Lower.sextOrTrunc(InstWidth);
+                    APInt Lower2 = Lower.sextOrTrunc(InstWidth);
+                    APInt Lower3 = Lower2;
+                    if (Lower2.getBitWidth() < Lower.getBitWidth()) {
+                      Lower2 = Lower2.sext(Lower.getBitWidth());
+                    } else {
+                      Lower2 = Lower2.trunc(Lower.getBitWidth());
+                    }
+                    if (Lower != Lower2) {
+                      ErrStr = makeErrStr(TP, "Lower value of range is out of bound");
+                      return false;
+                    } else {
+                      if ((Lower3.slt(Lower3.getSignedMinValue(InstWidth))) ||
+                          (Lower3.sgt(Lower3.getSignedMaxValue(InstWidth)))) {
+                        ErrStr = makeErrStr(TP, "Lower bound is out of range");
+                        return false;
+                      }
+                    }
+                    Lower = Lower3;
                   }
 
-                  // look for comma
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::Comma) {
@@ -1173,10 +1184,9 @@ bool Parser::parseLine(std::string &ErrStr) {
                     return false;
                   }
 
-                  // look for untypedconst
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K != Token::UntypedInt && CurTok.K == Token::Int) {
+                  if (CurTok.K == Token::Int) {
                     ErrStr = makeErrStr(TP, "expected upper bound of range without width");
                     return false;
                   }
@@ -1187,10 +1197,26 @@ bool Parser::parseLine(std::string &ErrStr) {
                   Upper = CurTok.Val;
 
                   if (Upper.getBitWidth() != InstWidth) {
-                    Upper = Upper.sextOrTrunc(InstWidth);
+                    APInt Upper2 = Upper.sextOrTrunc(InstWidth);
+                    APInt Upper3 = Upper2;
+                    if (Upper2.getBitWidth() < Upper.getBitWidth()) {
+                      Upper2 = Upper2.sext(Upper.getBitWidth());
+                    } else {
+                      Upper2 = Upper2.trunc(Upper.getBitWidth());
+                    }
+                    if (Upper != Upper2) {
+                      ErrStr = makeErrStr(TP, "Upper value of range is out of bound");
+                      return false;
+                    } else {
+                      if ((Upper3.slt(Upper3.getSignedMinValue(InstWidth))) ||
+                          (Upper3.sgt(Upper3.getSignedMaxValue(InstWidth)))) {
+                        ErrStr = makeErrStr(TP, "Upper bound is out of range");
+                        return false;
+                      }
+                    }
+                    Upper = Upper3;
                   }
 
-                  // look for closeparen )
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::CloseParen) {
