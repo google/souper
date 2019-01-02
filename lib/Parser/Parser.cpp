@@ -1156,25 +1156,12 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   Lower = CurTok.Val;
 
-                  if (Lower.getBitWidth() != InstWidth) {
-                    APInt Lower2 = Lower.sextOrTrunc(InstWidth);
-                    APInt Lower3 = Lower2;
-                    if (Lower2.getBitWidth() < Lower.getBitWidth()) {
-                      Lower2 = Lower2.sext(Lower.getBitWidth());
-                    } else {
-                      Lower2 = Lower2.trunc(Lower.getBitWidth());
-                    }
-                    if (Lower != Lower2) {
-                      ErrStr = makeErrStr(TP, "Lower value of range is out of bound");
-                      return false;
-                    } else {
-                      if ((Lower3.slt(Lower3.getSignedMinValue(InstWidth))) ||
-                          (Lower3.sgt(Lower3.getSignedMaxValue(InstWidth)))) {
-                        ErrStr = makeErrStr(TP, "Lower bound is out of range");
-                        return false;
-                      }
-                    }
-                    Lower = Lower3;
+                  if (Lower.isSignedIntN(InstWidth) || Lower.isIntN(InstWidth)) {
+                    if (Lower.getBitWidth() != InstWidth)
+                      Lower = Lower.sextOrTrunc(InstWidth);
+                  } else {
+                    ErrStr = makeErrStr(TP, "Lower bound is out of range");
+                    return false;
                   }
 
                   if (!consumeToken(ErrStr))
@@ -1196,25 +1183,12 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   Upper = CurTok.Val;
 
-                  if (Upper.getBitWidth() != InstWidth) {
-                    APInt Upper2 = Upper.sextOrTrunc(InstWidth);
-                    APInt Upper3 = Upper2;
-                    if (Upper2.getBitWidth() < Upper.getBitWidth()) {
-                      Upper2 = Upper2.sext(Upper.getBitWidth());
-                    } else {
-                      Upper2 = Upper2.trunc(Upper.getBitWidth());
-                    }
-                    if (Upper != Upper2) {
-                      ErrStr = makeErrStr(TP, "Upper value of range is out of bound");
-                      return false;
-                    } else {
-                      if ((Upper3.slt(Upper3.getSignedMinValue(InstWidth))) ||
-                          (Upper3.sgt(Upper3.getSignedMaxValue(InstWidth)))) {
-                        ErrStr = makeErrStr(TP, "Upper bound is out of range");
-                        return false;
-                      }
-                    }
-                    Upper = Upper3;
+                  if (Upper.isSignedIntN(InstWidth) || Upper.isIntN(InstWidth)) {
+                    if (Upper.getBitWidth() != InstWidth)
+                      Upper = Upper.sextOrTrunc(InstWidth);
+                  } else {
+                    ErrStr = makeErrStr(TP, "Upper bound is out of range");
+                    return false;
                   }
 
                   if (!consumeToken(ErrStr))

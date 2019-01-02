@@ -188,10 +188,10 @@ TEST(ParserTest, Errors) {
         "<input>:1:1: expected ',' after lower bound of range" },
       { "%0:i32 = var (range=[2,90)\n",
         "<input>:1:1: expected ')' to complete data flow fact string" },
-      { "%0:i8 = var (range=[2,128)\n",
-        "<input>:1:1: Upper value of range is out of bound" },
+      { "%0:i8 = var (range=[2,256)\n",
+        "<input>:1:1: Upper bound is out of range" },
       { "%0:i8 = var (range=[-129,127)\n",
-        "<input>:1:1: Lower value of range is out of bound" },
+        "<input>:1:1: Lower bound is out of range" },
 
       // type checking
       { "%0 = add 1:i32\n",

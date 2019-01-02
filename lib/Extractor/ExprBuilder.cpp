@@ -381,8 +381,6 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
     Inst *Lower = LIC->getConst(I->Range.getLower());
     Inst *Upper = LIC->getConst(I->Range.getUpper());
  
-    // not wrapped set: x >= Lower && x <= Upper
-    // wrapped set: x >= Lower || x <= Upper
     if (!I->Range.isWrappedSet()) {
       Result = LIC->getInst(Inst::And, 1, {Result, LIC->getInst(Inst::And, 1,
                             {LIC->getInst(Inst::Ule, 1, {Lower, I}),
