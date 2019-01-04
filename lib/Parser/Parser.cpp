@@ -1156,6 +1156,10 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   Lower = CurTok.Val;
 
+                  if (Lower.isNegative() && !Lower.isSignedIntN(InstWidth)) {
+                    ErrStr = makeErrStr(TP, "Lower bound is out of range");
+                    return false;
+                  }
                   if (Lower.isSignedIntN(InstWidth) || Lower.isIntN(InstWidth)) {
                     if (Lower.getBitWidth() != InstWidth)
                       Lower = Lower.sextOrTrunc(InstWidth);
@@ -1183,6 +1187,10 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   Upper = CurTok.Val;
 
+                  if (Upper.isNegative() && !Upper.isSignedIntN(InstWidth)) {
+                    ErrStr = makeErrStr(TP, "Upper bound is out of range");
+                    return false;
+                  }
                   if (Upper.isSignedIntN(InstWidth) || Upper.isIntN(InstWidth)) {
                     if (Upper.getBitWidth() != InstWidth)
                       Upper = Upper.sextOrTrunc(InstWidth);
