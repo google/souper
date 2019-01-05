@@ -123,7 +123,9 @@ static const std::vector<Component> CompLibrary = {
   Component{Inst::CtPop, 0, {0}},
   Component{Inst::BSwap, 0, {0}},
   Component{Inst::Cttz, 0, {0}},
-  Component{Inst::Ctlz, 0, {0}}
+  Component{Inst::Ctlz, 0, {0}},
+  Component{Inst::FShl, 0, {0,0,0}},
+  Component{Inst::FShr, 0, {0,0,0}}
 };
 
 class InstSynthesis {

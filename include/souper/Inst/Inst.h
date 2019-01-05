@@ -91,6 +91,8 @@ struct Inst : llvm::FoldingSetNode {
     BSwap,
     Cttz,
     Ctlz,
+    FShl,
+    FShr,
     ExtractValue,
     SAddWithOverflow,
     SAddO,

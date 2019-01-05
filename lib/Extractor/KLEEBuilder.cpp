@@ -338,6 +338,24 @@ private:
       return SubExpr::create(klee::ConstantExpr::create(Width, Width),
                              countOnes(Val));
     }
+    case Inst::FShl:
+    case Inst::FShr: {
+      unsigned IWidth = I->Width;
+      ref<Expr> High = get(Ops[0]);
+      ref<Expr> Low = get(Ops[1]);
+      ref<Expr> ShAmt = get(Ops[2]);
+      ref<Expr> ShAmtModWidth =
+          URemExpr::create(ShAmt, klee::ConstantExpr::create(IWidth, IWidth));
+      ref<Expr> Concatenated = ConcatExpr::create(High, Low);
+      unsigned CWidth = Concatenated->getWidth();
+      ref<Expr> ShAmtModWidthZExt = ZExtExpr::create(ShAmtModWidth, CWidth);
+      ref<Expr> Shifted =
+          I->K == Inst::FShl
+              ? ShlExpr::create(Concatenated, ShAmtModWidthZExt)
+              : LShrExpr::create(Concatenated, ShAmtModWidthZExt);
+      unsigned BitOffset = I->K == Inst::FShr ? 0 : IWidth;
+      return ExtractExpr::create(Shifted, BitOffset, IWidth);
+    }
     case Inst::SAddO:
       return XorExpr::create(get(addnswUB(I)), klee::ConstantExpr::create(1, Expr::Bool));
     case Inst::UAddO:

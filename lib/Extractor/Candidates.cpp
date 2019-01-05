@@ -510,6 +510,14 @@ Inst *ExprBuilder::buildHelper(Value *V) {
           return IC.getInst(Inst::Cttz, L->Width, {L});
         case Intrinsic::ctlz:
           return IC.getInst(Inst::Ctlz, L->Width, {L});
+        case Intrinsic::fshl:
+        case Intrinsic::fshr: {
+          Inst *Low = get(II->getOperand(1));
+          Inst *ShAmt = get(II->getOperand(2));
+          Inst::Kind K =
+              II->getIntrinsicID() == Intrinsic::fshl ? Inst::FShl : Inst::FShr;
+          return IC.getInst(K, L->Width, {/*High*/L, Low, ShAmt});
+        }
         case Intrinsic::sadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
           Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
