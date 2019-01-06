@@ -184,7 +184,7 @@ std::string ReplacementContext::printInstImpl(Inst *I, llvm::raw_ostream &Out,
           Out << " (powerOfTwo)";
         if (I->NumSignBits > 1)
           Out << " (signBits=" << I->NumSignBits << ")";
-        if (!I->Range.isEmptySet() && !I->Range.isFullSet())
+        if (!I->Range.isFullSet())
           Out << " (range=[" << I->Range.getLower()
               << "," << I->Range.getUpper() << "))";
       }
@@ -573,6 +573,7 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   unsigned Number = InstList.size();
   auto I = new Inst;
   InstList.emplace_back(I);
+  assert(Range.getBitWidth() == Width && Zero.getBitWidth() == Width && One.getBitWidth() == Width);
 
   I->K = Inst::Var;
   I->Number = Number;

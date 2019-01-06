@@ -1191,6 +1191,11 @@ bool Parser::parseLine(std::string &ErrStr) {
                   if (Upper.getBitWidth() != InstWidth)
                     Upper = Upper.sextOrTrunc(InstWidth);
 
+                  if (Lower == Upper && !Lower.isMinValue() && !Lower.isMaxValue()) {
+                    ErrStr = makeErrStr(TP, "range with lower == upper is invalid unless it is empty or full set");
+                    return false;
+                  }
+
                   if (!consumeToken(ErrStr))
                     return false;
                   if (CurTok.K != Token::CloseParen) {
