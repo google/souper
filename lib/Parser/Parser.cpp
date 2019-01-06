@@ -817,7 +817,7 @@ bool Parser::parseDemandedBits(std::string &ErrStr, Inst *LHS) {
     if (!consumeToken(ErrStr))
       return false;
     if (CurTok.K != Token::CloseParen) {
-      ErrStr = makeErrStr("expected ')' to complete demandedBits data flow string");
+      ErrStr = makeErrStr("expected ')' to complete demandedBits");
       return false;
     }
     if (!consumeToken(ErrStr))
@@ -1208,7 +1208,7 @@ bool Parser::parseLine(std::string &ErrStr) {
                 break;
             }
             if (CurTok.K != Token::CloseParen) {
-              ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact string");
+              ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact");
               return false;
             }
             Range = llvm::ConstantRange(Lower, Upper);
