@@ -1156,17 +1156,13 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   Lower = CurTok.Val;
 
-                  if (Lower.isNegative() && !Lower.isSignedIntN(InstWidth)) {
+                  if ((Lower.isNegative() && !Lower.isSignedIntN(InstWidth)) ||
+                      (!Lower.isNegative() && !(Lower.isSignedIntN(InstWidth) || Lower.isIntN(InstWidth)))) {
                     ErrStr = makeErrStr(TP, "Lower bound is out of range");
                     return false;
                   }
-                  if (Lower.isSignedIntN(InstWidth) || Lower.isIntN(InstWidth)) {
-                    if (Lower.getBitWidth() != InstWidth)
-                      Lower = Lower.sextOrTrunc(InstWidth);
-                  } else {
-                    ErrStr = makeErrStr(TP, "Lower bound is out of range");
-                    return false;
-                  }
+                  if (Lower.getBitWidth() != InstWidth)
+                    Lower = Lower.sextOrTrunc(InstWidth);
 
                   if (!consumeToken(ErrStr))
                     return false;
@@ -1187,17 +1183,13 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   Upper = CurTok.Val;
 
-                  if (Upper.isNegative() && !Upper.isSignedIntN(InstWidth)) {
+                  if ((Upper.isNegative() && !Upper.isSignedIntN(InstWidth)) ||
+                      (!Upper.isNegative() && !(Upper.isSignedIntN(InstWidth) || Upper.isIntN(InstWidth)))) {
                     ErrStr = makeErrStr(TP, "Upper bound is out of range");
                     return false;
                   }
-                  if (Upper.isSignedIntN(InstWidth) || Upper.isIntN(InstWidth)) {
-                    if (Upper.getBitWidth() != InstWidth)
-                      Upper = Upper.sextOrTrunc(InstWidth);
-                  } else {
-                    ErrStr = makeErrStr(TP, "Upper bound is out of range");
-                    return false;
-                  }
+                  if (Upper.getBitWidth() != InstWidth)
+                    Upper = Upper.sextOrTrunc(InstWidth);
 
                   if (!consumeToken(ErrStr))
                     return false;
