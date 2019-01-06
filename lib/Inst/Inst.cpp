@@ -590,6 +590,13 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   return I;
 }
 
+Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
+  return createVar(Width, Name, llvm::ConstantRange(Width, /*isFullSet*/ true),
+                   /*KnownZero*/ llvm::APInt(Width, 0), /*KnownOnes*/ llvm::APInt(Width, 0),
+                   /*NonZero*/ false, /*NonNegative*/ false, /*PowerOfTwo*/ false,
+                   /*Negative*/ false, /*SignBits*/ 1);
+}
+
 Block *InstContext::createBlock(unsigned Preds) {
   auto &BlockList = BlocksByPreds[Preds];
   unsigned Number = BlockList.size();

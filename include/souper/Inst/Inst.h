@@ -214,12 +214,12 @@ public:
   Inst *getReservedConst();
   Inst *getReservedInst(int Width);
 
+  Inst *createVar(unsigned Width, llvm::StringRef Name);
   Inst *createVar(unsigned Width, llvm::StringRef Name,
-                  llvm::ConstantRange Range=llvm::ConstantRange(1),
-                  llvm::APInt Zero=llvm::APInt(1, 0, false),
-                  llvm::APInt One=llvm::APInt(1, 0, false), bool NonZero=false,
-                  bool NonNegative=false, bool PowOfTwo=false, bool Negative=false,
-                  unsigned NumSignBits=1);
+                  llvm::ConstantRange Range,
+                  llvm::APInt Zero, llvm::APInt One,
+                  bool NonZero, bool NonNegative, bool PowOfTwo,
+                  bool Negative, unsigned NumSignBits);
   Block *createBlock(unsigned Preds);
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
