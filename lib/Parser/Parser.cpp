@@ -1062,6 +1062,7 @@ bool Parser::parseLine(std::string &ErrStr) {
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
                     ConstOne(InstWidth, 1, false), Lower(InstWidth, 0, false),
                     Upper(InstWidth, 0, false);
+        llvm::ConstantRange Range(InstWidth, /*isFullSet*/true);
         bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false,
           hasExternalUses = false;
         unsigned SignBits = 0;
@@ -1146,10 +1147,6 @@ bool Parser::parseLine(std::string &ErrStr) {
 
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K == Token::Int) {
-                    ErrStr = makeErrStr(TP, "expected lower bound of range without width");
-                    return false;
-                  }
                   if (CurTok.K != Token::UntypedInt) {
                     ErrStr = makeErrStr(TP, "expected lower bound of range");
                     return false;
@@ -1173,10 +1170,6 @@ bool Parser::parseLine(std::string &ErrStr) {
 
                   if (!consumeToken(ErrStr))
                     return false;
-                  if (CurTok.K == Token::Int) {
-                    ErrStr = makeErrStr(TP, "expected upper bound of range without width");
-                    return false;
-                  }
                   if (CurTok.K != Token::UntypedInt) {
                     ErrStr = makeErrStr(TP, "expected upper bound of range");
                     return false;
@@ -1218,11 +1211,12 @@ bool Parser::parseLine(std::string &ErrStr) {
               ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact string");
               return false;
             }
+            Range = llvm::ConstantRange(Lower, Upper);
             if (!consumeToken(ErrStr))
               return false;
           }
         }
-        Inst *I = IC.createVar(InstWidth, InstName, llvm::ConstantRange(Lower, Upper), Zero, One, NonZero,
+        Inst *I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
                                NonNegative, PowOfTwo, Negative, SignBits);
         Context.setInst(InstName, I);
         return true;
