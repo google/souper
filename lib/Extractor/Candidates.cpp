@@ -99,11 +99,13 @@ struct ExprBuilder {
   Inst *makeArrayRead(Value *V);
   Inst *buildConstant(Constant *c);
   Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
-  Inst *build(Value *V);
+  Inst *build(Value *V, APInt DemandedBits);
+  Inst *buildHelper(Value *V);
   void addPC(BasicBlock *BB, BasicBlock *Pred, std::vector<InstMapping> &PCs);
   void addPathConditions(BlockPCs &BPCs, std::vector<InstMapping> &PCs,
                          std::unordered_set<Block *> &VisitedBlocks,
                          BasicBlock *BB);
+  Inst *get(Value *V, APInt DemandedBits);
   Inst *get(Value *V);
   void markExternalUses(Inst *I);
 };
@@ -246,7 +248,13 @@ void ExprBuilder::markExternalUses (Inst *I) {
         I->DepsWithExternalUses.insert(U.first);
 }
 
-Inst *ExprBuilder::build(Value *V) {
+Inst *ExprBuilder::build(Value *V, APInt DemandedBits) {
+  Inst *I = buildHelper(V);
+  I->DemandedBits = DemandedBits;
+  return I;
+}
+
+Inst *ExprBuilder::buildHelper(Value *V) {
   if (auto C = dyn_cast<Constant>(V)) {
     return buildConstant(C);
   } else if (auto ICI = dyn_cast<ICmpInst>(V)) {
@@ -532,18 +540,26 @@ Inst *ExprBuilder::build(Value *V) {
   return makeArrayRead(V);
 }
 
-Inst *ExprBuilder::get(Value *V) {
+Inst *ExprBuilder::get(Value *V, APInt DemandedBits) {
   // Cache V if V is not found in InstMap
   Inst *&E = EBC.InstMap[V];
   if (!E)
-    E = build(V);
+    E = build(V, DemandedBits);
   if (E->K != Inst::Const && !E->hasOrigin(V))
     E->Origins.push_back(V);
-  E->DemandedBits = APInt::getAllOnesValue(E->Width);
-  if (HarvestDemandedBits) {
-    if (Instruction *I = dyn_cast<Instruction>(V))
-      E->DemandedBits = DB->getDemandedBits(I);
+  return E;
+}
+
+Inst *ExprBuilder::get(Value *V) {
+  // Cache V if V is not found in InstMap
+  Inst *&E = EBC.InstMap[V];
+  if (!E) {
+    unsigned Width = DL.getTypeSizeInBits(V->getType());
+    APInt DemandedBits = APInt::getAllOnesValue(Width);
+    E = build(V, DemandedBits);
   }
+  if (E->K != Inst::Const && !E->hasOrigin(V))
+    E->Origins.push_back(V);
   return E;
 }
 
@@ -771,7 +787,13 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
         continue;
       if (I.hasNUses(0))
         continue;
-      Inst *In = EB.get(&I);
+      Inst *In;
+      if (HarvestDemandedBits) {
+        APInt DemandedBits = DB->getDemandedBits(&I);
+        In = EB.get(&I, DemandedBits);
+      } else {
+        In = EB.get(&I);
+      }
       EB.markExternalUses(In);
       BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
       assert(EB.get(&I)->hasOrigin(&I));
@@ -785,7 +807,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       auto BPCSets = AddBlockPCSets(BCS->BPCs, BPCVars);
 
       for (auto &R : BCS->Replacements) {
-        std::tie(R.BPCs, R.PCs) = 
+        std::tie(R.BPCs, R.PCs) =
           GetRelevantPCs(BCS->BPCs, BCS->PCs, BPCSets, PCSets, Vars, R.Mapping);
       }
 

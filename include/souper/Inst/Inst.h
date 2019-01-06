@@ -223,6 +223,8 @@ public:
 
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
                 bool Available=true);
+  Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
+                llvm::APInt DemandedBits, bool Available);
 };
 
 int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
