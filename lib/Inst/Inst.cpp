@@ -627,7 +627,7 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
 
 Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
                            const std::vector<Inst *> &Ops,
-                           bool Available) {
+                           llvm::APInt DemandedBits, bool Available) {
   std::vector<Inst *> OrderedOps;
 
   const std::vector<Inst *> *InstOps;
@@ -644,6 +644,8 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   ID.AddInteger(Width);
   for (auto O : *InstOps)
     ID.AddPointer(O);
+  if (!DemandedBits.isAllOnesValue())
+    ID.Add(DemandedBits);
 
   void *IP = 0;
   if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
@@ -654,10 +656,17 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   N->K = K;
   N->Width = Width;
   N->Ops = *InstOps;
-  N->DemandedBits = llvm::APInt::getAllOnesValue(Width);
+  N->DemandedBits = DemandedBits;
   N->Available = Available;
   InstSet.InsertNode(N, IP);
   return N;
+}
+
+Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
+                           const std::vector<Inst *> &Ops,
+                           bool Available) {
+  llvm::APInt DemandedBits = llvm::APInt::getAllOnesValue(Width);
+  return getInst(K, Width, Ops, DemandedBits, Available);
 }
 
 bool Inst::isCommutative(Inst::Kind K) {

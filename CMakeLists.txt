@@ -15,6 +15,12 @@ if(LLVM_CONFIG_EXECUTABLE STREQUAL "LLVM_CONFIG_EXECUTABLE-NOTFOUND")
 endif()
 
 execute_process(
+  COMMAND ${LLVM_CONFIG_EXECUTABLE} --includedir
+  OUTPUT_VARIABLE LLVM_INCLUDEDIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --cppflags
   OUTPUT_VARIABLE LLVM_CXXFLAGS
   OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -61,10 +67,12 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-set(CLANG_CXXFLAGS "-I\"${LLVM_SRC}/tools/clang/include\" -I\"${LLVM_BUILD}/tools/clang/include\"")
+set(CLANG_CXXFLAGS "")
+set(CLANG_INCLUDEDIR "${LLVM_SRC}/tools/clang/include" "${LLVM_BUILD}/tools/clang/include")
 set(CLANG_LIBS "-lclangCodeGen -lclangTooling -lclangRewrite -lclangFrontend -lclangAnalysis -lclangParse -lclangSerialization -lclangSema -lclangEdit -lclangAnalysis -lclangAST -lclangDriver -lclangLex -lclangBasic")
 
-set(GTEST_CXXFLAGS "-I\"${LLVM_SRC}/utils/unittest/googletest/include\" -DGTEST_HAS_RTTI=0")
+set(GTEST_CXXFLAGS "-DGTEST_HAS_RTTI=0")
+set(GTEST_INCLUDEDIR "${LLVM_SRC}/utils/unittest/googletest/include")
 set(GTEST_LIBS "-lgtest_main -lgtest")
 
 set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++11")
@@ -250,12 +258,20 @@ add_executable(parser_tests
   unittests/Parser/ParserTests.cpp
 )
 
-set_target_properties(souper internal-solver-test lexer-test parser-test souper-check souperExtractor souperInfer souperInst souperKVStore souperParser souperSMTLIB2 souperTool souperPass souperPassProfileAll kleeExpr
-  PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
-set_target_properties(souperClangTool clang-souper
-  PROPERTIES COMPILE_FLAGS "${CLANG_CXXFLAGS} ${LLVM_CXXFLAGS}")
-set_target_properties(extractor_tests inst_tests parser_tests
-  PROPERTIES COMPILE_FLAGS "${GTEST_CXXFLAGS} ${LLVM_CXXFLAGS}")
+foreach(target souper internal-solver-test lexer-test parser-test souper-check
+               souperExtractor souperInfer souperInst souperKVStore souperParser
+               souperSMTLIB2 souperTool souperPass souperPassProfileAll kleeExpr)
+  set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
+  target_include_directories(${target} PRIVATE "${LLVM_INCLUDEDIR}")
+endforeach()
+foreach(target souperClangTool clang-souper)
+  set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${CLANG_CXXFLAGS} ${LLVM_CXXFLAGS}")
+  target_include_directories(${target} PRIVATE "${LLVM_INCLUDEDIR}" ${CLANG_INCLUDEDIR})
+endforeach()
+foreach(target extractor_tests inst_tests parser_tests)
+  set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${GTEST_CXXFLAGS} ${LLVM_CXXFLAGS}")
+  target_include_directories(${target} PRIVATE "${LLVM_INCLUDEDIR}" "${GTEST_INCLUDEDIR}")
+endforeach()
 
 target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
@@ -300,7 +316,8 @@ configure_file(
 
 add_custom_target(check
   COMMAND ${CMAKE_BINARY_DIR}/run_lit
-  DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souperPass souperPassProfileAll)
+  DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souperPass souperPassProfileAll
+  USES_TERMINAL)
 
 find_program(GO_EXECUTABLE NAMES go DOC "go executable")
 if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
@@ -309,6 +326,7 @@ if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
   )
   set_target_properties(souperweb-backend
     PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
+  target_include_directories(souperweb-backend PRIVATE "${LLVM_INCLUDEDIR}")
 
   target_link_libraries(souperweb-backend souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
 
