@@ -591,10 +591,10 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
 }
 
 Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
-  return createVar(Width, Name, llvm::ConstantRange(Width, /*isFullSet*/ true),
-                   /*KnownZero*/ llvm::APInt(Width, 0), /*KnownOnes*/ llvm::APInt(Width, 0),
-                   /*NonZero*/ false, /*NonNegative*/ false, /*PowerOfTwo*/ false,
-                   /*Negative*/ false, /*SignBits*/ 1);
+  return createVar(Width, Name, /*Range=*/llvm::ConstantRange(Width, /*isFullSet=*/ true),
+                   /*KnownZero=*/ llvm::APInt(Width, 0), /*KnownOne=*/ llvm::APInt(Width, 0),
+                   /*NonZero=*/ false, /*NonNegative=*/ false, /*PowerOfTwo=*/ false,
+                   /*Negative=*/ false, /*SignBits=*/ 1);
 }
 
 Block *InstContext::createBlock(unsigned Preds) {
