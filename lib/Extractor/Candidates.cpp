@@ -186,18 +186,17 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
 
     ConstantRange Range = llvm::ConstantRange(Width, /*isFullSet=*/true);
     if (HarvestConstantRange && V->getType()->isIntegerTy()) {
-      // TODO: Find out a better way to get the current basic block
-      // with this approach, we might be restricting the constant
-      // range harvesting. Because range info. might be coming from
-      // llvm values other than instruction.
       if (Instruction *I = dyn_cast<Instruction>(V)) {
+        // TODO: Find out a better way to get the current basic block
+        // with this approach, we might be restricting the constant
+        // range harvesting. Because range info. might be coming from
+        // llvm values other than instruction.
         BasicBlock *BB = I->getParent();
-        ConstantRange R1 = LVI->getConstantRange(V, BB);
+        auto LVIRange = LVI->getConstantRange(V, BB);
         auto SC = SE->getSCEV(V);
-        // TODO: getUnsignedRange() from SCEV and see if we can
-        // use that to find more precise range.
-        ConstantRange R2 = SE->getSignedRange(SC);
-        Range = R1.intersectWith(R2);
+        auto R1 = LVIRange.intersectWith(SE->getSignedRange(SC));
+        auto R2 = LVIRange.intersectWith(SE->getUnsignedRange(SC));
+        Range = R1.getSetSize().ult(R2.getSetSize()) ? R1 : R2;
       }
     }
 
