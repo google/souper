@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper -dce %solver -souper-infer-inst -S -o - %s | %FileCheck %s
+; RUN: %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-comps=add,sub,mul,const -S -o - %s | %FileCheck %s
 
 ; Translated from test/Infer/odd.opt
 
