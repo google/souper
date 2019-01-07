@@ -1,0 +1,10 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%0:i32 = var (range=[10,9))
+%1:i1 = eq %0, 9
+cand %1 0

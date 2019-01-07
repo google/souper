@@ -16,7 +16,9 @@
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/DemandedBits.h"
+#include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
@@ -93,6 +95,8 @@ public:
     Info.addRequired<LoopInfoWrapperPass>();
     Info.addRequired<DominatorTreeWrapperPass>();
     Info.addRequired<DemandedBitsWrapperPass>();
+    Info.addRequired<LazyValueInfoWrapperPass>();
+    Info.addRequired<ScalarEvolutionWrapperPass>();
     Info.addRequired<TargetLibraryInfoWrapperPass>();
   }
 
@@ -338,10 +342,16 @@ public:
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>(*F).getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
+    LazyValueInfo *LVI = &getAnalysis<LazyValueInfoWrapperPass>(*F).getLVI();
+    if (!LVI)
+      report_fatal_error("getLVI() failed");
+    ScalarEvolution *SE = &getAnalysis<ScalarEvolutionWrapperPass>(*F).getSE();
+    if (!SE)
+      report_fatal_error("getSE() failed");
     TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
     if (!TLI)
       report_fatal_error("getTLI() failed");
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, TLI, IC, EBC);
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, LVI, SE, TLI, IC, EBC);
 
     std::string FunctionName;
     if (F->hasLocalLinkage()) {
@@ -490,6 +500,8 @@ INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(LazyValueInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 
