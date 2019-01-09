@@ -516,7 +516,7 @@ Inst *ExprBuilder::buildHelper(Value *V) {
           Inst *ShAmt = get(II->getOperand(2));
           Inst::Kind K =
               II->getIntrinsicID() == Intrinsic::fshl ? Inst::FShl : Inst::FShr;
-          return IC.getInst(K, L->Width, {/*High*/L, Low, ShAmt});
+          return IC.getInst(K, L->Width, {/*High=*/L, Low, ShAmt});
         }
         case Intrinsic::sadd_with_overflow: {
           Inst *R = get(II->getOperand(1));
