@@ -400,6 +400,10 @@ const char *Inst::getKindName(Kind K) {
     return "cttz";
   case Ctlz:
     return "ctlz";
+  case FShl:
+    return "fshl";
+  case FShr:
+    return "fshr";
   case ExtractValue:
     return "extractvalue";
   case SAddWithOverflow:
@@ -476,6 +480,8 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("bswap", Inst::BSwap)
                    .Case("cttz", Inst::Cttz)
                    .Case("ctlz", Inst::Ctlz)
+                   .Case("fshl", Inst::FShl)
+                   .Case("fshr", Inst::FShr)
                    .Case("sadd.with.overflow", Inst::SAddWithOverflow)
                    .Case("uadd.with.overflow", Inst::UAddWithOverflow)
                    .Case("ssub.with.overflow", Inst::SSubWithOverflow)
@@ -721,6 +727,9 @@ int Inst::getCost(Inst::Kind K) {
     case SRem:
     case URem:
       return 5;
+    case FShl:
+    case FShr:
+      return 3;
     case Select:
       return 3;
     default:
