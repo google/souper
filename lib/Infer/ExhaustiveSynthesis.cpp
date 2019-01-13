@@ -16,6 +16,7 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Support/CommandLine.h"
 #include "souper/Infer/ExhaustiveSynthesis.h"
+#include "souper/Infer/AliveDriver.h"
 
 #include <queue>
 
@@ -49,6 +50,9 @@ namespace {
     cl::init(1));
   static cl::opt<bool> EnableBigQuery("souper-exhaustive-synthesis-enable-big-query",
     cl::desc("Enable big query in exhaustive synthesis (default=false)"),
+    cl::init(false));
+  static cl::opt<bool> UseAlive("souper-use-alive",
+    cl::desc("Use Alive2 as the backend"),
     cl::init(false));
 }
 
@@ -434,6 +438,40 @@ APInt getNextInputVal(Inst *Var,
   llvm::report_fatal_error("Model does not contain the guess input variable");
 }
 
+Inst *findConst(souper::Inst *I, std::string ConstName,
+                std::set<const Inst *> &Visited) {
+  if (I->Name == ConstName) {
+    return I;
+  } else {
+    for (auto &&Op : I->Ops) {
+      if (Visited.find(Op) == Visited.end()) {
+        auto Ret = findConst(Op, ConstName, Visited);
+        if (Ret) {
+          return Ret;
+        }
+      }
+    }
+    Visited.insert(I);
+  }
+  return nullptr;
+}
+
+bool exceeds64Bits(const Inst *I, std::set<const Inst *> &Visited) {
+  if (I->Width > 64) {
+    return true;
+  } else {
+    for (auto &&Op : I->Ops) {
+      if (Visited.find(Op) == Visited.end()) {
+        if (exceeds64Bits(Op, Visited)) {
+          return true;
+        }
+      }
+    }
+    Visited.insert(I);
+  }
+  return false;
+}
+
 std::error_code
 ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const BlockPCs &BPCs,
@@ -475,6 +513,50 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     llvm::errs() << "There are " << Guesses.size() << " Guesses\n";
 
 
+  std::map<Inst *, Inst *> InstCache;
+  std::map<Block *, Block *> BlockCache;
+
+  if (UseAlive) {
+    std::set<const Inst *> Visited;
+    if (exceeds64Bits(LHS, Visited))
+      llvm::report_fatal_error("LHS exceeds 64 bits");
+
+    Inst *Ante = IC.getConst(APInt(1, true));
+    for (auto PC : PCs ) {
+      Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+      Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+    }
+
+    AliveDriver Verifier(LHS, Ante);
+    for (auto &&G : Guesses) {
+      std::set<const Inst *> Visited;
+      auto C = findConst(G, "reservedconst_0", Visited);
+      if (!C) {
+        if (Verifier.verify(G)) {
+          RHS = G;
+          return EC;
+        }
+      } else {
+        auto Result = Verifier.synthesizeConstant(G);
+        // TODO(manasij7479): Extend to multiple constants
+        // TODO: Counterexample guided loop or UB constraints in query
+        if (Result.has_value()) {
+          std::map<Inst *, llvm::APInt> ConstMap =
+            {{C, llvm::APInt(C->Width, Result.value())}};
+          auto GWithC = getInstCopy(G, IC, InstCache, BlockCache, &ConstMap,
+                                    /*CloneVars=*/false);
+          if (Verifier.verify(GWithC)) {
+            RHS = GWithC;
+            return EC;
+          } else {
+            continue;
+          }
+          return EC;
+        }
+      }
+    }
+    return EC;
+  }
   // Big Query
   // TODO: Need to check if big query actually saves us time or just wastes time
   if (EnableBigQuery) {

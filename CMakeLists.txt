@@ -69,21 +69,27 @@ execute_process(
 
 set(CLANG_CXXFLAGS "")
 set(CLANG_INCLUDEDIR "${LLVM_SRC}/tools/clang/include" "${LLVM_BUILD}/tools/clang/include")
+
+set(ALIVE_DIR "${CMAKE_SOURCE_DIR}/third_party/alive2")
+set(ALIVE_LDFLAGS "-L ${ALIVE_DIR}/build -lalive2")
+
 set(CLANG_LIBS "-lclangCodeGen -lclangTooling -lclangRewrite -lclangFrontend -lclangAnalysis -lclangParse -lclangSerialization -lclangSema -lclangEdit -lclangAnalysis -lclangAST -lclangDriver -lclangLex -lclangBasic")
 
 set(GTEST_CXXFLAGS "-DGTEST_HAS_RTTI=0")
 set(GTEST_INCLUDEDIR "${LLVM_SRC}/utils/unittest/googletest/include")
 set(GTEST_LIBS "-lgtest_main -lgtest")
 
-set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++11")
+set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++17")
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++11")
+  set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++17")
   set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -fvisibility-inlines-hidden")
   set(PASS_LDFLAGS "-Wl,-undefined,dynamic_lookup")
 endif()
 
 include_directories(include third_party/klee/include)
+include_directories(include "${ALIVE_DIR}")
+include_directories(include "${ALIVE_DIR}/alive2")
 
 set(KLEE_EXPR_FILES
   third_party/klee/lib/Expr/Constraints.cpp
@@ -116,6 +122,10 @@ find_library(HIREDIS_LIBRARY
   hiredis
   PATHS
   third_party/hiredis/install/lib)
+
+find_library(ALIVE_LIBRARY alive2 PATHS "${ALIVE_DIR}/build")
+
+find_library(Z3_LIBRARY z3)
 
 set(SOUPER_CLANG_TOOL_FILES
   lib/ClangTool/Actions.cpp
@@ -154,6 +164,8 @@ set(SOUPER_INFER_FILES
   include/souper/Infer/InstSynthesis.h
   lib/Infer/ExhaustiveSynthesis.cpp
   include/souper/Infer/ExhaustiveSynthesis.h
+  lib/Infer/AliveDriver.cpp
+  include/souper/Infer/AliveDriver.h
 )
 
 add_library(souperInfer STATIC
@@ -258,6 +270,7 @@ add_executable(parser_tests
   unittests/Parser/ParserTests.cpp
 )
 
+set(LLVM_LDFLAGS "${LLVM_LDFLAGS} ${ALIVE_LDFLAGS}")
 foreach(target souper internal-solver-test lexer-test parser-test souper-check
                souperExtractor souperInfer souperInst souperKVStore souperParser
                souperSMTLIB2 souperTool souperPass souperPassProfileAll kleeExpr)
@@ -276,20 +289,20 @@ endforeach()
 target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperExtractor souperInfer souperInst kleeExpr)
-target_link_libraries(souperInfer ${LLVM_LIBS} ${LLVM_LDFLAGS})
+target_link_libraries(souperInfer ${LLVM_LIBS} ${LLVM_LDFLAGS} ${Z3_LIBRARY})
 target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperKVStore ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperParser souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
-target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY})
-target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS} ${HIREDIS_LIBRARY})
-target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY})
+target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
-target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY})
-target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY})
+target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS})
