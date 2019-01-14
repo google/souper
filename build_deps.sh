@@ -25,19 +25,18 @@ llvm_branch=tags/RELEASE_700/final
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 
-alivedir=third_party/alive2
-alive_builddir=$alivedir/build
-mkdir -p $alivedir $alive_builddir
-git clone git@github.com:manasij7479/alive2.git $alivedir/alive2
-(cd $alive_builddir && cmake ../alive2 -GNinja)
-ninja -C $alive_builddir
-
-
 llvm_build_type=Release
 if [ -n "$1" ] ; then
   llvm_build_type="$1"
   shift
 fi
+
+alivedir=third_party/alive2
+alive_builddir=$alivedir/build
+mkdir -p $alivedir $alive_builddir
+git clone git@github.com:manasij7479/alive2.git $alivedir/alive2
+(cd $alive_builddir && cmake ../alive2 -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
+ninja -C $alive_builddir
 
 llvmdir=third_party/llvm
 llvm_installdir=$(pwd)/$llvmdir/$llvm_build_type
