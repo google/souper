@@ -537,12 +537,9 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
           return EC;
         }
       } else {
-        auto Result = Verifier.synthesizeConstant(G);
-        // TODO(manasij7479): Extend to multiple constants
+        auto ConstMap = Verifier.synthesizeConstants(G);
         // TODO: Counterexample guided loop or UB constraints in query
-        if (Result.has_value()) {
-          std::map<Inst *, llvm::APInt> ConstMap =
-            {{C, llvm::APInt(C->Width, Result.value())}};
+
           auto GWithC = getInstCopy(G, IC, InstCache, BlockCache, &ConstMap,
                                     /*CloneVars=*/false);
           if (Verifier.verify(GWithC)) {
@@ -552,7 +549,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
             continue;
           }
           return EC;
-        }
       }
     }
     return EC;
