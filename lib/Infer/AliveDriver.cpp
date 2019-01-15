@@ -73,6 +73,14 @@ public:
     F.getBB("").addIntr(std::move(AI));
   }
 
+  template <typename A>
+  IR::Value *unaryOp(IR::Type &t, std::string name, A a,
+                     IR::UnaryOp::Op Op) {
+    return append
+      (std::make_unique<IR::UnaryOp>
+      (t, std::move(name), *toValue(t, a), Op));
+  }
+
   // Unimplemented : Freeze, CopyOp, Unreachable
 
 private:
@@ -361,6 +369,8 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     BINOPW(ShlNUW, Shl, NUW);
     BINOP(LShr, LShr);
     BINOP(AShr, AShr);
+    BINOP(Cttz, Cttz);
+    BINOP(Ctlz, Ctlz);
 
     #define ICMP(SOUPER, ALIVE) case souper::Inst::SOUPER: {     \
       ExprCache[I] = Builder.iCmp(t, Name, IR::ICmp::ALIVE,      \
@@ -384,6 +394,14 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     CONVOP(SExt, SExt);
     CONVOP(ZExt, ZExt);
     CONVOP(Trunc, Trunc);
+
+    #define UNARYOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {  \
+      ExprCache[I] = Builder.unaryOp(t, Name,                    \
+      ExprCache[I->Ops[0]], IR::UnaryOp::ALIVE);                 \
+      return true;                                               \
+    }
+
+    UNARYOP(CtPop, Ctpop);
 
     default:{
       llvm::outs() << "Unsupported Instruction Kind : " << I->getKindName(I->K) << "\n";
