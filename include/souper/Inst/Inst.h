@@ -18,6 +18,7 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
+#include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Value.h"
 #include <map>
 #include <memory>
@@ -29,6 +30,7 @@
 namespace souper {
 
 const unsigned MaxPreds = 100000;
+const std::string ReservedConstPrefix = "reservedconst_";
 
 struct Inst;
 
@@ -43,7 +45,6 @@ struct Inst : llvm::FoldingSetNode {
   typedef enum {
     Const,
     UntypedConst,
-    Reserved,
     Var,
     Phi,
 
@@ -90,6 +91,8 @@ struct Inst : llvm::FoldingSetNode {
     BSwap,
     Cttz,
     Ctlz,
+    FShl,
+    FShr,
     ExtractValue,
     SAddWithOverflow,
     SAddO,
@@ -103,6 +106,9 @@ struct Inst : llvm::FoldingSetNode {
     SMulO,
     UMulWithOverflow,
     UMulO,
+
+    ReservedConst,
+    ReservedInst,
 
     None,
 } Kind;
@@ -145,6 +151,7 @@ struct Inst : llvm::FoldingSetNode {
   bool Negative;
   unsigned NumSignBits;
   llvm::APInt DemandedBits;
+  llvm::ConstantRange Range=llvm::ConstantRange(1);
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
@@ -201,27 +208,32 @@ class InstContext {
 
   std::vector<std::unique_ptr<Inst>> Insts;
   llvm::FoldingSet<Inst> InstSet;
-  unsigned ReservedCounter = 0;
+  unsigned ReservedConstCounter = 0;
 
 public:
   Inst *getConst(const llvm::APInt &I);
   Inst *getUntypedConst(const llvm::APInt &I);
-  Inst *getReserved();
+  Inst *getReservedConst();
+  Inst *getReservedInst(int Width);
 
+  Inst *createVar(unsigned Width, llvm::StringRef Name);
   Inst *createVar(unsigned Width, llvm::StringRef Name,
-                  llvm::APInt Zero=llvm::APInt(1, 0, false),
-                  llvm::APInt One=llvm::APInt(1, 0, false), bool NonZero=false,
-                  bool NonNegative=false, bool PowOfTwo=false, bool Negative=false,
-                  unsigned NumSignBits=1);
+                  llvm::ConstantRange Range,
+                  llvm::APInt Zero, llvm::APInt One,
+                  bool NonZero, bool NonNegative, bool PowOfTwo,
+                  bool Negative, unsigned NumSignBits);
   Block *createBlock(unsigned Preds);
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
 
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
                 bool Available=true);
+  Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
+                llvm::APInt DemandedBits, bool Available);
 };
 
 int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
+int instCount(Inst *I);
 int benefit(Inst *LHS, Inst *RHS);
 
 void PrintReplacement(llvm::raw_ostream &Out, const BlockPCs &BPCs,
@@ -253,6 +265,13 @@ Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Block *, Block *> &BlockCache,
                   std::map<Inst *, llvm::APInt> *ConstMap,
                   bool CloneVars);
+
+Inst *instJoin(Inst *I, Inst *Reserved, Inst *NewInst, InstContext &IC);
+
+void findVars(Inst *Root, std::vector<Inst *> &Vars);
+
+bool hasReservedInst(Inst *Root);
+void getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts);
 
 void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                       std::map<Inst *, Inst *> &InstCache,

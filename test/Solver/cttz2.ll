@@ -5,7 +5,7 @@
 
 declare i32 @llvm.cttz.i32(i32) nounwind readnone
 
-define void @foo(i32 %x, i32 %y) {
+define i1 @foo(i32 %x, i32 %y) {
 entry:
   %zero = icmp eq i32 %x, 0
   %count1 = call i32 @llvm.cttz.i32(i32 %x)
@@ -14,8 +14,7 @@ entry:
   %count1plusy = add i32 %count1, %y
   %eq = icmp eq i32 %count1plusy, %count2
   %cmp = or i1 %eq, %zero, !expected !1
-
-  ret void
+  ret i1 %cmp
 }
 
 !1 = !{i1 1}

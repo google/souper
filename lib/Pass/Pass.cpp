@@ -16,7 +16,9 @@
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/DemandedBits.h"
+#include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
@@ -49,9 +51,6 @@ std::unique_ptr<Solver> S;
 unsigned ReplaceCount;
 KVStore *KV;
 
-static cl::opt<bool> DebugSouperPass("souper-debug", cl::Hidden,
-                                     cl::init(false), cl::desc("Debug Souper"));
-
 static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
      cl::init(1),
      cl::desc("Control the verbose level of debug output (default=1). "
@@ -71,10 +70,6 @@ static cl::opt<unsigned> FirstReplace("souper-first-opt", cl::Hidden,
 static cl::opt<unsigned> LastReplace("souper-last-opt", cl::Hidden,
     cl::init(std::numeric_limits<unsigned>::max()),
     cl::desc("Last Souper optimization to perform (default=infinite)"));
-
-static bool dumpAllReplacements() {
-  return DebugSouperPass && (DebugLevel > 1);
-}
 
 #ifdef DYNAMIC_PROFILE_ALL
 static const bool DynamicProfileAll = true;
@@ -100,6 +95,8 @@ public:
     Info.addRequired<LoopInfoWrapperPass>();
     Info.addRequired<DominatorTreeWrapperPass>();
     Info.addRequired<DemandedBitsWrapperPass>();
+    Info.addRequired<LazyValueInfoWrapperPass>();
+    Info.addRequired<ScalarEvolutionWrapperPass>();
     Info.addRequired<TargetLibraryInfoWrapperPass>();
   }
 
@@ -321,6 +318,13 @@ public:
       switch (I->K) {
       case Inst::Select:
         return Builder.CreateSelect(V0, V1, V2);
+      case Inst::FShl:
+      case Inst::FShr: {
+        Intrinsic::ID ID =
+            I->K == Inst::FShl ? Intrinsic::fshl : Intrinsic::fshr;
+        Function *F = Intrinsic::getDeclaration(M, ID, T);
+        return Builder.CreateCall(F, {V0, V1, V2});
+      }
       default:
         break;
       }
@@ -345,10 +349,16 @@ public:
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>(*F).getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
+    LazyValueInfo *LVI = &getAnalysis<LazyValueInfoWrapperPass>(*F).getLVI();
+    if (!LVI)
+      report_fatal_error("getLVI() failed");
+    ScalarEvolution *SE = &getAnalysis<ScalarEvolutionWrapperPass>(*F).getSE();
+    if (!SE)
+      report_fatal_error("getSE() failed");
     TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
     if (!TLI)
       report_fatal_error("getTLI() failed");
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, TLI, IC, EBC);
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, LVI, SE, TLI, IC, EBC);
 
     std::string FunctionName;
     if (F->hasLocalLinkage()) {
@@ -358,14 +368,14 @@ public:
       FunctionName = F->getName();
     }
 
-    if (dumpAllReplacements()) {
+    if (DebugLevel > 1) {
       errs() << "\n";
       errs() << "; Listing all replacements for " << FunctionName << "\n";
     }
 
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
-        if (dumpAllReplacements()) {
+        if (DebugLevel > 3) {
           errs() << "\n; *****";
           errs() << "\n; For LLVM instruction:\n;";
           R.Origin->print(errs());
@@ -377,7 +387,7 @@ public:
       }
     }
 
-    if (DebugSouperPass) {
+    if (DebugLevel > 1) {
       errs() << "\n";
       errs() << "; Listing applied replacements for " << FunctionName << "\n";
       errs() << "; Using solver: " << S->getName() << '\n';
@@ -421,14 +431,18 @@ public:
 	Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
                                ReplacedValues, Builder, F->getParent());
 	if (!NewVal) {
-	  if (DebugSouperPass)
+	  if (DebugLevel > 1)
 	    errs() << "\"\n; replacement failed\n";
 	  continue;
 	}
 
 	ReplacedValues[Cand.Mapping.LHS] = NewVal;
 
-	if (DebugSouperPass) {
+	if (DebugLevel > 1) {
+          if (DebugLevel > 2) {
+            errs() << "\nFunction before replacement:\n";
+            F->print(errs());
+          }
 	  errs() << "\n";
 	  errs() << "; Replacing \"";
 	  I->print(errs());
@@ -446,9 +460,16 @@ public:
 	if (DynamicProfile)
           dynamicProfile(F, Cand);
         I->replaceAllUsesWith(NewVal);
+
+	if (DebugLevel > 2) {
+          errs() << "\nFunction after replacement:\n\n";
+          F->print(errs());
+          errs() << "\n";
+        }
+
         Changed = true;
       } else {
-        if (DebugSouperPass)
+        if (DebugLevel > 1)
           errs() << "Skipping this replacement (number " << ReplaceCount <<
             ")\n";
       }
@@ -486,6 +507,8 @@ INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(LazyValueInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 

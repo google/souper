@@ -1,0 +1,17 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; zero extension of non-wrapped range zero extends the upper and lower bound
+; in this example, zero-extended range is a wrapped range
+; CHECK: LGTM
+
+%0:i8 = var (range=[-10,100))
+%1:i16 = zext %0
+%low:i16 = zext -10:i8
+%up:i16 = zext 100:i8
+%2:i1 = ult %1, %up
+%3:i1 = ule %low, %1
+%4:i1 = or %2, %3
+cand %4 1

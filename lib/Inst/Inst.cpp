@@ -19,6 +19,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <queue>
+#include <set>
 
 using namespace souper;
 
@@ -183,6 +184,9 @@ std::string ReplacementContext::printInstImpl(Inst *I, llvm::raw_ostream &Out,
           Out << " (powerOfTwo)";
         if (I->NumSignBits > 1)
           Out << " (signBits=" << I->NumSignBits << ")";
+        if (!I->Range.isFullSet())
+          Out << " (range=[" << I->Range.getLower()
+              << "," << I->Range.getUpper() << "))";
       }
       Out << OpsSS.str();
 
@@ -396,6 +400,10 @@ const char *Inst::getKindName(Kind K) {
     return "cttz";
   case Ctlz:
     return "ctlz";
+  case FShl:
+    return "fshl";
+  case FShr:
+    return "fshr";
   case ExtractValue:
     return "extractvalue";
   case SAddWithOverflow:
@@ -410,6 +418,10 @@ const char *Inst::getKindName(Kind K) {
     return "smul.with.overflow";
   case UMulWithOverflow:
     return "umul.with.overflow";
+  case ReservedConst:
+    return "reservedconst";
+  case ReservedInst:
+    return "reservedinst";
   case SAddO:
   case UAddO:
   case SSubO:
@@ -468,6 +480,8 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("bswap", Inst::BSwap)
                    .Case("cttz", Inst::Cttz)
                    .Case("ctlz", Inst::Ctlz)
+                   .Case("fshl", Inst::FShl)
+                   .Case("fshr", Inst::FShr)
                    .Case("sadd.with.overflow", Inst::SAddWithOverflow)
                    .Case("uadd.with.overflow", Inst::UAddWithOverflow)
                    .Case("ssub.with.overflow", Inst::SSubWithOverflow)
@@ -538,16 +552,25 @@ Inst *InstContext::getUntypedConst(const llvm::APInt &Val) {
   return N;
 }
 
-Inst *InstContext::getReserved() {
+Inst *InstContext::getReservedConst() {
   auto N = new Inst;
   Insts.emplace_back(N);
-  N->K = Inst::Reserved;
-  N->Name = "reserved_" + std::to_string(ReservedCounter++);
+  N->K = Inst::ReservedConst;
+  N->Name = ReservedConstPrefix + std::to_string(ReservedConstCounter++);
   N->Width = 0;
   return N;
 }
 
+Inst *InstContext::getReservedInst(int Width) {
+  auto N = new Inst;
+  Insts.emplace_back(N);
+  N->K = Inst::ReservedInst;
+  N->Width = Width;
+  return N;
+}
+
 Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
+                             llvm::ConstantRange Range,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
                              bool NonNegative, bool PowOfTwo, bool Negative,
                              unsigned NumSignBits) {
@@ -556,11 +579,13 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   unsigned Number = InstList.size();
   auto I = new Inst;
   InstList.emplace_back(I);
+  assert(Range.getBitWidth() == Width && Zero.getBitWidth() == Width && One.getBitWidth() == Width);
 
   I->K = Inst::Var;
   I->Number = Number;
   I->Width = Width;
   I->Name = Name;
+  I->Range = Range;
   I->KnownZeros = Zero;
   I->KnownOnes = One;
   I->NonZero = NonZero;
@@ -569,6 +594,13 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   I->Negative = Negative;
   I->NumSignBits = NumSignBits;
   return I;
+}
+
+Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
+  return createVar(Width, Name, /*Range=*/llvm::ConstantRange(Width, /*isFullSet=*/ true),
+                   /*KnownZero=*/ llvm::APInt(Width, 0), /*KnownOne=*/ llvm::APInt(Width, 0),
+                   /*NonZero=*/ false, /*NonNegative=*/ false, /*PowerOfTwo=*/ false,
+                   /*Negative=*/ false, /*SignBits=*/ 1);
 }
 
 Block *InstContext::createBlock(unsigned Preds) {
@@ -608,7 +640,7 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
 
 Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
                            const std::vector<Inst *> &Ops,
-                           bool Available) {
+                           llvm::APInt DemandedBits, bool Available) {
   std::vector<Inst *> OrderedOps;
 
   const std::vector<Inst *> *InstOps;
@@ -625,6 +657,8 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   ID.AddInteger(Width);
   for (auto O : *InstOps)
     ID.AddPointer(O);
+  if (!DemandedBits.isAllOnesValue())
+    ID.Add(DemandedBits);
 
   void *IP = 0;
   if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
@@ -635,10 +669,17 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   N->K = K;
   N->Width = Width;
   N->Ops = *InstOps;
-  N->DemandedBits = llvm::APInt::getAllOnesValue(Width);
+  N->DemandedBits = DemandedBits;
   N->Available = Available;
   InstSet.InsertNode(N, IP);
   return N;
+}
+
+Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
+                           const std::vector<Inst *> &Ops,
+                           bool Available) {
+  llvm::APInt DemandedBits = llvm::APInt::getAllOnesValue(Width);
+  return getInst(K, Width, Ops, DemandedBits, Available);
 }
 
 bool Inst::isCommutative(Inst::Kind K) {
@@ -686,6 +727,9 @@ int Inst::getCost(Inst::Kind K) {
     case SRem:
     case URem:
       return 5;
+    case FShl:
+    case FShr:
+      return 3;
     case Select:
       return 3;
     default:
@@ -710,6 +754,28 @@ static int costHelper(Inst *I, Inst *Root, std::set<Inst *> &Visited,
 int souper::cost(Inst *I, bool IgnoreDepsWithExternalUses) {
   std::set<Inst *> Visited;
   return costHelper(I, I, Visited, IgnoreDepsWithExternalUses);
+}
+
+
+static int countHelper(Inst *I, std::set<Inst *> &Visited) {
+  if (!Visited.insert(I).second)
+    return 0;
+
+  int Count;
+
+  if (I->K == Inst::Var || I->K == Inst::Const || I->K == Inst::ReservedInst)
+    Count = 0;
+  else
+    Count = 1;
+
+  for (auto Op : I->Ops)
+    Count += countHelper(Op, Visited);
+  return Count;
+}
+
+int souper::instCount(Inst *I) {
+  std::set<Inst *> Visited;
+  return countHelper(I, Visited);
 }
 
 int souper::benefit(Inst *LHS, Inst *RHS) {
@@ -821,6 +887,63 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
   }
 }
 
+/* TODO call findCands instead */
+void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::queue<Inst *> Q;
+  Q.push(Root);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    if (!Visited.insert(I).second)
+      continue;
+    if (I->K == Inst::Var &&
+        I->Name.find(ReservedConstPrefix) == std::string::npos) {
+      Vars.push_back(I);
+    }
+    for (auto Op : I->Ops)
+      Q.push(Op);
+  }
+}
+
+void souper::getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::queue<Inst *> Q;
+  Q.push(Root);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    if (!Visited.insert(I).second)
+      continue;
+    if (I->K == Inst::ReservedInst) {
+      assert(I->Width > 0);
+      ReservedInsts.push_back(I);
+    }
+    for (auto Op : I->Ops)
+      Q.push(Op);
+  }
+}
+
+bool souper::hasReservedInst(Inst *Root) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::queue<Inst *> Q;
+  Q.push(Root);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    if (I->K == Inst::ReservedInst)
+      return true;
+    if (!Visited.insert(I).second)
+      continue;
+    for (auto Op : I->Ops)
+      Q.push(Op);
+  }
+  return false;
+}
+
 Inst *souper::getInstCopy(Inst *I, InstContext &IC,
                           std::map<Inst *, Inst *> &InstCache,
                           std::map<Block *, Block *> &BlockCache,
@@ -850,10 +973,11 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
       }
     }
     if (!Copy) {
-      if (CloneVars && I->Name.find("reserved_") == std::string::npos)
-        Copy = IC.createVar(I->Width, I->Name, I->KnownZeros, I->KnownOnes,
-                            I->NonZero, I->NonNegative, I->PowOfTwo,
-                            I->Negative, I->NumSignBits);
+      if (CloneVars &&
+          I->Name.find(ReservedConstPrefix) == std::string::npos)
+        Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
+                            I->KnownOnes, I->NonZero, I->NonNegative,
+                            I->PowOfTwo, I->Negative, I->NumSignBits);
       else {
         Copy = I;
       }
@@ -873,6 +997,27 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
   }
   assert(Copy);
   InstCache[I] = Copy;
+  return Copy;
+}
+
+Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
+                       InstContext &IC) {
+  std::vector<Inst *> Ops;
+
+  for (auto const &Op : I->Ops) {
+    auto NewOp = instJoin(Op, EmptyInst, NewInst, IC);
+    Ops.push_back(NewOp);
+  }
+
+  Inst *Copy = 0;
+  if (I == EmptyInst) {
+    Copy = NewInst;
+  } else if (I->K == Inst::Var) {
+    Copy = I;
+  } else {
+    Copy = IC.getInst(I->K, I->Width, Ops);
+  }
+
   return Copy;
 }
 

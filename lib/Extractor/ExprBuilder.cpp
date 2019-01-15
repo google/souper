@@ -376,6 +376,21 @@ Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
                                    LIC->getInst(Inst::Eq, 1, {Res, Zero})});
     Result = LIC->getInst(Inst::And, 1, {Result, SignBits});
   }
+  // TODO: We might want to look into handling empty set later
+  if (!I->Range.isEmptySet() && !I->Range.isFullSet()) {
+    Inst *Lower = LIC->getConst(I->Range.getLower());
+    Inst *Upper = LIC->getConst(I->Range.getUpper());
+ 
+    if (!I->Range.isWrappedSet()) {
+      Result = LIC->getInst(Inst::And, 1, {Result, LIC->getInst(Inst::And, 1,
+                            {LIC->getInst(Inst::Ule, 1, {Lower, I}),
+                             LIC->getInst(Inst::Ult, 1, {I, Upper})})});
+    } else {
+      Result = LIC->getInst(Inst::And, 1, {Result, LIC->getInst(Inst::Or, 1,
+                            {LIC->getInst(Inst::Ule, 1, {Lower, I}),
+                             LIC->getInst(Inst::Ult, 1, {I, Upper})})});
+    }
+  }
 
   return Result;
 }

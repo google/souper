@@ -57,9 +57,9 @@ instmap = {
 nestedinsts = ["add", "mul", "and", "or", "xor"]
 boolinsts = ["eq", "ne", "ugt", "uge", "ult", "ule", "sgt", "sge", "slt", "sle"]
 towidthinsts = ["sext", "trunc", "zext"];
-intrinsts = ["bswap", "ctpop", "cttz", "ctlz", "sadd.with.overflow",
-             "uadd.with.overflow", "ssub.with.overflow", "usub.with.overflow",
-             "smul.with.overflow", "umul.with.overflow"]
+intrinsts = ["bswap", "ctpop", "cttz", "ctlz", "fshl", "fshr",
+             "sadd.with.overflow", "uadd.with.overflow", "ssub.with.overflow",
+             "usub.with.overflow", "smul.with.overflow", "umul.with.overflow"]
 specialinsts = ["block", "pc", "cand", "infer", "result"]
 
 def parseConst(c):
@@ -67,7 +67,7 @@ def parseConst(c):
     tmp = c.split(':')
     constant = tmp[0]
     width = tmp[1]
-    assert width[0] == "i", "wront type format %s" % width
+    assert width[0] == "i", "wrong type format %s" % width
     return [constant, width]
 
 def parseOps(ops):

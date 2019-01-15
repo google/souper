@@ -31,6 +31,19 @@ if [ -n "$1" ] ; then
   shift
 fi
 
+alivedir=third_party/alive2
+alive_builddir=$alivedir/build
+mkdir -p $alivedir $alive_builddir
+git clone git@github.com:manasij7479/alive2.git $alivedir/alive2
+
+if [ -n "`which ninja`" ] ; then
+  (cd $alive_builddir && cmake ../alive2 -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
+  ninja -C $alive_builddir
+else
+  (cd $alive_builddir && cmake ../alive2 -DCMAKE_BUILD_TYPE=$llvm_build_type)
+  make -C $alive_builddir -j4
+fi
+
 llvmdir=third_party/llvm
 llvm_installdir=$(pwd)/$llvmdir/$llvm_build_type
 llvm_builddir=$(pwd)/$llvmdir/${llvm_build_type}-build

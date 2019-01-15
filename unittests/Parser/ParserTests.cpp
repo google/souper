@@ -94,7 +94,7 @@ TEST(ParserTest, Errors) {
       { "%0:i4 = var ()\n",
         "<input>:1:1: invalid data flow fact type" },
       { "%0:i4 = var (knownBits=10x0\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i4 = var (knownBits=10\nx0)\n",
         "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i4 = var (knownBits10x0)\n",
@@ -130,23 +130,23 @@ TEST(ParserTest, Errors) {
         "infer %1\n",
         "<input>:2:1: extract value expects an aggregate type" },
       { "%0:i4 = var (knownBits=001x) (nonZero\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i4 = var (nonZero\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i4 = var (nonNegative (nonZero)\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i4 = var (knownBits=0012) (nonZero)\n",
         "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i4 = var (knownBits=0011 (nonZero) (nonNegative)\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i4 = var (a)\n",
         "<input>:1:1: invalid data flow fact type" },
       { "%0:i4 = var (powerOf2)\n",
         "<input>:1:1: invalid data flow fact type" },
       { "%0:i8 = var (powerOfTwo (nonZero)\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i4 = var (negative\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i8 = var (signBits)\n",
         "<input>:1:1: expected '=' for number of signBits" },
       { "%0:i8 = var (signBits=-1)\n",
@@ -156,15 +156,15 @@ TEST(ParserTest, Errors) {
       { "%0:i8 = var (signBits=0)\n",
         "<input>:1:1: expected positive integer value for number of sign bits" },
       { "%0:i8 = var (signBits=2\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i8 = var (signBits=9)\n",
         "<input>:1:1: number of sign bits can't exceed instruction width and expects positive integer value" },
       { "%0:i8 = var (knownBits=0001xxxx) (signBit=3)\n",
         "<input>:1:1: invalid data flow fact type" },
       { "%0:i8 = var (signBits=3) (nonNegative) (nonZero) (powerOfTwo\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i8 = var (nonNegative) (nonZero) (powerOfTwo) (signBits=3\n",
-        "<input>:1:1: expected ')' to complete data flow fact string" },
+        "<input>:1:1: expected ')' to complete data flow fact" },
       { "%0:i64 = var ; 0\n"
         "%1:i1 = add 42:i32, %0 (^",
         "<input>:2:25: unexpected '^'" },
@@ -176,6 +176,24 @@ TEST(ParserTest, Errors) {
         "%1:i1 = extractvalue 42, 1 (hasSomethingElse\n"
         "infer %1\n",
         "<input>:2:1: expected hasExternalUses token" },
+      { "%0:i8 = var (range[2,90))\n",
+        "<input>:1:1: expected '=' for range as 'range='" },
+      { "%0:i32 = var (range=2,90))\n",
+        "<input>:1:1: expected '[' to specify lower bound of range" },
+      { "%0:i32 = var (range=[2:i32,90:i32))\n",
+        "<input>:1:1: expected lower bound of range" },
+      { "%0:i32 = var (range=[2,90:i32))\n",
+        "<input>:1:1: expected upper bound of range" },
+      { "%0:i32 = var (range=[2 90))\n",
+        "<input>:1:1: expected ',' after lower bound of range" },
+      { "%0:i32 = var (range=[2,90)\n",
+        "<input>:1:1: expected ')' to complete data flow fact" },
+      { "%0:i8 = var (range=[2,256))\n",
+        "<input>:1:1: Upper bound is out of range" },
+      { "%0:i8 = var (range=[-129,127))\n",
+        "<input>:1:1: Lower bound is out of range" },
+      { "%0:i8 = var (range=[6,6))\n",
+        "<input>:1:1: range with lower == upper is invalid unless it is empty or full set" },
 
       // type checking
       { "%0 = add 1:i32\n",
@@ -215,6 +233,48 @@ TEST(ParserTest, Errors) {
         "<input>:1:1: inst must have width of 32, has width 64" },
       { "%0 = select 1:i1, 2:i32, 3:i64\n",
         "<input>:1:1: operands have different widths" },
+
+      { "%0 = fshl\n",
+        "<input>:2:1: unexpected token: ''" },
+      { "%0 = fshl 1:i1\n",
+        "<input>:1:1: expected 3 operands, found 1" },
+      { "%0 = fshl 1:i1, 2:i1\n",
+        "<input>:1:1: expected 3 operands, found 2" },
+      { "%0 = fshl 1:i2, 2:i1, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i1, 2:i2, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i1, 2:i1, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i2, 2:i2, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i2, 2:i1, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i1, 2:i2, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i1, 2:i1, 3:i1, 4:i1\n",
+        "<input>:1:1: expected 3 operands, found 4" },
+
+      { "%0 = fshr\n",
+        "<input>:2:1: unexpected token: ''" },
+      { "%0 = fshr 1:i1\n",
+        "<input>:1:1: expected 3 operands, found 1" },
+      { "%0 = fshr 1:i1, 2:i1\n",
+        "<input>:1:1: expected 3 operands, found 2" },
+      { "%0 = fshr 1:i2, 2:i1, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i1, 2:i2, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i1, 2:i1, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i2, 2:i2, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i2, 2:i1, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i1, 2:i2, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i1, 2:i1, 3:i1, 4:i1\n",
+        "<input>:1:1: expected 3 operands, found 4" },
 
       { "%0 = zext 1:i1\n",
         "<input>:1:1: inst must have a width" },
@@ -291,7 +351,7 @@ TEST(ParserTest, FullReplacementErrors) {
       { "%0:i4 = var ; 0\ninfer %0 (demandedBits0010)\n",
         "<input>:2:23: expected '=' for demandedBits" },
       { "%0:i4 = var ; 0\ninfer %0 (demandedBits=0010\n",
-        "<input>:3:1: expected ')' to complete demandedBits data flow string" },
+        "<input>:3:1: expected ')' to complete demandedBits" },
       { "%0:i4 = var ; 0\ninfer %0 (demandedBits=000)\n",
         "<input>:2:24: demandedBits pattern must be of same length as infer operand width" },
       { "%0:i4 = var ; 0\ninfer %0 (demandedBits=11111)\n",
@@ -313,7 +373,7 @@ TEST(ParserTest, FullReplacementErrors) {
       { "%0:i4 = var ; 0\ncand %0 7:i4 (demandedBits0111)\n",
         "<input>:2:27: expected '=' for demandedBits" },
       { "%0:i4 = var ; 0\ncand %0 7:i4 (demandedBits=0111\n",
-        "<input>:3:1: expected ')' to complete demandedBits data flow string" },
+        "<input>:3:1: expected ')' to complete demandedBits" },
       { "%0:i4 = var ; 0\ncand %0 7:i4 (demandedBits=2111)\n",
         "<input>:2:28: expected demandedBits pattern of type [0|1]+" },
       { "%0:i64 = var ; 0\n"
@@ -475,6 +535,38 @@ cand %2 1:i1
 cand %2 1:i1
 )i",
       R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshl %0, %1, 0:i32
+cand %2 %0
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshl %0, %1, 32:i32
+cand %2 %0
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshl %0, %1, 33:i32
+%3:i32 = fshl %0, %1, 1:i32
+cand %2 %3
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshr %0, %1, 0:i32
+cand %2 %1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshr %0, %1, 32:i32
+cand %2 %1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshr %0, %1, 33:i32
+%3:i32 = fshr %0, %1, 1:i32
+cand %2 %3
+)i",
+      R"i(%0:i32 = var ; 0
 %1:i32 = bswap %0
 %2:i1 = eq 1:i32, %1
 cand %2 1:i1
@@ -534,6 +626,16 @@ cand %4 %0
 %1:i1 = add 0:i1, %0 (hasExternalUses)
 %2:i1 = add %0, %1
 cand %2 1:i1
+)i",
+      R"i(%0:i8 = var (range=[1,3)) ; 0
+%1:i8 = var (range=[1,5)) ; 1
+%2:i8 = shl %0, %1
+%3:i1 = ule %2, 32:i8
+cand %3 1:i1
+)i",
+      R"i(%0:i32 = var (range=[10,9)) ; 0
+%1:i1 = eq 9:i32, %0
+cand %1 0:i1
 )i",
       R"i(%0:i32 = var ; 0
 %1:i32 = shl %0, 3:i32

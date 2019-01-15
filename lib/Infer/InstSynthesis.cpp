@@ -1207,6 +1207,31 @@ Inst *InstSynthesis::createCleanInst(Inst::Kind Kind, unsigned Width,
       return IC.getConst(APInt(Width, Width));
     break;
 
+  case Inst::FShl:
+  case Inst::FShr:
+    if (Ops[2]->K == Inst::Const) {
+      APInt ShAmtModWidth(Width, Ops[2]->Val.urem(Width));
+      if (ShAmtModWidth.isNullValue()) {
+        if (Kind == Inst::FShl)
+          return Ops[0];
+        if (Kind == Inst::FShr)
+          return Ops[1];
+      }
+      if (Ops[0] == Ops[1] && Ops[0]->K == Inst::Const) {
+        if (Kind == Inst::FShl)
+          return IC.getConst(Ops[0]->Val.rotl(ShAmtModWidth));
+        if (Kind == Inst::FShr)
+          return IC.getConst(Ops[0]->Val.rotr(ShAmtModWidth));
+      }
+      // if (Ops[0]->K == Inst::Const && Ops[1]->K == Inst::Const) // FIXME?
+      if (Ops[2]->Val != ShAmtModWidth) {
+        // FIXME: this ends up not being used, since the cost is the same.
+        return IC.getInst(Kind, Width,
+                          {Ops[0], Ops[1], IC.getConst(ShAmtModWidth)});
+      }
+    }
+    break;
+
   default:
     break;
   }
@@ -1266,7 +1291,7 @@ std::vector<LocVar> InstSynthesis::getOpLocs(const LocVar &Loc) {
   // Inputs have no operands
   if (Loc.first == 0)
     return Res;
-  assert(Loc.first >= 1 && "invalid locatoin variable");
+  assert(Loc.first >= 1 && "invalid location variable");
   auto const &Comp = Comps[Loc.first-1];
   for (unsigned J = 0; J < Comp.OpWidths.size(); ++J) {
     LocVar Tmp = std::make_pair(Loc.first, J+1);

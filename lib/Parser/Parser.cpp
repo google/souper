@@ -43,6 +43,7 @@ struct Token {
     KnownBits,
     OpenParen,
     CloseParen,
+    OpenBracket,
     Eof,
   };
 
@@ -241,6 +242,11 @@ FoundChar:
   if (*Begin == ')') {
     ++Begin;
     return Token{Token::CloseParen, Begin-1, 1, APInt()};
+  }
+
+  if (*Begin == '[') {
+    ++Begin;
+    return Token{Token::OpenBracket, Begin-1, 1, APInt()};
   }
 
   ErrStr = std::string("unexpected '") + *Begin + "'";
@@ -579,6 +585,10 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   case Inst::Ctlz:
     MaxOps = MinOps = 1;
     break;
+  case Inst::FShl:
+  case Inst::FShr:
+    MaxOps = MinOps = 3;
+    break;
 
   default:
     llvm::report_fatal_error("unhandled");
@@ -811,7 +821,7 @@ bool Parser::parseDemandedBits(std::string &ErrStr, Inst *LHS) {
     if (!consumeToken(ErrStr))
       return false;
     if (CurTok.K != Token::CloseParen) {
-      ErrStr = makeErrStr("expected ')' to complete demandedBits data flow string");
+      ErrStr = makeErrStr("expected ')' to complete demandedBits");
       return false;
     }
     if (!consumeToken(ErrStr))
@@ -1054,7 +1064,9 @@ bool Parser::parseLine(std::string &ErrStr) {
 
       if (IK == Inst::Var) {
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
-                    ConstOne(InstWidth, 1, false);
+                    ConstOne(InstWidth, 1, false), Lower(InstWidth, 0, false),
+                    Upper(InstWidth, 0, false);
+        llvm::ConstantRange Range(InstWidth, /*isFullSet*/true);
         bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false,
           hasExternalUses = false;
         unsigned SignBits = 0;
@@ -1122,6 +1134,73 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   if (!consumeToken(ErrStr))
                     return false;
+                } else if (CurTok.str() == "range") {
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::Eq) {
+                    ErrStr = makeErrStr(TP, "expected '=' for range as 'range='");
+                    return false;
+                  }
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::OpenBracket) {
+                    ErrStr = makeErrStr(TP, "expected '[' to specify lower bound of range");
+                    return false;
+                  }
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::UntypedInt) {
+                    ErrStr = makeErrStr(TP, "expected lower bound of range");
+                    return false;
+                  }
+                  Lower = CurTok.Val;
+
+                  if (!Lower.isSignedIntN(InstWidth) && (Lower.isNegative() ||
+                      (!Lower.isNegative() && !Lower.isIntN(InstWidth)))) {
+                    ErrStr = makeErrStr(TP, "Lower bound is out of range");
+                    return false;
+                  }
+                  if (Lower.getBitWidth() != InstWidth)
+                    Lower = Lower.sextOrTrunc(InstWidth);
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::Comma) {
+                    ErrStr = makeErrStr(TP, "expected ',' after lower bound of range");
+                    return false;
+                  }
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::UntypedInt) {
+                    ErrStr = makeErrStr(TP, "expected upper bound of range");
+                    return false;
+                  }
+                  Upper = CurTok.Val;
+
+                  if (!Upper.isSignedIntN(InstWidth) && (Upper.isNegative() ||
+                      (!Upper.isNegative() && !Upper.isIntN(InstWidth)))) {
+                    ErrStr = makeErrStr(TP, "Upper bound is out of range");
+                    return false;
+                  }
+                  if (Upper.getBitWidth() != InstWidth)
+                    Upper = Upper.sextOrTrunc(InstWidth);
+
+                  if (Lower == Upper && !Lower.isMinValue() && !Lower.isMaxValue()) {
+                    ErrStr = makeErrStr(TP, "range with lower == upper is invalid unless it is empty or full set");
+                    return false;
+                  }
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::CloseParen) {
+                    ErrStr = makeErrStr(TP, "expected ')' after upper bound of range");
+                    return false;
+                  }
+                  if (!consumeToken(ErrStr))
+                    return false;
                 } else {
                   ErrStr = makeErrStr(TP, "invalid data flow fact type");
                   return false;
@@ -1133,14 +1212,15 @@ bool Parser::parseLine(std::string &ErrStr) {
                 break;
             }
             if (CurTok.K != Token::CloseParen) {
-              ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact string");
+              ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact");
               return false;
             }
+            Range = llvm::ConstantRange(Lower, Upper);
             if (!consumeToken(ErrStr))
               return false;
           }
         }
-        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero,
+        Inst *I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
                                NonNegative, PowOfTwo, Negative, SignBits);
         Context.setInst(InstName, I);
         return true;

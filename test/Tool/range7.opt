@@ -1,0 +1,14 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+; non overlapping ranges difference will never be equal to zero
+
+%0:i32 = var (range=[10,50))
+%1:i32 = var (range=[70,120))
+%2:i32 = subnw %0, %1
+%4:i1 = ne %2, 0
+cand %4 1:i1

@@ -76,6 +76,12 @@ SOUPER_INFER_NOP -- Try to synthesize nops: Optimizations where the
 output is equivalent to one of its inputs. For example, this
 expression can be optimized to a nop: x = bswap(bswap(x))
 
+SOUPER_INFER_INST -- Try to synthesis instructions with InstSynthesis
+synthesizer.
+
+SOUPER_EXHAUSTIVE_SYNTHESIS -- Try to synthesize instructions with
+ExhaustiveSynthesis synthesizer.
+
 SOUPER_NO_EXPLOIT_UB -- Do not exploit LLVM-level undefined behavior
 when making inferences.
 
@@ -173,7 +179,7 @@ if ($souper) {
     }
 
     if (exists $ENV{"SOUPER_DEBUG"}) {
-        push @ARGV, ("-mllvm", "-souper-debug");
+        push @ARGV, ("-mllvm", "-souper-debug-level=".$ENV{"SOUPER_DEBUG"});
     }
 
     if (exists $ENV{"SOUPER_EXPLOIT_BLOCKPCS"}) {
