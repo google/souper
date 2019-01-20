@@ -1,0 +1,16 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+; this is wrong when %Op0 is poison
+
+%X:i16 = var
+%Op0:i16 = var
+%Op1 = sub 0, %X
+%r = srem %Op0, %Op1
+infer %r
+%r2 = srem %Op0, %X
+result %r2

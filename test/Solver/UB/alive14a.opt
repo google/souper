@@ -1,0 +1,20 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+; ERROR: Target is more poisonous than Source for i4 %B
+; Example:
+; %x i4 = 0x8 (8, -8)
+; %A i4 = poison
+; Source value: 0xE (14, -2)
+; Target value: poison
+
+%x:i4 = var
+%B = ashr %x, 2
+infer %B
+%A = shlnsw %x, 1
+%B2 = ashr %A, 3
+result %B2

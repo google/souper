@@ -1,33 +1,35 @@
-from ubuntu:16.04
+from ubuntu:18.04
 
 run set -x; \
         apt-get update -qq \
         && apt-get remove -y -qq clang llvm llvm-runtime \
 	&& apt-get install libgmp10 \
-	&& echo 'ca-certificates gcc g++ valgrind libc6-dev libgmp-dev cmake patch ninja-build make autoconf automake libtool golang-go python subversion git' > /usr/src/build-deps \
+	&& echo 'ca-certificates valgrind libc6-dev libgmp-dev cmake patch ninja-build make autoconf automake libtool golang-go python subversion git clang' > /usr/src/build-deps \
 	&& apt-get install -y $(cat /usr/src/build-deps) --no-install-recommends \
 	&& git clone https://github.com/Z3Prover/z3.git /usr/src/z3 \
 	&& git clone https://github.com/antirez/redis /usr/src/redis
 
 run cd /usr/src/z3 \
-	&& git checkout z3-4.6.0 \
+	&& git checkout z3-4.7.1 \
 	&& python scripts/mk_make.py --noomp \
 	&& cd build \
 	&& make -j10 \
 	&& make install
 
 run cd /usr/src/redis \
-	&& git checkout 4.0.8 \
-	&& make -j4 \
+	&& git checkout 4.0.11 \
+	&& make -j10 \
 	&& make install
 
 run export GOPATH=/usr/src/go \
-	&& go get github.com/garyburd/redigo/redis
+	&& go get github.com/gomodule/redigo/redis
 
 add build_deps.sh /usr/src/souper/build_deps.sh
 add clone_and_test.sh /usr/src/souper/clone_and_test.sh
+add patches /usr/src/souper/patches
 
-run cd /usr/src/souper \
+run export CC=clang CXX=clang++ \
+	&& cd /usr/src/souper \
 #	&& ./build_deps.sh Debug \
 #       && rm -rf third_party/llvm/Debug-build \
 	&& ./build_deps.sh Release \
@@ -55,7 +57,7 @@ run export GOPATH=/usr/src/go \
         && rm -rf /usr/src/souper-build \
 	&& strip /usr/local/bin/* \
 	&& groupadd -r souper \
-	&& useradd -r -g souper souper \
+	&& useradd -m -r -g souper souper \
 	&& mkdir /data \
 	&& chown souper:souper /data \
 	&& rm -rf /usr/local/include /usr/local/lib/*.a /usr/local/lib/*.la

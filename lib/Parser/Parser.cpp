@@ -23,6 +23,7 @@
 #include "souper/Inst/Inst.h"
 
 #include <string>
+#include <unordered_set>
 
 using namespace llvm;
 using namespace souper;
@@ -42,6 +43,7 @@ struct Token {
     KnownBits,
     OpenParen,
     CloseParen,
+    OpenBracket,
     Eof,
   };
 
@@ -242,6 +244,11 @@ FoundChar:
     return Token{Token::CloseParen, Begin-1, 1, APInt()};
   }
 
+  if (*Begin == '[') {
+    ++Begin;
+    return Token{Token::OpenBracket, Begin-1, 1, APInt()};
+  }
+
   ErrStr = std::string("unexpected '") + *Begin + "'";
   ++Begin;
   return Token{Token::Error, Begin-1, 0, APInt()};
@@ -306,6 +313,7 @@ struct Parser {
   // set of blockpc(s) related to B. The map is used for error- and
   // type-checking.
   std::map<Block *, unsigned> BlockPCIdxMap;
+  std::unordered_set<Inst *> ExternalUsesSet;
   Inst *LHS = 0;
 
   std::string makeErrStr(const std::string &ErrStr) {
@@ -809,7 +817,7 @@ bool Parser::parseDemandedBits(std::string &ErrStr, Inst *LHS) {
     if (!consumeToken(ErrStr))
       return false;
     if (CurTok.K != Token::CloseParen) {
-      ErrStr = makeErrStr("expected ')' to complete demandedBits data flow string");
+      ErrStr = makeErrStr("expected ')' to complete demandedBits");
       return false;
     }
     if (!consumeToken(ErrStr))
@@ -1052,8 +1060,11 @@ bool Parser::parseLine(std::string &ErrStr) {
 
       if (IK == Inst::Var) {
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
-                    ConstOne(InstWidth, 1, false);
-        bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
+                    ConstOne(InstWidth, 1, false), Lower(InstWidth, 0, false),
+                    Upper(InstWidth, 0, false);
+        llvm::ConstantRange Range(InstWidth, /*isFullSet*/true);
+        bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false,
+          hasExternalUses = false;
         unsigned SignBits = 0;
         while (CurTok.K != Token::ValName && CurTok.K != Token::Ident && CurTok.K != Token::Eof) {
           if (CurTok.K == Token::OpenParen) {
@@ -1119,6 +1130,73 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   if (!consumeToken(ErrStr))
                     return false;
+                } else if (CurTok.str() == "range") {
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::Eq) {
+                    ErrStr = makeErrStr(TP, "expected '=' for range as 'range='");
+                    return false;
+                  }
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::OpenBracket) {
+                    ErrStr = makeErrStr(TP, "expected '[' to specify lower bound of range");
+                    return false;
+                  }
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::UntypedInt) {
+                    ErrStr = makeErrStr(TP, "expected lower bound of range");
+                    return false;
+                  }
+                  Lower = CurTok.Val;
+
+                  if (!Lower.isSignedIntN(InstWidth) && (Lower.isNegative() ||
+                      (!Lower.isNegative() && !Lower.isIntN(InstWidth)))) {
+                    ErrStr = makeErrStr(TP, "Lower bound is out of range");
+                    return false;
+                  }
+                  if (Lower.getBitWidth() != InstWidth)
+                    Lower = Lower.sextOrTrunc(InstWidth);
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::Comma) {
+                    ErrStr = makeErrStr(TP, "expected ',' after lower bound of range");
+                    return false;
+                  }
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::UntypedInt) {
+                    ErrStr = makeErrStr(TP, "expected upper bound of range");
+                    return false;
+                  }
+                  Upper = CurTok.Val;
+
+                  if (!Upper.isSignedIntN(InstWidth) && (Upper.isNegative() ||
+                      (!Upper.isNegative() && !Upper.isIntN(InstWidth)))) {
+                    ErrStr = makeErrStr(TP, "Upper bound is out of range");
+                    return false;
+                  }
+                  if (Upper.getBitWidth() != InstWidth)
+                    Upper = Upper.sextOrTrunc(InstWidth);
+
+                  if (Lower == Upper && !Lower.isMinValue() && !Lower.isMaxValue()) {
+                    ErrStr = makeErrStr(TP, "range with lower == upper is invalid unless it is empty or full set");
+                    return false;
+                  }
+
+                  if (!consumeToken(ErrStr))
+                    return false;
+                  if (CurTok.K != Token::CloseParen) {
+                    ErrStr = makeErrStr(TP, "expected ')' after upper bound of range");
+                    return false;
+                  }
+                  if (!consumeToken(ErrStr))
+                    return false;
                 } else {
                   ErrStr = makeErrStr(TP, "invalid data flow fact type");
                   return false;
@@ -1130,14 +1208,15 @@ bool Parser::parseLine(std::string &ErrStr) {
                 break;
             }
             if (CurTok.K != Token::CloseParen) {
-              ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact string");
+              ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact");
               return false;
             }
+            Range = llvm::ConstantRange(Lower, Upper);
             if (!consumeToken(ErrStr))
               return false;
           }
         }
-        Inst *I = IC.createVar(InstWidth, InstName, Zero, One, NonZero,
+        Inst *I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
                                NonNegative, PowOfTwo, Negative, SignBits);
         Context.setInst(InstName, I);
         return true;
@@ -1167,6 +1246,7 @@ bool Parser::parseLine(std::string &ErrStr) {
       }
 
       std::vector<Inst *> Ops;
+      bool hasExternalUses = false;
 
       while (1) {
         Inst *I = parseInst(ErrStr);
@@ -1175,7 +1255,26 @@ bool Parser::parseLine(std::string &ErrStr) {
 
         Ops.push_back(I);
 
-        if (CurTok.K != Token::Comma) break;
+        if (CurTok.K != Token::Comma) {
+          if (CurTok.K == Token::OpenParen) {
+            if (!consumeToken(ErrStr))
+              return false;
+            if (CurTok.K != Token::Ident || CurTok.str() != "hasExternalUses") {
+              ErrStr = makeErrStr(TP, "expected hasExternalUses token");
+              return false;
+            }
+            if (!consumeToken(ErrStr))
+              return false;
+            if (CurTok.K != Token::CloseParen) {
+              ErrStr = makeErrStr(TP, "expected ')' to complete external uses string");
+              return false;
+            }
+            if (!consumeToken(ErrStr))
+              return false;
+            hasExternalUses = true;
+          }
+          break;
+        }
         if (!consumeToken(ErrStr)) return false;
       }
 
@@ -1223,6 +1322,10 @@ bool Parser::parseLine(std::string &ErrStr) {
         }
       }
 
+      if (hasExternalUses)
+        ExternalUsesSet.insert(I);
+      for (auto EU: ExternalUsesSet)
+        I->DepsWithExternalUses.insert(EU);
       Context.setInst(InstName, I);
       return true;
     }

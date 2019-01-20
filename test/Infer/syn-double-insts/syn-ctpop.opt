@@ -1,0 +1,15 @@
+; REQUIRES: solver, synthesis, long-duration-synthesis
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-exhaustive-synthesis-num-instructions=2 %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; synthesis ctpop
+
+; Need 15 min~
+
+%0:i16 = var
+%1:i16 = and %0, 255:i16
+%2:i16 = or %1, 128:i16
+%3:i16 = ctpop %2
+infer %3
+; CHECK: %4:i16 = add 128:i16, %1
+; CHECK: %5:i16 = ctpop %4

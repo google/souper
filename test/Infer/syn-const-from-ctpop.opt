@@ -1,0 +1,12 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-iN=false -souper-exhaustive-synthesis %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: result %0
+
+
+%0:i16 = var (powerOfTwo)
+%1:i16 = ctpop %0
+%2:i16 = mul %0, %1
+infer %2

@@ -16,7 +16,9 @@
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/DemandedBits.h"
+#include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
@@ -49,9 +51,6 @@ std::unique_ptr<Solver> S;
 unsigned ReplaceCount;
 KVStore *KV;
 
-static cl::opt<bool> DebugSouperPass("souper-debug", cl::Hidden,
-                                     cl::init(false), cl::desc("Debug Souper"));
-
 static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
      cl::init(1),
      cl::desc("Control the verbose level of debug output (default=1). "
@@ -71,10 +70,6 @@ static cl::opt<unsigned> FirstReplace("souper-first-opt", cl::Hidden,
 static cl::opt<unsigned> LastReplace("souper-last-opt", cl::Hidden,
     cl::init(std::numeric_limits<unsigned>::max()),
     cl::desc("Last Souper optimization to perform (default=infinite)"));
-
-static bool dumpAllReplacements() {
-  return DebugSouperPass && (DebugLevel > 1);
-}
 
 #ifdef DYNAMIC_PROFILE_ALL
 static const bool DynamicProfileAll = true;
@@ -100,14 +95,15 @@ public:
     Info.addRequired<LoopInfoWrapperPass>();
     Info.addRequired<DominatorTreeWrapperPass>();
     Info.addRequired<DemandedBitsWrapperPass>();
+    Info.addRequired<LazyValueInfoWrapperPass>();
+    Info.addRequired<ScalarEvolutionWrapperPass>();
     Info.addRequired<TargetLibraryInfoWrapperPass>();
   }
 
   void dynamicProfile(Function *F, CandidateReplacement &Cand) {
     std::string Str;
     llvm::raw_string_ostream Loc(Str);
-    auto I = Cand.Origin;
-    I->getDebugLoc().print(Loc);
+    Cand.Origin->getDebugLoc().print(Loc);
     ReplacementContext Context;
     std::string LHS = GetReplacementLHSString(Cand.BPCs, Cand.PCs,
                                               Cand.Mapping.LHS, Context);
@@ -159,124 +155,178 @@ public:
 
     appendToGlobalCtors(*M, Ctor, 0);
 
-    BasicBlock::iterator BI(I);
+    BasicBlock::iterator BI(Cand.Origin);
     while (isa<PHINode>(*BI))
       ++BI;
     new AtomicRMWInst(AtomicRMWInst::Add, CntVar,
                       ConstantInt::get(C, APInt(64, 1)), AtomicOrdering::Monotonic,
-                      SyncScope::System, I);
+                      SyncScope::System, Cand.Origin);
   }
 
   Value *getValue(Inst *I, Instruction *ReplacedInst,
                   ExprBuilderContext &EBC, DominatorTree &DT,
+                  std::map<Inst *, Value *> &ReplacedValues,
                   IRBuilder<> &Builder, Module *M) {
     Type *T = Type::getIntNTy(ReplacedInst->getContext(), I->Width);
-    if (I->K == Inst::Const) {
+    if (I->K == Inst::Const)
       return ConstantInt::get(T, I->Val);
-    } else if (EBC.Origins.count(I) != 0) {
+
+    if (ReplacedValues.find(I) != ReplacedValues.end())
+      return ReplacedValues[I];
+
+    if (I->Origins.size() > 0) {
       // if there's an Origin, we're connecting to existing code
-      auto It = EBC.Origins.equal_range(I);
-      for (auto O = It.first; O != It.second; ++O) {
-        Value *V = O->second;
+      for (auto V : I->Origins) {
         if (V->getType() != T)
-          continue;
+          continue; // TODO: can we assert this doesn't happen?
+        if (isa<Argument>(V) || isa<Constant>(V))
+          return V;
         if (auto IP = dyn_cast<Instruction>(V)) {
-          // Dominance check
           if (DT.dominates(IP, ReplacedInst)) {
             ++InstructionReplaced;
             return V;
           } else {
             ++DominanceCheckFailed;
           }
-        } else if (isa<Argument>(V) || isa<Constant>(V)) {
-          return V;
         } else {
           report_fatal_error("Unhandled LLVM instruction in getValue()");
         }
       }
       return 0;
-    } else {
-      // otherwise, recursively generate code
-      Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, Builder, M);
-      if (!V0)
-        return 0;
-      switch (I->Ops.size()) {
-      case 1:
-        switch (I->K) {
-        case Inst::SExt:
-          return Builder.CreateSExt(V0, T);
-        case Inst::ZExt:
-          return Builder.CreateZExt(V0, T);
-        case Inst::Trunc:
-          return Builder.CreateTrunc(V0, T);
-        case Inst::CtPop:{
-          Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctpop, T);
-          return Builder.CreateCall(F, V0);
-        }
-        case Inst::BSwap:{
-          Function *F = Intrinsic::getDeclaration(M, Intrinsic::bswap, T);
-          return Builder.CreateCall(F, V0);
-        }
-        case Inst::Cttz:{
-          Function *F = Intrinsic::getDeclaration(M, Intrinsic::cttz, T);
-          // According to LLVM LangRef, the second argument of cttz i1 <is_zero_undef>
-          // must be a constant and is a flag to indicate whether the intrinsic should
-          // ensure that a zero as the first argument produces a defined result.
-          return Builder.CreateCall(F, {V0,
-                ConstantInt::get(V0->getContext(), APInt(1, 0))});
-        }
-        case Inst::Ctlz:{
-          // Ditto
-          Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctlz, T);
-          return Builder.CreateCall(F, {V0,
-                ConstantInt::get(V0->getContext(), APInt(1, 0))});
-        }
-        default:
-          break;
-        }
-      case 2:{
-        Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT, Builder, M);
-        if (!V1)
-          return 0;
-        switch (I->K) {
-        case Inst::And:
-          if (isa<Constant>(V0))
-            return Builder.CreateAnd(V1, V0);
-          return Builder.CreateAnd(V0, V1);
-        case Inst::Or:
-          if (isa<Constant>(V0))
-            return Builder.CreateOr(V1, V0);
-          return Builder.CreateOr(V0, V1);
-        case Inst::Xor:
-          if (isa<Constant>(V0))
-            return Builder.CreateXor(V1, V0);
-          return Builder.CreateXor(V0, V1);
-        case Inst::Add:
-          if (isa<Constant>(V0))
-            return Builder.CreateAdd(V1, V0);
-          return Builder.CreateAdd(V0, V1);
-        case Inst::Sub:
-          return Builder.CreateSub(V0, V1);
-        case Inst::Mul:
-          if (isa<Constant>(V0))
-            return Builder.CreateMul(V1, V0);
-          return Builder.CreateMul(V0, V1);
-        case Inst::Shl:
-          return Builder.CreateShl(V0, V1);
-        case Inst::AShr:
-          return Builder.CreateAShr(V0, V1);
-        case Inst::LShr:
-          return Builder.CreateLShr(V0, V1);
-        default:
-          break;
-        }
+    }
+
+    // otherwise, recursively generate code
+    Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, ReplacedValues,
+                         Builder, M);
+    if (!V0)
+      return 0;
+    switch (I->Ops.size()) {
+    case 1:
+      switch (I->K) {
+      case Inst::SExt:
+        return Builder.CreateSExt(V0, T);
+      case Inst::ZExt:
+        return Builder.CreateZExt(V0, T);
+      case Inst::Trunc:
+        return Builder.CreateTrunc(V0, T);
+      case Inst::CtPop:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctpop, T);
+        return Builder.CreateCall(F, V0);
+      }
+      case Inst::BSwap:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::bswap, T);
+        return Builder.CreateCall(F, V0);
+      }
+      case Inst::Cttz:{
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::cttz, T);
+        // According to LLVM LangRef, the second argument of cttz i1 <is_zero_undef>
+        // must be a constant and is a flag to indicate whether the intrinsic should
+        // ensure that a zero as the first argument produces a defined result.
+        return Builder.CreateCall(F, {V0,
+              ConstantInt::get(V0->getContext(), APInt(1, 0))});
+      }
+      case Inst::Ctlz:{
+        // Ditto
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::ctlz, T);
+        return Builder.CreateCall(F, {V0,
+              ConstantInt::get(V0->getContext(), APInt(1, 0))});
       }
       default:
         break;
       }
-      report_fatal_error((std::string)"Unhandled Souper instruction " +
-                         Inst::getKindName(I->K) + " in getValue()");
+    case 2:{
+      Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT,
+                           ReplacedValues, Builder, M);
+      if (!V1)
+        return 0;
+      switch (I->K) {
+      case Inst::And:
+        if (isa<Constant>(V0))
+          return Builder.CreateAnd(V1, V0);
+        return Builder.CreateAnd(V0, V1);
+      case Inst::Or:
+        if (isa<Constant>(V0))
+          return Builder.CreateOr(V1, V0);
+        return Builder.CreateOr(V0, V1);
+      case Inst::Xor:
+        if (isa<Constant>(V0))
+          return Builder.CreateXor(V1, V0);
+        return Builder.CreateXor(V0, V1);
+      case Inst::Add:
+        if (isa<Constant>(V0))
+          return Builder.CreateAdd(V1, V0);
+        return Builder.CreateAdd(V0, V1);
+      case Inst::Sub:
+        return Builder.CreateSub(V0, V1);
+      case Inst::Mul:
+        if (isa<Constant>(V0))
+          return Builder.CreateMul(V1, V0);
+        return Builder.CreateMul(V0, V1);
+      case Inst::Shl:
+        return Builder.CreateShl(V0, V1);
+      case Inst::AShr:
+        return Builder.CreateAShr(V0, V1);
+      case Inst::LShr:
+        return Builder.CreateLShr(V0, V1);
+      case Inst::Ne:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpNE(V1, V0);
+        } else {
+          return Builder.CreateICmpNE(V0, V1);
+        }
+      case Inst::Eq:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpEQ(V1, V0);
+        } else {
+          return Builder.CreateICmpEQ(V0, V1);
+        }
+      case Inst::Ult:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpUGT(V1, V0);
+        } else {
+          return Builder.CreateICmpULT(V0, V1);
+        }
+      case Inst::Slt:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpSGT(V1, V0);
+        } else {
+          return Builder.CreateICmpSLT(V0, V1);
+        }
+      case Inst::Ule:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpUGE(V1, V0);
+        } else {
+          return Builder.CreateICmpULE(V0, V1);
+        }
+      case Inst::Sle:
+        if (isa<Constant>(V0)) {
+          return Builder.CreateICmpSGE(V1, V0);
+        } else {
+          return Builder.CreateICmpSLE(V0, V1);
+        }
+      default:
+        break;
+      }
     }
+    case 3:{
+      Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT,
+                           ReplacedValues, Builder, M);
+      Value *V2 = getValue(I->Ops[2], ReplacedInst, EBC, DT,
+                           ReplacedValues, Builder, M);
+      if (!V1 || !V2)
+        return 0;
+      switch (I->K) {
+      case Inst::Select:
+        return Builder.CreateSelect(V0, V1, V2);
+      default:
+        break;
+      }
+    }
+    default:
+      break;
+    }
+    report_fatal_error((std::string)"Unhandled Souper instruction " +
+                       Inst::getKindName(I->K) + " in getValue()");
   }
 
   bool runOnFunction(Function *F) {
@@ -284,6 +334,7 @@ public:
     InstContext IC;
     ExprBuilderContext EBC;
     CandidateMap CandMap;
+    std::map<Inst *, Value *> ReplacedValues;
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>(*F).getLoopInfo();
     if (!LI)
       report_fatal_error("getLoopInfo() failed");
@@ -291,10 +342,16 @@ public:
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>(*F).getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
+    LazyValueInfo *LVI = &getAnalysis<LazyValueInfoWrapperPass>(*F).getLVI();
+    if (!LVI)
+      report_fatal_error("getLVI() failed");
+    ScalarEvolution *SE = &getAnalysis<ScalarEvolutionWrapperPass>(*F).getSE();
+    if (!SE)
+      report_fatal_error("getSE() failed");
     TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
     if (!TLI)
       report_fatal_error("getTLI() failed");
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, TLI, IC, EBC);
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, LVI, SE, TLI, IC, EBC);
 
     std::string FunctionName;
     if (F->hasLocalLinkage()) {
@@ -304,14 +361,14 @@ public:
       FunctionName = F->getName();
     }
 
-    if (dumpAllReplacements()) {
+    if (DebugLevel > 1) {
       errs() << "\n";
       errs() << "; Listing all replacements for " << FunctionName << "\n";
     }
 
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
-        if (dumpAllReplacements()) {
+        if (DebugLevel > 3) {
           errs() << "\n; *****";
           errs() << "\n; For LLVM instruction:\n;";
           R.Origin->print(errs());
@@ -323,7 +380,7 @@ public:
       }
     }
 
-    if (DebugSouperPass) {
+    if (DebugLevel > 1) {
       errs() << "\n";
       errs() << "; Listing applied replacements for " << FunctionName << "\n";
       errs() << "; Using solver: " << S->getName() << '\n';
@@ -358,41 +415,54 @@ public:
       if (!Cand.Mapping.RHS)
         continue;
 
-      Instruction *I = Cand.Origin;
-      IRBuilder<> Builder(I);
-
-      Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
-                               Builder, F->getParent());
-      if (!NewVal) {
-        if (DebugSouperPass)
-          errs() << "\"\n; replacement failed\n";
-        continue;
-      }
-
-      if (DebugSouperPass) {
-        errs() << "\n";
-        errs() << "; Replacing \"";
-        I->print(errs());
-        errs() << "\"\n; from \"";
-        I->getDebugLoc().print(errs());
-        errs() << "\"\n; with \"";
-        NewVal->print(errs());
-        errs() << "\" in:\n";
-        PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
-        errs() << "\"\n; with \"";
-        NewVal->print(errs());
-        errs() << "\"\n";
-      }
-      EBC.Origins.erase(Cand.Mapping.LHS);
-      EBC.Origins.insert(std::pair<Inst *, Value *>(Cand.Mapping.LHS, NewVal));
-
       if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
-        if (DynamicProfile)
+
+	Instruction *I = Cand.Origin;
+	assert(Cand.Mapping.LHS->hasOrigin(I));
+	IRBuilder<> Builder(I);
+
+	Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
+                               ReplacedValues, Builder, F->getParent());
+	if (!NewVal) {
+	  if (DebugLevel > 1)
+	    errs() << "\"\n; replacement failed\n";
+	  continue;
+	}
+
+	ReplacedValues[Cand.Mapping.LHS] = NewVal;
+
+	if (DebugLevel > 1) {
+          if (DebugLevel > 2) {
+            errs() << "\nFunction before replacement:\n";
+            F->print(errs());
+          }
+	  errs() << "\n";
+	  errs() << "; Replacing \"";
+	  I->print(errs());
+	  errs() << "\"\n; from \"";
+	  I->getDebugLoc().print(errs());
+	  errs() << "\"\n; with \"";
+	  NewVal->print(errs());
+	  errs() << "\" in:\n";
+	  PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
+	  errs() << "\"\n; with \"";
+	  NewVal->print(errs());
+	  errs() << "\"\n";
+	}
+
+	if (DynamicProfile)
           dynamicProfile(F, Cand);
         I->replaceAllUsesWith(NewVal);
+
+	if (DebugLevel > 2) {
+          errs() << "\nFunction after replacement:\n\n";
+          F->print(errs());
+          errs() << "\n";
+        }
+
         Changed = true;
       } else {
-        if (DebugSouperPass)
+        if (DebugLevel > 1)
           errs() << "Skipping this replacement (number " << ReplaceCount <<
             ")\n";
       }
@@ -430,6 +500,8 @@ INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(LazyValueInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
                     false)
 

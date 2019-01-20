@@ -1,0 +1,11 @@
+; REQUIRES: solver, synthesis
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-iN=false -souper-exhaustive-synthesis %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: {{(ashr|lshr)}} %0, 3:i16
+
+
+%0:i16 = var (nonNegative)
+%1 = sdiv %0, 8
+infer %1

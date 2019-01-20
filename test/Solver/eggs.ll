@@ -3,6 +3,8 @@
 ; RUN: %llvm-as -o %t %s
 ; RUN: %souper %solver -check -souper-infer-iN=false %t
 
+declare void @sink(i1) nounwind readnone
+
 ; A woman was carrying a large basket of eggs when a passer-by bumped her and
 ; she dropped the basket and all the eggs broke. The passer-by asked how many
 ; eggs there had been. The woman replied: "I don't remember exactly, but I do
@@ -38,8 +40,10 @@ cont5:
 cont6:
   %check1 = icmp eq i10 %x, 301
   %check2 = icmp eq i10 %x, 721
-  %check = or i1 %check1, %check2, !expected !1 
+  %check = or i1 %check1, %check2, !expected !1
   %check3 = icmp eq i10 %x, 999, !expected !0
+  call void @sink(i1 %check)
+  call void @sink(i1 %check3)
   ret i10 %x
 out:
   ret i10 0

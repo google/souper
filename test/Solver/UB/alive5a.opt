@@ -1,0 +1,18 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+; XFAIL: *
+
+; optimization is wrong when b is poison
+
+%a:i1 = var
+%b:i16 = var
+%r = select %a, 0, %b
+infer %r
+%nop0:i16 = sext %a
+%op0 = xor %nop0, -1
+%r2 = and %op0, %b
+result %r2

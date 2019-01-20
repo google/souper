@@ -1,0 +1,14 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+%X:i16 = var
+%inc = add %X, 1
+%c = ult %inc, 3
+%r = select %c, %X, 0
+infer %r
+%r2 = sdiv 1, %X
+result %r2

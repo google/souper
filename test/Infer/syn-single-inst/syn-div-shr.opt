@@ -1,0 +1,10 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+; CHECK: {{(ashr|lshr)}}
+
+%0:i32 = var
+%1:i32 = sdiv %0, 16:i32
+%cmp:i1 = slt 0:i32, %0
+pc %cmp 1:i1
+infer %1

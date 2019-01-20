@@ -19,6 +19,7 @@
 #include "souper/SMTLIB2/Solver.h"
 
 #include <map>
+#include <queue>
 #include <set>
 #include <vector>
 #include <utility>
@@ -249,7 +250,7 @@ private:
 
   /// Create a copy of instruction I replacing its input vars with vars
   /// in Replacements
-  Inst *getInstCopy(Inst *I, InstContext &IC,
+  Inst *replaceVars(Inst *I, InstContext &IC,
                     const std::map<Inst *, Inst *> &Replacements);
 
   /// A mapping from program locations (line numbers) to a set of component
@@ -316,25 +317,6 @@ private:
                             std::vector<InstMapping> &WiringPCs);
 
 };
-
-void findCands(Inst *Root, std::vector<Inst *> &Guesses, InstContext &IC,
-               int Max);
-
-Inst *getInstCopy(Inst *I, InstContext &IC,
-                  std::map<Inst *, Inst *> &InstCache,
-                  std::map<Block *, Block *> &BlockCache);
-
-void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
-                      std::map<Inst *, Inst *> &InstCache,
-                      std::map<Block *, Block *> &BlockCache,
-                      InstContext &IC);
-
-void separatePCs(const std::vector<InstMapping> &PCs,
-                 std::vector<InstMapping> &PCsCopy,
-                 std::map<Inst *, Inst *> &InstCache,
-                 std::map<Block *, Block *> &BlockCache,
-                 InstContext &IC);
-
 }
 
 #endif  // SOUPER_INST_SYNTHESIS_H

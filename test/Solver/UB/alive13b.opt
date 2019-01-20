@@ -1,0 +1,14 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%a:i17 = var
+%b:i17 = var
+%sh = shlnsw 1, %b
+%mul = mulnsw %a, %sh
+infer %mul
+%mul2 = shlnsw %a, %b
+result %mul2

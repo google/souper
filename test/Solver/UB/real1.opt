@@ -1,0 +1,15 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK-NOT: LGTM
+
+                               ; example values illustrating buggy execution
+%0:i32 = var                   ; = 0
+%1:i1 = slt 31:i32, %0         ; = true
+%2:i32 = var                   ; = 32
+%3:i32 = shl %2, %0            ; = poison
+%4:i8 = trunc %3               ; = poison
+%5:i8 = select %1, 0:i8, %4    ; = 0
+cand %5 %4                     ; WRONG

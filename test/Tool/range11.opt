@@ -1,0 +1,11 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+%0:i16 = var (range=[100, 10))
+%1:i1 = ule %0, 100
+%2:i1 = ult 10, %0
+%3:i1 = or %1, %2
+cand %3 1:i1

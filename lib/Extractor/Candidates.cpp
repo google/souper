@@ -15,8 +15,11 @@
 #include "souper/Extractor/Candidates.h"
 
 #include "llvm/ADT/EquivalenceClasses.h"
+#include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/Instructions.h"
@@ -46,13 +49,18 @@ static llvm::cl::opt<bool> HarvestDataFlowFacts(
     llvm::cl::init(true));
 static llvm::cl::opt<bool> HarvestDemandedBits(
     "souper-harvest-demanded-bits",
-    llvm::cl::desc("Perform demanded bits analysis (default=false)"),
-    llvm::cl::init(false));
+    llvm::cl::desc("Perform demanded bits analysis (default=true)"),
+    llvm::cl::init(true));
+static llvm::cl::opt<bool> HarvestConstantRange(
+    "souper-harvest-const-range",
+    llvm::cl::desc("Perform range analysis (default=true)"),
+    llvm::cl::init(true));
 
 using namespace llvm;
 using namespace souper;
 
 void CandidateReplacement::printFunction(llvm::raw_ostream &Out) const {
+  assert(Mapping.LHS->hasOrigin(Origin));
   const Function *F = Origin->getParent()->getParent();
   std::string N;
   if (F->hasLocalLinkage()) {
@@ -78,14 +86,17 @@ namespace {
 
 struct ExprBuilder {
   ExprBuilder(const ExprBuilderOptions &Opts, Module *M, const LoopInfo *LI,
-              DemandedBits *DB, TargetLibraryInfo * TLI, InstContext &IC,
+              DemandedBits *DB, LazyValueInfo *LVI, ScalarEvolution *SE,
+              TargetLibraryInfo * TLI, InstContext &IC,
               ExprBuilderContext &EBC)
-    : Opts(Opts), DL(M->getDataLayout()), LI(LI), DB(DB), TLI(TLI), IC(IC), EBC(EBC) {}
+    : Opts(Opts), DL(M->getDataLayout()), LI(LI), DB(DB), LVI(LVI), SE(SE), TLI(TLI), IC(IC), EBC(EBC) {}
 
   const ExprBuilderOptions &Opts;
   const DataLayout &DL;
   const LoopInfo *LI;
   DemandedBits *DB;
+  LazyValueInfo *LVI;
+  ScalarEvolution *SE;
   TargetLibraryInfo *TLI;
   InstContext &IC;
   ExprBuilderContext &EBC;
@@ -98,12 +109,15 @@ struct ExprBuilder {
   Inst *makeArrayRead(Value *V);
   Inst *buildConstant(Constant *c);
   Inst *buildGEP(Inst *Ptr, gep_type_iterator begin, gep_type_iterator end);
-  Inst *build(Value *V);
+  Inst *build(Value *V, APInt DemandedBits);
+  Inst *buildHelper(Value *V);
   void addPC(BasicBlock *BB, BasicBlock *Pred, std::vector<InstMapping> &PCs);
   void addPathConditions(BlockPCs &BPCs, std::vector<InstMapping> &PCs,
                          std::unordered_set<Block *> &VisitedBlocks,
                          BasicBlock *BB);
+  Inst *get(Value *V, APInt DemandedBits);
   Inst *get(Value *V);
+  void markExternalUses(Inst *I);
 };
 
 }
@@ -169,7 +183,24 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
       Negative = isKnownNegative(V, DL);
       NumSignBits = ComputeNumSignBits(V, DL);
     }
-  return IC.createVar(Width, Name, Known.Zero, Known.One, NonZero, NonNegative,
+
+    ConstantRange Range = llvm::ConstantRange(Width, /*isFullSet=*/true);
+    if (HarvestConstantRange && V->getType()->isIntegerTy()) {
+      if (Instruction *I = dyn_cast<Instruction>(V)) {
+        // TODO: Find out a better way to get the current basic block
+        // with this approach, we might be restricting the constant
+        // range harvesting. Because range info. might be coming from
+        // llvm values other than instruction.
+        BasicBlock *BB = I->getParent();
+        auto LVIRange = LVI->getConstantRange(V, BB);
+        auto SC = SE->getSCEV(V);
+        auto R1 = LVIRange.intersectWith(SE->getSignedRange(SC));
+        auto R2 = LVIRange.intersectWith(SE->getUnsignedRange(SC));
+        Range = R1.getSetSize().ult(R2.getSetSize()) ? R1 : R2;
+      }
+    }
+
+  return IC.createVar(Width, Name, Range, Known.Zero, Known.One, NonZero, NonNegative,
                       PowOfTwo, Negative, NumSignBits);
 }
 
@@ -215,7 +246,42 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
   return Ptr;
 }
 
-Inst *ExprBuilder::build(Value *V) {
+void ExprBuilder::markExternalUses (Inst *I) {
+  std::map<Inst *, unsigned> UsesCount;
+  std::unordered_set<Inst *> Visited;
+  std::vector<Inst *> Stack;
+  Stack.push_back(I);
+  while(!Stack.empty()) {
+    Inst* T = Stack.back();
+    Stack.pop_back();
+    for (auto Op: T->Ops) {
+      if (Op->K != Inst::Const && Op->K != Inst::Var
+          && Op->K != Inst::UntypedConst && Op->K != Inst::Phi) {
+
+        if (UsesCount.find(Op) == UsesCount.end())
+          UsesCount[Op] = 1;
+        else
+          UsesCount[Op]++;
+
+        if (Visited.insert(Op).second) {
+          Stack.push_back(Op);
+        }
+      }
+    }
+  }
+  for (auto U : UsesCount)
+    for (auto R : EBC.InstMap)
+      if (R.second == U.first && R.first->getNumUses() != U.second)
+        I->DepsWithExternalUses.insert(U.first);
+}
+
+Inst *ExprBuilder::build(Value *V, APInt DemandedBits) {
+  Inst *I = buildHelper(V);
+  I->DemandedBits = DemandedBits;
+  return I;
+}
+
+Inst *ExprBuilder::buildHelper(Value *V) {
   if (auto C = dyn_cast<Constant>(V)) {
     return buildConstant(C);
   } else if (auto ICI = dyn_cast<ICmpInst>(V)) {
@@ -501,18 +567,26 @@ Inst *ExprBuilder::build(Value *V) {
   return makeArrayRead(V);
 }
 
+Inst *ExprBuilder::get(Value *V, APInt DemandedBits) {
+  // Cache V if V is not found in InstMap
+  Inst *&E = EBC.InstMap[V];
+  if (!E)
+    E = build(V, DemandedBits);
+  if (E->K != Inst::Const && !E->hasOrigin(V))
+    E->Origins.push_back(V);
+  return E;
+}
+
 Inst *ExprBuilder::get(Value *V) {
   // Cache V if V is not found in InstMap
   Inst *&E = EBC.InstMap[V];
   if (!E) {
-    E = build(V);
+    unsigned Width = DL.getTypeSizeInBits(V->getType());
+    APInt DemandedBits = APInt::getAllOnesValue(Width);
+    E = build(V, DemandedBits);
   }
-  EBC.Origins.insert(std::pair<Inst *, Value *>(E, V));
-  E->DemandedBits = APInt::getAllOnesValue(E->Width);
-  if (HarvestDemandedBits) {
-    if (Instruction *I = dyn_cast<Instruction>(V))
-      E->DemandedBits = DB->getDemandedBits(I);
-  }
+  if (E->K != Inst::Const && !E->hasOrigin(V))
+    E->Origins.push_back(V);
   return E;
 }
 
@@ -727,17 +801,30 @@ std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
 }
 
 void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
+                           LazyValueInfo *LVI, ScalarEvolution *SE,
                            TargetLibraryInfo *TLI,
                            const ExprBuilderOptions &Opts, InstContext &IC,
                            ExprBuilderContext &EBC,
                            FunctionCandidateSet &Result) {
-  ExprBuilder EB(Opts, F.getParent(), LI, DB, TLI, IC, EBC);
+  ExprBuilder EB(Opts, F.getParent(), LI, DB, LVI, SE, TLI, IC, EBC);
 
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
     for (auto &I : BB) {
-      if (I.getType()->isIntegerTy())
-        BCS->Replacements.emplace_back(&I, InstMapping(EB.get(&I), 0));
+      if (!I.getType()->isIntegerTy())
+        continue;
+      if (I.hasNUses(0))
+        continue;
+      Inst *In;
+      if (HarvestDemandedBits) {
+        APInt DemandedBits = DB->getDemandedBits(&I);
+        In = EB.get(&I, DemandedBits);
+      } else {
+        In = EB.get(&I);
+      }
+      EB.markExternalUses(In);
+      BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
+      assert(EB.get(&I)->hasOrigin(&I));
     }
     if (!BCS->Replacements.empty()) {
       std::unordered_set<Block *> VisitedBlocks;
@@ -748,7 +835,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       auto BPCSets = AddBlockPCSets(BCS->BPCs, BPCVars);
 
       for (auto &R : BCS->Replacements) {
-        std::tie(R.BPCs, R.PCs) = 
+        std::tie(R.BPCs, R.PCs) =
           GetRelevantPCs(BCS->BPCs, BCS->PCs, BPCSets, PCSets, Vars, R.Mapping);
       }
 
@@ -774,6 +861,8 @@ public:
     Info.addRequired<LoopInfoWrapperPass>();
     Info.addRequired<DemandedBitsWrapperPass>();
     Info.addRequired<TargetLibraryInfoWrapperPass>();
+    Info.addRequired<LazyValueInfoWrapperPass>();
+    Info.addRequired<ScalarEvolutionWrapperPass>();
     Info.setPreservesAll();
   }
 
@@ -785,7 +874,13 @@ public:
     DemandedBits *DB = &getAnalysis<DemandedBitsWrapperPass>().getDemandedBits();
     if (!DB)
       report_fatal_error("getDemandedBits() failed");
-    ExtractExprCandidates(F, LI, DB, TLI, Opts, IC, EBC, Result);
+    LazyValueInfo *LVI = &getAnalysis<LazyValueInfoWrapperPass>().getLVI();
+    if (!LVI)
+      report_fatal_error("getLVI() failed");
+    ScalarEvolution *SE = &getAnalysis<ScalarEvolutionWrapperPass>().getSE();
+    if (!SE)
+      report_fatal_error("getSE() failed");
+    ExtractExprCandidates(F, LI, DB, LVI, SE, TLI, Opts, IC, EBC, Result);
     return false;
   }
 };
@@ -795,10 +890,11 @@ char ExtractExprCandidatesPass::ID = 0;
 }
 
 FunctionCandidateSet souper::ExtractCandidatesFromPass(
-    Function *F, const LoopInfo *LI, DemandedBits *DB, TargetLibraryInfo *TLI,
-    InstContext &IC, ExprBuilderContext &EBC, const ExprBuilderOptions &Opts) {
+    Function *F, const LoopInfo *LI, DemandedBits *DB, LazyValueInfo *LVI,
+    ScalarEvolution *SE, TargetLibraryInfo *TLI, InstContext &IC,
+    ExprBuilderContext &EBC, const ExprBuilderOptions &Opts) {
   FunctionCandidateSet Result;
-  ExtractExprCandidates(*F, LI, DB, TLI, Opts, IC, EBC, Result);
+  ExtractExprCandidates(*F, LI, DB, LVI, SE, TLI, Opts, IC, EBC, Result);
   return Result;
 }
 

@@ -18,15 +18,19 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/FoldingSet.h"
+#include "llvm/IR/ConstantRange.h"
+#include "llvm/IR/Value.h"
 #include <map>
 #include <memory>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace souper {
 
 const unsigned MaxPreds = 100000;
+const std::string ReservedConstPrefix = "reservedconst_";
 
 struct Inst;
 
@@ -101,6 +105,9 @@ struct Inst : llvm::FoldingSetNode {
     UMulWithOverflow,
     UMulO,
 
+    ReservedConst,
+    ReservedInst,
+
     None,
 } Kind;
 
@@ -111,11 +118,14 @@ struct Inst : llvm::FoldingSetNode {
   bool Available = true;
   llvm::APInt Val;
   std::string Name;
+  std::unordered_set<Inst *> DepsWithExternalUses;
   std::vector<Inst *> Ops;
   mutable std::vector<Inst *> OrderedOps;
+  std::vector<llvm::Value *> Origins;
 
   bool operator<(const Inst &I) const;
   const std::vector<Inst *> &orderedOps() const;
+  bool hasOrigin(llvm::Value *V) const;
 
   void Profile(llvm::FoldingSetNodeID &ID) const;
 
@@ -127,7 +137,9 @@ struct Inst : llvm::FoldingSetNode {
   static Kind getKind(std::string Name);
 
   static bool isAssociative(Kind K);
+  static bool isCmp(Kind K);
   static bool isCommutative(Kind K);
+  static bool isShift(Kind K);
   static int getCost(Kind K);
   llvm::APInt KnownZeros;
   llvm::APInt KnownOnes;
@@ -137,6 +149,7 @@ struct Inst : llvm::FoldingSetNode {
   bool Negative;
   unsigned NumSignBits;
   llvm::APInt DemandedBits;
+  llvm::ConstantRange Range=llvm::ConstantRange(1);
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
@@ -166,6 +179,7 @@ class ReplacementContext {
   llvm::DenseMap<Block *, std::string> BlockNames;
   std::map<std::string, Inst *> NameToInst;
   std::map<std::string, Block *> NameToBlock;
+  std::string printInstImpl(Inst *I, llvm::raw_ostream &Out, bool printNames, Inst *OrigI);
 
 public:
   void printPCs(const std::vector<InstMapping> &PCs,
@@ -192,25 +206,33 @@ class InstContext {
 
   std::vector<std::unique_ptr<Inst>> Insts;
   llvm::FoldingSet<Inst> InstSet;
+  unsigned ReservedConstCounter = 0;
 
 public:
   Inst *getConst(const llvm::APInt &I);
   Inst *getUntypedConst(const llvm::APInt &I);
+  Inst *getReservedConst();
+  Inst *getReservedInst(int Width);
 
+  Inst *createVar(unsigned Width, llvm::StringRef Name);
   Inst *createVar(unsigned Width, llvm::StringRef Name,
-                  llvm::APInt Zero=llvm::APInt(1, 0, false),
-                  llvm::APInt One=llvm::APInt(1, 0, false), bool NonZero=false,
-                  bool NonNegative=false, bool PowOfTwo=false, bool Negative=false,
-                  unsigned NumSignBits=1);
+                  llvm::ConstantRange Range,
+                  llvm::APInt Zero, llvm::APInt One,
+                  bool NonZero, bool NonNegative, bool PowOfTwo,
+                  bool Negative, unsigned NumSignBits);
   Block *createBlock(unsigned Preds);
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
 
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
                 bool Available=true);
+  Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
+                llvm::APInt DemandedBits, bool Available);
 };
 
-int cost(Inst *I);
+int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
+int instCount(Inst *I);
+int benefit(Inst *LHS, Inst *RHS);
 
 void PrintReplacement(llvm::raw_ostream &Out, const BlockPCs &BPCs,
                       const std::vector<InstMapping> &PCs, InstMapping Mapping,
@@ -232,6 +254,37 @@ void PrintReplacementRHS(llvm::raw_ostream &Out, Inst *RHS,
                          bool printNames = false);
 std::string GetReplacementRHSString(Inst *RHS, ReplacementContext &Context,
                                     bool printNames = false);
+
+void findCands(Inst *Root, std::vector<Inst *> &Guesses,
+               bool WidthMustMatch, bool FilterVars, int Max);
+
+Inst *getInstCopy(Inst *I, InstContext &IC,
+                  std::map<Inst *, Inst *> &InstCache,
+                  std::map<Block *, Block *> &BlockCache,
+                  std::map<Inst *, llvm::APInt> *ConstMap,
+                  bool CloneVars);
+
+Inst *instJoin(Inst *I, Inst *Reserved, Inst *NewInst, InstContext &IC);
+
+void findVars(Inst *Root, std::vector<Inst *> &Vars);
+
+bool hasReservedInst(Inst *Root);
+void getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts);
+
+void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
+                      std::map<Inst *, Inst *> &InstCache,
+                      std::map<Block *, Block *> &BlockCache,
+                      InstContext &IC,
+                      std::map<Inst *, llvm::APInt> *ConstMap,
+                      bool CloneVars);
+
+void separatePCs(const std::vector<InstMapping> &PCs,
+                 std::vector<InstMapping> &PCsCopy,
+                 std::map<Inst *, Inst *> &InstCache,
+                 std::map<Block *, Block *> &BlockCache,
+                 InstContext &IC,
+                 std::map<Inst *, llvm::APInt> *ConstMap,
+                 bool CloneVars);
 
 }
 

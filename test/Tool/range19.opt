@@ -1,0 +1,16 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; sign extension of non-wrapped range sign extends the upper and lower bound
+; CHECK: LGTM
+
+%0:i8 = var (range=[-10,100))
+%1:i16 = sext %0
+%low:i16 = sext -10:i8
+%up:i16 = sext 100:i8
+%2:i1 = slt %1, %up
+%3:i1 = sle %low, %1
+%4:i1 = and %2, %3
+cand %4 1

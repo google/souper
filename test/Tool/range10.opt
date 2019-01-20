@@ -1,0 +1,12 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -print-counterexample=false  %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: LGTM
+
+%0:i8 = var (range=[0,4))
+%1:i8 = shl 2, %0
+%2:i8 = var (knownBits=xxx00000)
+%3:i8 = and %1, %2
+cand %3 0

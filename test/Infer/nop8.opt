@@ -1,5 +1,9 @@
 ; REQUIRES: solver
-; RUN: %souper-check -infer-rhs -souper-infer-nop %solver %s | %FileCheck %s
+; RUN: %souper-check -infer-rhs -souper-infer-nop %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis %solver %s > %t2
+; RUN: %FileCheck %s < %t1
+; RUN: %FileCheck %s < %t2
+
 ; CHECK: Failed to infer RHS
 
 %0 = block 3
