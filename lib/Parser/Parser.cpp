@@ -585,6 +585,10 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   case Inst::Ctlz:
     MaxOps = MinOps = 1;
     break;
+  case Inst::FShl:
+  case Inst::FShr:
+    MaxOps = MinOps = 3;
+    break;
 
   default:
     llvm::report_fatal_error("unhandled");

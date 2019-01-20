@@ -234,6 +234,48 @@ TEST(ParserTest, Errors) {
       { "%0 = select 1:i1, 2:i32, 3:i64\n",
         "<input>:1:1: operands have different widths" },
 
+      { "%0 = fshl\n",
+        "<input>:2:1: unexpected token: ''" },
+      { "%0 = fshl 1:i1\n",
+        "<input>:1:1: expected 3 operands, found 1" },
+      { "%0 = fshl 1:i1, 2:i1\n",
+        "<input>:1:1: expected 3 operands, found 2" },
+      { "%0 = fshl 1:i2, 2:i1, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i1, 2:i2, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i1, 2:i1, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i2, 2:i2, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i2, 2:i1, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i1, 2:i2, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshl 1:i1, 2:i1, 3:i1, 4:i1\n",
+        "<input>:1:1: expected 3 operands, found 4" },
+
+      { "%0 = fshr\n",
+        "<input>:2:1: unexpected token: ''" },
+      { "%0 = fshr 1:i1\n",
+        "<input>:1:1: expected 3 operands, found 1" },
+      { "%0 = fshr 1:i1, 2:i1\n",
+        "<input>:1:1: expected 3 operands, found 2" },
+      { "%0 = fshr 1:i2, 2:i1, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i1, 2:i2, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i1, 2:i1, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i2, 2:i2, 3:i1\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i2, 2:i1, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i1, 2:i2, 3:i2\n",
+       "<input>:1:1: operands have different widths" },
+      { "%0 = fshr 1:i1, 2:i1, 3:i1, 4:i1\n",
+        "<input>:1:1: expected 3 operands, found 4" },
+
       { "%0 = zext 1:i1\n",
         "<input>:1:1: inst must have a width" },
       { "%0:i33 = zext 1:i1, 2:i32\n",
@@ -491,6 +533,38 @@ cand %2 1:i1
 %1:i32 = ctlz %0
 %2:i1 = eq 1:i32, %1
 cand %2 1:i1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshl %0, %1, 0:i32
+cand %2 %0
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshl %0, %1, 32:i32
+cand %2 %0
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshl %0, %1, 33:i32
+%3:i32 = fshl %0, %1, 1:i32
+cand %2 %3
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshr %0, %1, 0:i32
+cand %2 %1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshr %0, %1, 32:i32
+cand %2 %1
+)i",
+      R"i(%0:i32 = var ; 0
+%1:i32 = var ; 1
+%2:i32 = fshr %0, %1, 33:i32
+%3:i32 = fshr %0, %1, 1:i32
+cand %2 %3
 )i",
       R"i(%0:i32 = var ; 0
 %1:i32 = bswap %0

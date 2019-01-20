@@ -318,6 +318,13 @@ public:
       switch (I->K) {
       case Inst::Select:
         return Builder.CreateSelect(V0, V1, V2);
+      case Inst::FShl:
+      case Inst::FShr: {
+        Intrinsic::ID ID =
+            I->K == Inst::FShl ? Intrinsic::fshl : Intrinsic::fshr;
+        Function *F = Intrinsic::getDeclaration(M, ID, T);
+        return Builder.CreateCall(F, {V0, V1, V2});
+      }
       default:
         break;
       }
