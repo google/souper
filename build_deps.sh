@@ -24,6 +24,7 @@ hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
 llvm_branch=tags/RELEASE_700/final
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
+alive_repo=https://github.com/manasij7479/alive2.git
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
@@ -34,7 +35,7 @@ fi
 alivedir=third_party/alive2
 alive_builddir=$alivedir/build
 mkdir -p $alivedir $alive_builddir
-git clone git@github.com:manasij7479/alive2.git $alivedir/alive2
+git clone $alive_repo $alivedir/alive2
 
 if [ -n "`which ninja`" ] ; then
   (cd $alive_builddir && cmake ../alive2 -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
