@@ -125,7 +125,28 @@ find_library(HIREDIS_LIBRARY
 
 find_library(ALIVE_LIBRARY alive2 PATHS "${ALIVE_DIR}/build")
 
-find_library(Z3_LIBRARY z3)
+find_path(Z3_INCLUDE_DIRECTORY
+  NAMES
+  z3.h
+  z3++.h
+  PATHS
+  third_party/z3-install/include)
+
+include_directories(${Z3_INCLUDE_DIRECTORY})
+
+find_library(Z3_LIBRARY
+  NAMES
+  z3
+  PATHS
+  third_party/z3-install/lib)
+
+find_program(Z3
+  NAMES
+  z3
+  PATHS
+  third_party/z3-install/bin)
+
+set(TEST_SOLVER "-z3-path=${Z3}")
 
 set(SOUPER_CLANG_TOOL_FILES
   lib/ClangTool/Actions.cpp
@@ -313,7 +334,6 @@ if (NOT BUILD_CLANG_TOOL)
   set_target_properties(souperClangTool clang-souper PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
 endif()
 
-set(TEST_SOLVER "" CACHE STRING "Solver command line argument to use in tests, e.g. -stp-path=/path/to/stp")
 set(TEST_SYNTHESIS "" CACHE STRING "Enable additional, computationally intensive synthesis tests")
 set(TEST_LONG_DURATION_SYNTHESIS "" CACHE STRING "Enable long duration (> 10 min) synthesis tests")
 
