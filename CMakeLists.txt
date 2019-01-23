@@ -230,27 +230,24 @@ add_library(souperTool STATIC
   ${SOUPER_TOOL_FILES}
 )
 
-add_library(souperPass SHARED
-  ${KLEE_EXPR_FILES}
+set(SOUPER_SOURCES
   ${SOUPER_EXTRACTOR_FILES}
   ${SOUPER_INST_FILES}
   ${SOUPER_KVSTORE_FILES}
   ${SOUPER_PARSER_FILES}
   ${SOUPER_SMTLIB2_FILES}
   ${SOUPER_TOOL_FILES}
-  ${SOUPER_INFER_FILES}
+  ${SOUPER_INFER_FILES})
+
+add_library(souperPass SHARED
+  ${KLEE_EXPR_FILES}
+  ${SOUPER_SOURCES}
   lib/Pass/Pass.cpp
 )
 
 add_library(souperPassProfileAll SHARED
   ${KLEE_EXPR_FILES}
-  ${SOUPER_EXTRACTOR_FILES}
-  ${SOUPER_INST_FILES}
-  ${SOUPER_KVSTORE_FILES}
-  ${SOUPER_PARSER_FILES}
-  ${SOUPER_SMTLIB2_FILES}
-  ${SOUPER_TOOL_FILES}
-  ${SOUPER_INFER_FILES}
+  ${SOUPER_SOURCES}
   lib/Pass/Pass.cpp
 )
 target_compile_definitions(souperPassProfileAll PRIVATE DYNAMIC_PROFILE_ALL=1)
@@ -383,3 +380,5 @@ if (BUILD_CLANG_TOOL)
   configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang @ONLY)
   configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang++ @ONLY)
 endif()
+
+add_subdirectory(docs)
