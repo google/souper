@@ -31,6 +31,7 @@ import (
 	"syscall"
 	"text/template"
 	"time"
+	"fmt"
 
 	"github.com/gomodule/redigo/redis"
 )
@@ -676,5 +677,6 @@ func main() {
 	http.HandleFunc("/solve", ctx.solveHandler)
 	http.HandleFunc("/solve/json", ctx.solveHandler)
 
+	fmt.Println("Listening on port :8080")
 	http.ListenAndServe(":8080", nil)
 }
