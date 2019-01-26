@@ -40,6 +40,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 set(LLVM_LIBS "${LLVM_LIBS} ${LLVM_SYSTEM_LIBS}")
+string(STRIP ${LLVM_LIBS} LLVM_LIBS)
 
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --ldflags
