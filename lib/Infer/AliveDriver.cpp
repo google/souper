@@ -344,6 +344,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
         ExprCache[I->Ops[0]],
         ExprCache[I->Ops[1]],
         ExprCache[I->Ops[2]]);
+      return true;
     }
 
     #define BINOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {    \
