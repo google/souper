@@ -24,8 +24,9 @@ hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
 llvm_branch=tags/RELEASE_700/final
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
+alive_repo=https://github.com/manasij7479/alive2.git
 z3_repo=https://github.com/Z3Prover/z3.git
-z3_commit=502d0e37dd2926c1c52e33fa3ae91353d1058e25
+z3_branch=z3-4.8.4
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
@@ -33,32 +34,49 @@ if [ -n "$1" ] ; then
   shift
 fi
 
+z3_srcdir=$(pwd)/third_party/z3
+z3_installdir=$(pwd)/third_party/z3-install
+git clone $z3_repo $z3_srcdir
+mkdir -p $z3_installdir
+
+(cd $z3_srcdir && git checkout $z3_branch &&
+python scripts/mk_make.py --noomp --prefix=$z3_installdir &&
+cd build && make -j8 install)
+
+export PATH=$z3_installdir/bin:$PATH
+
 alivedir=third_party/alive2
 alive_builddir=$alivedir/build
 mkdir -p $alivedir $alive_builddir
-git clone git@github.com:manasij7479/alive2.git $alivedir/alive2
+git clone $alive_repo $alivedir/alive2
 
-if [ -n "`which ninja`" ] ; then
-  (cd $alive_builddir && cmake ../alive2 -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
-  ninja -C $alive_builddir
+if [ "$(uname)" == "Darwin" ]; then
+    shlib_extension=.dylib
 else
-  (cd $alive_builddir && cmake ../alive2 -DCMAKE_BUILD_TYPE=$llvm_build_type)
-  make -C $alive_builddir -j4
+    shlib_extension=.so
 fi
 
-llvmdir=third_party/llvm
-llvm_installdir=$(pwd)/$llvmdir/$llvm_build_type
-llvm_builddir=$(pwd)/$llvmdir/${llvm_build_type}-build
+if [ -n "`which ninja`" ] ; then
+  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/libz3$shlib_extension -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
+  ninja -C $alive_builddir
+else
+  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/libz3$shlib_extension -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type)
+  make -C $alive_builddir -j8
+fi
 
-svn co https://llvm.org/svn/llvm-project/llvm/${llvm_branch} $llvmdir
-svn co https://llvm.org/svn/llvm-project/cfe/${llvm_branch} $llvmdir/tools/clang
-svn co https://llvm.org/svn/llvm-project/compiler-rt/${llvm_branch} $llvmdir/projects/compiler-rt
-svn co https://llvm.org/svn/llvm-project/libcxx/${llvm_branch} $llvmdir/projects/libcxx
-svn co https://llvm.org/svn/llvm-project/libcxxabi/${llvm_branch} $llvmdir/projects/libcxxabi
+llvm_srcdir=third_party/llvm
+llvm_installdir=$(pwd)/${llvm_srcdir}/$llvm_build_type
+llvm_builddir=$(pwd)/${llvm_srcdir}/${llvm_build_type}-build
+
+svn co https://llvm.org/svn/llvm-project/llvm/${llvm_branch} ${llvm_srcdir}
+svn co https://llvm.org/svn/llvm-project/cfe/${llvm_branch} ${llvm_srcdir}/tools/clang
+svn co https://llvm.org/svn/llvm-project/compiler-rt/${llvm_branch} ${llvm_srcdir}/projects/compiler-rt
+svn co https://llvm.org/svn/llvm-project/libcxx/${llvm_branch} ${llvm_srcdir}/projects/libcxx
+svn co https://llvm.org/svn/llvm-project/libcxxabi/${llvm_branch} ${llvm_srcdir}/projects/libcxxabi
 # Disable the broken select -> logic optimizations
-patch $llvmdir/lib/Transforms/InstCombine/InstCombineSelect.cpp < patches/disable-instcombine-select-to-logic.patch
+patch ${llvm_srcdir}/lib/Transforms/InstCombine/InstCombineSelect.cpp < patches/disable-instcombine-select-to-logic.patch
 # Apply instcombine switch patch
-patch -d $llvmdir -p0 -i $(pwd)/patches/enable-instcombine-switch.patch
+patch -d ${llvm_srcdir} -p0 -i $(pwd)/patches/enable-instcombine-switch.patch
 
 mkdir -p $llvm_builddir
 
@@ -70,8 +88,8 @@ if [ -n "`which ninja`" ] ; then
   ninja -C $llvm_builddir install
 else
   (cd $llvm_builddir && cmake $cmake_flags "$@")
-  make -C $llvm_builddir -j4
-  make -C $llvm_builddir -j4 install
+  make -C $llvm_builddir -j8
+  make -C $llvm_builddir -j8 install
 fi
 
 # we want these but they don't get installed by default

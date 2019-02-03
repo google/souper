@@ -30,7 +30,7 @@ class AliveDriver {
 public:
   AliveDriver(Inst *LHS_, Inst *PreCondition_);
 
-  std::optional<int64_t> synthesizeConstant(souper::Inst *RHS);
+  std::map<Inst *, llvm::APInt> synthesizeConstants(souper::Inst *RHS);
 
   bool verify(Inst *RHS);
   ~AliveDriver() {

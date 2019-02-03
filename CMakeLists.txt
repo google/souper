@@ -8,9 +8,8 @@ if(NOT CMAKE_BUILD_TYPE)
       "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
 endif()
 
-find_program(LLVM_CONFIG_EXECUTABLE HINTS ${CMAKE_SOURCE_DIR}/third_party/llvm/${CMAKE_BUILD_TYPE}/bin
-                                    NAMES llvm-config DOC "llvm-config executable")
-if(LLVM_CONFIG_EXECUTABLE STREQUAL "LLVM_CONFIG_EXECUTABLE-NOTFOUND")
+set(LLVM_CONFIG_EXECUTABLE ${CMAKE_SOURCE_DIR}/third_party/llvm/${CMAKE_BUILD_TYPE}/bin/llvm-config)
+if(NOT EXISTS ${LLVM_CONFIG_EXECUTABLE})
   message(FATAL_ERROR "llvm-config could not be found!")
 endif()
 
@@ -40,6 +39,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 set(LLVM_LIBS "${LLVM_LIBS} ${LLVM_SYSTEM_LIBS}")
+string(STRIP ${LLVM_LIBS} LLVM_LIBS)
 
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --ldflags
@@ -125,9 +125,10 @@ find_library(HIREDIS_LIBRARY
 
 find_path(Z3_INCLUDE_DIRECTORY
   NAMES
+  z3.h
   z3++.h
   PATHS
-  third_party/z3/install/include)
+  third_party/z3-install/include)
 
 include_directories(${Z3_INCLUDE_DIRECTORY})
 
@@ -135,8 +136,15 @@ find_library(Z3_LIBRARY
   NAMES
   z3
   PATHS
-  third_party/z3/install/lib)
-find_library(Z3_LIBRARY z3)
+  third_party/z3-install/lib)
+
+find_program(Z3
+  NAMES
+  z3
+  PATHS
+  third_party/z3-install/bin)
+
+set(TEST_SOLVER "-z3-path=${Z3}")
 
 find_library(ALIVE_LIBRARY alive2 PATHS "${ALIVE_DIR}/build")
 
@@ -327,7 +335,6 @@ if (NOT BUILD_CLANG_TOOL)
   set_target_properties(souperClangTool clang-souper PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
 endif()
 
-set(TEST_SOLVER "" CACHE STRING "Solver command line argument to use in tests, e.g. -stp-path=/path/to/stp")
 set(TEST_SYNTHESIS "" CACHE STRING "Enable additional, computationally intensive synthesis tests")
 set(TEST_LONG_DURATION_SYNTHESIS "" CACHE STRING "Enable long duration (> 10 min) synthesis tests")
 

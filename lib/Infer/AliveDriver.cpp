@@ -127,13 +127,18 @@ bool startsWith(const std::string &pre, const std::string &str) {
   return std::equal(pre.begin(), pre.end(), str.begin());
 }
 
-void getReservedConsts(souper::Inst *I, std::set<std::string> &Result) {
+void getReservedConsts(souper::Inst *I,
+                       std::map<std::string, souper::Inst *> &Result,
+                       std::set<souper::Inst *> &Visited) {
   if (startsWith("reservedconst_", I->Name)) {
-    Result.insert(I->Name);
+    Result["%" + I->Name] = I;
   }
   for (auto &&Op : I->Ops) {
-    getReservedConsts(Op, Result);
+    if (Visited.find(Op) == Visited.end()) {
+      getReservedConsts(Op, Result, Visited);
+    }
   }
+  Visited.insert(I);
 }
 
 struct ReturnLHSRAII {
@@ -145,8 +150,9 @@ struct ReturnLHSRAII {
 };
 }
 
-util::Errors synthesizeConstantUsingSolver(tools::Transform &t,
-                                           int64_t &result) {
+std::map<souper::Inst *, llvm::APInt>
+synthesizeConstantUsingSolver(tools::Transform &t,
+  std::map<std::string, souper::Inst *> &SouperConsts) {
 
   IR::Value::reset_gbl_id();
   IR::State SrcState(t.src), tgt_state(t.tgt);
@@ -167,7 +173,7 @@ util::Errors synthesizeConstantUsingSolver(tools::Transform &t,
   };
 
   std::set<smt::expr> Vars;
-  std::set<smt::expr> Consts;
+  std::map<std::string, smt::expr> SMTConsts;
 
   for (auto &[var, val] : SrcState.getValues()) {
     auto &name = var->getName();
@@ -182,12 +188,14 @@ util::Errors synthesizeConstantUsingSolver(tools::Transform &t,
     if (startsWith("%reserved", name)) {
       auto app = val.first.value.isApp();
       assert(app);
-      Consts.insert(Z3_get_app_arg(smt::ctx(), app, 1));
+      SMTConsts[name] = (Z3_get_app_arg(smt::ctx(), app, 1));
     }
   }
 
   auto SimpleConstExistsCheck =
     smt::expr::mkForAll(Vars, SrcRet.first.value == TgtRet.first.value);
+
+  std::map<souper::Inst *, llvm::APInt> SynthesisResult;
 
   smt::Solver::check({{preprocess(t, QVars, SrcRet.second,
                        std::move(SimpleConstExistsCheck)),
@@ -195,14 +203,18 @@ util::Errors synthesizeConstantUsingSolver(tools::Transform &t,
     if (R.isUnsat()) {
       ErrF(R, true, "Value mismatch");
     } else if (R.isSat()) {
-      result = R.getModel().getInt(*Consts.begin());
+      auto &&Model = R.getModel();
+      for (auto &[name, expr] : SMTConsts) {
+        auto *I = SouperConsts[name];
+        SynthesisResult[I] = llvm::APInt(I->Width, Model.getInt(expr));
+      }
       return;
     } else {
       ErrF(R, true, "Unknown/Invalid Result, investigate.");
     }
   }}});
 
-  return Errs;
+  return SynthesisResult;
 }
 
 souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_)
@@ -217,36 +229,28 @@ souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_)
 }
 
 //TODO: Return an APInt when alive supports it
-std::optional<int64_t>
-souper::AliveDriver::synthesizeConstant(souper::Inst *RHS) {
+std::map<souper::Inst *, llvm::APInt>
+souper::AliveDriver::synthesizeConstants(souper::Inst *RHS) {
+  std::map<Inst *, llvm::APInt> Result;
   InstNumbers = 0;
-  std::set<std::string> Consts;
-  getReservedConsts(RHS, Consts);
+  std::map<std::string, Inst *> Consts;
+  std::set<Inst *> Visited;
+  getReservedConsts(RHS, Consts, Visited);
   assert(!Consts.empty());
-  if (Consts.size() == 1) {
-    RExprCache.clear();
-    IR::Function RHSF;
-    if (!translateRoot(RHS, nullptr, RHSF, RExprCache)) {
-      llvm::errs() << "Failed to translate RHS.\n";
-      // TODO: Eventually turn this into an assertion
-      return std::nullopt;
-    }
-    tools::Transform t;
-    ReturnLHSRAII foo{t, LHSF};
-    t.src = std::move(LHSF);
-    t.tgt = std::move(RHSF);
-    tools::TransformVerify tv(t, /*check_each_var=*/false);
-    int64_t result = 0;
-    if (auto errs = synthesizeConstantUsingSolver(t, result)) {
-      return std::nullopt; // TODO: Encode errs into ErrorCode
-    } else {
-      return {result};
-    }
-  } else {
-    if (!Consts.empty())
-      llvm::errs() << "Multiple constants unimplemented.\n";
-    return std::nullopt;
+  RExprCache.clear();
+  IR::Function RHSF;
+  if (!translateRoot(RHS, nullptr, RHSF, RExprCache)) {
+    llvm::errs() << "Failed to translate RHS.\n";
+    // TODO: Eventually turn this into an assertion
+    return {};
   }
+  tools::Transform t;
+  ReturnLHSRAII foo{t, LHSF};
+  t.src = std::move(LHSF);
+  t.tgt = std::move(RHSF);
+  tools::TransformVerify tv(t, /*check_each_var=*/false);
+
+  return synthesizeConstantUsingSolver(t, Consts);
 }
 
 
@@ -340,6 +344,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
         ExprCache[I->Ops[0]],
         ExprCache[I->Ops[1]],
         ExprCache[I->Ops[2]]);
+      return true;
     }
 
     #define BINOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {    \
