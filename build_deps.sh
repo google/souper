@@ -80,12 +80,7 @@ cp $llvm_builddir/lib/libgtest_main.a $llvm_installdir/lib
 cp $llvm_builddir/lib/libgtest.a $llvm_installdir/lib
 
 kleedir=third_party/klee
-
-if [ -d third_party/klee/.git ] ; then
-  (cd $kleedir && git fetch)
-else
-  git clone -b $klee_branch $klee_repo $kleedir
-fi
+git clone -b $klee_branch $klee_repo $kleedir
 
 hiredisdir=third_party/hiredis
 
