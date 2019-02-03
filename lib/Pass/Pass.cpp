@@ -48,7 +48,7 @@ using namespace llvm;
 
 namespace {
 std::unique_ptr<Solver> S;
-unsigned ReplaceCount;
+unsigned ReplaceCount, Replacements;
 KVStore *KV;
 
 static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
@@ -460,6 +460,7 @@ public:
 	if (DynamicProfile)
           dynamicProfile(F, Cand);
         I->replaceAllUsesWith(NewVal);
+        Replacements++;
 
 	if (DebugLevel > 2) {
           errs() << "\nFunction after replacement:\n\n";
@@ -489,6 +490,8 @@ public:
     for (auto *F : FL)
       if (!F->isDeclaration())
         Changed = runOnFunction(F) || Changed;
+    if (DebugLevel > 1)
+      errs() << "\nTotal of " << Replacements << " replacements done on this module\n";
     return Changed;
   }
 
