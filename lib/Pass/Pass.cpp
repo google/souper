@@ -394,6 +394,17 @@ public:
     }
 
     for (auto &Cand : CandMap) {
+
+      if (ReplaceCount < FirstReplace || ReplaceCount > LastReplace) {
+        if (DebugLevel > 1)
+          errs() << "Skipping this replacement (number " << ReplaceCount << ")\n";
+        if (ReplaceCount < std::numeric_limits<unsigned>::max())
+          ++ReplaceCount;
+        continue;
+      }
+      if (ReplaceCount < std::numeric_limits<unsigned>::max())
+        ++ReplaceCount;
+
       if (StaticProfile) {
         std::string Str;
         llvm::raw_string_ostream Loc(Str);
@@ -422,60 +433,52 @@ public:
       if (!Cand.Mapping.RHS)
         continue;
 
-      if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
+      Instruction *I = Cand.Origin;
+      assert(Cand.Mapping.LHS->hasOrigin(I));
+      IRBuilder<> Builder(I);
 
-	Instruction *I = Cand.Origin;
-	assert(Cand.Mapping.LHS->hasOrigin(I));
-	IRBuilder<> Builder(I);
-
-	Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
+      Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
                                ReplacedValues, Builder, F->getParent());
-	if (!NewVal) {
-	  if (DebugLevel > 1)
-	    errs() << "\"\n; replacement failed\n";
-	  continue;
-	}
 
-	ReplacedValues[Cand.Mapping.LHS] = NewVal;
-
-	if (DebugLevel > 1) {
-          if (DebugLevel > 2) {
-            errs() << "\nFunction before replacement:\n";
-            F->print(errs());
-          }
-	  errs() << "\n";
-	  errs() << "; Replacing \"";
-	  I->print(errs());
-	  errs() << "\"\n; from \"";
-	  I->getDebugLoc().print(errs());
-	  errs() << "\"\n; with \"";
-	  NewVal->print(errs());
-	  errs() << "\" in:\n";
-	  PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
-	  errs() << "\"\n; with \"";
-	  NewVal->print(errs());
-	  errs() << "\"\n";
-	}
-
-	if (DynamicProfile)
-          dynamicProfile(F, Cand);
-        I->replaceAllUsesWith(NewVal);
-        Replacements++;
-
-	if (DebugLevel > 2) {
-          errs() << "\nFunction after replacement:\n\n";
-          F->print(errs());
-          errs() << "\n";
-        }
-
-        Changed = true;
-      } else {
+      if (!NewVal) {
         if (DebugLevel > 1)
-          errs() << "Skipping this replacement (number " << ReplaceCount <<
-            ")\n";
+          errs() << "\"\n; replacement failed\n";
+        continue;
       }
-      if (ReplaceCount < std::numeric_limits<unsigned>::max())
-        ++ReplaceCount;
+
+      ReplacedValues[Cand.Mapping.LHS] = NewVal;
+
+      if (DebugLevel > 1) {
+        if (DebugLevel > 2) {
+          errs() << "\nFunction before replacement:\n";
+          F->print(errs());
+        }
+        errs() << "\n";
+        errs() << "; Replacing \"";
+        I->print(errs());
+        errs() << "\"\n; from \"";
+        I->getDebugLoc().print(errs());
+        errs() << "\"\n; with \"";
+        NewVal->print(errs());
+        errs() << "\" in:\n";
+        PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
+        errs() << "\"\n; with \"";
+        NewVal->print(errs());
+        errs() << "\"\n";
+      }
+
+      if (DynamicProfile)
+        dynamicProfile(F, Cand);
+
+      I->replaceAllUsesWith(NewVal);
+
+      if (DebugLevel > 2) {
+        errs() << "\nFunction after replacement:\n\n";
+        F->print(errs());
+        errs() << "\n";
+      }
+
+      Changed = true;
     }
 
     return Changed;
