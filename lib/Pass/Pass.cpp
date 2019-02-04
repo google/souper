@@ -439,9 +439,6 @@ public:
 
       // here we finally commit to having a viable replacement
 
-      errs() << "FirstReplace = " << FirstReplace << "\n";
-      errs() << "LastReplace = " << LastReplace << "\n";
-
       if (ReplacementIdx < FirstReplace || ReplacementIdx > LastReplace) {
         if (DebugLevel > 1)
           errs() << "Skipping this replacement (number " << ReplacementIdx << ")\n";
@@ -467,7 +464,7 @@ public:
         I->getDebugLoc().print(errs());
         errs() << "\"\n; with \"";
         NewVal->print(errs());
-        errs() << "\" in:\n";
+        errs() << "\" in:\n\"";
         PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
         errs() << "\"\n; with \"";
         NewVal->print(errs());
