@@ -48,7 +48,7 @@ using namespace llvm;
 
 namespace {
 std::unique_ptr<Solver> S;
-unsigned ReplaceCount, Replacements;
+unsigned ReplacementIdx, ReplacementsDone;
 KVStore *KV;
 
 static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
@@ -395,16 +395,6 @@ public:
 
     for (auto &Cand : CandMap) {
 
-      if (ReplaceCount < FirstReplace || ReplaceCount > LastReplace) {
-        if (DebugLevel > 1)
-          errs() << "Skipping this replacement (number " << ReplaceCount << ")\n";
-        if (ReplaceCount < std::numeric_limits<unsigned>::max())
-          ++ReplaceCount;
-        continue;
-      }
-      if (ReplaceCount < std::numeric_limits<unsigned>::max())
-        ++ReplaceCount;
-
       if (StaticProfile) {
         std::string Str;
         llvm::raw_string_ostream Loc(Str);
@@ -440,11 +430,28 @@ public:
       Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
                                ReplacedValues, Builder, F->getParent());
 
+      // TODO can we assert that getValue() succeeds?
       if (!NewVal) {
         if (DebugLevel > 1)
           errs() << "\"\n; replacement failed\n";
         continue;
       }
+
+      // here we finally commit to having a viable replacement
+
+      errs() << "FirstReplace = " << FirstReplace << "\n";
+      errs() << "LastReplace = " << LastReplace << "\n";
+
+      if (ReplacementIdx < FirstReplace || ReplacementIdx > LastReplace) {
+        if (DebugLevel > 1)
+          errs() << "Skipping this replacement (number " << ReplacementIdx << ")\n";
+        if (ReplacementIdx < std::numeric_limits<unsigned>::max())
+          ++ReplacementIdx;
+        continue;
+      }
+      if (ReplacementIdx < std::numeric_limits<unsigned>::max())
+        ++ReplacementIdx;
+      ReplacementsDone++;
 
       ReplacedValues[Cand.Mapping.LHS] = NewVal;
 
@@ -494,7 +501,7 @@ public:
       if (!F->isDeclaration())
         Changed = runOnFunction(F) || Changed;
     if (DebugLevel > 1)
-      errs() << "\nTotal of " << Replacements << " replacements done on this module\n";
+      errs() << "\nTotal of " << ReplacementsDone << " replacements done on this module\n";
     return Changed;
   }
 
