@@ -16,7 +16,8 @@
 // instruction occurs in LHS / RHS. The instructions are ordered according to
 // the enum in Inst.h
 // Output: first line is number of occurrences of each
-// instruction on the LHS, second is same for RHS
+// instruction on the LHS, second is same for RHS.
+// The other option is to print the difference between LHS and RHS.
 
 #include "souper/Parser/Parser.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -44,8 +45,13 @@ void instCount(Inst *I, std::map<int, int> &Result) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2)
+  bool DumpDiff = false;
+  int DiffArgPos = 2;
+  if (argc < 2)
     std::cerr << "Please specify input file!" << '\n';
+
+  if (DiffArgPos < argc && strcmp(argv[DiffArgPos], "-diff") == 0)
+    DumpDiff = true;
 
   auto MB = MemoryBuffer::getFileOrSTDIN(argv[1]);
 
@@ -67,27 +73,25 @@ int main(int argc, char **argv) {
     for (const auto &R : Reps) {
       instCount(R.Mapping.LHS, LHSResult);
       instCount(R.Mapping.RHS, RHSResult);
-
-      for (const auto &PC : R.PCs) {
-        instCount(PC.LHS, LHSResult);
-        instCount(PC.RHS, RHSResult);
-      }
-
-      for (const auto &BPC : R.BPCs) {
-        instCount(BPC.PC.LHS, LHSResult);
-        instCount(BPC.PC.RHS, RHSResult);
-      }
     }
 
-    for (Inst::Kind i = Inst::Const; i <= Inst::None;
-         i = static_cast<Inst::Kind>(static_cast<int>(i) + 1))
-      std::cout << LHSResult[i] << (i != Inst::None ? "," : "");
-    std::cout << std::endl;
+    if (!DumpDiff) {
+      for (Inst::Kind i = Inst::Const; i <= Inst::None;
+           i = static_cast<Inst::Kind>(static_cast<int>(i) + 1))
+        std::cout << LHSResult[i] << (i != Inst::None ? "," : "");
+      std::cout << std::endl;
 
-    for (Inst::Kind i = Inst::Const; i <= Inst::None;
-         i = static_cast<Inst::Kind>(static_cast<int>(i) + 1))
-      std::cout << RHSResult[i] << (i != Inst::None ? "," : "");
-    std::cout << std::endl;
+      for (Inst::Kind i = Inst::Const; i <= Inst::None;
+           i = static_cast<Inst::Kind>(static_cast<int>(i) + 1))
+        std::cout << RHSResult[i] << (i != Inst::None ? "," : "");
+      std::cout << std::endl;
+    }
+    else {
+      for (Inst::Kind i = Inst::Const; i <= Inst::None;
+           i = static_cast<Inst::Kind>(static_cast<int>(i) + 1))
+        std::cout << (LHSResult[i] - RHSResult[i]) << (i != Inst::None ? "," : "");
+      std::cout << std::endl;
+    }
   }
   else {
     std::cerr << MB.getError().message() << '\n';
