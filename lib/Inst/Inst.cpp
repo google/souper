@@ -507,6 +507,8 @@ void Inst::Profile(llvm::FoldingSetNodeID &ID) const {
     ID.AddPointer(B);
     break;
   default:
+    if (!DemandedBits.isAllOnesValue())
+      ID.Add(DemandedBits);
     break;
   }
 
