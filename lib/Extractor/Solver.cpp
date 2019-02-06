@@ -75,7 +75,7 @@ public:
 
   std::error_code infer(const BlockPCs &BPCs,
                         const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, InstContext &IC, CandidateType T) override {
+                        Inst *LHS, Inst *&RHS, InstContext &IC) override {
     std::error_code EC;
 
     /*
@@ -148,7 +148,9 @@ public:
       }
     }
 
-    if (T == CandidateType::HarvestedFromUse) return EC;
+    // Do not do further synthesis if LHS is harvested from uses.
+    if (LHS->HarvestKind == HarvestType::HarvestedFromUse)
+      return EC;
 
     if (InferNop) {
       std::vector<Inst *> Guesses;
@@ -283,13 +285,13 @@ public:
 
   std::error_code infer(const BlockPCs &BPCs,
                         const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, InstContext &IC, CandidateType T) override {
+                        Inst *LHS, Inst *&RHS, InstContext &IC) override {
     ReplacementContext Context;
     std::string Repl = GetReplacementLHSString(BPCs, PCs, LHS, Context);
     const auto &ent = InferCache.find(Repl);
     if (ent == InferCache.end()) {
       ++MemMissesInfer;
-      std::error_code EC = UnderlyingSolver->infer(BPCs, PCs, LHS, RHS, IC, T);
+      std::error_code EC = UnderlyingSolver->infer(BPCs, PCs, LHS, RHS, IC);
       std::string RHSStr;
       if (!EC && RHS) {
         RHSStr = GetReplacementRHSString(RHS, Context);
@@ -353,7 +355,7 @@ public:
 
   std::error_code infer(const BlockPCs &BPCs,
                         const std::vector<InstMapping> &PCs,
-                        Inst *LHS, Inst *&RHS, InstContext &IC, CandidateType T) override {
+                        Inst *LHS, Inst *&RHS, InstContext &IC) override {
     ReplacementContext Context;
     std::string LHSStr = GetReplacementLHSString(BPCs, PCs, LHS, Context);
     if (LHSStr.length() > MaxLHSSize)
@@ -378,7 +380,7 @@ public:
         KV->hSet(LHSStr, "result", "");
         return std::error_code();
       }
-      std::error_code EC = UnderlyingSolver->infer(BPCs, PCs, LHS, RHS, IC, T);
+      std::error_code EC = UnderlyingSolver->infer(BPCs, PCs, LHS, RHS, IC);
       std::string RHSStr;
       if (!EC && RHS) {
         RHSStr = GetReplacementRHSString(RHS, Context);

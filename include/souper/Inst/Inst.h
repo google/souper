@@ -29,6 +29,8 @@
 
 namespace souper {
 
+enum class HarvestType { HarvestedFromDef, HarvestedFromUse };
+
 const unsigned MaxPreds = 100000;
 const std::string ReservedConstPrefix = "reservedconst_";
 
@@ -151,6 +153,7 @@ struct Inst : llvm::FoldingSetNode {
   bool Negative;
   unsigned NumSignBits;
   llvm::APInt DemandedBits;
+  HarvestType HarvestKind;
   llvm::ConstantRange Range=llvm::ConstantRange(1);
 };
 

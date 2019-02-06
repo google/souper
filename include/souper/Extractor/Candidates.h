@@ -38,11 +38,9 @@ class Value;
 
 namespace souper {
 
-enum class CandidateType { HarvestedFromDef, HarvestedFromUse };
-
 struct CandidateReplacement {
-  CandidateReplacement(llvm::Instruction *Origin, InstMapping Mapping, CandidateType T)
-  : Origin(Origin), Mapping(Mapping), Type(T) {}
+  CandidateReplacement(llvm::Instruction *Origin, InstMapping Mapping)
+  : Origin(Origin), Mapping(Mapping) {}
 
   /// The instruction from which the candidate was derived.
   llvm::Instruction *Origin;
@@ -57,8 +55,6 @@ struct CandidateReplacement {
   /// A BlockPC has the same semantics as a PC, except that the PC only applies
   /// if the given predecessor of the given block is chosen.
   BlockPCs BPCs;
-
-  CandidateType Type;
 
   void printFunction(llvm::raw_ostream &Out) const;
   void printLHS(llvm::raw_ostream &Out, ReplacementContext &Context,

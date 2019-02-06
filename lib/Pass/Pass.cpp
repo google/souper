@@ -411,7 +411,7 @@ public:
         }
         if (std::error_code EC =
             S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
-                     Cand.Mapping.RHS, IC, Cand.Type)) {
+                     Cand.Mapping.RHS, IC)) {
           if (EC == std::errc::timed_out ||
               EC == std::errc::value_too_large) {
             continue;
@@ -473,7 +473,7 @@ public:
         if (DynamicProfile)
           dynamicProfile(F, Cand);
 
-        if (Cand.Type == CandidateType::HarvestedFromDef) {
+        if (Cand.Mapping.LHS->HarvestKind == HarvestType::HarvestedFromDef) {
           I->replaceAllUsesWith(NewVal);
         } else {
           for (llvm::Value::use_iterator UI = I->use_begin();
