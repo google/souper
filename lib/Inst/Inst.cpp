@@ -787,7 +787,8 @@ int souper::benefit(Inst *LHS, Inst *RHS) {
 void souper::PrintReplacement(llvm::raw_ostream &Out,
                               const BlockPCs &BPCs,
                               const std::vector<InstMapping> &PCs,
-                              InstMapping Mapping, bool printNames) {
+                              InstMapping Mapping,
+                              bool printNames) {
   assert(Mapping.LHS);
   assert(Mapping.RHS);
 
@@ -796,18 +797,22 @@ void souper::PrintReplacement(llvm::raw_ostream &Out,
   Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(Mapping.LHS, Out, printNames);
   std::string RRef = Context.printInst(Mapping.RHS, Out, printNames);
+  Out << "cand " << SRef << " " << RRef;
   if (!Mapping.LHS->DemandedBits.isAllOnesValue()) {
-    Out << "cand " << SRef << " " << RRef << " (" << "demandedBits="
-        << Inst::getDemandedBitsString(Mapping.LHS->DemandedBits)
-        << ")" << '\n';
-  } else {
-    Out << "cand " << SRef << " " << RRef << '\n';
+    Out<< " (" << "demandedBits="
+       << Inst::getDemandedBitsString(Mapping.LHS->DemandedBits)
+       << ")";
   }
+  if (Mapping.LHS->HarvestKind == HarvestType::HarvestedFromUse) {
+    Out << " (harvestedFromUse)";
+  }
+  Out << "\n";
 }
 
 std::string souper::GetReplacementString(const BlockPCs &BPCs,
                                          const std::vector<InstMapping> &PCs,
-                                         InstMapping Mapping, bool printNames) {
+                                         InstMapping Mapping,
+                                         bool printNames) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
   PrintReplacement(SS, BPCs, PCs, Mapping, printNames);
@@ -825,13 +830,17 @@ void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
   Context.printPCs(PCs, Out, printNames);
   Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(LHS, Out, printNames);
+
+  Out << "infer " << SRef;
   if (!LHS->DemandedBits.isAllOnesValue()) {
-    Out << "infer " << SRef << " (" << "demandedBits="
-        << Inst::getDemandedBitsString(LHS->DemandedBits)
-        << ")" << '\n';
-  } else {
-    Out << "infer " << SRef << '\n';
+    Out<< " (" << "demandedBits="
+       << Inst::getDemandedBitsString(LHS->DemandedBits)
+       << ")";
   }
+  if (LHS->HarvestKind == HarvestType::HarvestedFromUse) {
+    Out << " (harvestedFromUse)";
+  }
+  Out << "\n";
 }
 
 std::string souper::GetReplacementLHSString(const BlockPCs &BPCs,

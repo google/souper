@@ -827,12 +827,13 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       // Harvest Uses (Operands)
       if (HarvestUses) {
         for (auto &Op : I.operands()) {
+          // TODO: support regular values
           if (auto U = dyn_cast<Instruction>(Op)){
             if (U->getType()->isIntegerTy()) {
               Inst *In = EB.get(U);
+              In->HarvestKind = HarvestType::HarvestedFromUse;
               EB.markExternalUses(In);
-              BCS->Replacements.emplace_back(U, InstMapping(In, 0),
-                                             CandidateType::HarvestedFromUse);
+              BCS->Replacements.emplace_back(U, InstMapping(In, 0));
               assert(EB.get(U)->hasOrigin(U));
             }
           }
@@ -851,9 +852,9 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       } else {
         In = EB.get(&I);
       }
+      In->HarvestKind = HarvestType::HarvestedFromDef;
       EB.markExternalUses(In);
-      BCS->Replacements.emplace_back(&I, InstMapping(In, 0),
-                                     CandidateType::HarvestedFromDef);
+      BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
       assert(EB.get(&I)->hasOrigin(&I));
     }
     if (!BCS->Replacements.empty()) {
