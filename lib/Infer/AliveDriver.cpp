@@ -70,7 +70,7 @@ public:
   template <typename T>
   void assume(T &&V) {
     auto AI = std::make_unique<IR::Assume>(*std::move(V));
-    F.getBB("").addIntr(std::move(AI));
+    F.getBB("").addInstr(std::move(AI));
   }
 
   template <typename A>
@@ -87,7 +87,7 @@ private:
   template <typename T>
   IR::Value *append(T &&p) {
     auto ptr = p.get();
-    F.getBB("").addIntr(std::move(p));
+    F.getBB("").addInstr(std::move(p));
     return ptr;
   }
 
