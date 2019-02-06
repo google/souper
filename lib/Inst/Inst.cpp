@@ -787,8 +787,7 @@ int souper::benefit(Inst *LHS, Inst *RHS) {
 void souper::PrintReplacement(llvm::raw_ostream &Out,
                               const BlockPCs &BPCs,
                               const std::vector<InstMapping> &PCs,
-                              InstMapping Mapping,
-                              bool printNames) {
+                              InstMapping Mapping, bool printNames) {
   assert(Mapping.LHS);
   assert(Mapping.RHS);
 
@@ -811,8 +810,7 @@ void souper::PrintReplacement(llvm::raw_ostream &Out,
 
 std::string souper::GetReplacementString(const BlockPCs &BPCs,
                                          const std::vector<InstMapping> &PCs,
-                                         InstMapping Mapping,
-                                         bool printNames) {
+                                         InstMapping Mapping, bool printNames) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
   PrintReplacement(SS, BPCs, PCs, Mapping, printNames);
