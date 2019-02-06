@@ -401,8 +401,8 @@ public:
           std::string HField = "sprofile " + Loc.str();
           ReplacementContext Context;
           KV->hIncrBy(GetReplacementLHSString(Cand.BPCs, Cand.PCs,
-                                              Cand.Mapping.LHS, Context),
-                      HField, 1);
+                                              Cand.Mapping.LHS,
+                                              Context), HField, 1);
         }
         if (DynamicProfileAll) {
           dynamicProfile(F, Cand);
