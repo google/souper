@@ -370,6 +370,7 @@ public:
     if (DebugLevel > 1) {
       errs() << "\n";
       errs() << "; Listing all replacements for " << FunctionName << "\n";
+      errs() << "; Using solver: " << S->getName() << '\n';
     }
 
     for (auto &B : CS.Blocks) {
@@ -386,11 +387,6 @@ public:
         AddToCandidateMap(CandMap, R);
       }
 
-      if (DebugLevel > 1) {
-        errs() << "\n";
-        errs() << "; Listing applied replacements for " << FunctionName << "\n";
-        errs() << "; Using solver: " << S->getName() << '\n';
-      }
 
       for (auto &Cand : CandMap) {
 
@@ -485,14 +481,14 @@ public:
           }
         }
 
-        if (DebugLevel > 2) {
-          errs() << "\nFunction after replacement:\n\n";
-          F->print(errs());
-          errs() << "\n";
-        }
-
         Changed = true;
       }
+    }
+
+    if (DebugLevel > 2) {
+      errs() << "\nFunction after replacement:\n\n";
+      F->print(errs());
+      errs() << "\n";
     }
 
     return Changed;
