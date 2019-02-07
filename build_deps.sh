@@ -24,6 +24,7 @@ hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
 llvm_branch=tags/RELEASE_700/final
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
+alive_commit=b31fccabc8e4fa2d780d55a9c6099f252decb7bd
 alive_repo=https://github.com/manasij7479/alive2.git
 z3_repo=https://github.com/Z3Prover/z3.git
 z3_branch=z3-4.8.4
@@ -49,6 +50,7 @@ alivedir=third_party/alive2
 alive_builddir=$alivedir/build
 mkdir -p $alivedir $alive_builddir
 git clone $alive_repo $alivedir/alive2
+git -C $alivedir/alive2 checkout $alive_commit
 
 if [ "$(uname)" == "Darwin" ]; then
     shlib_extension=.dylib
