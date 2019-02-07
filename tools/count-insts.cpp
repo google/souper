@@ -28,32 +28,39 @@
 using namespace souper;
 using namespace llvm;
 
+static cl::opt<std::string> InputFilename(cl::Positional,
+                                          cl::desc("input file"),
+                                          cl::init("-"));
+
+static cl::opt<bool> DumpDiff("diff",
+                              cl::desc("Print output as difference between LHS abd RHS"),
+                              cl::init(false));
+
+static cl::opt<bool> StopAtExtUse("stop-at-ext-use",
+                              cl::desc("Stop DAG traversing if instruction has external uses"),
+                              cl::init(false));
+
 void countHelper(Inst *I, std::set<Inst *> &Visited,
-                 std::map<int, int> &Result) {
+                 std::map<int, int> &Result, Inst *OrigI) {
   if (!Visited.insert(I).second)
     return;
 
   ++Result[I->K];
 
   for (auto Op : I->Ops)
-    countHelper(Op, Visited, Result);
+    if (!(StopAtExtUse && OrigI->DepsWithExternalUses.find(Op) != OrigI->DepsWithExternalUses.end()))
+      countHelper(Op, Visited, Result, OrigI);
 }
 
 void instCount(Inst *I, std::map<int, int> &Result) {
   std::set<Inst *> Visited;
-  return countHelper(I, Visited, Result);
+  return countHelper(I, Visited, Result, I);
 }
 
 int main(int argc, char **argv) {
-  bool DumpDiff = false;
-  int DiffArgPos = 2;
-  if (argc < 2)
-    std::cerr << "Please specify input file!" << '\n';
+  cl::ParseCommandLineOptions(argc, argv);
 
-  if (DiffArgPos < argc && strcmp(argv[DiffArgPos], "-diff") == 0)
-    DumpDiff = true;
-
-  auto MB = MemoryBuffer::getFileOrSTDIN(argv[1]);
+  auto MB = MemoryBuffer::getFileOrSTDIN(InputFilename);
 
   if (MB) {
     InstContext IC;
