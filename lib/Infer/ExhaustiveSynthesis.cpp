@@ -54,6 +54,9 @@ namespace {
   static cl::opt<bool> UseAlive("souper-use-alive",
     cl::desc("Use Alive2 as the backend"),
     cl::init(false));
+  static cl::opt<bool> LSBPruning("souper-lsb-pruning",
+    cl::desc("Try to prune guesses by looking for a difference in LSB"),
+    cl::init(false));
 }
 
 // TODO
@@ -472,6 +475,30 @@ bool exceeds64Bits(const Inst *I, std::set<const Inst *> &Visited) {
   return false;
 }
 
+bool canDifferInLSB(InstContext &IC, BlockPCs &BPCs,
+                    std::vector<InstMapping> &PCs,
+                    InstMapping &M, unsigned Timeout,
+                    SMTLIBSolver *SMTSolver) {
+  Inst *LHSOne = IC.getConst(llvm::APInt(M.LHS->Width, 1));
+  Inst *NewLHS = IC.getInst(Inst::And, M.LHS->Width, {M.LHS, LHSOne});
+  Inst *RHSOne = IC.getConst(llvm::APInt(M.RHS->Width, 1));
+  Inst *NewRHS = IC.getInst(Inst::And, M.RHS->Width, {M.RHS, RHSOne});
+  // TODO: Experiment with larger masks: 3, 7, MSB, etc.
+
+  InstMapping NewMapping{NewLHS, NewRHS};
+
+  auto Query = BuildQuery(IC, BPCs, PCs, NewMapping, 0);
+
+  bool QueryIsSat;
+  auto EC = SMTSolver->isSatisfiable(Query, QueryIsSat, 0, 0, Timeout);
+  if (EC) {
+    if (DebugLevel > 1)
+      llvm::errs() << "Solver error in LSB pruning!\n";
+    return false;
+  }
+  return QueryIsSat;
+}
+
 std::error_code
 ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const BlockPCs &BPCs,
@@ -731,6 +758,16 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
 
     InstMapping Mapping2(LHS, I2);
+
+    if (LSBPruning && !GuessHasConstant) {
+      if (canDifferInLSB(IC, BPCsCopy, PCsCopy, Mapping2,
+                             Timeout, SMTSolver)) {
+        continue;
+        // Guess doesn't work, found model for which they differ in LSB
+        // TODO Utilize this for the mysterious constant synthesis 'loop'
+      }
+    }
+
     std::string Query2 = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping2, 0);
 
     bool SecondSmallQueryIsSat;

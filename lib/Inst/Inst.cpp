@@ -507,6 +507,8 @@ void Inst::Profile(llvm::FoldingSetNodeID &ID) const {
     ID.AddPointer(B);
     break;
   default:
+    if (!DemandedBits.isAllOnesValue())
+      ID.Add(DemandedBits);
     break;
   }
 
@@ -794,13 +796,16 @@ void souper::PrintReplacement(llvm::raw_ostream &Out,
   Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(Mapping.LHS, Out, printNames);
   std::string RRef = Context.printInst(Mapping.RHS, Out, printNames);
+  Out << "cand " << SRef << " " << RRef;
   if (!Mapping.LHS->DemandedBits.isAllOnesValue()) {
-    Out << "cand " << SRef << " " << RRef << " (" << "demandedBits="
-        << Inst::getDemandedBitsString(Mapping.LHS->DemandedBits)
-        << ")" << '\n';
-  } else {
-    Out << "cand " << SRef << " " << RRef << '\n';
+    Out<< " (" << "demandedBits="
+       << Inst::getDemandedBitsString(Mapping.LHS->DemandedBits)
+       << ")";
   }
+  if (Mapping.LHS->HarvestKind == HarvestType::HarvestedFromUse) {
+    Out << " (harvestedFromUse)";
+  }
+  Out << "\n";
 }
 
 std::string souper::GetReplacementString(const BlockPCs &BPCs,
@@ -823,13 +828,17 @@ void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
   Context.printPCs(PCs, Out, printNames);
   Context.printBlockPCs(BPCs, Out, printNames);
   std::string SRef = Context.printInst(LHS, Out, printNames);
+
+  Out << "infer " << SRef;
   if (!LHS->DemandedBits.isAllOnesValue()) {
-    Out << "infer " << SRef << " (" << "demandedBits="
-        << Inst::getDemandedBitsString(LHS->DemandedBits)
-        << ")" << '\n';
-  } else {
-    Out << "infer " << SRef << '\n';
+    Out<< " (" << "demandedBits="
+       << Inst::getDemandedBitsString(LHS->DemandedBits)
+       << ")";
   }
+  if (LHS->HarvestKind == HarvestType::HarvestedFromUse) {
+    Out << " (harvestedFromUse)";
+  }
+  Out << "\n";
 }
 
 std::string souper::GetReplacementLHSString(const BlockPCs &BPCs,

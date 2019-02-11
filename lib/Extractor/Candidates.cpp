@@ -55,6 +55,10 @@ static llvm::cl::opt<bool> HarvestConstantRange(
     "souper-harvest-const-range",
     llvm::cl::desc("Perform range analysis (default=true)"),
     llvm::cl::init(true));
+static llvm::cl::opt<bool> HarvestUses(
+    "souper-harvest-uses",
+    llvm::cl::desc("Harvest operands (default=false)"),
+    llvm::cl::init(false));
 
 using namespace llvm;
 using namespace souper;
@@ -818,7 +822,25 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
 
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
+    BCS->BB = &BB;
     for (auto &I : BB) {
+      // Harvest Uses (Operands)
+      if (HarvestUses) {
+        for (auto &Op : I.operands()) {
+          // TODO: support regular values
+          if (auto U = dyn_cast<Instruction>(Op)){
+            if (U->getType()->isIntegerTy()) {
+              Inst *In = EB.get(U);
+              In->HarvestKind = HarvestType::HarvestedFromUse;
+              EB.markExternalUses(In);
+              BCS->Replacements.emplace_back(U, InstMapping(In, 0));
+              assert(EB.get(U)->hasOrigin(U));
+            }
+          }
+        }
+      }
+
+      // Harvest Defs
       if (!I.getType()->isIntegerTy())
         continue;
       if (I.hasNUses(0))
@@ -830,6 +852,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       } else {
         In = EB.get(&I);
       }
+      In->HarvestKind = HarvestType::HarvestedFromDef;
       EB.markExternalUses(In);
       BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
       assert(EB.get(&I)->hasOrigin(&I));

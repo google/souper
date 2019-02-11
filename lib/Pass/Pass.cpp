@@ -48,7 +48,7 @@ using namespace llvm;
 
 namespace {
 std::unique_ptr<Solver> S;
-unsigned ReplaceCount, Replacements;
+unsigned ReplacementIdx, ReplacementsDone;
 KVStore *KV;
 
 static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
@@ -340,7 +340,6 @@ public:
     bool Changed = false;
     InstContext IC;
     ExprBuilderContext EBC;
-    CandidateMap CandMap;
     std::map<Inst *, Value *> ReplacedValues;
     LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>(*F).getLoopInfo();
     if (!LI)
@@ -371,9 +370,11 @@ public:
     if (DebugLevel > 1) {
       errs() << "\n";
       errs() << "; Listing all replacements for " << FunctionName << "\n";
+      errs() << "; Using solver: " << S->getName() << '\n';
     }
 
     for (auto &B : CS.Blocks) {
+      CandidateMap CandMap;
       for (auto &R : B->Replacements) {
         if (DebugLevel > 3) {
           errs() << "\n; *****";
@@ -385,97 +386,109 @@ public:
         }
         AddToCandidateMap(CandMap, R);
       }
-    }
 
-    if (DebugLevel > 1) {
-      errs() << "\n";
-      errs() << "; Listing applied replacements for " << FunctionName << "\n";
-      errs() << "; Using solver: " << S->getName() << '\n';
-    }
 
-    for (auto &Cand : CandMap) {
-      if (StaticProfile) {
-        std::string Str;
-        llvm::raw_string_ostream Loc(Str);
-        Cand.Origin->getDebugLoc().print(Loc);
-        std::string HField = "sprofile " + Loc.str();
-        ReplacementContext Context;
-        KV->hIncrBy(GetReplacementLHSString(Cand.BPCs, Cand.PCs,
-                                            Cand.Mapping.LHS, Context),
-                    HField, 1);
-      }
-      if (DynamicProfileAll) {
-        dynamicProfile(F, Cand);
-        Changed = true;
-        continue;
-      }
-      if (std::error_code EC =
-          S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
-                   Cand.Mapping.RHS, IC)) {
-        if (EC == std::errc::timed_out ||
-            EC == std::errc::value_too_large) {
-          continue;
-        } else {
-          report_fatal_error("Unable to query solver: " + EC.message() + "\n");
+      for (auto &Cand : CandMap) {
+
+        if (StaticProfile) {
+          std::string Str;
+          llvm::raw_string_ostream Loc(Str);
+          Cand.Origin->getDebugLoc().print(Loc);
+          std::string HField = "sprofile " + Loc.str();
+          ReplacementContext Context;
+          KV->hIncrBy(GetReplacementLHSString(Cand.BPCs, Cand.PCs,
+                                              Cand.Mapping.LHS,
+                                              Context), HField, 1);
         }
-      }
-      if (!Cand.Mapping.RHS)
-        continue;
+        if (DynamicProfileAll) {
+          dynamicProfile(F, Cand);
+          Changed = true;
+          continue;
+        }
+        if (std::error_code EC =
+            S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
+                     Cand.Mapping.RHS, IC)) {
+          if (EC == std::errc::timed_out ||
+              EC == std::errc::value_too_large) {
+            continue;
+          } else {
+            report_fatal_error("Unable to query solver: " + EC.message() + "\n");
+          }
+        }
+        if (!Cand.Mapping.RHS)
+          continue;
 
-      if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
+        Instruction *I = Cand.Origin;
+        assert(Cand.Mapping.LHS->hasOrigin(I));
+        IRBuilder<> Builder(I);
 
-	Instruction *I = Cand.Origin;
-	assert(Cand.Mapping.LHS->hasOrigin(I));
-	IRBuilder<> Builder(I);
+        Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
+                                 ReplacedValues, Builder, F->getParent());
 
-	Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
-                               ReplacedValues, Builder, F->getParent());
-	if (!NewVal) {
-	  if (DebugLevel > 1)
-	    errs() << "\"\n; replacement failed\n";
-	  continue;
-	}
+        // TODO can we assert that getValue() succeeds?
+        if (!NewVal) {
+          if (DebugLevel > 1)
+            errs() << "\"\n; replacement failed\n";
+          continue;
+        }
 
-	ReplacedValues[Cand.Mapping.LHS] = NewVal;
+        // here we finally commit to having a viable replacement
 
-	if (DebugLevel > 1) {
+        if (ReplacementIdx < FirstReplace || ReplacementIdx > LastReplace) {
+          if (DebugLevel > 1)
+            errs() << "Skipping this replacement (number " << ReplacementIdx << ")\n";
+          if (ReplacementIdx < std::numeric_limits<unsigned>::max())
+            ++ReplacementIdx;
+          continue;
+        }
+        if (ReplacementIdx < std::numeric_limits<unsigned>::max())
+          ++ReplacementIdx;
+        ReplacementsDone++;
+
+        ReplacedValues[Cand.Mapping.LHS] = NewVal;
+
+        if (DebugLevel > 1) {
           if (DebugLevel > 2) {
             errs() << "\nFunction before replacement:\n";
             F->print(errs());
           }
-	  errs() << "\n";
-	  errs() << "; Replacing \"";
-	  I->print(errs());
-	  errs() << "\"\n; from \"";
-	  I->getDebugLoc().print(errs());
-	  errs() << "\"\n; with \"";
-	  NewVal->print(errs());
-	  errs() << "\" in:\n";
-	  PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
-	  errs() << "\"\n; with \"";
-	  NewVal->print(errs());
-	  errs() << "\"\n";
-	}
-
-	if (DynamicProfile)
-          dynamicProfile(F, Cand);
-        I->replaceAllUsesWith(NewVal);
-        Replacements++;
-
-	if (DebugLevel > 2) {
-          errs() << "\nFunction after replacement:\n\n";
-          F->print(errs());
           errs() << "\n";
+          errs() << "; Replacing \"";
+          I->print(errs());
+          errs() << "\"\n; from \"";
+          I->getDebugLoc().print(errs());
+          errs() << "\"\n; with \"";
+          NewVal->print(errs());
+          errs() << "\" in:\n\"";
+          PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
+          errs() << "\"\n; with \"";
+          NewVal->print(errs());
+          errs() << "\"\n";
+        }
+
+        if (DynamicProfile)
+          dynamicProfile(F, Cand);
+
+        if (Cand.Mapping.LHS->HarvestKind == HarvestType::HarvestedFromDef) {
+          I->replaceAllUsesWith(NewVal);
+        } else {
+          for (llvm::Value::use_iterator UI = I->use_begin();
+               UI != I->use_end(); UI ++) {
+            // TODO: Handle general values, not only instructions
+            auto *Usr = dyn_cast<llvm::Instruction>(UI->getUser());
+            if (Usr && Usr->getParent() == B->BB)
+              UI->set(NewVal);
+          }
         }
 
         Changed = true;
-      } else {
-        if (DebugLevel > 1)
-          errs() << "Skipping this replacement (number " << ReplaceCount <<
-            ")\n";
       }
-      if (ReplaceCount < std::numeric_limits<unsigned>::max())
-        ++ReplaceCount;
+    }
+
+    if (DebugLevel > 2) {
+      errs() << "\nFunction after replacement:\n\n";
+      F->print(errs());
+      errs() << "\n";
     }
 
     return Changed;
@@ -491,7 +504,7 @@ public:
       if (!F->isDeclaration())
         Changed = runOnFunction(F) || Changed;
     if (DebugLevel > 1)
-      errs() << "\nTotal of " << Replacements << " replacements done on this module\n";
+      errs() << "\nTotal of " << ReplacementsDone << " replacements done on this module\n";
     return Changed;
   }
 

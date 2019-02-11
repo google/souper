@@ -148,6 +148,10 @@ public:
       }
     }
 
+    // Do not do further synthesis if LHS is harvested from uses.
+    if (LHS->HarvestKind == HarvestType::HarvestedFromUse)
+      return EC;
+
     if (InferNop) {
       std::vector<Inst *> Guesses;
       findCands(LHS, Guesses, /*WidthMustMatch=*/true, /*FilterVars=*/false, MaxNops);

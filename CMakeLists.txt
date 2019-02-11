@@ -231,27 +231,24 @@ add_library(souperTool STATIC
   ${SOUPER_TOOL_FILES}
 )
 
-add_library(souperPass SHARED
-  ${KLEE_EXPR_FILES}
+set(SOUPER_SOURCES
   ${SOUPER_EXTRACTOR_FILES}
   ${SOUPER_INST_FILES}
   ${SOUPER_KVSTORE_FILES}
   ${SOUPER_PARSER_FILES}
   ${SOUPER_SMTLIB2_FILES}
   ${SOUPER_TOOL_FILES}
-  ${SOUPER_INFER_FILES}
+  ${SOUPER_INFER_FILES})
+
+add_library(souperPass SHARED
+  ${KLEE_EXPR_FILES}
+  ${SOUPER_SOURCES}
   lib/Pass/Pass.cpp
 )
 
 add_library(souperPassProfileAll SHARED
   ${KLEE_EXPR_FILES}
-  ${SOUPER_EXTRACTOR_FILES}
-  ${SOUPER_INST_FILES}
-  ${SOUPER_KVSTORE_FILES}
-  ${SOUPER_PARSER_FILES}
-  ${SOUPER_SMTLIB2_FILES}
-  ${SOUPER_TOOL_FILES}
-  ${SOUPER_INFER_FILES}
+  ${SOUPER_SOURCES}
   lib/Pass/Pass.cpp
 )
 target_compile_definitions(souperPassProfileAll PRIVATE DYNAMIC_PROFILE_ALL=1)
@@ -280,6 +277,10 @@ add_executable(souper-check
   tools/souper-check.cpp
 )
 
+add_executable(count-insts
+  tools/count-insts.cpp
+)
+
 add_executable(extractor_tests
   unittests/Extractor/ExtractorTests.cpp
 )
@@ -293,7 +294,7 @@ add_executable(parser_tests
 )
 
 set(LLVM_LDFLAGS "${LLVM_LDFLAGS} ${ALIVE_LDFLAGS}")
-foreach(target souper internal-solver-test lexer-test parser-test souper-check
+foreach(target souper internal-solver-test lexer-test parser-test souper-check count-insts
                souperExtractor souperInfer souperInst souperKVStore souperParser
                souperSMTLIB2 souperTool souperPass souperPassProfileAll kleeExpr)
   set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
@@ -325,7 +326,8 @@ target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
 target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
-target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(count-insts souperParser)
+target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
 
@@ -350,7 +352,7 @@ configure_file(
 
 add_custom_target(check
   COMMAND ${CMAKE_BINARY_DIR}/run_lit
-  DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souperPass souperPassProfileAll
+  DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souperPass souperPassProfileAll count-insts
   USES_TERMINAL)
 
 find_program(GO_EXECUTABLE NAMES go DOC "go executable")
@@ -384,3 +386,5 @@ if (BUILD_CLANG_TOOL)
   configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang @ONLY)
   configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang++ @ONLY)
 endif()
+
+add_subdirectory(docs)
