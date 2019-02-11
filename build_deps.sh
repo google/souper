@@ -120,17 +120,3 @@ mkdir -p $hiredisdir/install/lib
 (cd $hiredisdir && git checkout $hiredis_commit && make libhiredis.a &&
  cp -r hiredis.h async.h read.h sds.h adapters install/include/hiredis &&
  cp libhiredis.a install/lib)
-
-z3dir=$(pwd)/third_party/z3
-
-if [ -d $z3dir/.git ] ; then
-  (cd $z3dir && git fetch)
-else
-  git clone $z3_repo $z3dir
-fi
-
-mkdir -p $z3dir/install
-
-(cd $z3dir && git checkout $z3_commit &&
-python scripts/mk_make.py --prefix=$z3dir/install &&
-cd build && make -j4 install)
