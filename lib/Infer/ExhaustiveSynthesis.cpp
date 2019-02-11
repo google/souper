@@ -24,6 +24,8 @@ static const unsigned MaxTries = 30;
 static const unsigned MaxInputSpecializationTries = 2;
 static const unsigned MaxLHSCands = 15;
 
+bool UseAlive;
+
 using namespace souper;
 using namespace llvm;
 
@@ -51,9 +53,9 @@ namespace {
   static cl::opt<bool> EnableBigQuery("souper-exhaustive-synthesis-enable-big-query",
     cl::desc("Enable big query in exhaustive synthesis (default=false)"),
     cl::init(false));
-  static cl::opt<bool> UseAlive("souper-use-alive",
-    cl::desc("Use Alive2 as the backend"),
-    cl::init(false));
+  static cl::opt<bool, /*ExternalStorage=*/true>
+    AliveFlagParser("souper-use-alive", cl::desc("Use Alive2 as the backend"),
+    cl::Hidden, cl::location(UseAlive), cl::init(false));
   static cl::opt<bool> LSBPruning("souper-lsb-pruning",
     cl::desc("Try to prune guesses by looking for a difference in LSB"),
     cl::init(false));

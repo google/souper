@@ -22,6 +22,8 @@
 #include <utility>
 #include <system_error>
 
+extern bool UseAlive;
+
 namespace souper {
 
 class ExhaustiveSynthesis {
