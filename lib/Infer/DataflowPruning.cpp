@@ -112,8 +112,7 @@ EvalValue getValue(Inst *I, ValueCache &C) {
   } else if (I->K == souper::Inst::Var
       || I->K == souper::Inst::ReservedConst
       || I->K == souper::Inst::ReservedInst) {
-    assert(I->Name != "");
-    if (C.find(I) != C.end()) {
+    if (I->Name != "" && C.find(I) != C.end()) {
       return C[I];
     } else {
       return EvalValue(); // unavailable
@@ -143,6 +142,7 @@ llvm::KnownBits dataflow::findKnownBits(Inst* I, ValueCache& C) {
         Op0KB.One <<= Op1V.getValue();
         Op0KB.Zero <<= Op1V.getValue();
         Op0KB.Zero.setLowBits(Op1V.getValue().getLimitedValue());
+        // setLowBits takes an unsiged int, so getLimitedValue is harmless
         return Op0KB;
       } else {
         return Result;
@@ -174,7 +174,8 @@ llvm::KnownBits dataflow::findKnownBits(Inst* I, ValueCache& C) {
       // ^ logic copied from LLVM ValueTracking.cpp
       return Op0KB;
     }
-    default : return Result;
+    default :
+      return Result;
   }
 }
 

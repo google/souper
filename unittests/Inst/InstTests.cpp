@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "llvm/Support/raw_ostream.h"
+#include "souper/Infer/DataflowPruning.h"
 #include "souper/Inst/Inst.h"
 #include "gtest/gtest.h"
 
@@ -61,4 +62,55 @@ TEST(InstTest, Print) {
   EXPECT_EQ("%1", Context.printInst(I1AI2MI3, SS, /*printNames=*/false));
   EXPECT_EQ("%0:i64 = add 1:i64, 2:i64\n"
             "%1:i64 = mul 3:i64, %0\n", SS.str());
+}
+
+TEST(InstTest, KnownBits) {
+  InstContext IC;
+
+  Inst *I1 = IC.getConst(llvm::APInt(64, 5));
+
+  souper::dataflow::ValueCache C;
+  auto KB = souper::dataflow::findKnownBits(I1, C);
+  ASSERT_EQ(KB.One, 5);
+  ASSERT_EQ(KB.Zero, ~5);
+
+  Inst *I2 = IC.getInst(Inst::Var, 64, {});
+  Inst *I3 = IC.getConst(llvm::APInt(64, 0xFF));
+  Inst *I4 = IC.getInst(Inst::And, 64, {I2, I3});
+  KB = souper::dataflow::findKnownBits(I4, C);
+  ASSERT_EQ(KB.One, 0);
+  ASSERT_EQ(KB.Zero, ~0xFF);
+
+  Inst *I5 = IC.getInst(Inst::Or, 64, {I2, I1});
+  KB = souper::dataflow::findKnownBits(I5, C);
+  ASSERT_EQ(KB.One, 5);
+  ASSERT_EQ(KB.Zero, 0);
+
+  Inst *I6 = IC.getInst(Inst::Shl, 64, {I2, I1});
+  KB = souper::dataflow::findKnownBits(I6, C);
+  ASSERT_EQ(KB.One, 0);
+  ASSERT_EQ(KB.Zero, 31);
+}
+
+TEST(InstTest, ConstantRange) {
+  InstContext IC;
+
+  Inst *I1 = IC.getConst(llvm::APInt(64, 5));
+
+  souper::dataflow::ValueCache C;
+  auto CR = souper::dataflow::findConstantRange(I1, C);
+  ASSERT_EQ(CR.getLower(), 5);
+  ASSERT_EQ(CR.getUpper(), 6);
+
+  Inst *I2 = IC.getInst(Inst::Var, 64, {});
+  Inst *I3 = IC.getConst(llvm::APInt(64, 0xFF));
+  Inst *I4 = IC.getInst(Inst::And, 64, {I2, I3});
+  CR = souper::dataflow::findConstantRange(I4, C);
+  ASSERT_EQ(CR.getLower(), 0);
+  ASSERT_EQ(CR.getUpper(), 0xFF + 1);
+
+  Inst *I5 = IC.getInst(Inst::Add, 64, {I4, I1});
+  CR = souper::dataflow::findConstantRange(I5, C);
+  ASSERT_EQ(CR.getLower(), 5);
+  ASSERT_EQ(CR.getUpper(), 0xFF + 5 + 1);
 }

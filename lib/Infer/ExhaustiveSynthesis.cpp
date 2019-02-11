@@ -15,9 +15,9 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Support/CommandLine.h"
-#include "souper/Infer/ExhaustiveSynthesis.h"
 #include "souper/Infer/AliveDriver.h"
 #include "souper/Infer/DataflowPruning.h"
+#include "souper/Infer/ExhaustiveSynthesis.h"
 
 #include <queue>
 #include <functional>
@@ -62,11 +62,8 @@ namespace {
     cl::desc("Try to prune guesses by looking for a difference in LSB"),
     cl::init(false));
   static cl::opt<bool> EnableDataflowPruning("souper-dataflow-pruning",
-    cl::desc("Enable pruning based on dataflow analysis (default=true)"),
+    cl::desc("Enable pruning based on dataflow analysis (default=false)"),
     cl::init(false));
-  static cl::opt<unsigned> DataflowPruningStatsLevel("souper-dataflow-pruning-stats-level",
-    cl::desc("Print pruning statistics (default=0)"),
-    cl::init(0));
 }
 
 // TODO
@@ -646,7 +643,7 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS,
   int TooExpensive = 0;
 
   dataflow::DataflowPruningManager DataflowPruning
-    (LHS, Inputs, DataflowPruningStatsLevel);
+    (LHS, Inputs, DebugLevel);
   // Cheaper tests go first
   std::vector<PruneFunc> PruneFuncs = {CostPrune};
   if (EnableDataflowPruning) {
@@ -660,7 +657,7 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS,
 
   getGuesses(Guesses, Inputs, LHS->Width,
              LHSCost, IC, nullptr, nullptr, TooExpensive, PruneCallback);
-  if (DataflowPruningStatsLevel == 1) {
+  if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::outs());
   }
 
