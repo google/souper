@@ -1,13 +1,12 @@
 #include "llvm/ADT/APInt.h"
-#include "llvm/Support/KnownBits.h"
 #include "llvm/IR/ConstantRange.h"
+#include "llvm/Support/KnownBits.h"
 #include "souper/Inst/Inst.h"
 
 #include <unordered_map>
 
 namespace souper {
 namespace dataflow {
-
 
 using EvalValue = llvm::Optional<llvm::APInt>;
 using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;
