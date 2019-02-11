@@ -336,7 +336,7 @@ if (NOT BUILD_CLANG_TOOL)
   set_target_properties(souperClangTool clang-souper PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
 endif()
 
-set(TEST_SYNTHESIS "" CACHE STRING "Enable additional, computationally intensive synthesis tests")
+set(TEST_SYNTHESIS "ON" CACHE STRING "Enable additional, computationally intensive synthesis tests")
 set(TEST_LONG_DURATION_SYNTHESIS "" CACHE STRING "Enable long duration (> 10 min) synthesis tests")
 
 configure_file(
