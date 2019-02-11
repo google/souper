@@ -421,3 +421,15 @@ IR::Type &souper::AliveDriver::getType(int n) {
   }
   return *TypeCache[n];
 }
+
+bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
+                                   const std::vector<InstMapping> &PCs,
+                                   InstContext &IC) {
+  Inst *Ante = IC.getConst(llvm::APInt(1, true));
+  for (auto PC : PCs ) {
+    Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+  }
+  AliveDriver Verifier(LHS, Ante);
+  return Verifier.verify(RHS);
+}

@@ -57,6 +57,9 @@ private:
   smt::smt_initializer smt_init;
 };
 
+bool isTransformationValid(Inst* LHS, Inst* RHS, const std::vector<InstMapping> &PCs,
+                           InstContext &IC);
+
 }
 
 #endif

@@ -21,6 +21,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "souper/Extractor/Solver.h"
+#include "souper/Infer/AliveDriver.h"
 #include "souper/Infer/ExhaustiveSynthesis.h"
 #include "souper/Infer/InstSynthesis.h"
 #include "souper/KVStore/KVStore.h"
@@ -95,6 +96,17 @@ public:
         Guesses.emplace_back(IC.getConst(APInt(LHS->Width, -1)));
       for (auto I : Guesses) {
         InstMapping Mapping(LHS, I);
+
+        if (UseAlive) {
+          bool IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS,
+                                               PCs, IC);
+          if (IsValid) {
+            RHS = I;
+            return std::error_code();
+          }
+          // TODO: Propagate errors from Alive backend, exit early for errors
+        }
+
         std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0);
         if (Query.empty())
           return std::make_error_code(std::errc::value_too_large);
@@ -114,6 +126,16 @@ public:
       std::vector<llvm::APInt> ModelVals;
       Inst *I = IC.createVar(LHS->Width, "constant");
       InstMapping Mapping(LHS, I);
+
+      if (UseAlive) {
+        bool IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS, PCs, IC);
+        if (IsValid) {
+          RHS = I;
+          return std::error_code();
+        }
+        // TODO: Propagate errors from Alive backend, exit early for errors
+      }
+
       std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
       if (Query.empty())
         return std::make_error_code(std::errc::value_too_large);
@@ -238,6 +260,10 @@ public:
                           InstMapping Mapping, bool &IsValid,
                           std::vector<std::pair<Inst *, llvm::APInt>> *Model)
   override {
+    if (UseAlive) {
+      IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS, PCs, IC);
+      return std::error_code();
+    }
     std::string Query;
     if (Model && SMTSolver->supportsModels()) {
       std::vector<Inst *> ModelInsts;
