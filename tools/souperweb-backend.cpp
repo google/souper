@@ -90,7 +90,7 @@ static llvm::cl::opt<std::string> Action("action", llvm::cl::init(""));
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
   KVStore *KV;
-  std::unique_ptr<Solver> S = GetSolverFromArgs(KV);
+  std::unique_ptr<souper::Solver> S = GetSolverFromArgs(KV);
 
   auto MB = MemoryBuffer::getSTDIN();
   if (MB) {

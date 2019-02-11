@@ -167,6 +167,7 @@ set(SOUPER_EXTRACTOR_FILES
   lib/Extractor/ExprBuilder.cpp
   lib/Extractor/KLEEBuilder.cpp
   lib/Extractor/Solver.cpp
+  lib/Extractor/Z3Builder.cpp
   include/souper/Extractor/Candidates.h
   include/souper/Extractor/ExprBuilder.h
   include/souper/Extractor/Solver.h
@@ -396,7 +397,7 @@ if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
     PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
   target_include_directories(souperweb-backend PRIVATE "${LLVM_INCLUDEDIR}")
 
-  target_link_libraries(souperweb-backend souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
+  target_link_libraries(souperweb-backend souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY} ${Z3_LIBRARY})
 
   add_custom_target(souperweb ALL COMMAND ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/souperweb ${CMAKE_SOURCE_DIR}/tools/souperweb.go
                                   COMMENT "Building souperweb")
