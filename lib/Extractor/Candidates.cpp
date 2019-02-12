@@ -60,6 +60,8 @@ static llvm::cl::opt<bool> HarvestUses(
     llvm::cl::desc("Harvest operands (default=false)"),
     llvm::cl::init(false));
 
+extern bool UseAlive;
+
 using namespace llvm;
 using namespace souper;
 
@@ -461,6 +463,9 @@ Inst *ExprBuilder::buildHelper(Value *V) {
     // TODO: In principle we could track loop iterations and maybe even maintain
     // a separate set of values for each iteration (as in bounded model
     // checking).
+    if (UseAlive) { // FIXME: Remove this after alive supports phi
+      return makeArrayRead(V);
+    }
     if (!isLoopEntryPoint(Phi)) {
       BasicBlock *BB = Phi->getParent();
       BlockInfo &BI = EBC.BlockMap[BB];

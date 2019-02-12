@@ -353,29 +353,41 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
       return true;                                               \
     }
 
-    #define BINOPW(SOUPER, ALIVE, W) case souper::Inst::SOUPER: {\
+    #define BINOPF(SOUPER, ALIVE, W) case souper::Inst::SOUPER: {\
       ExprCache[I] = Builder.binOp(t, Name, ExprCache[I->Ops[0]],\
       ExprCache[I->Ops[1]], IR::BinOp::ALIVE, IR::BinOp::W);     \
       return true;                                               \
     }
 
     BINOP(Add, Add);
-    BINOPW(AddNSW, Add, NSW);
-    BINOPW(AddNUW, Add, NUW);
+    BINOPF(AddNSW, Add, NSW);
+    BINOPF(AddNUW, Add, NUW);
+    BINOPF(AddNW, Add, NSWNUW)
     BINOP(Sub, Sub);
-    BINOPW(SubNSW, Sub, NSW);
-    BINOPW(SubNUW, Sub, NUW);
+    BINOPF(SubNSW, Sub, NSW);
+    BINOPF(SubNUW, Sub, NUW);
     BINOP(Mul, Mul);
+    BINOPF(MulNSW, Mul, NSW);
+    BINOPF(MulNUW, Mul, NUW);
+    BINOPF(MulNW, Mul, NSWNUW);
     BINOP(And, And);
     BINOP(Or, Or);
     BINOP(Xor, Xor);
     BINOP(Shl, Shl);
-    BINOPW(ShlNSW, Shl, NSW);
-    BINOPW(ShlNUW, Shl, NUW);
+    BINOPF(ShlNSW, Shl, NSW);
+    BINOPF(ShlNUW, Shl, NUW);
     BINOP(LShr, LShr);
+    BINOPF(LShrExact, LShr, Exact);
     BINOP(AShr, AShr);
+    BINOPF(AShrExact, AShr, Exact);
     BINOP(Cttz, Cttz);
     BINOP(Ctlz, Ctlz);
+    BINOP(URem, URem);
+    BINOP(SRem, SRem);
+    BINOP(UDiv, UDiv);
+    BINOPF(UDivExact, UDiv, Exact);
+    BINOP(SDiv, SDiv);
+    BINOPF(SDivExact, SDiv, Exact);
 
     #define ICMP(SOUPER, ALIVE) case souper::Inst::SOUPER: {     \
       ExprCache[I] = Builder.iCmp(t, Name, IR::ICmp::ALIVE,      \
@@ -407,6 +419,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     }
 
     UNARYOP(CtPop, Ctpop);
+    UNARYOP(BSwap, BSwap);
 
     default:{
       llvm::outs() << "Unsupported Instruction Kind : " << I->getKindName(I->K) << "\n";
