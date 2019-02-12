@@ -362,10 +362,11 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     BINOP(Add, Add);
     BINOPF(AddNSW, Add, NSW);
     BINOPF(AddNUW, Add, NUW);
-    BINOPF(AddNW, Add, NSWNUW)
+    BINOPF(AddNW, Add, NSWNUW);
     BINOP(Sub, Sub);
     BINOPF(SubNSW, Sub, NSW);
     BINOPF(SubNUW, Sub, NUW);
+    BINOPF(SubNW, Sub, NSWNUW);
     BINOP(Mul, Mul);
     BINOPF(MulNSW, Mul, NSW);
     BINOPF(MulNUW, Mul, NUW);
@@ -376,6 +377,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     BINOP(Shl, Shl);
     BINOPF(ShlNSW, Shl, NSW);
     BINOPF(ShlNUW, Shl, NUW);
+    BINOPF(ShlNW, Shl, NSWNUW);
     BINOP(LShr, LShr);
     BINOPF(LShrExact, LShr, Exact);
     BINOP(AShr, AShr);
