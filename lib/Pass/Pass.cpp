@@ -373,8 +373,8 @@ public:
       errs() << "; Using solver: " << S->getName() << '\n';
     }
 
+    CandidateMap CandMap;
     for (auto &B : CS.Blocks) {
-      CandidateMap CandMap;
       for (auto &R : B->Replacements) {
         if (DebugLevel > 3) {
           errs() << "\n; *****";
@@ -386,102 +386,109 @@ public:
         }
         AddToCandidateMap(CandMap, R);
       }
+    }
 
 
-      for (auto &Cand : CandMap) {
+    for (auto &Cand : CandMap) {
 
-        if (StaticProfile) {
-          std::string Str;
-          llvm::raw_string_ostream Loc(Str);
-          Cand.Origin->getDebugLoc().print(Loc);
-          std::string HField = "sprofile " + Loc.str();
-          ReplacementContext Context;
-          KV->hIncrBy(GetReplacementLHSString(Cand.BPCs, Cand.PCs,
-                                              Cand.Mapping.LHS,
-                                              Context), HField, 1);
-        }
-        if (DynamicProfileAll) {
-          dynamicProfile(F, Cand);
-          Changed = true;
+      if (StaticProfile) {
+        std::string Str;
+        llvm::raw_string_ostream Loc(Str);
+        Cand.Origin->getDebugLoc().print(Loc);
+        std::string HField = "sprofile " + Loc.str();
+        ReplacementContext Context;
+        KV->hIncrBy(GetReplacementLHSString(Cand.BPCs, Cand.PCs,
+                                            Cand.Mapping.LHS,
+                                            Context), HField, 1);
+      }
+      if (DynamicProfileAll) {
+        dynamicProfile(F, Cand);
+        Changed = true;
+        continue;
+      }
+      if (std::error_code EC =
+          S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
+                   Cand.Mapping.RHS, IC)) {
+        if (EC == std::errc::timed_out ||
+            EC == std::errc::value_too_large) {
           continue;
+        } else {
+          report_fatal_error("Unable to query solver: " + EC.message() + "\n");
         }
-        if (std::error_code EC =
-            S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
-                     Cand.Mapping.RHS, IC)) {
-          if (EC == std::errc::timed_out ||
-              EC == std::errc::value_too_large) {
-            continue;
-          } else {
-            report_fatal_error("Unable to query solver: " + EC.message() + "\n");
-          }
-        }
-        if (!Cand.Mapping.RHS)
-          continue;
+      }
+      if (!Cand.Mapping.RHS)
+        continue;
 
-        Instruction *I = Cand.Origin;
-        assert(Cand.Mapping.LHS->hasOrigin(I));
-        IRBuilder<> Builder(I);
+      Instruction *I = Cand.Origin;
+      assert(Cand.Mapping.LHS->hasOrigin(I));
+      IRBuilder<> Builder(I);
 
-        Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
-                                 ReplacedValues, Builder, F->getParent());
+      Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
+                               ReplacedValues, Builder, F->getParent());
 
-        // TODO can we assert that getValue() succeeds?
-        if (!NewVal) {
-          if (DebugLevel > 1)
-            errs() << "\"\n; replacement failed\n";
-          continue;
-        }
+      assert(Cand.Mapping.LHS->HarvestKind == HarvestType::HarvestedFromUse &&
+             isa<llvm::Constant>(NewVal));
 
-        // here we finally commit to having a viable replacement
+      // TODO can we assert that getValue() succeeds?
+      if (!NewVal) {
+        if (DebugLevel > 1)
+          errs() << "\"\n; replacement failed\n";
+        continue;
+      }
 
-        if (ReplacementIdx < FirstReplace || ReplacementIdx > LastReplace) {
-          if (DebugLevel > 1)
-            errs() << "Skipping this replacement (number " << ReplacementIdx << ")\n";
-          if (ReplacementIdx < std::numeric_limits<unsigned>::max())
-            ++ReplacementIdx;
-          continue;
-        }
+      // here we finally commit to having a viable replacement
+
+      if (ReplacementIdx < FirstReplace || ReplacementIdx > LastReplace) {
+        if (DebugLevel > 1)
+          errs() << "Skipping this replacement (number " << ReplacementIdx << ")\n";
         if (ReplacementIdx < std::numeric_limits<unsigned>::max())
           ++ReplacementIdx;
-        ReplacementsDone++;
+        continue;
+      }
+      if (ReplacementIdx < std::numeric_limits<unsigned>::max())
+        ++ReplacementIdx;
+      ReplacementsDone++;
 
+      if (Cand.Mapping.LHS->HarvestKind == HarvestType::HarvestedFromDef)
         ReplacedValues[Cand.Mapping.LHS] = NewVal;
 
-        if (DebugLevel > 1) {
-          if (DebugLevel > 2) {
-            errs() << "\nFunction before replacement:\n";
-            F->print(errs());
-          }
-          errs() << "\n";
-          errs() << "; Replacing \"";
-          I->print(errs());
-          errs() << "\"\n; from \"";
-          I->getDebugLoc().print(errs());
-          errs() << "\"\n; with \"";
-          NewVal->print(errs());
-          errs() << "\" in:\n\"";
-          PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
-          errs() << "\"\n; with \"";
-          NewVal->print(errs());
-          errs() << "\"\n";
+      if (DebugLevel > 1) {
+        if (DebugLevel > 2) {
+          errs() << "\nFunction before replacement:\n";
+          F->print(errs());
         }
+        errs() << "\n";
+        errs() << "; Replacing \"";
+        I->print(errs());
+        errs() << "\"\n; from \"";
+        I->getDebugLoc().print(errs());
+        errs() << "\"\n; with \"";
+        NewVal->print(errs());
+        errs() << "\" in:\n\"";
+        PrintReplacement(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping);
+        errs() << "\"\n; with \"";
+        NewVal->print(errs());
+        errs() << "\"\n";
+      }
 
-        if (DynamicProfile)
-          dynamicProfile(F, Cand);
+      if (DynamicProfile)
+        dynamicProfile(F, Cand);
 
-        if (Cand.Mapping.LHS->HarvestKind == HarvestType::HarvestedFromDef) {
-          I->replaceAllUsesWith(NewVal);
-        } else {
-          for (llvm::Value::use_iterator UI = I->use_begin();
-               UI != I->use_end(); UI ++) {
-            // TODO: Handle general values, not only instructions
-            auto *Usr = dyn_cast<llvm::Instruction>(UI->getUser());
-            if (Usr && Usr->getParent() == B->BB)
-              UI->set(NewVal);
-          }
-        }
-
+      if (Cand.Mapping.LHS->HarvestKind == HarvestType::HarvestedFromDef) {
+        I->replaceAllUsesWith(NewVal);
         Changed = true;
+      } else {
+        for (llvm::Value::use_iterator UI = I->use_begin();
+             UI != I->use_end(); ) {
+          llvm::Use &U = *UI;
+          ++UI;
+          // TODO: Handle general values, not only instructions
+          auto *Usr = dyn_cast<llvm::Instruction>(U.getUser());
+          if (Usr && Usr->getParent() == Cand.Mapping.LHS->HarvestFrom) {
+            U.set(NewVal);
+            Changed = true;
+          }
+        }
       }
     }
 

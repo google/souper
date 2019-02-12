@@ -154,6 +154,7 @@ struct Inst : llvm::FoldingSetNode {
   unsigned NumSignBits;
   llvm::APInt DemandedBits;
   HarvestType HarvestKind;
+  llvm::BasicBlock* HarvestFrom;
   llvm::ConstantRange Range=llvm::ConstantRange(1);
 };
 

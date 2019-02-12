@@ -77,6 +77,17 @@ bool Inst::operator<(const Inst &Other) const {
     return (*OpsA[I] < *OpsB[I]);
   }
 
+  if (HarvestKind == HarvestType::HarvestedFromDef &&
+      Other.HarvestKind == HarvestType::HarvestedFromUse) {
+    return false;
+  }
+  else if (HarvestKind == HarvestType::HarvestedFromUse &&
+           Other.HarvestKind == HarvestType::HarvestedFromDef) {
+    return true;
+  }
+
+  if (HarvestFrom != Other.HarvestFrom)
+    return HarvestFrom < Other.HarvestFrom;
   llvm_unreachable("Should have found an unequal operand");
 }
 
@@ -509,6 +520,9 @@ void Inst::Profile(llvm::FoldingSetNodeID &ID) const {
   default:
     if (!DemandedBits.isAllOnesValue())
       ID.Add(DemandedBits);
+    if (HarvestKind == HarvestType::HarvestedFromUse) {
+      ID.Add(HarvestFrom);
+    }
     break;
   }
 
@@ -673,6 +687,8 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   N->Ops = *InstOps;
   N->DemandedBits = DemandedBits;
   N->Available = Available;
+  N->HarvestKind = HarvestType::HarvestedFromDef;
+  N->HarvestFrom = nullptr;
   InstSet.InsertNode(N, IP);
   return N;
 }
