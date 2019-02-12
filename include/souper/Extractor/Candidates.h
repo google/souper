@@ -67,7 +67,6 @@ struct BlockCandidateSet {
   std::vector<InstMapping> PCs;
   BlockPCs BPCs;
   std::vector<CandidateReplacement> Replacements;
-  llvm::BasicBlock *BB;
 };
 
 struct FunctionCandidateSet {

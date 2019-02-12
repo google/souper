@@ -123,6 +123,7 @@ struct ExprBuilder {
                          BasicBlock *BB);
   Inst *get(Value *V, APInt DemandedBits);
   Inst *get(Value *V);
+  Inst *getFromUse(Value *V);
   void markExternalUses(Inst *I);
 };
 
@@ -594,6 +595,16 @@ Inst *ExprBuilder::get(Value *V, APInt DemandedBits) {
   return E;
 }
 
+Inst *ExprBuilder::getFromUse(Value *V) {
+  // Do not find from cache
+  unsigned Width = DL.getTypeSizeInBits(V->getType());
+  APInt DemandedBits = APInt::getAllOnesValue(Width);
+  Inst *E = build(V, DemandedBits);
+  if (E->K != Inst::Const && !E->hasOrigin(V))
+    E->Origins.push_back(V);
+  return E;
+}
+
 Inst *ExprBuilder::get(Value *V) {
   // Cache V if V is not found in InstMap
   Inst *&E = EBC.InstMap[V];
@@ -827,19 +838,25 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
 
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
-    BCS->BB = &BB;
     for (auto &I : BB) {
       // Harvest Uses (Operands)
       if (HarvestUses) {
+        std::unordered_set<llvm::Instruction *> Visited;
         for (auto &Op : I.operands()) {
           // TODO: support regular values
           if (auto U = dyn_cast<Instruction>(Op)){
+            // If uses are in the same block with its def, give up
+            if (U->getParent() == &BB)
+              continue;
             if (U->getType()->isIntegerTy()) {
-              Inst *In = EB.get(U);
-              In->HarvestKind = HarvestType::HarvestedFromUse;
-              EB.markExternalUses(In);
-              BCS->Replacements.emplace_back(U, InstMapping(In, 0));
-              assert(EB.get(U)->hasOrigin(U));
+              if(Visited.insert(U).second) {
+                Inst *In = EB.getFromUse(U);
+                In->HarvestKind = HarvestType::HarvestedFromUse;
+                In->HarvestFrom = &BB;
+                EB.markExternalUses(In);
+                BCS->Replacements.emplace_back(U, InstMapping(In, 0));
+                assert(EB.get(U)->hasOrigin(U));
+              }
             }
           }
         }
@@ -858,6 +875,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
         In = EB.get(&I);
       }
       In->HarvestKind = HarvestType::HarvestedFromDef;
+      In->HarvestFrom = nullptr;
       EB.markExternalUses(In);
       BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
       assert(EB.get(&I)->hasOrigin(&I));
