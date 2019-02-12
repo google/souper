@@ -116,6 +116,8 @@ SOUPER_STATIC_PROFILE -- During compilation, communicate with a running
 Redis instance in order to record the number of times each optimization
 was performed.
 
+SOUPER_USE_ALIVE -- Send queries to Alive2
+
 LLVM_DISABLE_INSTRUCTION_COMBINER -- Disable the invocation of instruction
 combiner during compilation.
 
@@ -215,6 +217,10 @@ if ($souper) {
     if (exists $ENV{"SOUPER_DYNAMIC_PROFILE"} ||
 	exists $ENV{"SOUPER_DYNAMIC_PROFILE_ALL"}) {
         push @ARGV, ("-g", "-mllvm", "-souper-dynamic-profile");
+    }
+
+    if (exists $ENV{"SOUPER_USE_ALIVE"}) {
+        push @ARGV, ("-mllvm", "-souper-use-alive");
     }
 
     if (exists $ENV{"SOUPER_INFER_INT"}) {
