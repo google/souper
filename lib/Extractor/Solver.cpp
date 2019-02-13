@@ -128,9 +128,19 @@ public:
       InstMapping Mapping(LHS, I);
 
       if (UseAlive) {
-        bool IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS, PCs, IC);
-        if (IsValid) {
-          RHS = I;
+        //Try to synthesize a constant at the root
+        I = IC.createVar(LHS->Width, "reservedconst_0");
+
+        Inst *Ante = IC.getConst(llvm::APInt(1, true));
+        for (auto PC : PCs ) {
+          Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+          Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+        }
+
+        AliveDriver Synthesizer(LHS, Ante);
+        auto ConstantMap = Synthesizer.synthesizeConstants(I);
+        if (ConstantMap.find(I) != ConstantMap.end()) {
+          RHS = IC.getConst(ConstantMap[I]);
           return std::error_code();
         }
         // TODO: Propagate errors from Alive backend, exit early for errors
