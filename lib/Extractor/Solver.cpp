@@ -105,18 +105,18 @@ public:
             return std::error_code();
           }
           // TODO: Propagate errors from Alive backend, exit early for errors
-        }
-
-        std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0);
-        if (Query.empty())
-          return std::make_error_code(std::errc::value_too_large);
-        bool IsSat;
-        EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
-        if (EC)
-          return EC;
-        if (!IsSat) {
-          RHS = I;
-          return EC;
+        } else {
+          std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0);
+          if (Query.empty())
+            return std::make_error_code(std::errc::value_too_large);
+          bool IsSat;
+          EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
+          if (EC)
+            return EC;
+          if (!IsSat) {
+            RHS = I;
+            return EC;
+          }
         }
       }
     }
@@ -134,38 +134,38 @@ public:
           return std::error_code();
         }
         // TODO: Propagate errors from Alive backend, exit early for errors
-      }
-
-      std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
-      if (Query.empty())
-        return std::make_error_code(std::errc::value_too_large);
-      bool IsSat;
-      EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInsts.size(),
-                                    &ModelVals, Timeout);
-      if (EC)
-        return EC;
-      if (IsSat) {
-        // We found a model for a constant
-        Inst *Const = 0;
-        for (unsigned J = 0; J != ModelInsts.size(); ++J) {
-          if (ModelInsts[J]->Name == "constant") {
-            Const = IC.getConst(ModelVals[J]);
-            break;
-          }
-        }
-        if (!Const)
-          report_fatal_error("there must be a model for the constant");
-        // Check if the constant is valid for all inputs
-        InstMapping ConstMapping(LHS, Const);
-        std::string Query = BuildQuery(IC, BPCs, PCs, ConstMapping, 0);
+      } else {
+        std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
         if (Query.empty())
           return std::make_error_code(std::errc::value_too_large);
-        EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
+        bool IsSat;
+        EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInsts.size(),
+                                    &ModelVals, Timeout);
         if (EC)
           return EC;
-        if (!IsSat) {
-          RHS = Const;
-          return EC;
+        if (IsSat) {
+          // We found a model for a constant
+          Inst *Const = 0;
+          for (unsigned J = 0; J != ModelInsts.size(); ++J) {
+            if (ModelInsts[J]->Name == "constant") {
+              Const = IC.getConst(ModelVals[J]);
+              break;
+            }
+          }
+          if (!Const)
+            report_fatal_error("there must be a model for the constant");
+          // Check if the constant is valid for all inputs
+          InstMapping ConstMapping(LHS, Const);
+          std::string Query = BuildQuery(IC, BPCs, PCs, ConstMapping, 0);
+          if (Query.empty())
+            return std::make_error_code(std::errc::value_too_large);
+          EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
+          if (EC)
+            return EC;
+          if (!IsSat) {
+            RHS = Const;
+            return EC;
+          }
         }
       }
     }
