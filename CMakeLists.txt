@@ -113,7 +113,8 @@ find_path(HIREDIS_INCLUDE_DIR
   NAMES
   hiredis/hiredis.h
   PATHS
-  third_party/hiredis/install/include)
+  third_party/hiredis/install/include
+  NO_DEFAULT_PATH)
 
 include_directories(${HIREDIS_INCLUDE_DIR}/hiredis)
 
@@ -121,30 +122,34 @@ find_library(HIREDIS_LIBRARY
   NAMES
   hiredis
   PATHS
-  third_party/hiredis/install/lib)
+  third_party/hiredis/install/lib
+  NO_DEFAULT_PATH)
 
-find_library(ALIVE_LIBRARY alive2 PATHS "${ALIVE_DIR}/build")
+find_library(ALIVE_LIBRARY alive2 PATHS "${ALIVE_DIR}/build" NO_DEFAULT_PATH)
 
 find_path(Z3_INCLUDE_DIRECTORY
   NAMES
   z3.h
   z3++.h
   PATHS
-  third_party/z3-install/include)
+  third_party/z3-install/include
+  NO_DEFAULT_PATH)
 
 include_directories(${Z3_INCLUDE_DIRECTORY})
 
 find_library(Z3_LIBRARY
   NAMES
-  z3
+  libz3.a
   PATHS
-  third_party/z3-install/lib)
+  third_party/z3-install/lib
+  NO_DEFAULT_PATH)
 
 find_program(Z3
   NAMES
   z3
   PATHS
-  third_party/z3-install/bin)
+  third_party/z3-install/bin
+  NO_DEFAULT_PATH)
 
 set(TEST_SOLVER "-z3-path=${Z3}")
 
@@ -308,23 +313,27 @@ foreach(target extractor_tests inst_tests parser_tests)
   target_include_directories(${target} PRIVATE "${LLVM_INCLUDEDIR}" "${GTEST_INCLUDEDIR}")
 endforeach()
 
+add_library(z3 STATIC IMPORTED)
+set_target_properties(z3 PROPERTIES IMPORTED_LOCATION ${Z3_LIBRARY})
+set_target_properties(z3 PROPERTIES IMPORTED_IMPLIB ${Z3_LIBRARY})
+
 target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperExtractor souperInfer souperInst kleeExpr)
-target_link_libraries(souperInfer ${LLVM_LIBS} ${LLVM_LDFLAGS} ${Z3_LIBRARY})
+target_link_libraries(souperInfer ${LLVM_LIBS} ${LLVM_LDFLAGS} z3)
 target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperKVStore ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperParser souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS} ${ALIVE_LIBRARY})
 target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
-target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
-target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
-target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
+target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
+target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
-target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
-target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
+target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(count-insts souperParser)
 target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(inst_tests souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY})
