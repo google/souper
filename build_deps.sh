@@ -24,7 +24,7 @@ hiredis_commit=010756025e8cefd1bc66c6d4ed3b1648ef6f1f95
 llvm_branch=tags/RELEASE_700/final
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
-alive_commit=738c5673bf9a7a71aa9bcd1a1ffd3ae1b2f67f4e
+alive_commit=b7f1ae1fb55ddf326dfe3865c82a320b77f4ae05
 alive_repo=https://github.com/manasij7479/alive2.git
 z3_repo=https://github.com/Z3Prover/z3.git
 z3_branch=z3-4.8.4
@@ -41,7 +41,7 @@ git clone $z3_repo $z3_srcdir
 mkdir -p $z3_installdir
 
 (cd $z3_srcdir && git checkout $z3_branch &&
-python scripts/mk_make.py --noomp --prefix=$z3_installdir &&
+python scripts/mk_make.py --staticlib --noomp --prefix=$z3_installdir &&
 cd build && make -j8 install)
 
 export PATH=$z3_installdir/bin:$PATH
@@ -52,17 +52,11 @@ mkdir -p $alivedir $alive_builddir
 git clone $alive_repo $alivedir/alive2
 git -C $alivedir/alive2 checkout $alive_commit
 
-if [ "$(uname)" == "Darwin" ]; then
-    shlib_extension=.dylib
-else
-    shlib_extension=.so
-fi
-
 if [ -n "`which ninja`" ] ; then
-  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/libz3$shlib_extension -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
+  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
   ninja -C $alive_builddir
 else
-  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/libz3$shlib_extension -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type)
+  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type)
   make -C $alive_builddir -j8
 fi
 
