@@ -69,7 +69,9 @@ public:
 
   template <typename T>
   void assume(T &&V) {
-    auto AI = std::make_unique<IR::Assume>(*std::move(V));
+    auto AI =
+      std::make_unique<IR::Assume>(*std::move(V), /*if_non_poison=*/ true);
+      //TODO: FIgure out whether if_non_poison can be uconditionally true
     F.getBB("").addInstr(std::move(AI));
   }
 
