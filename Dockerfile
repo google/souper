@@ -8,16 +8,7 @@ run set -x; \
 	&& apt-get install libgmp10 \
 	&& echo 'ca-certificates valgrind libc6-dev libgmp-dev cmake patch ninja-build make autoconf automake libtool golang-go python subversion re2c git clang' > /usr/src/build-deps \
 	&& apt-get install -y $(cat /usr/src/build-deps) --no-install-recommends \
-	&& git clone https://github.com/Z3Prover/z3.git /usr/src/z3 \
 	&& git clone https://github.com/antirez/redis /usr/src/redis
-
-run export CC=clang CXX=clang++ \
-        && cd /usr/src/z3 \
-	&& git checkout z3-4.8.4 \
-	&& python scripts/mk_make.py --noomp \
-	&& cd build \
-	&& make -j10 \
-	&& make install
 
 run export CC=clang CXX=clang++ \
         && cd /usr/src/redis \
@@ -53,7 +44,7 @@ add unittests /usr/src/souper/unittests
 run export GOPATH=/usr/src/go \
 	&& mkdir -p /usr/src/souper-build \
 	&& cd /usr/src/souper-build \
-	&& CC=/usr/src/souper/third_party/llvm/Release/bin/clang CXX=/usr/src/souper/third_party/llvm/Release/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DTEST_SYNTHESIS=ON -DTEST_SOLVER=-z3-path=/usr/bin/z3 ../souper \
+	&& CC=/usr/src/souper/third_party/llvm/Release/bin/clang CXX=/usr/src/souper/third_party/llvm/Release/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DTEST_SYNTHESIS=ON ../souper \
 	&& ninja souperweb souperweb-backend \
         && ninja check \
 	&& cp souperweb souperweb-backend /usr/local/bin \
