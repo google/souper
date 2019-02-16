@@ -427,7 +427,7 @@ public:
                                ReplacedValues, Builder, F->getParent());
 
       // if LHS comes from use, then NewVal should be a constant
-      assert(!Cand.Mapping.LHS->HarvestKind == HarvestType::HarvestedFromUse ||
+      assert(Cand.Mapping.LHS->HarvestKind != HarvestType::HarvestedFromUse ||
              isa<llvm::Constant>(NewVal));
 
       // TODO can we assert that getValue() succeeds?
