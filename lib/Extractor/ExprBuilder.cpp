@@ -320,7 +320,7 @@ Inst *ExprBuilder::getUBInstCondition(Inst *Root) {
   return Result;
 }
 
-Inst *ExprBuilder::getDemandedBitsCondition(Inst *I) {
+Inst *ExprBuilder::getDataflowConditions(Inst *I) {
   Inst *Result = LIC->getConst(llvm::APInt(1, true));
 
   if (I->K != Inst::Var)
@@ -921,7 +921,7 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
 
   // Get known bit constraints
   for (const auto &I : getVarInsts({Mapping.LHS, Mapping.RHS}))
-    Ante = LIC->getInst(Inst::And, 1, {Ante, getDemandedBitsCondition(I)});
+    Ante = LIC->getInst(Inst::And, 1, {Ante, getDataflowConditions(I)});
 
   // Get UB constraints of RHS
   Inst *RHSUB = getUBInstCondition(Mapping.RHS);
