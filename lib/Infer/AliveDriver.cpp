@@ -1,3 +1,4 @@
+#include "souper/Extractor/ExprBuilder.h"
 #include "souper/Infer/AliveDriver.h"
 
 #include "alive2/ir/function.h"
@@ -220,8 +221,8 @@ synthesizeConstantUsingSolver(tools::Transform &t,
   return SynthesisResult;
 }
 
-souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_)
-    : LHS(LHS_), PreCondition(PreCondition_) {
+souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_)
+    : LHS(LHS_), PreCondition(PreCondition_), IC(IC_) {
   InstNumbers = 101;
   //FIXME: Magic number. 101 is chosen arbitrarily.
   //This should go away once non-input variable names are not discarded
@@ -300,6 +301,29 @@ bool souper::AliveDriver::translateRoot(const souper::Inst *I, const Inst *PC,
   return true;
 }
 
+// Dummy because it doesn't actually build expressions.
+// It exists for the purpose of reusing parts of the abstract ExprBuilder here.
+// FIXME: Allow creating objects of ExprBuilder
+class DummyExprBuilder : public souper::ExprBuilder {
+public:
+  DummyExprBuilder(souper::InstContext &IC) : souper::ExprBuilder(IC) {}
+  std::string BuildQuery(const souper::BlockPCs & BPCs,
+                         const std::vector<souper::InstMapping> & PCs,
+                         souper::InstMapping Mapping,
+                         std::vector<souper::Inst *> * ModelVars,
+                         bool Negate) override {
+    llvm::report_fatal_error("Do not call");
+    return "";
+  }
+  std::string GetExprStr(const souper::BlockPCs & BPCs,
+                         const std::vector<souper::InstMapping> & PCs,
+                         souper::InstMapping Mapping,
+                         std::vector<souper::Inst *> * ModelVars,
+                         bool Negate) override {
+    llvm::report_fatal_error("Do not call");
+    return "";
+  }
+};
 
 bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
                                             IR::Function &F,
@@ -338,7 +362,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
   switch (I->K) {
     case souper::Inst::Var: {
       ExprCache[I] = Builder.var(t, Name);
-      return true;
+      return translateDataflowFacts(I, F, ExprCache);
     }
     case souper::Inst::Const: {
       ExprCache[I] = Builder.val(t, I->Val.getLimitedValue());
@@ -435,6 +459,24 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     }
   }
 }
+bool
+souper::AliveDriver::translateDataflowFacts(const souper::Inst* I,
+                                            IR::Function& F,
+                                            souper::AliveDriver::Cache& ExprCache) {
+  DummyExprBuilder EB(IC);
+  auto DataFlowConstraints = EB.getDataflowConditions(const_cast<Inst *>(I));
+  //FIXME: Get rid of the const_cast by making getDataflowConditions take const Inst *
+  if (DataFlowConstraints) {
+    if (!translateAndCache(DataFlowConstraints, F, ExprCache)) {
+      return false;
+    }
+    FunctionBuilder Builder(F);
+    Builder.assume(ExprCache[DataFlowConstraints]);
+    return true;
+  } else {
+    return false;
+  }
+}
 
 IR::Type &souper::AliveDriver::getType(int n) {
   if (TypeCache.find(n) == TypeCache.end()) {
@@ -451,6 +493,6 @@ bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
     Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
     Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
   }
-  AliveDriver Verifier(LHS, Ante);
+  AliveDriver Verifier(LHS, Ante, IC);
   return Verifier.verify(RHS);
 }
