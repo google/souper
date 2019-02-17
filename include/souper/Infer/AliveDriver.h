@@ -28,7 +28,7 @@ namespace souper {
 class AliveDriver {
   typedef std::unordered_map<const Inst *, IR::Value *> Cache;
 public:
-  AliveDriver(Inst *LHS_, Inst *PreCondition_);
+  AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_);
 
   std::map<Inst *, llvm::APInt> synthesizeConstants(souper::Inst *RHS);
 
@@ -49,11 +49,13 @@ private:
 
   bool translateRoot(const Inst *I, const Inst *PC, IR::Function &F, Cache &ExprCache);
   bool translateAndCache(const Inst *I, IR::Function &F, Cache &ExprCache);
+  bool translateDataflowFacts(const Inst *I, IR::Function &F, Cache &ExprCache);
   IR::Function LHSF;
 
   int InstNumbers;
   std::unordered_map<const Inst *, std::string> NamesCache;
 
+  InstContext &IC;
   smt::smt_initializer smt_init;
 };
 
