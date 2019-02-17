@@ -455,8 +455,13 @@ public:
 
       if (DebugLevel > 1) {
         if (DebugLevel > 2) {
-          errs() << "\nFunction before replacement:\n";
-          F->print(errs());
+          if (DebugLevel > 4) {
+            errs() << "\nModule before replacement:\n";
+            F->getParent()->dump();
+          } else {
+            errs() << "\nFunction before replacement:\n";
+            F->print(errs());
+          }
         }
         errs() << "\n";
         errs() << "; Replacing \"";
@@ -494,8 +499,13 @@ public:
     }
 
     if (DebugLevel > 2) {
-      errs() << "\nFunction after replacement:\n\n";
-      F->print(errs());
+      if (DebugLevel > 4) {
+        errs() << "\nModule after replacement:\n";
+        F->getParent()->dump();
+      } else {
+        errs() << "\nFunction after replacement:\n\n";
+        F->print(errs());
+      }
       errs() << "\n";
     }
 
