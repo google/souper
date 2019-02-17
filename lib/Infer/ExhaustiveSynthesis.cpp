@@ -551,7 +551,7 @@ std::error_code synthesizeWithAlive(SynthesisContext &SC, Inst *&RHS,
     Ante = SC.IC.getInst(Inst::And, 1, {Ante, Eq});
   }
 
-  AliveDriver Verifier(SC.LHS, Ante);
+  AliveDriver Verifier(SC.LHS, Ante, SC.IC);
   for (auto &&G : Guesses) {
     std::set<const Inst *> Visited;
     auto C = findConst(G, "reservedconst_0", Visited);
