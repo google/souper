@@ -27,6 +27,7 @@ static const unsigned MaxInputSpecializationTries = 2;
 static const unsigned MaxLHSCands = 15;
 
 bool UseAlive;
+unsigned DebugLevel;
 
 using namespace souper;
 using namespace llvm;
@@ -44,11 +45,12 @@ static const std::vector<Inst::Kind> BinaryOperators = {
 };
 
 namespace {
-  static cl::opt<unsigned> DebugLevel("souper-exhaustive-synthesis-debug-level",
+  static cl::opt<unsigned, /*ExternalStorage=*/true>
+    DebugFlagParser("souper-exhaustive-synthesis-debug-level",
     cl::desc("Synthesis debug level (default=0). "
     "The larger the number is, the more fine-grained debug "
     "information will be printed"),
-    cl::init(0));
+    cl::Hidden, cl::location(DebugLevel), cl::init(0));
   static cl::opt<unsigned> MaxNumInstructions("souper-exhaustive-synthesis-num-instructions",
     cl::desc("Maximum number of instructions to synthesize (default=1)."),
     cl::init(1));

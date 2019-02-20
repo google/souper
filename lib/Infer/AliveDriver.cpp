@@ -19,6 +19,8 @@
 #include <string_view>
 #include <z3.h>
 
+extern unsigned DebugLevel;
+
 namespace {
 class FunctionBuilder {
 public:
@@ -243,7 +245,8 @@ souper::AliveDriver::synthesizeConstants(souper::Inst *RHS) {
   RExprCache.clear();
   IR::Function RHSF;
   if (!translateRoot(RHS, nullptr, RHSF, RExprCache)) {
-    llvm::errs() << "Failed to translate RHS.\n";
+    if (DebugLevel > 2)
+      llvm::errs() << "Failed to translate RHS.\n";
     // TODO: Eventually turn this into an assertion
     return {};
   }
@@ -278,7 +281,8 @@ bool souper::AliveDriver::verify (Inst *RHS) {
     llvm::errs() << os.str();
     return false; // TODO: Encode errs into ErrorCode
   } else {
-    llvm::errs() << "RHS proved valid.\n";
+    if (DebugLevel > 2)
+      llvm::errs() << "RHS proved valid.\n";
     return true;
   }
 }
