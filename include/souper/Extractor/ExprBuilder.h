@@ -55,6 +55,8 @@ public:
                  std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
 
   Inst *getDataflowConditions(Inst *I);
+  Inst *getBlockPCs(Inst *Root);
+  void setBlockPCMap(const BlockPCs &BPCs);
 
 protected:
   InstContext *LIC;
@@ -74,10 +76,7 @@ protected:
                               std::map<Inst *, bool> *SelectBranches,
                               UBPathInstMap &CachedUBPathInsts);
 
-  void setBlockPCMap(const BlockPCs &BPCs);
-
   Inst *getUBInstCondition(Inst *Root);
-  Inst *getBlockPCs(Inst *Root);
   std::map<Inst *, Inst *> getUBInstConstraints(Inst *Root);
   std::vector<Inst *> getUBPathInsts(Inst *Root);
   std::vector<Inst *> getVarInsts(const std::vector<Inst *> Insts);

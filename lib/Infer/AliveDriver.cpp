@@ -221,11 +221,19 @@ synthesizeConstantUsingSolver(tools::Transform &t,
   return SynthesisResult;
 }
 
-souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_)
-    : LHS(LHS_), PreCondition(PreCondition_), IC(IC_) {
+souper::AliveDriver::AliveDriver(Inst *LHS_, const BlockPCs &BPCs,
+                                 const std::vector<InstMapping> &PCs,
+                                 InstContext &IC_)
+    : LHS(LHS_), IC(IC_), BPCs(BPCs), PCs(PCs) {
   InstNumbers = 101;
   //FIXME: Magic number. 101 is chosen arbitrarily.
   //This should go away once non-input variable names are not discarded
+
+  PreCondition = IC.getConst(llvm::APInt(1, true));
+  for (auto PC : PCs ) {
+    Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+    PreCondition = IC.getInst(Inst::And, 1, {PreCondition, Eq});
+  }
 
   if (!translateRoot(LHS, PreCondition, LHSF, LExprCache)) {
     llvm::report_fatal_error("Failed to translate LHS.\n");
@@ -478,6 +486,25 @@ souper::AliveDriver::translateDataflowFacts(const souper::Inst* I,
   }
 }
 
+bool
+souper::AliveDriver::translateBlockPCs(const souper::Inst* I,
+                                      IR::Function& F,
+                                      souper::AliveDriver::Cache& ExprCache) {
+  DummyExprBuilder EB(IC);
+  EB.setBlockPCMap(BPCs);
+  auto BPCCondition = EB.getBlockPCs(const_cast<Inst *>(I));
+    if (BPCCondition) {
+    if (!translateAndCache(BPCCondition, F, ExprCache)) {
+      return false;
+    }
+    FunctionBuilder Builder(F);
+    Builder.assume(ExprCache[BPCCondition]);
+    return true;
+  } else {
+    return false;
+  }
+}
+
 IR::Type &souper::AliveDriver::getType(int n) {
   if (TypeCache.find(n) == TypeCache.end()) {
     TypeCache[n] = new IR::IntType("i" + std::to_string(n), n);
@@ -486,13 +513,9 @@ IR::Type &souper::AliveDriver::getType(int n) {
 }
 
 bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
+                                   const BlockPCs &BPCs,
                                    const std::vector<InstMapping> &PCs,
                                    InstContext &IC) {
-  Inst *Ante = IC.getConst(llvm::APInt(1, true));
-  for (auto PC : PCs ) {
-    Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
-    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
-  }
-  AliveDriver Verifier(LHS, Ante, IC);
+  AliveDriver Verifier(LHS, BPCs, PCs, IC);
   return Verifier.verify(RHS);
 }

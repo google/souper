@@ -57,7 +57,7 @@ namespace {
     cl::init(false));
   static cl::opt<bool, /*ExternalStorage=*/true>
     AliveFlagParser("souper-use-alive", cl::desc("Use Alive2 as the backend"),
-    cl::Hidden, cl::location(UseAlive), cl::init(false));
+    cl::Hidden, cl::location(UseAlive), cl::init(true));
   static cl::opt<bool> LSBPruning("souper-lsb-pruning",
     cl::desc("Try to prune guesses by looking for a difference in LSB"),
     cl::init(false));
@@ -545,13 +545,7 @@ std::error_code synthesizeWithAlive(SynthesisContext &SC, Inst *&RHS,
   if (exceeds64Bits(SC.LHS, Visited))
     llvm::report_fatal_error("LHS exceeds 64 bits");
 
-  Inst *Ante = SC.IC.getConst(APInt(1, true));
-  for (auto PC : SC.PCs ) {
-    Inst *Eq = SC.IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
-    Ante = SC.IC.getInst(Inst::And, 1, {Ante, Eq});
-  }
-
-  AliveDriver Verifier(SC.LHS, Ante, SC.IC);
+  AliveDriver Verifier(SC.LHS, SC.BPCs, SC.PCs, SC.IC);
   for (auto &&G : Guesses) {
     std::set<const Inst *> Visited;
     auto C = findConst(G, "reservedconst_0", Visited);

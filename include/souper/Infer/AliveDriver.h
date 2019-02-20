@@ -28,7 +28,8 @@ namespace souper {
 class AliveDriver {
   typedef std::unordered_map<const Inst *, IR::Value *> Cache;
 public:
-  AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_);
+  AliveDriver(Inst *LHS_, const BlockPCs &BPCs,
+              const std::vector<InstMapping> &PCs, InstContext &IC_);
 
   std::map<Inst *, llvm::APInt> synthesizeConstants(souper::Inst *RHS);
 
@@ -40,6 +41,8 @@ public:
   }
 private:
   Inst *LHS, *PreCondition;
+  const BlockPCs &BPCs;
+  const std::vector<InstMapping> &PCs;
 
   Cache LExprCache, RExprCache;
 
@@ -50,6 +53,7 @@ private:
   bool translateRoot(const Inst *I, const Inst *PC, IR::Function &F, Cache &ExprCache);
   bool translateAndCache(const Inst *I, IR::Function &F, Cache &ExprCache);
   bool translateDataflowFacts(const Inst *I, IR::Function &F, Cache &ExprCache);
+  bool translateBlockPCs(const Inst *I, IR::Function &F, Cache &ExprCache);
   IR::Function LHSF;
 
   int InstNumbers;
@@ -59,7 +63,8 @@ private:
   smt::smt_initializer smt_init;
 };
 
-bool isTransformationValid(Inst* LHS, Inst* RHS, const std::vector<InstMapping> &PCs,
+bool isTransformationValid(Inst* LHS, Inst* RHS, const BlockPCs &BPCs,
+                           const std::vector<InstMapping> &PCs,
                            InstContext &IC);
 
 }

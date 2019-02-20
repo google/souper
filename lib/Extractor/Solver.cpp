@@ -99,7 +99,7 @@ public:
 
         if (UseAlive) {
           bool IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS,
-                                               PCs, IC);
+                                               BPCs, PCs, IC);
           if (IsValid) {
             RHS = I;
             return std::error_code();
@@ -137,7 +137,7 @@ public:
           Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
         }
 
-        AliveDriver Synthesizer(LHS, Ante, IC);
+        AliveDriver Synthesizer(LHS, BPCs, PCs, IC);
         auto ConstantMap = Synthesizer.synthesizeConstants(I);
         if (ConstantMap.find(I) != ConstantMap.end()) {
           RHS = IC.getConst(ConstantMap[I]);
@@ -271,7 +271,7 @@ public:
                           std::vector<std::pair<Inst *, llvm::APInt>> *Model)
   override {
     if (UseAlive) {
-      IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS, PCs, IC);
+      IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS, BPCs, PCs, IC);
       return std::error_code();
     }
     std::string Query;
