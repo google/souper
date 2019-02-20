@@ -23,6 +23,7 @@
 #include <system_error>
 
 extern bool UseAlive;
+extern unsigned DebugLevel;
 
 namespace souper {
 
