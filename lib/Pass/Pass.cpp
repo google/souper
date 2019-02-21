@@ -217,6 +217,10 @@ public:
         Function *F = Intrinsic::getDeclaration(M, Intrinsic::bswap, T);
         return Builder.CreateCall(F, V0);
       }
+      case Inst::BitReverse:{
+	Function *F = Intrinsic::getDeclaration(M, Intrinsic::bitreverse, T);
+	return Builder.CreateCall(F, V0);
+      }
       case Inst::Cttz:{
         Function *F = Intrinsic::getDeclaration(M, Intrinsic::cttz, T);
         // According to LLVM LangRef, the second argument of cttz i1 <is_zero_undef>

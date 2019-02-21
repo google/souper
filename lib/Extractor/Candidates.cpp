@@ -515,6 +515,8 @@ Inst *ExprBuilder::buildHelper(Value *V) {
           return IC.getInst(Inst::CtPop, L->Width, {L});
         case Intrinsic::bswap:
           return IC.getInst(Inst::BSwap, L->Width, {L});
+        case Intrinsic::bitreverse:
+	  return IC.getInst(Inst::BitReverse, L->Width, {L});
         case Intrinsic::cttz:
           return IC.getInst(Inst::Cttz, L->Width, {L});
         case Intrinsic::ctlz:

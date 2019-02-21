@@ -581,6 +581,7 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
 
   case Inst::CtPop:
   case Inst::BSwap:
+  case Inst::BitReverse:
   case Inst::Cttz:
   case Inst::Ctlz:
     MaxOps = MinOps = 1;

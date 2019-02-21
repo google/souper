@@ -464,6 +464,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
 
     UNARYOP(CtPop, Ctpop);
     UNARYOP(BSwap, BSwap);
+    UNARYOP(BitReverse, BitReverse);
 
     default:{
       llvm::outs() << "Unsupported Instruction Kind : " << I->getKindName(I->K) << "\n";
