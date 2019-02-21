@@ -291,28 +291,13 @@ private:
       return countOnes(get(Ops[0]));
     case Inst::BSwap: {
       ref<Expr> L = get(Ops[0]);
-      unsigned Width = L->getWidth();
-      if (Width == 16) {
-        return ConcatExpr::create(ExtractExpr::create(L, 0, 8),
-                                  ExtractExpr::create(L, 8, 8));
+      constexpr unsigned bytelen = 8;
+      ref<Expr> res = ExtractExpr::create(L, 0, bytelen);
+      for (unsigned i = 1; i < L->getWidth() / bytelen; i++) {
+	res = ConcatExpr::create(res, ExtractExpr::create(L, i * bytelen, bytelen));
       }
-      else if (Width == 32) {
-        return ConcatExpr::create4(ExtractExpr::create(L, 0, 8),
-                                   ExtractExpr::create(L, 8, 8),
-                                   ExtractExpr::create(L, 16, 8),
-                                   ExtractExpr::create(L, 24, 8));
-      }
-      else if (Width == 64) {
-        return ConcatExpr::create8(ExtractExpr::create(L, 0, 8),
-                                   ExtractExpr::create(L, 8, 8),
-                                   ExtractExpr::create(L, 16, 8),
-                                   ExtractExpr::create(L, 24, 8),
-                                   ExtractExpr::create(L, 32, 8),
-                                   ExtractExpr::create(L, 40, 8),
-                                   ExtractExpr::create(L, 48, 8),
-                                   ExtractExpr::create(L, 56, 8));
-      }
-      break;
+
+      return res;
     }
     case Inst::Cttz: {
       ref<Expr> L = get(Ops[0]);

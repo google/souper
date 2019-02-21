@@ -69,14 +69,8 @@ TEST(ParserTest, Errors) {
         "<input>:3:9: block %2 is undeclared" },
       { ",\n", "<input>:1:1: expected inst, block, cand, infer, result, pc, "
         "or blockpc" },
-      { "%0:i128 = var ; 0\n%1:i128 = bswap %0\n",
-        "<input>:2:1: bswap doesn't support 128 bits" },
-      { "%0:i33 = var ; 0\n%1:i33 = ctpop %0\n",
-        "<input>:2:1: ctpop doesn't support 33 bits" },
-      { "%0:i70 = var ; 0\n%1:i70 = cttz %0\n",
-        "<input>:2:1: cttz doesn't support 70 bits" },
-      { "%0:i128 = var ; 0\n%1:i128 = ctlz %0\n",
-        "<input>:2:1: ctlz doesn't support 128 bits" },
+      { "%0:i40 = var ; 0\n%1:i40 = bswap %0\n",
+        "<input>:2:1: bswap argument must be a multiple of 16 bits" },
       { "%0:i4 = var (knownBits=00010)\n",
         "<input>:1:1: knownbits pattern must be of same length as var width" },
       { "%0:i4 = var (knownBits=1xx00)\n",
@@ -562,6 +556,21 @@ cand %2 1:i1
 %2:i1 = eq 1:i32, %1
 cand %2 1:i1
 )i",
+      R"i(%0:i33 = var ; 0
+%1:i33 = ctpop %0
+%2:i1 = eq 1:i33, %1
+cand %2 1:i1
+)i",
+      R"i(%0:i33 = var ; 0
+%1:i33 = cttz %0
+%2:i1 = eq 1:i33, %1
+cand %2 1:i1
+)i",
+      R"i(%0:i33 = var ; 0
+%1:i33 = ctlz %0
+%2:i1 = eq 1:i33, %1
+cand %2 1:i1
+)i",
       R"i(%0:i32 = var ; 0
 %1:i32 = var ; 1
 %2:i32 = fshl %0, %1, 0:i32
@@ -597,6 +606,11 @@ cand %2 %3
       R"i(%0:i32 = var ; 0
 %1:i32 = bswap %0
 %2:i1 = eq 1:i32, %1
+cand %2 1:i1
+)i",
+      R"i(%0:i128 = var ; 0
+%1:i128 = bswap %0
+%2:i1 = eq 1:i128, %1
 cand %2 1:i1
 )i",
       R"i(%0:i64 = var ; 0
