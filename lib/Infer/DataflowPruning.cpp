@@ -192,6 +192,18 @@ llvm::ConstantRange dataflow::findConstantRange(souper::Inst* I,
         return result; // Whole range
       }
     }
+    case souper::Inst::Trunc: {
+      auto R0 = findConstantRange(I->Ops[0], C);
+      return R0.truncate(I->Width);
+    }
+    case souper::Inst::SExt: {
+      auto R0 = findConstantRange(I->Ops[0], C);
+      return R0.signExtend(I->Width);
+    }
+    case souper::Inst::ZExt: {
+      auto R0 = findConstantRange(I->Ops[0], C);
+      return R0.zeroExtend(I->Width);
+    }
     case souper::Inst::Add: {
       auto R0 = findConstantRange(I->Ops[0], C);
       auto R1 = findConstantRange(I->Ops[1], C);
