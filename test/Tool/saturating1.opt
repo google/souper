@@ -1,0 +1,11 @@
+; REQUIRES: solver
+
+; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t1
+; RUN: %FileCheck %s -check-prefix=SUCCESS < %t1
+
+; SUCCESS: RHS inferred successfully
+; SUCCESS: cand %0 127:i8
+
+%0 = sadd.sat 125:i8, 9
+infer %0
+

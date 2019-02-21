@@ -58,6 +58,7 @@ nestedinsts = ["add", "mul", "and", "or", "xor"]
 boolinsts = ["eq", "ne", "ugt", "uge", "ult", "ule", "sgt", "sge", "slt", "sle"]
 towidthinsts = ["sext", "trunc", "zext"];
 intrinsts = ["bswap", "ctpop", "cttz", "ctlz", "fshl", "fshr",
+             "sadd.sat", "uadd.sat", "ssub.sat", "usub.sat",
              "sadd.with.overflow", "uadd.with.overflow", "ssub.with.overflow",
              "usub.with.overflow", "smul.with.overflow", "umul.with.overflow"]
 specialinsts = ["block", "pc", "cand", "infer", "result"]

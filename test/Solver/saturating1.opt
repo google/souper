@@ -1,0 +1,12 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver %s | %FileCheck %s
+
+; CHECK: LGTM
+
+%x:i8 = var
+%y:i8 = var
+%z = sadd.sat %x, %y
+pc %x 0
+infer %z
+%res = addnsw %x, %y
+result %res

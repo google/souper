@@ -308,6 +308,14 @@ public:
         } else {
           return Builder.CreateICmpSLE(V0, V1);
         }
+      case Inst::SAddSat:
+	return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::sadd_sat, T), {V0, V1});
+      case Inst::UAddSat:
+	return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::uadd_sat, T), {V0, V1});
+      case Inst::SSubSat:
+	return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::ssub_sat, T), {V0, V1});
+      case Inst::USubSat:
+	return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::usub_sat, T), {V0, V1});
       default:
         break;
       }
