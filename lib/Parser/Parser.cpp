@@ -723,25 +723,9 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     return false;
   }
 
-  switch (IK) {
-  case Inst::BSwap:
-    if (Width != 16 && Width != 32 && Width != 64) {
-      ErrStr = "bswap doesn't support " + std::to_string(Width) + " bits";
-      return false;
-    }
-    break;
-  case Inst::CtPop:
-  case Inst::Ctlz:
-  case Inst::Cttz:
-    if (Width !=8 && Width != 16 && Width != 32 &&
-        Width != 64 && Width != 256) {
-      ErrStr = std::string(Inst::getKindName(IK)) + " doesn't support " +
-        std::to_string(Width) + " bits";
-      return false;
-    }
-    break;
-  default:
-    break;
+  if (IK == Inst::BSwap && Width % 16 != 0) {
+    ErrStr = "bswap argument must be a multiple of 16 bits";
+    return false;
   }
 
   return true;

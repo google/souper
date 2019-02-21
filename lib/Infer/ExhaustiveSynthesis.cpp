@@ -205,21 +205,9 @@ void getGuesses(std::vector<Inst *> &Guesses,
         if (Comp->K == Inst::ReservedInst && Comp->Width == 0)
           Comp->Width = Width;
 
-        switch (K) {
-        case Inst::BSwap:
-          if (Width != 16 && Width != 32 && Width != 64) {
-            continue;
-          }
-        case Inst::CtPop:
-        case Inst::Ctlz:
-        case Inst::Cttz:
-          if (Width != 8 && Width != 16 && Width != 32 &&
-              Width != 64 && Width != 256) {
-            continue;
-          }
-        default:
-          break;
-        }
+	if (K == Inst::BSwap && Width % 16 != 0) {
+	  continue;
+	}
 
         for (auto V : matchWidth(Comp, Width, IC)) {
           auto N = IC.getInst(K, Width, { V });

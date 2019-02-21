@@ -417,21 +417,13 @@ void InstSynthesis::initConstComponents(InstContext &IC) {
 }
 
 void InstSynthesis::filterFixedWidthIntrinsicComps() {
-  // CtPop/BSwap/Cttz/Ctlz require specific widths
+  // BSwap require specific widths
   for (auto It = Comps.begin(); It != Comps.end();) {
     assert(It->Width && "comp width not set");
-    if (It->Kind == Inst::BSwap)
-      if (It->Width != 16 && It->Width != 32 && It->Width != 64) {
+    if (It->Kind == Inst::BSwap && (It->Width % 16) != 0) {
         It = Comps.erase(It);
         continue;
-      }
-    if ((It->Kind == Inst::CtPop) || (It->Kind == Inst::Ctlz) ||
-        (It->Kind == Inst::Cttz))
-      if (It->Width != 8 && It->Width != 16 && It->Width != 32 &&
-          It->Width != 64 && It->Width != 256) {
-        It = Comps.erase(It);
-        continue;
-      }
+    }
     ++It;
   }
 }
