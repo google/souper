@@ -1189,6 +1189,7 @@ Inst *InstSynthesis::createCleanInst(Inst::Kind Kind, unsigned Width,
 
   case Inst::CtPop:
   case Inst::BSwap:
+  case Inst::BitReverse:
     if (Ops[0] == IC.getConst(APInt(Width, 0)))
       return IC.getConst(APInt(Width, 0));
     break;
