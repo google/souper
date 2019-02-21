@@ -984,7 +984,9 @@ Inst *InstSynthesis::createInstFromWiring(
   if (Comp.Kind == Inst::Select) {
     Ops[0] = IC.getInst(Inst::Trunc, 1, {Ops[0]});
     return createCleanInst(Comp.Kind, Comp.Width, Ops, IC);
-  } if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc) {
+  }
+
+  if (Comp.Width < DefaultWidth && Comp.Kind != Inst::Trunc) {
     Inst *Ret = createCleanInst(Comp.Kind, Comp.Width, Ops, IC);
     return IC.getInst(Inst::ZExt, DefaultWidth, {Ret});
   } else
@@ -1223,6 +1225,21 @@ Inst *InstSynthesis::createCleanInst(Inst::Kind Kind, unsigned Width,
                           {Ops[0], Ops[1], IC.getConst(ShAmtModWidth)});
       }
     }
+    break;
+
+  case Inst::SAddSat:
+  case Inst::UAddSat:
+    if (Ops[0]->K == Inst::Const && Ops[0]->Val.isNullValue()) {
+      return Ops[1];
+    } else if (Ops[1]->K == Inst::Const && Ops[1]->Val.isNullValue()) {
+      return Ops[0];
+    }
+    break;
+
+  case Inst::SSubSat:
+  case Inst::USubSat:
+    if (Ops[1]->K == Inst::Const && Ops[1]->Val.isNullValue())
+      return Ops[0];
     break;
 
   default:

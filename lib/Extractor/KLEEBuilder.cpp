@@ -82,7 +82,7 @@ public:
       Printer.setArrayValuesToGet(Arr);
     }
     Printer.generateOutput();
-  
+
     if (DumpKLEEExprs) {
       SMTSS << "; KLEE expression:\n; ";
       std::unique_ptr<ExprPPrinter> PP(ExprPPrinter::create(SMTSS));
@@ -91,7 +91,7 @@ public:
       PP->print(E);
       SMTSS << '\n';
     }
-  
+
     return SMTSS.str();
   }
 
@@ -179,7 +179,7 @@ private:
       ref<Expr> Mul = MulExpr::create(get(Ops[0]), get(Ops[1]));
       return Mul;
     }
-  
+
     // We introduce these extra checks here because KLEE invokes llvm::APInt's
     // div functions, which crash upon divide-by-zero.
     case Inst::UDiv:
@@ -197,11 +197,11 @@ private:
       if (R->isZero()) {
         return klee::ConstantExpr::create(0, Ops[1]->Width);
       }
-  
+
       switch (I->K) {
       default:
         break;
-  
+
       case Inst::UDiv: {
         ref<Expr> Udiv = UDivExpr::create(get(Ops[0]), R);
         return Udiv;
@@ -229,7 +229,7 @@ private:
       llvm_unreachable("unknown kind");
     }
     }
-  
+
     case Inst::And:
       return buildAssoc(AndExpr::create, Ops);
     case Inst::Or:
@@ -367,6 +367,46 @@ private:
       unsigned Index = Ops[1]->Val.getZExtValue();
       return get(Ops[0]->Ops[Index]);
     }
+    case Inst::SAddSat: {
+      ref<Expr> add = AddExpr::create(get(Ops[0]), get(Ops[1]));
+      auto sextL = SExtExpr::create(get(Ops[0]), I->Width + 1);
+      auto sextR = SExtExpr::create(get(Ops[1]), I->Width + 1);
+      auto addExt = AddExpr::create(sextL, sextR);
+      auto smin = klee::ConstantExpr::alloc(llvm::APInt::getSignedMinValue(I->Width));
+      auto smax = klee::ConstantExpr::alloc(llvm::APInt::getSignedMaxValue(I->Width));
+      auto sminExt = SExtExpr::create(smin, I->Width + 1);
+      auto smaxExt = SExtExpr::create(smax, I->Width + 1);
+      auto pred = SleExpr::create(addExt, sminExt);
+
+      auto pred2 = SgeExpr::create(addExt, smaxExt);
+      auto select2 = SelectExpr::create(pred2, smax, add);
+
+      return SelectExpr::create(pred, smin, select2);
+    }
+    case Inst::UAddSat: {
+      ref<Expr> add = AddExpr::create(get(Ops[0]), get(Ops[1]));
+      return SelectExpr::create(get(addnuwUB(I)), add, klee::ConstantExpr::alloc(llvm::APInt::getMaxValue(I->Width)));
+    }
+    case Inst::SSubSat: {
+      ref<Expr> sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
+      auto sextL = SExtExpr::create(get(Ops[0]), I->Width + 1);
+      auto sextR = SExtExpr::create(get(Ops[1]), I->Width + 1);
+      auto subExt = SubExpr::create(sextL, sextR);
+      auto smin = klee::ConstantExpr::alloc(llvm::APInt::getSignedMinValue(I->Width));
+      auto smax = klee::ConstantExpr::alloc(llvm::APInt::getSignedMaxValue(I->Width));
+      auto sminExt = SExtExpr::create(smin, I->Width + 1);
+      auto smaxExt = SExtExpr::create(smax, I->Width + 1);
+      auto pred = SleExpr::create(subExt, sminExt);
+
+      auto pred2 = SgeExpr::create(subExt, smaxExt);
+      auto select2 = SelectExpr::create(pred2, smax, sub);
+
+      return SelectExpr::create(pred, smin, select2);
+    }
+    case Inst::USubSat: {
+      ref<Expr> sub = SubExpr::create(get(Ops[0]), get(Ops[1]));
+      return SelectExpr::create(get(subnuwUB(I)), sub, klee::ConstantExpr::alloc(llvm::APInt::getMinValue(I->Width)));
+    }
     case Inst::SAddWithOverflow:
     case Inst::UAddWithOverflow:
     case Inst::SSubWithOverflow:
@@ -378,7 +418,7 @@ private:
     }
     llvm_unreachable("unknown kind");
   }
-  
+
   ref<Expr> get(Inst *I) {
     ref<Expr> &E = ExprMap[I];
     if (E.isNull()) {
@@ -387,7 +427,7 @@ private:
     }
     return E;
   }
-  
+
   ref<Expr> makeSizedArrayRead(unsigned Width, llvm::StringRef Name, Inst *Origin) {
     std::string NameStr;
     if (Name.empty())
@@ -399,7 +439,7 @@ private:
     Arrays.emplace_back(
      new Array(ArrayNames.makeName(NameStr), 1, 0, 0, Expr::Int32, Width));
     Vars.push_back(Origin);
-  
+
     UpdateList UL(Arrays.back().get(), 0);
     return ReadExpr::create(UL, klee::ConstantExpr::alloc(0, Expr::Int32));
   }

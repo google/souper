@@ -508,6 +508,7 @@ Inst *ExprBuilder::buildHelper(Value *V) {
     LibFunc Func;
     if (auto II = dyn_cast<IntrinsicInst>(Call)) {
       Inst *L = get(II->getOperand(0));
+      Inst *R = get(II->getOperand(1));
       switch (II->getIntrinsicID()) {
         default:
           break;
@@ -523,48 +524,53 @@ Inst *ExprBuilder::buildHelper(Value *V) {
           return IC.getInst(Inst::Ctlz, L->Width, {L});
         case Intrinsic::fshl:
         case Intrinsic::fshr: {
-          Inst *Low = get(II->getOperand(1));
           Inst *ShAmt = get(II->getOperand(2));
           Inst::Kind K =
               II->getIntrinsicID() == Intrinsic::fshl ? Inst::FShl : Inst::FShr;
-          return IC.getInst(K, L->Width, {/*High=*/L, Low, ShAmt});
+          return IC.getInst(K, L->Width, {/*High=*/L, /*Low=*/R, ShAmt});
         }
         case Intrinsic::sadd_with_overflow: {
-          Inst *R = get(II->getOperand(1));
           Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
           Inst *Overflow = IC.getInst(Inst::SAddO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SAddWithOverflow, L->Width+1, {Add, Overflow});
         }
         case Intrinsic::uadd_with_overflow: {
-          Inst *R = get(II->getOperand(1));
           Inst *Add = IC.getInst(Inst::Add, L->Width, {L, R}, /*Available=*/false);
           Inst *Overflow = IC.getInst(Inst::UAddO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::UAddWithOverflow, L->Width+1, {Add, Overflow});
         }
         case Intrinsic::ssub_with_overflow: {
-          Inst *R = get(II->getOperand(1));
           Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
           Inst *Overflow = IC.getInst(Inst::SSubO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SSubWithOverflow, L->Width+1, {Sub, Overflow});
         }
         case Intrinsic::usub_with_overflow: {
-          Inst *R = get(II->getOperand(1));
           Inst *Sub = IC.getInst(Inst::Sub, L->Width, {L, R}, /*Available=*/false);
           Inst *Overflow = IC.getInst(Inst::USubO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::USubWithOverflow, L->Width+1, {Sub, Overflow});
         }
         case Intrinsic::smul_with_overflow: {
-          Inst *R = get(II->getOperand(1));
           Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
           Inst *Overflow = IC.getInst(Inst::SMulO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::SMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
         case Intrinsic::umul_with_overflow: {
-          Inst *R = get(II->getOperand(1));
           Inst *Mul = IC.getInst(Inst::Mul, L->Width, {L, R}, /*Available=*/false);
           Inst *Overflow = IC.getInst(Inst::UMulO, 1, {L, R}, /*Available=*/false);
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
+        case Intrinsic::sadd_sat: {
+	  return IC.getInst(Inst::SAddSat, L->Width, {L, R});
+	}
+        case Intrinsic::uadd_sat: {
+	  return IC.getInst(Inst::UAddSat, L->Width, {L, R});
+	}
+        case Intrinsic::ssub_sat: {
+	  return IC.getInst(Inst::SSubSat, L->Width, {L, R});
+	}
+        case Intrinsic::usub_sat: {
+	  return IC.getInst(Inst::USubSat, L->Width, {L, R});
+	}
       }
     } else {
       Function* F = Call->getCalledFunction();
@@ -652,7 +658,7 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
   }
 }
 
-// Collect path conditions for a basic block. 
+// Collect path conditions for a basic block.
 // There are two kinds of path conditions, which correspond to
 // two Souper instruction kinds, pc and blockpc, respectively.
 // (1) The PC condition is added when the given predecessor of
@@ -661,8 +667,8 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
 //          B1
 //         /  \
 //       B2    B3
-//     The path conditions [B1->B2] and [B1->B3] will be added 
-//     to B2 and B3's PCs, respectively, because B1 can determine 
+//     The path conditions [B1->B2] and [B1->B3] will be added
+//     to B2 and B3's PCs, respectively, because B1 can determine
 //     the choice of either B2 or B3.
 // (2) The BlockPC condition handles cases where we don't know
 //     which predecessor would be chosen. In this case, we recursively
@@ -670,9 +676,9 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
 //     the PC condition (as defined above) is met. Then we add
 //     the this condition into the BlockPCs of the basic block from
 //     which we start our recursion. If a loop head or an entry
-//     point of an irreducible loop is encountered along any path, 
+//     point of an irreducible loop is encountered along any path,
 //     we stash the collected BlockPCs (if there is any) and return.
-//     The following examples (without loops) describe the idea. 
+//     The following examples (without loops) describe the idea.
 //     A simple example:
 //         B1
 //        /  \
@@ -684,7 +690,7 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
 //     Instead, we add whatever path conditions dominating B2 and
 //     B3 into B4's BlockPCs. In this simple case, we will have
 //     blockpc %B4, 0, s1, r1 // B1->B2
-//      
+//
 // Now consider a more complex example:
 //            B1          B2
 //           /  \        /  \

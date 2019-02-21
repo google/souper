@@ -42,6 +42,8 @@ static const std::vector<Inst::Kind> BinaryOperators = {
   Inst::Shl, Inst::AShr, Inst::LShr,
   Inst::Eq, Inst::Ne, Inst::Ult,
   Inst::Slt, Inst::Ule, Inst::Sle,
+  Inst::SAddSat, Inst::UAddSat,
+  Inst::SSubSat, Inst::USubSat
 };
 
 namespace {

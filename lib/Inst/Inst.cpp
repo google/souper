@@ -431,6 +431,14 @@ const char *Inst::getKindName(Kind K) {
     return "smul.with.overflow";
   case UMulWithOverflow:
     return "umul.with.overflow";
+  case SAddSat:
+    return "sadd.sat";
+  case UAddSat:
+    return "uadd.sat";
+  case SSubSat:
+    return "ssub.sat";
+  case USubSat:
+    return "usub.sat";
   case ReservedConst:
     return "reservedconst";
   case ReservedInst:
@@ -502,6 +510,10 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("usub.with.overflow", Inst::USubWithOverflow)
                    .Case("smul.with.overflow", Inst::SMulWithOverflow)
                    .Case("umul.with.overflow", Inst::UMulWithOverflow)
+                   .Case("sadd.sat", Inst::SAddSat)
+                   .Case("uadd.sat", Inst::UAddSat)
+                   .Case("ssub.sat", Inst::SSubSat)
+                   .Case("usub.sat", Inst::USubSat)
                    .Case("extractvalue", Inst::ExtractValue)
                    .Case("reservedinst", Inst::ReservedInst)
                    .Case("reservedconst", Inst::ReservedConst)
@@ -711,6 +723,8 @@ bool Inst::isCommutative(Inst::Kind K) {
   case AddNSW:
   case AddNUW:
   case AddNW:
+  case SAddSat:
+  case UAddSat:
   case Mul:
   case MulNSW:
   case MulNUW:
@@ -752,6 +766,10 @@ int Inst::getCost(Inst::Kind K) {
       return 5;
     case FShl:
     case FShr:
+    case SAddSat:
+    case UAddSat:
+    case SSubSat:
+    case USubSat:
       return 3;
     case Select:
       return 3;

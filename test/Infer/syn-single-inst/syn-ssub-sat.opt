@@ -1,0 +1,19 @@
+; REQUIRES: solver, synthesis, long-duration-synthesis
+
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: ssub.sat %x, %y
+
+%x:i8 = var
+%y:i8 = var
+%z = ssub.with.overflow %x, %y
+%sum = extractvalue %z, 0
+%ov = extractvalue %z, 1
+%x_lt0 = slt %x, 0
+%tmp = sle %y, 0
+%y_gt0 = xor %tmp, 1
+%t = and %x_lt0, %y_gt0
+%clamped = select %t,  -128:i8, 127:i8
+%res = select %ov, %clamped, %sum
+infer %res
