@@ -13,6 +13,7 @@
 
 #include "llvm/Support/raw_ostream.h"
 
+#include <iostream>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -267,6 +268,13 @@ bool souper::AliveDriver::verify (Inst *RHS) {
     llvm::errs() << "Failed to translate RHS.\n";
     // TODO: Eventually turn this into an assertion
     return false;
+  }
+
+  if (DebugLevel > 2) {
+    std::cerr << "Verifying following Alive Transformation ... \n\n";
+    std::cerr << LHSF << '\n';
+    std::cerr << " => \n\n";
+    std::cerr << RHSF << '\n';
   }
 
   tools::Transform t;
