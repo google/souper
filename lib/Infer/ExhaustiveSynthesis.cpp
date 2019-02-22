@@ -621,35 +621,14 @@ bool isBigQuerySat(SynthesisContext &SC,
   return BigQueryIsSat;
 }
 
-void generateAndSortGuesses(InstContext &IC, Inst *LHS,
-                            std::vector<Inst *> &Guesses) {
-  std::vector<Inst *> Inputs;
-  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
-  if (DebugLevel > 1)
-    llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
-
+void generateAndSortGuesses(InstContext &IC, Inst *LHS, const std::vector<Inst *> Inputs,
+                            std::vector<Inst *> &Guesses, PruneFunc PruneCallback) {
   int LHSCost = souper::cost(LHS, /*IgnoreDepsWithExternalUses=*/true);
 
   int TooExpensive = 0;
 
-  dataflow::DataflowPruningManager DataflowPruning
-    (LHS, Inputs, DebugLevel);
-  // Cheaper tests go first
-  std::vector<PruneFunc> PruneFuncs = {CostPrune};
-  if (EnableDataflowPruning) {
-    PruneFuncs.push_back(DataflowPruning.getPruneFunc());
-  }
-  auto PruneCallback = MkPruneFunc(PruneFuncs);
-  // TODO(zhengyangl): Refactor the syntactic pruning into a
-  // prune function here, between Cost and Dataflow
-  // TODO(manasij7479) : If RHS is concrete, evaluate both sides
-  // TODO(regehr?) : Solver assisted pruning (should be the last component)
-
   getGuesses(Guesses, Inputs, LHS->Width,
              LHSCost, IC, nullptr, nullptr, TooExpensive, PruneCallback);
-  if (DebugLevel >= 1) {
-    DataflowPruning.printStats(llvm::outs());
-  }
 
   // add nops guesses separately
   for (auto I : Inputs) {
@@ -812,7 +791,29 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   std::vector<Inst *> Guesses;
   std::error_code EC;
-  generateAndSortGuesses(IC, LHS, Guesses);
+
+  std::vector<Inst *> Inputs;
+  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+  if (DebugLevel > 1)
+    llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
+
+  dataflow::DataflowPruningManager DataflowPruning
+    (LHS, Inputs, DebugLevel);
+  // Cheaper tests go first
+  std::vector<PruneFunc> PruneFuncs = {CostPrune};
+  if (EnableDataflowPruning) {
+    PruneFuncs.push_back(DataflowPruning.getPruneFunc());
+  }
+  auto PruneCallback = MkPruneFunc(PruneFuncs);
+  // TODO(zhengyangl): Refactor the syntactic pruning into a
+  // prune function here, between Cost and Dataflow
+  // TODO(manasij7479) : If RHS is concrete, evaluate both sides
+  // TODO(regehr?) : Solver assisted pruning (should be the last component)
+
+  generateAndSortGuesses(IC, LHS, Inputs, Guesses, PruneCallback);
+  if (DebugLevel >= 1) {
+    DataflowPruning.printStats(llvm::outs());
+  }
 
   if (Guesses.empty()) {
     return EC;
@@ -871,6 +872,16 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       continue;
       // Guess doesn't work, found model for which they differ in LSB
       // TODO Utilize this for the mysterious constant synthesis 'loop'
+    }
+
+    // Avoids calling isConcreteCandidateSat
+    std::vector<Inst *> Empty;
+    if (!PruneCallback(ConcreteRHS, Empty)) {
+      if (DebugLevel > 3)
+        llvm::errs() << "Constant proved infeasible with inequivalence checks\n";
+      Tries++;
+      if (GuessHasConstant && Tries < MaxTries)
+        goto again; // TODO: Remove goto.
     }
 
     bool SecondSmallQueryIsSat;
