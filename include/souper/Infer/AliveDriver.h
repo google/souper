@@ -31,6 +31,7 @@ public:
   AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_);
 
   std::map<Inst *, llvm::APInt> synthesizeConstants(souper::Inst *RHS);
+  std::map<Inst *, llvm::APInt> synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext &IC);
 
   bool verify(Inst *RHS);
   ~AliveDriver() {

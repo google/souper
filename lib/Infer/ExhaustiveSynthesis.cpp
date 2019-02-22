@@ -66,6 +66,9 @@ namespace {
   static cl::opt<bool> EnableDataflowPruning("souper-dataflow-pruning",
     cl::desc("Enable pruning based on dataflow analysis (default=false)"),
     cl::init(false));
+  static cl::opt<bool> SynthesisConstWithCegisLoop("souper-synthesis-const-with-cegis",
+    cl::desc("Synthesis constants with CEGIS (default=false)"),
+    cl::init(false));
 }
 
 // TODO
@@ -478,14 +481,14 @@ APInt getNextInputVal(Inst *Var,
   llvm::report_fatal_error("Model does not contain the guess input variable");
 }
 
-Inst *findConst(souper::Inst *I, std::string ConstName,
+Inst *findConst(souper::Inst *I,
                 std::set<const Inst *> &Visited) {
-  if (I->Name == ConstName) {
+  if (I->Name.find(ReservedConstPrefix) != std::string::npos) {
     return I;
   } else {
     for (auto &&Op : I->Ops) {
       if (Visited.find(Op) == Visited.end()) {
-        auto Ret = findConst(Op, ConstName, Visited);
+        auto Ret = findConst(Op, Visited);
         if (Ret) {
           return Ret;
         }
@@ -551,25 +554,35 @@ std::error_code synthesizeWithAlive(SynthesisContext &SC, Inst *&RHS,
   AliveDriver Verifier(SC.LHS, Ante, SC.IC);
   for (auto &&G : Guesses) {
     std::set<const Inst *> Visited;
-    auto C = findConst(G, "reservedconst_0", Visited);
+    auto C = findConst(G, Visited);
     if (!C) {
       if (Verifier.verify(G)) {
         RHS = G;
         return EC;
       }
     } else {
-      auto ConstMap = Verifier.synthesizeConstants(G);
-      // TODO: Counterexample guided loop or UB constraints in query
-
-      auto GWithC = getInstCopy(G, SC.IC, InstCache, BlockCache, &ConstMap,
-                                /*CloneVars=*/false);
-      if (Verifier.verify(GWithC)) {
+      if (SynthesisConstWithCegisLoop) {
+        auto ConstMap = Verifier.synthesizeConstantsWithCegis(G, SC.IC);
+        if (ConstMap.empty())
+          continue;
+        auto GWithC = getInstCopy(G, SC.IC, InstCache, BlockCache, &ConstMap,
+                                  /*CloneVars=*/false);
         RHS = GWithC;
         return EC;
       } else {
-        continue;
+        auto ConstMap = Verifier.synthesizeConstants(G);
+        // TODO: Counterexample guided loop or UB constraints in query
+
+        auto GWithC = getInstCopy(G, SC.IC, InstCache, BlockCache, &ConstMap,
+                                  /*CloneVars=*/false);
+        if (Verifier.verify(GWithC)) {
+          RHS = GWithC;
+          return EC;
+        } else {
+          continue;
+        }
+        return EC;
       }
-      return EC;
     }
   }
   return EC;
