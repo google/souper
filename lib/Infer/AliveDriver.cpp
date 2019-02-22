@@ -22,6 +22,7 @@
 #include <z3.h>
 
 extern unsigned DebugLevel;
+static const int MaxTries = 30;
 
 namespace {
 class FunctionBuilder {
@@ -158,6 +159,61 @@ struct ReturnLHSRAII {
 }
 
 std::map<souper::Inst *, llvm::APInt>
+performCegisFirstQuery(tools::Transform &t,
+                       std::map<std::string, souper::Inst *> &SouperConsts,
+                       smt::expr &TriedExpr) {
+  IR::Value::reset_gbl_id();
+  IR::State SrcState(t.src);
+  IR::State TgtState(t.tgt);
+  util::sym_exec(SrcState);
+  util::sym_exec(TgtState);
+
+  auto &Sv = SrcState.returnVal();
+  auto &Tv = TgtState.returnVal();
+
+  std::map<souper::Inst *, llvm::APInt> SynthesisResult;
+  SynthesisResult.clear();
+
+  std::set<smt::expr> Vars;
+  std::map<std::string, smt::expr> SMTConsts;
+  for (auto &[Var, Val] : TgtState.getValues()) {
+    auto &Name = Var->getName();
+    if (startsWith("%reservedconst", Name)) {
+      auto App = Val.first.value.isApp();
+      assert(app);
+      SMTConsts[Name] = (Z3_get_app_arg(smt::ctx(), App, 1));
+    }
+  }
+
+  // TODO: implement synthesis with refinement
+  smt::Solver::check({{(Sv.first.value == Tv.first.value) && (TriedExpr),
+          [&](const smt::Result &R) {
+
+          // no more guesses, stop immediately
+          if (R.isUnsat()) {
+            if (DebugLevel > 3)
+              llvm::errs()<<"No more new possible guesses\n";
+            return;
+          } else if (R.isSat()) {
+            auto &&Model = R.getModel();
+            smt::expr TriedAnte(false);
+
+            for (auto &[name, expr] : SMTConsts) {
+              TriedAnte |= (expr != smt::expr::mkUInt(Model.getInt(expr), expr.bits()));
+            }
+            TriedExpr &= TriedAnte;
+
+            for (auto &[name, expr] : SMTConsts) {
+              auto *I = SouperConsts[name];
+              SynthesisResult[I] = llvm::APInt(I->Width, Model.getInt(expr));
+            }
+          }
+        }}});
+
+  return SynthesisResult;
+}
+
+std::map<souper::Inst *, llvm::APInt>
 synthesizeConstantUsingSolver(tools::Transform &t,
   std::map<std::string, souper::Inst *> &SouperConsts) {
 
@@ -259,6 +315,69 @@ souper::AliveDriver::synthesizeConstants(souper::Inst *RHS) {
   tools::TransformVerify tv(t, /*check_each_var=*/false);
 
   return synthesizeConstantUsingSolver(t, Consts);
+}
+
+std::map<souper::Inst *, llvm::APInt>
+souper::AliveDriver::synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext &IC) {
+  std::map<souper::Inst *, llvm::APInt> ConstMap;
+
+  std::map<std::string, Inst *> Consts;
+  std::set<Inst *> Visited;
+  getReservedConsts(RHS, Consts, Visited);
+  assert(!Consts.empty());
+
+  smt::expr TriedExpr(true);
+
+  RExprCache.clear();
+  IR::Function RHSF;
+  if (!translateRoot(RHS, nullptr, RHSF, RExprCache)) {
+    if (DebugLevel > 2)
+      llvm::errs() << "Failed to translate RHS.\n";
+    // TODO: Eventually turn this into an assertion
+    return {};
+  }
+
+  tools::Transform t;
+  t.tgt = std::move(RHSF);
+
+  unsigned Tried = 0;
+  while (true) {
+    // First Query
+    {
+      ReturnLHSRAII foo{t, LHSF};
+      t.src = std::move(LHSF);
+
+      Tried ++;
+      // exceeds MAX_TRIES, stop immediately
+      if (Tried > MaxTries) {
+        if (DebugLevel > 2)
+          llvm::errs() << "Time of tries reached maximum\n";
+        return {};
+      }
+
+      ConstMap = performCegisFirstQuery(t, Consts, TriedExpr);
+
+      // stop immediately if first query is unsat.
+      if (ConstMap.empty())
+        return {};
+    }
+
+    // plug constants into guess
+    std::map<Inst *, Inst *> InstCache;
+    std::map<Block *, Block *> BlockCache;
+    auto GWithC = getInstCopy(RHS, IC, InstCache, BlockCache, &ConstMap,
+                              /*CloneVars=*/false);
+
+    // Second Query
+    {
+      if (verify(GWithC)) {
+        break;
+      } else {
+        continue;
+      }
+    }
+  }
+  return ConstMap;
 }
 
 
