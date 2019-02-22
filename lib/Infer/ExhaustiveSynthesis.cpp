@@ -895,8 +895,14 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         llvm::errs() << "second query is SAT-- constant doesn't work\n";
       Tries++;
       // TODO tune max tries
-      if (GuessHasConstant && Tries < MaxTries)
-        goto again;
+      if (GuessHasConstant) {
+        if (Tries < MaxTries) {
+          goto again;
+        } else {
+          if (DebugLevel > 3)
+            llvm::errs() << "number of constant synthesis tries exceeds MaxTries (default=30)\n";
+        }
+      }
     } else {
       if (DebugLevel > 2) {
         if (GuessHasConstant) {
