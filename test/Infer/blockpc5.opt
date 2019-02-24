@@ -9,9 +9,9 @@
 ; ExhaustiveSynthesis: sub 210:i32, %1
 ; InstSynthesis: sub 210:i32, %1
 
-; XFAIL: *
+; UNSUPPORTED
 
-; XFAIL until blockpc is supported by ExhaustiveSynthesis. InstSynthesis passes the case correctly.
+; mark this case UNSUPPORTED until blockpc is supported by ExhaustiveSynthesis. InstSynthesis passes the case correctly.
 
 %0 = block 2
 %1:i32 = var
