@@ -54,7 +54,8 @@ struct EvalValue {
       case ValueKind::Val : Out << "Val"; break;
       case ValueKind::Poison : Out << "Poison"; break;
       case ValueKind::Undef : Out << "Undef"; break;
-      case ValueKind::Unimplemented: Out << "Unimplemented"; break;
+      case ValueKind::Unimplemented : Out << "Unimplemented"; break;
+      case ValueKind::UB : Out << "Undefined Behavior"; break;
     }
     if (hasValue())
       Out << " : " << Value;
