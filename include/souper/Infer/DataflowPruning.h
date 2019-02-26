@@ -1,17 +1,11 @@
 #include "llvm/ADT/APInt.h"
-#include "llvm/IR/ConstantRange.h"
-#include "llvm/Support/KnownBits.h"
+
+#include "souper/Infer/Interpreter.h"
 #include "souper/Inst/Inst.h"
 
 #include <unordered_map>
 
 namespace souper {
-namespace dataflow {
-
-using EvalValue = llvm::Optional<llvm::APInt>;
-using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;
-
-EvalValue evaluateInst(Inst *Root, ValueCache &Cache);
 
 class ValueAnalysis {
 public:
@@ -28,8 +22,7 @@ private:
   std::vector<ValueCache> Inputs;
 };
 
-llvm::KnownBits findKnownBits(Inst *I, ValueCache &C);
-llvm::ConstantRange findConstantRange(Inst *I, ValueCache &C);
+
 
 typedef std::function<bool(Inst *, std::vector<Inst *> &)> PruneFunc;
 
@@ -50,5 +43,4 @@ private:
   std::vector<ValueCache> generateInputSets(std::vector<Inst *> &Inputs);
 };
 
-}
 }
