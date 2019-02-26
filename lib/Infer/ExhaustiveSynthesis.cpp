@@ -632,7 +632,7 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS,
 
   int TooExpensive = 0;
 
-  dataflow::DataflowPruningManager DataflowPruning
+  DataflowPruningManager DataflowPruning
     (LHS, Inputs, DebugLevel);
   // Cheaper tests go first
   std::vector<PruneFunc> PruneFuncs = {CostPrune};
