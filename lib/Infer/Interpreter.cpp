@@ -35,8 +35,14 @@ EvalValue evaluateSingleInst(souper::Inst* Inst,
     case souper::Inst::Mul:
       return {args[0].getValue() * args[1].getValue()};
     case souper::Inst::UDiv:
+      if (args[1].getValue() == 0) {
+        return EvalValue::ub();
+      }
       return {args[0].getValue().udiv(args[1].getValue())};
     case souper::Inst::SDiv:
+      if (args[1].getValue() == 0) {
+        return EvalValue::ub();
+      }
       return {args[0].getValue().sdiv(args[1].getValue())};
     case souper::Inst::URem:
       return {args[0].getValue().urem(args[1].getValue())};

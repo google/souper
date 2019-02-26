@@ -9,7 +9,7 @@
 namespace souper {
 
 struct EvalValue {
-  enum class ValueKind {Val, Poison, Undef, Unimplemented};
+  enum class ValueKind {Val, Poison, Undef, UB, Unimplemented};
 
   EvalValue() : K(ValueKind::Unimplemented) {}
   EvalValue(llvm::APInt Val) : Value{Val}, K(ValueKind::Val) {};
@@ -40,6 +40,11 @@ struct EvalValue {
   static EvalValue unimplemented() {
     EvalValue Result;
     Result.K = ValueKind::Unimplemented;
+    return Result;
+  }
+  static EvalValue ub() {
+    EvalValue Result;
+    Result.K = ValueKind::UB;
     return Result;
   }
 
