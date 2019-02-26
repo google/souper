@@ -684,8 +684,6 @@ findSatisfyingConstantMap(SynthesisContext &SC, InstConstList &BadConsts,
   // avoid choices for constants that have not worked out in previous iterations
   // ((R1 != C11 ) \/ (R2 != C21 )) /\ ((R1 != C12 ) \/ (R2 != C22 )) /\ ...
   std::error_code EC;
-  std::map<Inst *, Inst *> InstCache;
-  std::map<Block *, Block *> BlockCache;
   std::map<Inst *, llvm::APInt> ConstMap;
 
   Inst *AvoidConsts = SC.IC.getConst(APInt(1, true));
