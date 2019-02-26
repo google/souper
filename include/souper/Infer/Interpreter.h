@@ -6,6 +6,8 @@
 
 #include "souper/Inst/Inst.h"
 
+#include <unordered_map>
+
 namespace souper {
 
 struct EvalValue {
