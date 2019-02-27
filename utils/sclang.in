@@ -82,6 +82,8 @@ synthesizer.
 SOUPER_EXHAUSTIVE_SYNTHESIS -- Try to synthesize instructions with
 ExhaustiveSynthesis synthesizer.
 
+SOUPER_USE_ALIVE -- Use Alive for Exhaustive Synthesis.
+
 SOUPER_NO_EXPLOIT_UB -- Do not exploit LLVM-level undefined behavior
 when making inferences.
 
@@ -237,6 +239,10 @@ if ($souper) {
 
     if (exists $ENV{"SOUPER_EXHAUSTIVE_SYNTHESIS"}) {
       push @ARGV, ("-mllvm", "-souper-exhaustive-synthesis");
+    }
+
+    if (exists $ENV{"SOUPER_USE_ALIVE"}) {
+      push @ARGV, ("-mllvm", "-souper-use-alive");
     }
 
     if (exists $ENV{"SOUPER_STATS"}) {
