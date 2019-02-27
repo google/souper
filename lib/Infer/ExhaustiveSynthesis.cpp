@@ -202,12 +202,16 @@ void getGuesses(std::vector<Inst *> &Guesses,
         if (Comp->K == Inst::ReservedConst)
           continue;
 
-        if (Comp->K == Inst::ReservedInst && Comp->Width == 0)
-          Comp->Width = Width;
+        if (K == Inst::BSwap && Width % 16 != 0) {
+          continue;
+        }
 
-	if (K == Inst::BSwap && Width % 16 != 0) {
-	  continue;
-	}
+        if (Comp->K == Inst::ReservedInst && Comp->Width == 0) {
+          auto V = IC.getReservedInst(Width);
+          auto N = IC.getInst(K, Width, { V });
+          addGuess(N, LHSCost, PartialGuesses, TooExpensive);
+          continue;
+        }
 
         for (auto V : matchWidth(Comp, Width, IC)) {
           auto N = IC.getInst(K, Width, { V });
@@ -346,12 +350,15 @@ void getGuesses(std::vector<Inst *> &Guesses,
             if (L->K == Inst::ReservedConst)
               continue;
 
-            if (L->K == Inst::ReservedInst && L->Width == 0)
-              L->Width = 1;
+            Inst *V;
+            if (L->K == Inst::ReservedInst && L->Width == 0) {
+              V = IC.getReservedInst(1);
+            } else {
+              V = matchWidth(L, 1, IC)[0];
+            }
 
-            auto MatchedWidthL = matchWidth(L, 1, IC);
             auto SelectInst = IC.getInst(Inst::Select,
-                                         Width, { MatchedWidthL[0], V1i, V2i });
+                                         Width, { V, V1i, V2i });
             addGuess(SelectInst, LHSCost, PartialGuesses, TooExpensive);
           }
         }
