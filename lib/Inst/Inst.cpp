@@ -1042,7 +1042,13 @@ Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
   if (I == EmptyInst) {
     Copy = NewInst;
   } else if (I->K == Inst::Var) {
-    Copy = I;
+    if (I->Name.find(ReservedConstPrefix) != std::string::npos) {
+      Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
+                          I->KnownOnes, I->NonZero, I->NonNegative,
+                          I->PowOfTwo, I->Negative, I->NumSignBits);
+    } else {
+      Copy = I;
+    }
   } else {
     Copy = IC.getInst(I->K, I->Width, Ops);
   }
