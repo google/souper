@@ -1,4 +1,5 @@
-; REQUIRES: solver, synthesis
+; REQUIRES: solver, synthesis, unsupported
+; mark this case UNSUPPORTED until blockpc is supported by ExhaustiveSynthesis. InstSynthesis passes the case correctly.
 
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,sub %s > %t1 2>&1
 ; RUN: %FileCheck %s -check-prefix=InstSynthesis < %t1
@@ -8,10 +9,6 @@
 
 ; ExhaustiveSynthesis: sub 210:i32, %1
 ; InstSynthesis: sub 210:i32, %1
-
-; UNSUPPORTED
-
-; mark this case UNSUPPORTED until blockpc is supported by ExhaustiveSynthesis. InstSynthesis passes the case correctly.
 
 %0 = block 2
 %1:i32 = var
