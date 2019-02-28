@@ -180,7 +180,7 @@ performCegisFirstQuery(tools::Transform &t,
     auto &Name = Var->getName();
     if (startsWith("%reservedconst", Name)) {
       auto App = Val.first.value.isApp();
-      assert(app);
+      assert(App);
       SMTConsts[Name] = (Z3_get_app_arg(smt::ctx(), App, 1));
     }
   }
