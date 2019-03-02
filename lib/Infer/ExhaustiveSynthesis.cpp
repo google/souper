@@ -657,6 +657,7 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS,
   // Cheaper tests go first
   std::vector<PruneFunc> PruneFuncs = {CostPrune};
   if (EnableDataflowPruning) {
+    DataflowPruning.init();
     PruneFuncs.push_back(DataflowPruning.getPruneFunc());
   }
   auto PruneCallback = MkPruneFunc(PruneFuncs);

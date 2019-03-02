@@ -25,8 +25,12 @@ bool ValueAnalysis::isInfeasible(souper::Inst* RHS) {
   return false;
 }
 DataflowPruningManager::DataflowPruningManager(
-  souper::Inst* LHS, std::vector<Inst *> &Inputs, unsigned StatsLevel)
-  : VA(LHS, generateInputSets(Inputs)), NumPruned(0), TotalGuesses(0) {
+  souper::Inst* LHS_, std::vector<Inst *> &Inputs_, unsigned StatsLevel_)
+  : LHS(LHS_), Inputs(Inputs_), StatsLevel(StatsLevel_), NumPruned(0),
+    TotalGuesses(0) {}
+
+void DataflowPruningManager::init() {
+  VA = ValueAnalysis(LHS, generateInputSets(Inputs));
   if (StatsLevel > 1) {
     DataflowPrune= [this](Inst *I, std::vector<Inst *> &RI) {
       TotalGuesses++;
