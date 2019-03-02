@@ -3,7 +3,7 @@
 ; RUN: %souper-interpret %solver -input-values=%0=30000,%1=1000 %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
-; CHECK: Val : 29000
+; CHECK: Value: 29000
 
 %0:i64 = var
 %1:i64 = var

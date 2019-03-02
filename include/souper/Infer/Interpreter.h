@@ -23,10 +23,13 @@ struct EvalValue {
     return K == ValueKind::Val;
   }
   llvm::APInt getValue() {
-    if (K == ValueKind::Val) {
-      return Value;
+    if (K != ValueKind::Val) {
+      llvm::errs() << "Interpreter: expected number but got ";
+      print(llvm::errs());
+      llvm::errs() << "\n";
+      llvm::report_fatal_error("exiting");
     }
-    llvm::report_fatal_error("souper::Interpreter: Value error");
+    return Value;
   }
 
   static EvalValue poison() {
@@ -52,15 +55,14 @@ struct EvalValue {
 
   template <typename Stream>
   void print(Stream &&Out) {
+    Out << "Value: ";
     switch (K) {
-      case ValueKind::Val : Out << "Val"; break;
+      case ValueKind::Val : Out << Value; break;
       case ValueKind::Poison : Out << "Poison"; break;
       case ValueKind::Undef : Out << "Undef"; break;
       case ValueKind::Unimplemented : Out << "Unimplemented"; break;
       case ValueKind::UB : Out << "Undefined Behavior"; break;
     }
-    if (hasValue())
-      Out << " : " << Value;
   }
 };
 using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;

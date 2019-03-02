@@ -33,6 +33,7 @@ static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::init(1),
      "The larger the number is, the more fine-grained debug "
      "information will be printed."));
 
+// TODO could support poison, undef, and UB here
 static bool parseInput(const std::string &S, std::string &Name,
                        std::string &Val) {
   if (S[0] != '%')
@@ -53,7 +54,7 @@ static bool parseInput(const std::string &S, std::string &Name,
     return false;
   int StartVal = Pos;
   while (Pos < S.size()) {
-    if (S[Pos] < '0' || S[Pos] > '9')
+    if ((S[Pos] < '0' || S[Pos] > '9') && S[Pos] != '-')
       return false;
     Pos++;
   }
@@ -61,7 +62,14 @@ static bool parseInput(const std::string &S, std::string &Name,
   return true;
 }
 
-int Interpret(const MemoryBufferRef &MB, Solver *S) {
+static bool fitsInBits(std::string str, unsigned bits) {
+  auto I = APInt(bits, str, 10);
+  std::string S = I.toString(10, true);
+  std::string U = I.toString(10, false);
+  return (str.compare(S) == 0) || (str.compare(U) == 0);
+}
+
+static int Interpret(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
   std::string ErrStr;
   std::vector<ParsedReplacement> Reps;
@@ -91,11 +99,15 @@ int Interpret(const MemoryBufferRef &MB, Solver *S) {
       bool Found = false;
       for (auto V : Vars) {
         if (V->Name == Name) {
-          if (APInt::getBitsNeeded(Val, 10) > V->Width) {
+          if (!fitsInBits(Val, V->Width)) {
             llvm::errs() << "Error: value '" << Val << "' is too large for ";
             llvm::errs() << V->Width << " bits.\n";
             return 1;
           }
+	  if (InputValues.find(V) != InputValues.end()) {
+	    llvm::errs() << "Error: duplicate value for %" << V->Name << "\n";
+	    return 1;
+	  }
           InputValues[V] = APInt(V->Width, Val, 10);
           Found = true;
           if (DebugLevel > 3)
