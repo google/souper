@@ -326,17 +326,22 @@ add_library(z3 STATIC IMPORTED)
 set_target_properties(z3 PROPERTIES IMPORTED_LOCATION ${Z3_LIBRARY})
 set_target_properties(z3 PROPERTIES IMPORTED_IMPLIB ${Z3_LIBRARY})
 
+# static
 target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
-target_link_libraries(souperExtractor souperInfer souperInst kleeExpr)
-target_link_libraries(souperInfer ${LLVM_LIBS} ${LLVM_LDFLAGS} z3)
+target_link_libraries(souperExtractor souperKVStore souperInfer souperInst kleeExpr)
+target_link_libraries(souperInfer souperExtractor ${LLVM_LIBS} ${LLVM_LDFLAGS} z3)
 target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
-target_link_libraries(souperKVStore ${LLVM_LIBS} ${LLVM_LDFLAGS})
+target_link_libraries(souperKVStore ${HIREDIS_LIBRARY} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperParser souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS} ${ALIVE_LIBRARY})
 target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
+
+# dynamic
 target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
+
+# executables
 target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(lexer-test souperParser)
@@ -345,8 +350,8 @@ target_link_libraries(souper-check souperTool souperExtractor souperKVStore soup
 target_link_libraries(souper-interpret souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(count-insts souperParser)
-target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
-target_link_libraries(inst_tests souperInfer souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY})
+target_link_libraries(extractor_tests souperExtractor souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
+target_link_libraries(inst_tests souperInfer souperInst souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
 
 SET(BUILD_CLANG_TOOL 1 CACHE BOOL "Build the Souper Clang tool")
