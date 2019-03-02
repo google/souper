@@ -16,6 +16,23 @@ std::string knownBitsString(llvm::KnownBits KB) {
   return S;
 }
 
+bool hasConstantHelper(Inst *I, std::set<Inst *> &Visited) {
+  if (I->K == Inst::Var && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
+    return true;
+  } else {
+    if (Visited.insert(I).second)
+      for (auto Op : I->Ops)
+        if (hasConstantHelper(Op, Visited))
+          return true;
+  }
+  return false;
+}
+
+bool hasConstant(Inst *I) {
+  std::set<Inst *> Visited;
+  return hasConstantHelper(I, Visited);
+}
+
 bool ValueAnalysis::isInfeasible(souper::Inst *RHS,
 				 unsigned StatsLevel) {
   for (int I = 0; I < Inputs.size(); ++I) {
@@ -24,29 +41,32 @@ bool ValueAnalysis::isInfeasible(souper::Inst *RHS,
       auto Val = C.getValue();
       if (StatsLevel > 2)
 	llvm::errs() << "  LHS value = " << Val << "\n";
-      auto CR = findConstantRange(RHS, Inputs[I]);
-      if (StatsLevel > 2)
-	llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
-      if (!CR.contains(Val)) {
-	if (StatsLevel > 2)
-	  llvm::errs() << "  pruned using CR!\n";
-        return true;
-      }
-      auto KB = findKnownBits(RHS, Inputs[I]);
-      if (StatsLevel > 2)
-	llvm::errs() << "  RHS KnownBits = " << knownBitsString(KB) << "\n";
-      if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
-	if (StatsLevel > 2)
-	  llvm::errs() << "  pruned using KB!\n";
-        return true;
-      }
 
-      auto RHSV = evaluateInst(RHS, Inputs[I]);
-      if (RHSV.hasValue()) {
-        if (Val != RHSV.getValue()) {
-	  if (StatsLevel > 2)
-	    llvm::errs() << "  pruned using interpreter!\n";
+      if (hasConstant(RHS)) {
+        auto CR = findConstantRange(RHS, Inputs[I]);
+        if (StatsLevel > 2)
+          llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
+        if (!CR.contains(Val)) {
+          if (StatsLevel > 2)
+            llvm::errs() << "  pruned using CR!\n";
           return true;
+        }
+        auto KB = findKnownBits(RHS, Inputs[I]);
+        if (StatsLevel > 2)
+          llvm::errs() << "  RHS KnownBits = " << knownBitsString(KB) << "\n";
+        if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
+          if (StatsLevel > 2)
+            llvm::errs() << "  pruned using KB!\n";
+          return true;
+        }
+      } else {
+        auto RHSV = evaluateInst(RHS, Inputs[I]);
+        if (RHSV.hasValue()) {
+          if (Val != RHSV.getValue()) {
+            if (StatsLevel > 2)
+              llvm::errs() << "  pruned using concrete interpreter!\n";
+            return true;
+          }
         }
       }
     }
