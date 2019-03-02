@@ -4,14 +4,11 @@
 ; RUN: %souper %solver -check %t
 
 ; Function Attrs: nounwind readnone
-declare { i32, i1 } @llvm.ssub.with.overflow.i32(i32, i32) #1
+declare { i8, i1 } @llvm.ssub.with.overflow.i8(i8, i8)
 
-define i32 @foo(i32 %x) {
+define i1 @foo() {
 entry:
-  %cmp1 = icmp ugt i32 %x, 0
-  %sub = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 0, i32 %x)
-  %bit = extractvalue { i32, i1 } %sub, 1
-  %ret = xor i1 %cmp1, %bit
-  %conv = zext i1 %ret to i32
-  ret i32 %conv
+  %sub = call { i8, i1 } @llvm.ssub.with.overflow.i8(i8 -10, i8 120)
+  %bit = extractvalue { i8, i1 } %sub, 1, !expected !{ i1 1 }
+  ret i1 %bit
 }
