@@ -345,8 +345,8 @@ target_link_libraries(souper-check souperTool souperExtractor souperKVStore soup
 target_link_libraries(souper-interpret souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(count-insts souperParser)
-target_link_libraries(extractor_tests souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
-target_link_libraries(inst_tests souperInfer souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY})
+target_link_libraries(extractor_tests souperExtractor souperKVStore ${HIREDIS_LIBRARY} souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
+target_link_libraries(inst_tests souperInfer souperInst souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
 
 SET(BUILD_CLANG_TOOL 1 CACHE BOOL "Build the Souper Clang tool")
