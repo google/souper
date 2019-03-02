@@ -1,5 +1,5 @@
 ; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-dataflow-pruning -souper-exhaustive-synthesis-debug-level=2 %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-dataflow-pruning -souper-exhaustive-synthesis-debug-level=2 %solver %s > %t1 2>&1
 ; RUN: %FileCheck %s < %t1
 
 %0:i32 = var

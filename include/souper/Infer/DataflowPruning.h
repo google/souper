@@ -16,7 +16,7 @@ public:
       LHSValues.push_back(evaluateInst(LHS, Input));
     }
   }
-  bool isInfeasible(Inst *RHS);
+  bool isInfeasible(Inst *RHS, unsigned StatsLevel);
 private:
   Inst *LHS;
   std::vector<EvalValue> LHSValues;
