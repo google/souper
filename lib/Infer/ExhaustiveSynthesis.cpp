@@ -669,7 +669,7 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS,
   getGuesses(Guesses, Inputs, LHS->Width,
              LHSCost, IC, nullptr, nullptr, TooExpensive, PruneCallback);
   if (DebugLevel >= 1) {
-    DataflowPruning.printStats(llvm::outs());
+    DataflowPruning.printStats(llvm::errs());
   }
 
   // add nops guesses separately

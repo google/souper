@@ -1,27 +1,58 @@
 #include "souper/Infer/DataflowPruning.h"
 namespace souper {
 
-bool ValueAnalysis::isInfeasible(souper::Inst* RHS) {
+std::string knownBitsString(llvm::KnownBits KB) {
+  std::string S = "";
+  for (int I = 0; I < KB.getBitWidth(); I++) {
+    if (KB.Zero.isNegative())
+      S += "0";
+    else if (KB.One.isNegative())
+      S += "1";
+    else
+      S += "?";
+    KB.Zero <<= 1;
+    KB.One <<= 1;
+  }
+  return S;
+}
+
+bool ValueAnalysis::isInfeasible(souper::Inst *RHS,
+				 unsigned StatsLevel) {
   for (int I = 0; I < Inputs.size(); ++I) {
     auto C = LHSValues[I];
     if (C.hasValue()) {
+      auto Val = C.getValue();
+      if (StatsLevel > 2)
+	llvm::errs() << "  LHS value = " << Val << "\n";
       auto CR = findConstantRange(RHS, Inputs[I]);
-      if (!CR.contains(C.getValue())) {
+      if (StatsLevel > 2)
+	llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
+      if (!CR.contains(Val)) {
+	if (StatsLevel > 2)
+	  llvm::errs() << "  pruned using CR!\n";
         return true;
       }
       auto KB = findKnownBits(RHS, Inputs[I]);
-      if ((KB.Zero & C.getValue()) != 0 || (KB.One & ~C.getValue()) != 0) {
+      if (StatsLevel > 2)
+	llvm::errs() << "  RHS KnownBits = " << knownBitsString(KB) << "\n";
+      if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
+	if (StatsLevel > 2)
+	  llvm::errs() << "  pruned using KB!\n";
         return true;
       }
 
       auto RHSV = evaluateInst(RHS, Inputs[I]);
       if (RHSV.hasValue()) {
-        if (C.getValue() != RHSV.getValue()) {
+        if (Val != RHSV.getValue()) {
+	  if (StatsLevel > 2)
+	    llvm::errs() << "  pruned using interpreter!\n";
           return true;
         }
       }
     }
   }
+  if (StatsLevel > 2)
+    llvm::errs() << "  could not prune.\n";
   return false;
 }
 DataflowPruningManager::DataflowPruningManager(
@@ -34,12 +65,12 @@ void DataflowPruningManager::init() {
   if (StatsLevel > 1) {
     DataflowPrune= [this](Inst *I, std::vector<Inst *> &RI) {
       TotalGuesses++;
-      if (VA.isInfeasible(I)) {
+      if (VA.isInfeasible(I, StatsLevel)) {
         NumPruned++;
-        llvm::outs() << "Dataflow Pruned "
+        llvm::errs() << "Dataflow Pruned "
           << NumPruned << "/" << TotalGuesses << "\n";
         ReplacementContext RC;
-        RC.printInst(I, llvm::outs(), true);
+        RC.printInst(I, llvm::errs(), true);
         return false;
       }
       return true;
@@ -47,7 +78,7 @@ void DataflowPruningManager::init() {
   } else if (StatsLevel == 1) {
       DataflowPrune= [this](Inst *I, std::vector<Inst *> &RI) {
       TotalGuesses++;
-      if (VA.isInfeasible(I)) {
+      if (VA.isInfeasible(I, StatsLevel)) {
         NumPruned++;
         return false;
       }
@@ -55,7 +86,7 @@ void DataflowPruningManager::init() {
     };
   } else {
     DataflowPrune= [this](Inst *I, std::vector<Inst *> &RI) {
-      return !VA.isInfeasible(I);
+      return !VA.isInfeasible(I, StatsLevel);
     };
   }
 }
