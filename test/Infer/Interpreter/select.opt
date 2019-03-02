@@ -1,0 +1,14 @@
+; RUN: %souper-interpret %solver -input-values=%0=5,%1=6 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST1 %s < %t
+; TEST1: Value: 5
+
+; RUN: %souper-interpret %solver -input-values=%0=5,%1=4 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST2 %s < %t
+; TEST2: Value: 4
+
+%0:i8 = var
+%1:i8 = var
+%cmp = slt %0, %1
+%s = select %cmp, %0, %1
+infer %s
+

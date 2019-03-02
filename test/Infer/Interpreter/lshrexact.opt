@@ -1,0 +1,16 @@
+; RUN: %souper-interpret %solver -input-values=%0=16,%1=4 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST1 %s < %t
+; TEST1: Value: 1
+
+; RUN: %souper-interpret %solver -input-values=%0=16,%1=5 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST2 %s < %t
+; TEST2: Value: Poison
+
+; RUN: %souper-interpret %solver -input-values=%0=16,%1=199 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST3 %s < %t
+; TEST3: Value: Poison
+
+%0:i199 = var
+%1:i199 = var
+%2 = lshrexact %0, %1
+infer %2

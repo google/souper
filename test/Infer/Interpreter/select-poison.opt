@@ -1,0 +1,16 @@
+; RUN: %souper-interpret %solver -input-values=%0=255,%1=0 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST1 %s < %t
+; TEST1: Value: Poison
+
+; RUN: %souper-interpret %solver -input-values=%0=255,%1=1 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST2 %s < %t
+; TEST2: Value: Undefined
+
+%0:i8 = var
+%1:i8 = var
+%sub = subnuw 0, %1
+%cmp = eq %sub, 0
+%poison = addnuw %0, 1
+%notpoison = add %0, 1
+%out = select %cmp, %poison, %notpoison
+infer %out

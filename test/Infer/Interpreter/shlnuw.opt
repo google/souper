@@ -1,0 +1,16 @@
+; RUN: %souper-interpret %solver -input-values=%0=1,%1=4 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST1 %s < %t
+; TEST1: Value: 16
+
+; RUN: %souper-interpret %solver -input-values=%0=1,%1=8 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST2 %s < %t
+; TEST2: Value: Poison
+
+; RUN: %souper-interpret %solver -input-values=%0=128,%1=1 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST2 %s < %t
+; TEST3: Value: Poison
+
+%0:i8 = var
+%1:i8 = var
+%2 = shlnuw %0, %1
+infer %2

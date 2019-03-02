@@ -1,0 +1,16 @@
+; RUN: %souper-interpret %solver -input-values=%0=15,%1=2 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST1 %s < %t
+; TEST1: Value: -61
+
+; RUN: %souper-interpret %solver -input-values=%0=240,%1=2 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST2 %s < %t
+; TEST2: Value: 60
+
+; RUN: %souper-interpret %solver -input-values=%0=240,%1=130 %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST3 %s < %t
+; TEST3: Value: 60
+
+%0:i8 = var
+%1:i8 = var
+%2 = fshr %0, %0, %1
+infer %2
