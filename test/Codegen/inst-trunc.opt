@@ -1,0 +1,11 @@
+; RUN: %souper2llvm %s | %FileCheck %s
+
+%0:i16 = var
+%1:i8 = trunc %0
+result %1
+
+; CHECK: define i8 @fun(i16) {
+; CHECK-NEXT: entry:
+; CHECK-NEXT:   %1 = trunc i16 %0 to i8
+; CHECK-NEXT:   ret i8 %1
+; CHECK-NEXT: }

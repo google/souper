@@ -35,9 +35,9 @@ namespace souper {
 enum class HarvestType { HarvestedFromDef, HarvestedFromUse };
 
 const unsigned MaxPreds = 100000;
-const std::string ReservedConstPrefix = "reservedconst_";
-const std::string ReservedInstPrefix = "reservedinst";
-const std::string BlockPred = "blockpred";
+extern const std::string ReservedConstPrefix;
+extern const std::string ReservedInstPrefix;
+extern const std::string BlockPred;
 
 struct Inst;
 
@@ -262,6 +262,8 @@ public:
                 bool Available=true);
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
                 llvm::APInt DemandedBits, bool Available);
+
+  std::vector<Inst *> getVariables() const;
 };
 
 struct SynthesisContext {
