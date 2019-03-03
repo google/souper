@@ -13,5 +13,5 @@ define i1 @alive0_f2(i16, i16) local_unnamed_addr #0 {
   ;CHECK-NOT: %cmp2 = icmp ne i16 %1, 0
   ;CHECK-NOT: %r = or i1 %cmp1, %cmp2
   ;CHECK: %3 = or i16 %0, %1
-  ;CHECK: %4 = icmp ne i16 %3, 0
+  ;CHECK: %4 = icmp ne i16 0, %3
 }

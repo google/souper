@@ -165,6 +165,15 @@ add_library(souperClangTool STATIC
   ${SOUPER_CLANG_TOOL_FILES}
 )
 
+set(SOUPER_CODEGEN_FILES
+  lib/Codegen/Codegen.cpp
+  include/souper/Codegen/Codegen.h
+)
+
+add_library(souperCodegen STATIC
+  ${SOUPER_CODEGEN_FILES}
+)
+
 set(SOUPER_EXTRACTOR_FILES
   lib/Extractor/Candidates.cpp
   lib/Extractor/ExprBuilder.cpp
@@ -300,6 +309,10 @@ add_executable(count-insts
   tools/count-insts.cpp
 )
 
+add_executable(souper2llvm
+  tools/souper2llvm.cpp
+)
+
 add_executable(extractor_tests
   unittests/Extractor/ExtractorTests.cpp
 )
@@ -318,9 +331,10 @@ add_executable(interpreter_tests
 
 set(LLVM_LDFLAGS "${LLVM_LDFLAGS} ${ALIVE_LDFLAGS}")
 foreach(target souper internal-solver-test lexer-test parser-test souper-check count-insts
-	       souper-interpret
+               souper2llvm souper-interpret
                souperExtractor souperInfer souperInst souperKVStore souperParser
-               souperSMTLIB2 souperTool souperPass souperPassProfileAll kleeExpr)
+               souperSMTLIB2 souperTool souperPass souperPassProfileAll kleeExpr
+               souperCodegen)
   set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
   target_include_directories(${target} PRIVATE "${LLVM_INCLUDEDIR}")
 endforeach()
@@ -349,8 +363,8 @@ target_link_libraries(souperSMTLIB2 ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperTool souperExtractor souperSMTLIB2)
 
 # dynamic
-target_link_libraries(souperPass ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
-target_link_libraries(souperPassProfileAll ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
+target_link_libraries(souperPass souperCodegen ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
+target_link_libraries(souperPassProfileAll souperCodegen ${PASS_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 
 # executables
 target_link_libraries(souper souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
@@ -361,6 +375,7 @@ target_link_libraries(souper-check souperTool souperExtractor souperKVStore soup
 target_link_libraries(souper-interpret souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} z3)
 target_link_libraries(count-insts souperParser)
+target_link_libraries(souper2llvm souperParser souperCodegen)
 target_link_libraries(extractor_tests souperExtractor souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(inst_tests souperInfer souperInst souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
@@ -421,7 +436,6 @@ configure_file(${CMAKE_SOURCE_DIR}/utils/cache_dump.in ${CMAKE_BINARY_DIR}/cache
 configure_file(${CMAKE_SOURCE_DIR}/utils/cache_dfa.in ${CMAKE_BINARY_DIR}/cache_dfa @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/utils/cache_import.in ${CMAKE_BINARY_DIR}/cache_import @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/utils/cache_infer.in ${CMAKE_BINARY_DIR}/cache_infer @ONLY)
-configure_file(${CMAKE_SOURCE_DIR}/utils/souper2llvm.in ${CMAKE_BINARY_DIR}/souper2llvm @ONLY)
 
 if (BUILD_CLANG_TOOL)
   configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang @ONLY)

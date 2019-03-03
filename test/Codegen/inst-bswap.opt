@@ -1,0 +1,16 @@
+; RUN: %souper2llvm %s | %FileCheck %s
+
+%0:i16 = var
+%1:i16 = bswap %0
+result %1
+
+; CHECK: define i16 @fun(i16) {
+; CHECK-NEXT: entry:
+; CHECK-NEXT:   %1 = call i16 @llvm.bswap.i16(i16 %0)
+; CHECK-NEXT:   ret i16 %1
+; CHECK-NEXT: }
+
+; CHECK: ; Function Attrs: nounwind readnone speculatable
+; CHECK-NEXT: declare i16 @llvm.bswap.i16(i16) #0
+
+; CHECK: attributes #0 = { nounwind readnone speculatable }
