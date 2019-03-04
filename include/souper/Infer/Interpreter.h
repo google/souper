@@ -72,7 +72,8 @@ llvm::KnownBits findKnownBits(Inst* I, ValueCache& C, bool PartialEval = true);
 llvm::ConstantRange findConstantRange(souper::Inst* I,
                                       souper::ValueCache& C,
                                       bool PartialEval = true);
-bool isConcrete(souper::Inst *I);
+bool isConcrete(souper::Inst *I, bool ConsiderConsts = true,
+                                 bool ConsiderHoles = true);
 }
 
 
