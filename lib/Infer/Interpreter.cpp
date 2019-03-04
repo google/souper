@@ -2,29 +2,31 @@
 
 namespace souper {
 
-  bool hasReservedHelper(Inst *I, std::set<Inst *> &Visited) {
-    if (I->K == Inst::ReservedConst || I->K == Inst::ReservedInst)
+  bool hasReservedHelper(Inst *I, std::set<Inst *> &Visited,
+                         bool ConsiderConsts,
+                         bool ConsiderHoles) {
+    if (ConsiderConsts && I->K == Inst::ReservedConst)
       return true;
-    if (I->K == Inst::Var && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
+    if (ConsiderHoles && I->K == Inst::ReservedInst)
       return true;
-    } else if (I->K == Inst::Var && (I->Name.find(ReservedInstPrefix) != std::string::npos)) {
+    if (ConsiderConsts && I->K == Inst::Var
+        && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
       return true;
-    } else {
-      if (Visited.insert(I).second)
-        for (auto Op : I->Ops)
-          if (hasReservedHelper(Op, Visited))
-            return true;
     }
+    if (ConsiderHoles && I->K == Inst::Var
+        && (I->Name.find(ReservedInstPrefix) != std::string::npos)) {
+      return true;
+    }
+    if (Visited.insert(I).second)
+      for (auto Op : I->Ops)
+        if (hasReservedHelper(Op, Visited, ConsiderConsts, ConsiderHoles))
+          return true;
     return false;
   }
 
-  bool hasReserved(Inst *I) {
+  bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
     std::set<Inst *> Visited;
-    return hasReservedHelper(I, Visited);
-  }
-
-  bool isConcrete(Inst *I) {
-    return !hasReserved(I);
+    return !hasReservedHelper(I, Visited, ConsiderConsts, ConsiderHoles);
   }
 
 #define ARG0 Args[0].getValue()
@@ -406,22 +408,34 @@ namespace souper {
     }
 //   case Phi:
 //     return "phi";
-//   case Add:
-//     return "add";
-//   case AddNSW:
-//     return "addnsw";
-//   case AddNUW:
-//     return "addnuw";
-//   case AddNW:
-//     return "addnw";
-//   case Sub:
-//     return "sub";
-//   case SubNSW:
-//     return "subnsw";
-//   case SubNUW:
-//     return "subnuw";
-//   case SubNW:
-//     return "subnw";
+    case Inst::AddNUW :
+    case Inst::AddNW :
+    case Inst::Add: {
+      const auto &Op0KB = KB0;
+      const auto &Op1KB = KB1;
+      return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/false,
+                                               Op0KB, Op1KB);
+    }
+    case Inst::AddNSW: {
+      const auto &Op0KB = KB0;
+      const auto &Op1KB = KB1;
+      return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/true,
+                                               Op0KB, Op1KB);
+    }
+    case Inst::SubNUW :
+    case Inst::SubNW :
+    case Inst::Sub: {
+      const auto &Op0KB = KB0;
+      const auto &Op1KB = KB1;
+      return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/false,
+                                               Op0KB, Op1KB);
+    }
+    case Inst::SubNSW: {
+      const auto &Op0KB = KB0;
+      const auto &Op1KB = KB1;
+      return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/true,
+                                               Op0KB, Op1KB);
+    }
 //   case Mul:
 //     return "mul";
 //   case MulNSW:
@@ -430,19 +444,42 @@ namespace souper {
 //     return "mulnuw";
 //   case MulNW:
 //     return "mulnw";
-//   case UDiv:
-//     return "udiv";
+    case Inst::UDiv: {
+      unsigned LeadZ = KB0.countMinLeadingZeros();
+      unsigned RHSMaxLeadingZeros = KB1.countMaxLeadingZeros();
+      if (RHSMaxLeadingZeros != I->Width)
+        LeadZ = std::min(I->Width, LeadZ + I->Width - RHSMaxLeadingZeros - 1);
+      Result.Zero.setHighBits(LeadZ);
+      return Result;
+    }
 //   case SDiv:
 //     return "sdiv";
 //   case UDivExact:
 //     return "udivexact";
 //   case SDivExact:
 //     return "sdivexact";
-//   case URem:
-//     return "urem";
+    case Inst::URem: {
+      auto Op1V = getValue(I->Ops[1], C);
+      if (Op1V.hasValue()) {
+        auto RA = Op1V.getValue();
+        if (RA.isPowerOf2()) {
+          auto LowBits = (RA - 1);
+          Result = KB0;
+          Result.Zero |= ~LowBits;
+          Result.One &= LowBits;
+          return Result;
+        }
+      }
+
+      unsigned Leaders =
+        std::max(KB0.countMinLeadingZeros(), KB1.countMinLeadingZeros());
+      Result.resetAll();
+      Result.Zero.setHighBits(Leaders);
+      return Result;
+    }
 //   case SRem:
 //     return "srem";
-    case souper::Inst::And : {
+    case Inst::And : {
       auto Op0KB = KB0;
       auto Op1KB = KB1;
 
@@ -468,10 +505,10 @@ namespace souper {
       // ^ logic copied from LLVM ValueTracking.cpp
       return Op0KB;
     }
-    case souper::Inst::ShlNSW :
-    case souper::Inst::ShlNUW :
-    case souper::Inst::ShlNW : // TODO: Rethink if these make sense
-    case souper::Inst::Shl : {
+    case Inst::ShlNSW :
+    case Inst::ShlNUW :
+    case Inst::ShlNW : // TODO: Rethink if these make sense
+    case Inst::Shl : {
       auto Op0KB = KB0;
       auto Op1V = getValue(I->Ops[1], C);
 
@@ -485,6 +522,9 @@ namespace souper {
         Op0KB.Zero.setLowBits(Val);
         // setLowBits takes an unsigned int, so getLimitedValue is harmless
         return Op0KB;
+      } else if (I->Ops[1]->Name.find(ReservedConstPrefix) != std::string::npos) {
+        Result.Zero.setLowBits(1);
+        return Result;
       } else {
         return Result;
       }
@@ -495,7 +535,7 @@ namespace souper {
 //     return "shlnuw";
 //   case ShlNW:
 //     return "shlnw";
-    case souper::Inst::LShr : {
+    case Inst::LShr : {
       auto Op0KB = KB0;
       auto Op1V = getValue(I->Ops[1], C);
       if (Op1V.hasValue()) {
@@ -520,13 +560,13 @@ namespace souper {
 //     return "ashrexact";
 //   case Select:
 //     return "select";
-    case souper::Inst::ZExt: {
+    case Inst::ZExt: {
       return KB0.zext(I->Width);
     }
-    case souper::Inst::SExt: {
+    case Inst::SExt: {
       return KB0.sext(I->Width);
     }
-    case souper::Inst::Trunc: {
+    case Inst::Trunc: {
       return KB0.trunc(I->Width);
     }
 //   case Eq:
@@ -543,10 +583,18 @@ namespace souper {
 //     return "sle";
 //   case CtPop:
 //     return "ctpop";
-//   case BSwap:
-//     return "bswap";
-//   case BitReverse:
-//     return "bitreverse";
+    case Inst::BSwap: {
+      auto Op0KB = KB0;
+      Op0KB.One = Op0KB.One.byteSwap();
+      Op0KB.Zero = Op0KB.Zero.byteSwap();
+      return Op0KB;
+    }
+    case Inst::BitReverse: {
+      auto Op0KB = KB0;
+      Op0KB.One = Op0KB.One.reverseBits();
+      Op0KB.Zero = Op0KB.Zero.reverseBits();
+      return Op0KB;
+    }
 //   case Cttz:
 //     return "cttz";
 //   case Ctlz:
@@ -589,10 +637,11 @@ namespace souper {
 
 #define CR0 findConstantRange(I->Ops[0], C, PartialEval)
 #define CR1 findConstantRange(I->Ops[1], C, PartialEval)
+#define CR2 findConstantRange(I->Ops[2], C, PartialEval)
 
   llvm::ConstantRange findConstantRange(Inst *I,
                                         ValueCache &C, bool PartialEval) {
-    llvm::ConstantRange result(I->Width);
+    llvm::ConstantRange Result(I->Width);
 
     if (PartialEval && isConcrete(I)) {
       auto RootVal = evaluateInst(I, C);
@@ -608,7 +657,10 @@ namespace souper {
       if (V.hasValue()) {
         return llvm::ConstantRange(V.getValue());
       } else {
-        return result; // Whole range
+        if (I->Name.find(ReservedConstPrefix) != std::string::npos) {
+          return llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
+        }
+        return Result; // Whole range
       }
     }
     case Inst::Trunc: {
@@ -630,7 +682,7 @@ namespace souper {
       if (V1.hasValue()) {
         return CR0.addWithNoSignedWrap(V1.getValue());
       } else {
-        return result; // full range, can we do better?
+        return Result; // full range, can we do better?
       }
     }
     case souper::Inst::SubNSW :
@@ -666,6 +718,15 @@ namespace souper {
     case Inst::UDiv: {
       return CR0.udiv(CR1);
     }
+    case Inst::Ctlz:
+    case Inst::Cttz:
+    case Inst::CtPop: {
+      return llvm::ConstantRange(llvm::APInt(I->Width, 0),
+                                 llvm::APInt(I->Width, I->Ops[0]->Width + 1));
+    }
+    case Inst::Select: {
+      return CR1.unionWith(CR2);
+    }
       //     case Inst::SDiv: {
       //       auto R0 = FindConstantRange(I->Ops[0], C);
       //       auto R1 = FindConstantRange(I->Ops[1], C);
@@ -673,9 +734,10 @@ namespace souper {
       //     }
       // TODO: Xor pattern for not, truncs and extends, etc
     default:
-      return result;
+      return Result;
     }
   }
 #undef CR0
 #undef CR1
+#undef CR2
 }
