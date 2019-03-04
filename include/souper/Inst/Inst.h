@@ -33,6 +33,7 @@ enum class HarvestType { HarvestedFromDef, HarvestedFromUse };
 
 const unsigned MaxPreds = 100000;
 const std::string ReservedConstPrefix = "reservedconst_";
+const std::string ReservedInstPrefix = "reservedinst";
 
 struct Inst;
 

@@ -16,33 +16,16 @@ std::string knownBitsString(llvm::KnownBits KB) {
   return S;
 }
 
-bool hasConstantHelper(Inst *I, std::set<Inst *> &Visited) {
-  if (I->K == Inst::Var && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
-    return true;
-  } else {
-    if (Visited.insert(I).second)
-      for (auto Op : I->Ops)
-        if (hasConstantHelper(Op, Visited))
-          return true;
-  }
-  return false;
-}
-
-bool hasConstant(Inst *I) {
-  std::set<Inst *> Visited;
-  return hasConstantHelper(I, Visited);
-}
-
 bool ValueAnalysis::isInfeasible(souper::Inst *RHS,
-				 unsigned StatsLevel) {
+                                 unsigned StatsLevel) {
   for (int I = 0; I < Inputs.size(); ++I) {
     auto C = LHSValues[I];
     if (C.hasValue()) {
       auto Val = C.getValue();
       if (StatsLevel > 2)
-	llvm::errs() << "  LHS value = " << Val << "\n";
+        llvm::errs() << "  LHS value = " << Val << "\n";
 
-      if (hasConstant(RHS)) {
+      if (!isConcrete(RHS)) {
         auto CR = findConstantRange(RHS, Inputs[I]);
         if (StatsLevel > 2)
           llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
