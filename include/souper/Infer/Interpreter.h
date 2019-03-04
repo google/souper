@@ -68,9 +68,11 @@ struct EvalValue {
 using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;
 
 EvalValue evaluateInst(Inst* Root, ValueCache &Cache);
-llvm::KnownBits findKnownBits(Inst* I, ValueCache& C);
+llvm::KnownBits findKnownBits(Inst* I, ValueCache& C, bool PartialEval = true);
 llvm::ConstantRange findConstantRange(souper::Inst* I,
-                                      souper::ValueCache& C);
+                                      souper::ValueCache& C,
+                                      bool PartialEval = true);
+bool isConcrete(souper::Inst *I);
 }
 
 

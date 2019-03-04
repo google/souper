@@ -2,6 +2,31 @@
 
 namespace souper {
 
+  bool hasReservedHelper(Inst *I, std::set<Inst *> &Visited) {
+    if (I->K == Inst::ReservedConst || I->K == Inst::ReservedInst)
+      return true;
+    if (I->K == Inst::Var && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
+      return true;
+    } else if (I->K == Inst::Var && (I->Name.find(ReservedInstPrefix) != std::string::npos)) {
+      return true;
+    } else {
+      if (Visited.insert(I).second)
+        for (auto Op : I->Ops)
+          if (hasReservedHelper(Op, Visited))
+            return true;
+    }
+    return false;
+  }
+
+  bool hasReserved(Inst *I) {
+    std::set<Inst *> Visited;
+    return hasReservedHelper(I, Visited);
+  }
+
+  bool isConcrete(Inst *I) {
+    return !hasReserved(I);
+  }
+
 #define ARG0 Args[0].getValue()
 #define ARG1 Args[1].getValue()
 #define ARG2 Args[2].getValue()
@@ -11,18 +36,18 @@ namespace souper {
     // UB propagates unconditionally
     for (auto &A : Args)
       if (A.K == EvalValue::ValueKind::UB)
-	return EvalValue::ub();
+        return EvalValue::ub();
 
     // phi and select only take poison from their chosen input
     if (Inst->K != Inst::Phi && Inst->K != Inst::Select) {
       for (auto &A : Args)
-	if (A.K == EvalValue::ValueKind::Poison)
-	  return EvalValue::poison();
+        if (A.K == EvalValue::ValueKind::Poison)
+          return EvalValue::poison();
     }
 
     for (auto &A : Args)
       if (A.K == EvalValue::ValueKind::Undef)
-	llvm::report_fatal_error("undef not supported by interpreter");
+        llvm::report_fatal_error("undef not supported by interpreter");
 
     switch (Inst->K) {
     case Inst::Const:
@@ -179,14 +204,14 @@ namespace souper {
 
     case Inst::Shl:
       if (ARG1.uge(ARG0.getBitWidth()))
-	return EvalValue::poison();
+        return EvalValue::poison();
       return {ARG0 << ARG1};
 
     case Inst::ShlNSW:{
       bool Ov;
       auto Res = ARG0.sshl_ov(ARG1, Ov);
       if (Ov)
-	return EvalValue::poison();
+        return EvalValue::poison();
       return Res;
     }
 
@@ -194,7 +219,7 @@ namespace souper {
       bool Ov;
       auto Res = ARG0.ushl_ov(ARG1, Ov);
       if (Ov)
-	return EvalValue::poison();
+        return EvalValue::poison();
       return Res;
     }
 
@@ -203,35 +228,35 @@ namespace souper {
       auto Res1 = ARG0.ushl_ov(ARG1, Ov1);
       auto Res2 = ARG0.sshl_ov(ARG1, Ov2);
       if (Ov1 || Ov2)
-	return EvalValue::poison();
+        return EvalValue::poison();
       return Res1;
     }
 
     case Inst::LShr:
       if (ARG1.uge(ARG0.getBitWidth()))
-	return EvalValue::poison();
+        return EvalValue::poison();
       return {ARG0.lshr(ARG1)};
 
     case Inst::LShrExact:{
       if (ARG1.uge(ARG0.getBitWidth()))
-	return EvalValue::poison();
+        return EvalValue::poison();
       auto Res = ARG0.lshr(ARG1);
       if (ARG0 != Res.shl(ARG1))
-	return EvalValue::poison();
+        return EvalValue::poison();
       return Res;
     }
 
     case Inst::AShr:
       if (ARG1.uge(ARG0.getBitWidth()))
-	return EvalValue::poison();
+        return EvalValue::poison();
       return {ARG0.ashr(ARG1)};
 
     case Inst::AShrExact:{
       if (ARG1.uge(ARG0.getBitWidth()))
-	return EvalValue::poison();
+        return EvalValue::poison();
       auto Res = ARG0.ashr(ARG1);
       if (ARG0 != Res.shl(ARG1))
-	return EvalValue::poison();
+        return EvalValue::poison();
       return Res;
     }
 
@@ -345,17 +370,28 @@ namespace souper {
     if (I->K == Inst::Const)
       return {I->Val};
     if (I->K == Inst::Var ||
-	I->K == Inst::ReservedConst ||
-	I->K == Inst::ReservedInst) {
+        I->K == Inst::ReservedConst ||
+        I->K == Inst::ReservedInst) {
       if (C.find(I) != C.end())
-	return C[I];
+        return C[I];
     }
     // unimplemented
     return EvalValue();
   }
 
-  llvm::KnownBits findKnownBits(Inst *I, ValueCache &C) {
+#define KB0 findKnownBits(I->Ops[0], C, PartialEval)
+#define KB1 findKnownBits(I->Ops[1], C, PartialEval)
+
+  llvm::KnownBits findKnownBits(Inst *I, ValueCache &C, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
+    if (PartialEval && isConcrete(I)) {
+      auto RootVal = evaluateInst(I, C);
+      if (RootVal.hasValue()) {
+        Result.One = RootVal.getValue();
+        Result.Zero = ~RootVal.getValue();
+        return Result;
+      }
+    }
     switch(I->K) {
     case Inst::Const:
     case Inst::Var : {
@@ -368,38 +404,63 @@ namespace souper {
         return Result;
       }
     }
-    case Inst::Shl : {
-      auto Op0KB = findKnownBits(I->Ops[0], C);
-      auto Op1V = getValue(I->Ops[1], C);
-      if (Op1V.hasValue()) {
-        Op0KB.One <<= Op1V.getValue();
-        Op0KB.Zero <<= Op1V.getValue();
-        Op0KB.Zero.setLowBits(Op1V.getValue().getLimitedValue());
-        // setLowBits takes an unsiged int, so getLimitedValue is harmless
-        return Op0KB;
-      } else {
-        return Result;
-      }
-    }
-    case Inst::And : {
-      auto Op0KB = findKnownBits(I->Ops[0], C);
-      auto Op1KB = findKnownBits(I->Ops[1], C);
+//   case Phi:
+//     return "phi";
+//   case Add:
+//     return "add";
+//   case AddNSW:
+//     return "addnsw";
+//   case AddNUW:
+//     return "addnuw";
+//   case AddNW:
+//     return "addnw";
+//   case Sub:
+//     return "sub";
+//   case SubNSW:
+//     return "subnsw";
+//   case SubNUW:
+//     return "subnuw";
+//   case SubNW:
+//     return "subnw";
+//   case Mul:
+//     return "mul";
+//   case MulNSW:
+//     return "mulnsw";
+//   case MulNUW:
+//     return "mulnuw";
+//   case MulNW:
+//     return "mulnw";
+//   case UDiv:
+//     return "udiv";
+//   case SDiv:
+//     return "sdiv";
+//   case UDivExact:
+//     return "udivexact";
+//   case SDivExact:
+//     return "sdivexact";
+//   case URem:
+//     return "urem";
+//   case SRem:
+//     return "srem";
+    case souper::Inst::And : {
+      auto Op0KB = KB0;
+      auto Op1KB = KB1;
 
       Op0KB.One &= Op1KB.One;
       Op0KB.Zero |= Op1KB.Zero;
       return Op0KB;
     }
     case Inst::Or : {
-      auto Op0KB = findKnownBits(I->Ops[0], C);
-      auto Op1KB = findKnownBits(I->Ops[1], C);
+      auto Op0KB = KB0;
+      auto Op1KB = KB1;
 
       Op0KB.One |= Op1KB.One;
       Op0KB.Zero &= Op1KB.Zero;
       return Op0KB;
     }
     case Inst::Xor : {
-      auto Op0KB = findKnownBits(I->Ops[0], C);
-      auto Op1KB = findKnownBits(I->Ops[1], C);
+      auto Op0KB = KB0;
+      auto Op1KB = KB1;
       llvm::APInt KnownZeroOut =
         (Op0KB.Zero & Op1KB.Zero) | (Op0KB.One & Op1KB.One);
       Op0KB.One = (Op0KB.Zero & Op1KB.One) | (Op0KB.One & Op1KB.Zero);
@@ -407,14 +468,139 @@ namespace souper {
       // ^ logic copied from LLVM ValueTracking.cpp
       return Op0KB;
     }
+    case souper::Inst::ShlNSW :
+    case souper::Inst::ShlNUW :
+    case souper::Inst::ShlNW : // TODO: Rethink if these make sense
+    case souper::Inst::Shl : {
+      auto Op0KB = KB0;
+      auto Op1V = getValue(I->Ops[1], C);
+
+      if (Op1V.hasValue()) {
+        auto Val = Op1V.getValue().getLimitedValue();
+        if (Val < 0 || Val >= I->Width) {
+          return Result;
+        }
+        Op0KB.One <<= Val;
+        Op0KB.Zero <<= Val;
+        Op0KB.Zero.setLowBits(Val);
+        // setLowBits takes an unsigned int, so getLimitedValue is harmless
+        return Op0KB;
+      } else {
+        return Result;
+      }
+    }
+//   case ShlNSW:
+//     return "shlnsw";
+//   case ShlNUW:
+//     return "shlnuw";
+//   case ShlNW:
+//     return "shlnw";
+    case souper::Inst::LShr : {
+      auto Op0KB = KB0;
+      auto Op1V = getValue(I->Ops[1], C);
+      if (Op1V.hasValue()) {
+        auto Val = Op1V.getValue().getLimitedValue();
+        if (Val < 0 || Val >= I->Width) {
+          return Result;
+        }
+        Op0KB.One <<= Val;
+        Op0KB.Zero <<= Val;
+        Op0KB.Zero.setHighBits(Val);
+        // setHighBits takes an unsigned int, so getLimitedValue is harmless
+        return Op0KB;
+      } else {
+        return Result;
+      }
+    }
+//   case LShrExact:
+//     return "lshrexact";
+//   case AShr:
+//     return "ashr";
+//   case AShrExact:
+//     return "ashrexact";
+//   case Select:
+//     return "select";
+    case souper::Inst::ZExt: {
+      return KB0.zext(I->Width);
+    }
+    case souper::Inst::SExt: {
+      return KB0.sext(I->Width);
+    }
+    case souper::Inst::Trunc: {
+      return KB0.trunc(I->Width);
+    }
+//   case Eq:
+//     return "eq";
+//   case Ne:
+//     return "ne";
+//   case Ult:
+//     return "ult";
+//   case Slt:
+//     return "slt";
+//   case Ule:
+//     return "ule";
+//   case Sle:
+//     return "sle";
+//   case CtPop:
+//     return "ctpop";
+//   case BSwap:
+//     return "bswap";
+//   case BitReverse:
+//     return "bitreverse";
+//   case Cttz:
+//     return "cttz";
+//   case Ctlz:
+//     return "ctlz";
+//   case FShl:
+//     return "fshl";
+//   case FShr:
+//     return "fshr";
+//   case ExtractValue:
+//     return "extractvalue";
+//   case SAddWithOverflow:
+//     return "sadd.with.overflow";
+//   case UAddWithOverflow:
+//     return "uadd.with.overflow";
+//   case SSubWithOverflow:
+//     return "ssub.with.overflow";
+//   case USubWithOverflow:
+//     return "usub.with.overflow";
+//   case SMulWithOverflow:
+//     return "smul.with.overflow";
+//   case UMulWithOverflow:
+//     return "umul.with.overflow";
+//   case ReservedConst:
+//     return "reservedconst";
+//   case ReservedInst:
+//     return "reservedinst";
+//   case SAddO:
+//   case UAddO:
+//   case SSubO:
+//   case USubO:
+//   case SMulO:
+//   case UMulO:
     default :
       return Result;
     }
   }
 
+#undef KB0
+#undef KB1
+
+#define CR0 findConstantRange(I->Ops[0], C, PartialEval)
+#define CR1 findConstantRange(I->Ops[1], C, PartialEval)
+
   llvm::ConstantRange findConstantRange(Inst *I,
-                                        ValueCache &C) {
+                                        ValueCache &C, bool PartialEval) {
     llvm::ConstantRange result(I->Width);
+
+    if (PartialEval && isConcrete(I)) {
+      auto RootVal = evaluateInst(I, C);
+      if (RootVal.hasValue()) {
+        return llvm::ConstantRange(RootVal.getValue());
+      }
+    }
+
     switch (I->K) {
     case Inst::Const:
     case Inst::Var : {
@@ -426,70 +612,59 @@ namespace souper {
       }
     }
     case Inst::Trunc: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      return R0.truncate(I->Width);
+      return CR0.truncate(I->Width);
     }
     case Inst::SExt: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      return R0.signExtend(I->Width);
+      return CR0.signExtend(I->Width);
     }
     case Inst::ZExt: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      return R0.zeroExtend(I->Width);
+      return CR0.zeroExtend(I->Width);
     }
+    case souper::Inst::AddNUW :
+    case souper::Inst::AddNW : // TODO: Rethink if these make sense
     case Inst::Add: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      auto R1 = findConstantRange(I->Ops[1], C);
-      return R0.add(R1);
+      return CR0.add(CR1);
     }
     case Inst::AddNSW: {
-      auto R0 = findConstantRange(I->Ops[0], C);
       auto V1 = getValue(I->Ops[1], C);
       if (V1.hasValue()) {
-        return R0.addWithNoSignedWrap(V1.getValue());
+        return CR0.addWithNoSignedWrap(V1.getValue());
       } else {
         return result; // full range, can we do better?
       }
     }
+    case souper::Inst::SubNSW :
+    case souper::Inst::SubNUW :
+    case souper::Inst::SubNW : // TODO: Rethink if these make sense
     case Inst::Sub: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      auto R1 = findConstantRange(I->Ops[1], C);
-      return R0.sub(R1);
+      return CR0.sub(CR1);
     }
+    case souper::Inst::MulNSW :
+    case souper::Inst::MulNUW :
+    case souper::Inst::MulNW : // TODO: Rethink if these make sense
     case Inst::Mul: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      auto R1 = findConstantRange(I->Ops[1], C);
-      return R0.multiply(R1);
+      return CR0.multiply(CR1);
     }
     case Inst::And: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      auto R1 = findConstantRange(I->Ops[1], C);
-      return R0.binaryAnd(R1);
+      return CR0.binaryAnd(CR1);
     }
     case Inst::Or: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      auto R1 = findConstantRange(I->Ops[1], C);
-      return R0.binaryOr(R1);
+      return CR0.binaryOr(CR1);
     }
+    case souper::Inst::ShlNSW :
+    case souper::Inst::ShlNUW :
+    case souper::Inst::ShlNW : // TODO: Rethink if these make sense
     case Inst::Shl: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      auto R1 = findConstantRange(I->Ops[1], C);
-      return R0.shl(R1);
+      return CR0.shl(CR1);
     }
     case Inst::AShr: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      auto R1 = findConstantRange(I->Ops[1], C);
-      return R0.ashr(R1);
+      return CR0.ashr(CR1);
     }
     case Inst::LShr: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      auto R1 = findConstantRange(I->Ops[1], C);
-      return R0.lshr(R1);
+      return CR0.lshr(CR1);
     }
     case Inst::UDiv: {
-      auto R0 = findConstantRange(I->Ops[0], C);
-      auto R1 = findConstantRange(I->Ops[1], C);
-      return R0.udiv(R1);
+      return CR0.udiv(CR1);
     }
       //     case Inst::SDiv: {
       //       auto R0 = FindConstantRange(I->Ops[0], C);
@@ -501,5 +676,6 @@ namespace souper {
       return result;
     }
   }
-
+#undef CR0
+#undef CR1
 }
