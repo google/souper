@@ -16,8 +16,8 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Support/CommandLine.h"
 #include "souper/Infer/AliveDriver.h"
-#include "souper/Infer/DataflowPruning.h"
 #include "souper/Infer/ExhaustiveSynthesis.h"
+#include "souper/Infer/Pruning.h"
 
 #include <queue>
 #include <functional>
@@ -641,7 +641,7 @@ bool isBigQuerySat(SynthesisContext &SC,
   return BigQueryIsSat;
 }
 
-void generateAndSortGuesses(InstContext &IC, Inst *LHS,
+void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
                             std::vector<Inst *> &Guesses) {
   std::vector<Inst *> Inputs;
   findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
@@ -652,8 +652,7 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS,
 
   int TooExpensive = 0;
 
-  DataflowPruningManager DataflowPruning
-    (LHS, Inputs, DebugLevel);
+  PruningManager DataflowPruning(LHS, Inputs, DebugLevel, IC, Solver);
   // Cheaper tests go first
   std::vector<PruneFunc> PruneFuncs = {CostPrune};
   if (EnableDataflowPruning) {
@@ -833,7 +832,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   std::vector<Inst *> Guesses;
   std::error_code EC;
-  generateAndSortGuesses(IC, LHS, Guesses);
+  generateAndSortGuesses(IC, LHS, SMTSolver, Guesses);
 
   if (Guesses.empty()) {
     return EC;
