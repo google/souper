@@ -195,6 +195,7 @@ set(SOUPER_INFER_FILES
   lib/Infer/DataflowPruning.cpp
   include/souper/Infer/DataflowPruning.h
   lib/Infer/Interpreter.cpp
+  lib/Infer/AbstractInterpreter.cpp
   include/souper/Infer/Interpreter.h
 )
 
