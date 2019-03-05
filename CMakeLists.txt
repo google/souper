@@ -329,7 +329,7 @@ set_target_properties(z3 PROPERTIES IMPORTED_IMPLIB ${Z3_LIBRARY})
 # static
 target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
-target_link_libraries(souperExtractor souperKVStore souperInfer souperInst kleeExpr)
+target_link_libraries(souperExtractor souperParser souperKVStore souperInfer souperInst kleeExpr)
 target_link_libraries(souperInfer souperExtractor ${LLVM_LIBS} ${LLVM_LDFLAGS} z3)
 target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperKVStore ${HIREDIS_LIBRARY} ${LLVM_LIBS} ${LLVM_LDFLAGS})
