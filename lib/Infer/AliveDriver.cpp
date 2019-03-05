@@ -1,6 +1,7 @@
 #include "souper/Extractor/ExprBuilder.h"
 #include "souper/Infer/AliveDriver.h"
 
+#include "alive2/ir/constant.h"
 #include "alive2/ir/function.h"
 #include "alive2/ir/instr.h"
 #include "alive2/ir/state.h"
@@ -24,10 +25,20 @@
 extern unsigned DebugLevel;
 static const int MaxTries = 30;
 
+bool startsWith(const std::string &pre, const std::string &str) {
+  return std::equal(pre.begin(), pre.end(), str.begin());
+}
+
 namespace {
 class FunctionBuilder {
 public:
   FunctionBuilder(IR::Function &F_) : F(F_) {}
+
+  template <typename A>
+  IR::Value *freeze(IR::Type &t, std::string name, A a) {
+    return append
+      (std::make_unique<IR::Freeze>(t, std::move(name), *toValue(t, a)));
+  }
 
   template <typename A, typename B, typename ...Others>
   IR::Value *binOp(IR::Type &t, std::string name, A a, B b,Others... others) {
@@ -113,6 +124,14 @@ private:
     if (auto It = identifiers.find(x); It != identifiers.end()) {
       return It->second;
     } else {
+      if (x.find("dummy") != std::string::npos) {
+        auto i = std::make_unique<IR::ConstantInput>(t, std::move(x));
+        auto ptr = i.get();
+//         F.addInput(std::move(i));
+        F.addConstant(std::move(i));
+        identifiers[x] = ptr;
+        return ptr;
+      }
       auto i = std::make_unique<IR::Input>(t, std::move(x));
       auto ptr = i.get();
       F.addInput(std::move(i));
@@ -131,9 +150,6 @@ private:
 };
 
 
-bool startsWith(const std::string &pre, const std::string &str) {
-  return std::equal(pre.begin(), pre.end(), str.begin());
-}
 
 void getReservedConsts(souper::Inst *I,
                        std::map<std::string, souper::Inst *> &Result,
@@ -381,10 +397,10 @@ souper::AliveDriver::synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext
 }
 
 
-bool souper::AliveDriver::verify (Inst *RHS) {
+bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
   RExprCache.clear();
   IR::Function RHSF;
-  if (!translateRoot(RHS, nullptr, RHSF, RExprCache)) {
+  if (!translateRoot(RHS, RHSAssumptions, RHSF, RExprCache)) {
     llvm::errs() << "Failed to translate RHS.\n";
     // TODO: Eventually turn this into an assertion
     return false;
@@ -455,6 +471,10 @@ public:
     return "";
   }
 };
+std::string getUniqueName() {
+  static int N = 0;
+  return "dummy_" + std::to_string(N++);
+}
 
 bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
                                             IR::Function &F,
@@ -494,6 +514,11 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     case souper::Inst::Var: {
       ExprCache[I] = Builder.var(t, Name);
       return translateDataflowFacts(I, F, ExprCache);
+    }
+    case souper::Inst::ReservedInst: {
+//       ExprCache[I] = Builder.freeze(t, getUniqueName(),Builder.var(t, getUniqueName()));
+      ExprCache[I] = Builder.var(t, getUniqueName());
+      return true;
     }
     case souper::Inst::Const: {
       ExprCache[I] = Builder.val(t, I->Val.getLimitedValue());
@@ -627,4 +652,28 @@ bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
   }
   AliveDriver Verifier(LHS, Ante, IC);
   return Verifier.verify(RHS);
+}
+
+
+bool souper::isCandidateInfeasible(souper::Inst* RHS, souper::ValueCache& C,
+                                   llvm::APInt LHSValue, InstContext &IC) {
+
+  auto LHS = IC.getConst(LHSValue);
+  // TODO: Use PC
+  AliveDriver Pruner(LHS, nullptr, IC);
+
+  Inst *RHSAssume = IC.getConst(llvm::APInt(1, true));
+  for (auto P : C) {
+    if (P.second.hasValue()) {
+      auto *Eq = IC.getInst(Inst::Eq, P.first->Width,
+                            {P.first, IC.getConst(P.second.getValue())});
+      RHSAssume = IC.getInst(Inst::And, 1, {RHSAssume, Eq});
+      ReplacementContext RC;
+      RC.printInst(RHSAssume, llvm::errs(), true);
+    } else {
+      return false;
+    }
+  }
+
+  return !Pruner.verify(RHS, RHSAssume);
 }

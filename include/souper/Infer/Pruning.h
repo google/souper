@@ -1,5 +1,6 @@
 #include "llvm/ADT/APInt.h"
 
+#include "souper/Extractor/Solver.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Inst/Inst.h"
 
@@ -7,46 +8,36 @@
 
 namespace souper {
 
-class ValueAnalysis {
-public:
-  ValueAnalysis() {}
-  ValueAnalysis(Inst *LHS_, std::vector<ValueCache> Inputs_)
-    : LHS(LHS_),Inputs(Inputs_) {
-    for (auto &&Input : Inputs) {
-      LHSValues.push_back(evaluateInst(LHS, Input));
-    }
-  }
-  bool isInfeasible(Inst *RHS, unsigned StatsLevel);
-private:
-  Inst *LHS;
-  std::vector<EvalValue> LHSValues;
-  std::vector<ValueCache> Inputs;
-};
-
-
-
 typedef std::function<bool(Inst *, std::vector<Inst *> &)> PruneFunc;
 
-class DataflowPruningManager {
+class PruningManager {
 public:
-  DataflowPruningManager(Inst *LHS_, std::vector<Inst *> &Inputs_,
-                         unsigned StatsLevel);
+  PruningManager(Inst *LHS_, std::vector< souper::Inst* >& Inputs_,
+                 unsigned int StatsLevel_, InstContext& IC_,
+                 SMTLIBSolver *SMTSolver_);
   PruneFunc getPruneFunc() {return DataflowPrune;}
   void printStats(llvm::raw_ostream &out) {
     out << "Dataflow Pruned " << NumPruned << "/" << TotalGuesses << "\n";
   }
+
+  bool isInfeasible(Inst *RHS, unsigned StatsLevel);
+  bool isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel);
+
   void init();
   // double init antipattern, required because init should
   // not be called when pruning is disabled
 private:
-  ValueAnalysis VA;
+  Inst *LHS;
+  std::vector<EvalValue> LHSValues;
+  InstContext &IC;
+  SMTLIBSolver *S;
   PruneFunc DataflowPrune;
   unsigned NumPruned;
   unsigned TotalGuesses;
   int StatsLevel;
-  Inst *LHS;
-
-  std::vector<Inst *> &Inputs;
+  SMTLIBSolver *SMTSolver;
+  std::vector<ValueCache> InputVals;
+  std::vector<Inst *> &InputVars;
   std::vector<ValueCache> generateInputSets(std::vector<Inst *> &Inputs);
 };
 

@@ -192,8 +192,8 @@ set(SOUPER_INFER_FILES
   include/souper/Infer/ExhaustiveSynthesis.h
   lib/Infer/AliveDriver.cpp
   include/souper/Infer/AliveDriver.h
-  lib/Infer/DataflowPruning.cpp
-  include/souper/Infer/DataflowPruning.h
+  lib/Infer/Pruning.cpp
+  include/souper/Infer/Pruning.h
   lib/Infer/Interpreter.cpp
   lib/Infer/AbstractInterpreter.cpp
   include/souper/Infer/Interpreter.h

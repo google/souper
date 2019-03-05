@@ -15,6 +15,7 @@
 #ifndef SOUPER_UTIL_ALIVE_DRIVER_H
 #define SOUPER_UTIL_ALIVE_DRIVER_H
 
+#include "souper/Infer/Interpreter.h"
 #include "souper/Inst/Inst.h"
 #include "alive2/ir/function.h"
 #include "alive2/smt/smt.h"
@@ -33,7 +34,7 @@ public:
   std::map<Inst *, llvm::APInt> synthesizeConstants(souper::Inst *RHS);
   std::map<Inst *, llvm::APInt> synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext &IC);
 
-  bool verify(Inst *RHS);
+  bool verify(Inst *RHS, Inst *RHSAssumptions = nullptr);
   ~AliveDriver() {
     for (auto &&p : TypeCache) {
       delete(p.second);
@@ -62,6 +63,9 @@ private:
 
 bool isTransformationValid(Inst* LHS, Inst* RHS, const std::vector<InstMapping> &PCs,
                            InstContext &IC);
+
+bool isCandidateInfeasible(Inst *RHS, ValueCache &C, llvm::APInt LHSValue,
+                          InstContext &IC);
 
 }
 
