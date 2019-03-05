@@ -1,20 +1,25 @@
 #include "souper/Infer/Interpreter.h"
 
 namespace souper {
+  bool isReservedConst(Inst *I) {
+    return I->K == Inst::ReservedConst ||
+          (I->K == Inst::Var &&
+          (I->Name.find(ReservedConstPrefix) != std::string::npos));
+  }
+
+  bool isReservedInst(Inst *I) {
+    return I->K == Inst::ReservedInst ||
+          (I->K == Inst::Var &&
+          (I->Name.find(ReservedInstPrefix) != std::string::npos));
+  }
 
   bool hasReservedHelper(Inst *I, std::set<Inst *> &Visited,
                          bool ConsiderConsts,
                          bool ConsiderHoles) {
-    if (ConsiderConsts && I->K == Inst::ReservedConst)
-      return true;
-    if (ConsiderHoles && I->K == Inst::ReservedInst)
-      return true;
-    if (ConsiderConsts && I->K == Inst::Var
-        && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
+    if (ConsiderConsts && isReservedConst(I)) {
       return true;
     }
-    if (ConsiderHoles && I->K == Inst::Var
-        && (I->Name.find(ReservedInstPrefix) != std::string::npos)) {
+    if (ConsiderHoles && isReservedInst(I)) {
       return true;
     }
     if (Visited.insert(I).second)
@@ -368,14 +373,15 @@ namespace souper {
     }
   }
 
-  EvalValue getValue(Inst *I, ValueCache &C) {
+  EvalValue getValue(Inst *I, ValueCache &C, bool PartialEval) {
     if (I->K == Inst::Const)
       return {I->Val};
-    if (I->K == Inst::Var ||
-        I->K == Inst::ReservedConst ||
-        I->K == Inst::ReservedInst) {
-      if (C.find(I) != C.end())
-        return C[I];
+    if (C.find(I) != C.end()) {
+      return C[I];
+    } else {
+      if (PartialEval && isConcrete(I)) {
+        return evaluateInst(I, C);
+      }
     }
     // unimplemented
     return EvalValue();
@@ -383,6 +389,7 @@ namespace souper {
 
 #define KB0 findKnownBits(I->Ops[0], C, PartialEval)
 #define KB1 findKnownBits(I->Ops[1], C, PartialEval)
+#define VAL(INST) getValue(INST, C, PartialEval)
 
   llvm::KnownBits findKnownBits(Inst *I, ValueCache &C, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
@@ -397,7 +404,7 @@ namespace souper {
     switch(I->K) {
     case Inst::Const:
     case Inst::Var : {
-      EvalValue V = getValue(I, C);
+      EvalValue V = VAL(I);
       if (V.hasValue()) {
         Result.One = V.getValue();
         Result.Zero = ~V.getValue();
@@ -459,7 +466,7 @@ namespace souper {
 //   case SDivExact:
 //     return "sdivexact";
     case Inst::URem: {
-      auto Op1V = getValue(I->Ops[1], C);
+      auto Op1V = VAL(I->Ops[1]);
       if (Op1V.hasValue()) {
         auto RA = Op1V.getValue();
         if (RA.isPowerOf2()) {
@@ -510,7 +517,7 @@ namespace souper {
     case Inst::ShlNW : // TODO: Rethink if these make sense
     case Inst::Shl : {
       auto Op0KB = KB0;
-      auto Op1V = getValue(I->Ops[1], C);
+      auto Op1V = VAL(I->Ops[1]);
 
       if (Op1V.hasValue()) {
         auto Val = Op1V.getValue().getLimitedValue();
@@ -522,7 +529,7 @@ namespace souper {
         Op0KB.Zero.setLowBits(Val);
         // setLowBits takes an unsigned int, so getLimitedValue is harmless
         return Op0KB;
-      } else if (I->Ops[1]->Name.find(ReservedConstPrefix) != std::string::npos) {
+      } else if (isReservedConst(I->Ops[1])) {
         Result.Zero.setLowBits(1);
         return Result;
       } else {
@@ -537,7 +544,7 @@ namespace souper {
 //     return "shlnw";
     case Inst::LShr : {
       auto Op0KB = KB0;
-      auto Op1V = getValue(I->Ops[1], C);
+      auto Op1V = VAL(I->Ops[1]);
       if (Op1V.hasValue()) {
         auto Val = Op1V.getValue().getLimitedValue();
         if (Val < 0 || Val >= I->Width) {
@@ -569,10 +576,37 @@ namespace souper {
     case Inst::Trunc: {
       return KB0.trunc(I->Width);
     }
-//   case Eq:
-//     return "eq";
-//   case Ne:
-//     return "ne";
+
+    case Inst::Eq: {
+      Inst *Constant = nullptr;
+      llvm::KnownBits Other;
+      if (isReservedConst(I->Ops[0])) {
+        Constant = I->Ops[0];
+        Other = KB1;
+      } else if (isReservedConst(I->Ops[1])) {
+        Constant = I->Ops[1];
+        Other = KB0;
+      } else {
+        return Result;
+      }
+      if ((Other.Zero & 1) != 0) {
+        Result.Zero.setBit(0);
+        return Result;
+      } else {
+        return Result;
+      }
+    }
+    case Inst::Ne: {
+      auto Op0KB = KB0;
+      auto Op1KB = KB1;
+      llvm::APInt Cond = (Op0KB.Zero & ~Op1KB.One) | (Op0KB.One & ~Op1KB.Zero);
+      bool Conflict = Cond != 0;
+      if (Conflict) {
+        Result.One.setBit(0);
+        return Result;
+      }
+      return Result;
+    }
 //   case Ult:
 //     return "ult";
 //   case Slt:
@@ -653,11 +687,11 @@ namespace souper {
     switch (I->K) {
     case Inst::Const:
     case Inst::Var : {
-      EvalValue V = getValue(I, C);
+      EvalValue V = VAL(I);
       if (V.hasValue()) {
         return llvm::ConstantRange(V.getValue());
       } else {
-        if (I->Name.find(ReservedConstPrefix) != std::string::npos) {
+        if (isReservedConst(I)) {
           return llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
         }
         return Result; // Whole range
@@ -678,7 +712,7 @@ namespace souper {
       return CR0.add(CR1);
     }
     case Inst::AddNSW: {
-      auto V1 = getValue(I->Ops[1], C);
+      auto V1 = VAL(I->Ops[1]);
       if (V1.hasValue()) {
         return CR0.addWithNoSignedWrap(V1.getValue());
       } else {
@@ -740,4 +774,5 @@ namespace souper {
 #undef CR0
 #undef CR1
 #undef CR2
+#undef VAL
 }
