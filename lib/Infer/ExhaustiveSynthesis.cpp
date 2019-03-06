@@ -175,15 +175,6 @@ bool CostPrune(Inst *I, std::vector<Inst *> &ReservedInsts) {
   return true;
 }
 
-struct SynthesisContext {
-  InstContext &IC;
-  SMTLIBSolver *SMTSolver;
-  Inst *LHS;
-  const std::vector<InstMapping> &PCs;
-  const BlockPCs &BPCs;
-  unsigned Timeout;
-};
-
 void getGuesses(std::vector<Inst *> &Guesses,
                 const std::vector<Inst *> &Inputs,
                 int Width, int LHSCost,
@@ -641,18 +632,17 @@ bool isBigQuerySat(SynthesisContext &SC,
   return BigQueryIsSat;
 }
 
-void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
-                            std::vector<Inst *> &Guesses) {
+void generateAndSortGuesses(SynthesisContext &SC, std::vector<Inst *> &Guesses) {
   std::vector<Inst *> Inputs;
-  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+  findCands(SC.LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
   if (DebugLevel > 1)
     llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
 
-  int LHSCost = souper::cost(LHS, /*IgnoreDepsWithExternalUses=*/true);
+  int LHSCost = souper::cost(SC.LHS, /*IgnoreDepsWithExternalUses=*/true);
 
   int TooExpensive = 0;
 
-  PruningManager DataflowPruning(LHS, Inputs, DebugLevel, IC, Solver);
+  PruningManager DataflowPruning(SC, Inputs, DebugLevel);
   // Cheaper tests go first
   std::vector<PruneFunc> PruneFuncs = {CostPrune};
   if (EnableDataflowPruning) {
@@ -665,15 +655,15 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
   // TODO(manasij7479) : If RHS is concrete, evaluate both sides
   // TODO(regehr?) : Solver assisted pruning (should be the last component)
 
-  getGuesses(Guesses, Inputs, LHS->Width,
-             LHSCost, IC, nullptr, nullptr, TooExpensive, PruneCallback);
+  getGuesses(Guesses, Inputs, SC.LHS->Width,
+             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback);
   if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::errs());
   }
 
   // add nops guesses separately
   for (auto I : Inputs) {
-    for (auto V : matchWidth(I, LHS->Width, IC))
+    for (auto V : matchWidth(I, SC.LHS->Width, SC.IC))
       addGuess(V, LHSCost, Guesses, TooExpensive);
   }
 
@@ -832,11 +822,11 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   std::vector<Inst *> Guesses;
   std::error_code EC;
-  generateAndSortGuesses(IC, LHS, SMTSolver, Guesses);
+  generateAndSortGuesses(SC, Guesses);
 
-  if (Guesses.empty()) {
+//   if (Guesses.empty()) {
     return EC;
-  }
+//   }
 
   std::map<Inst *, Inst *> InstCache;
   std::map<Block *, Block *> BlockCache;

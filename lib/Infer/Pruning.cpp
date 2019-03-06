@@ -99,7 +99,7 @@ bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
         std::map<Inst *, Inst *> InstCache;
         std::vector<Inst *> Empty;
         for (auto *Hole : Holes) {
-          auto DummyVar = IC.createVar(Hole->Width, getUniqueName());
+          auto DummyVar = SC.IC.createVar(Hole->Width, getUniqueName());
           InstCache[Hole] = DummyVar;
         }
         std::map<Inst *, llvm::APInt> ConstMap;
@@ -111,12 +111,12 @@ bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
           }
         }
         std::map<Block *, Block *> BlockCache;
-        auto RHSReplacement = getInstCopy(RHS, IC, InstCache, BlockCache, &ConstMap, true);
-        auto LHSReplacement = IC.getConst(Val);
+        auto RHSReplacement = getInstCopy(RHS, SC.IC, InstCache, BlockCache, &ConstMap, true);
+        auto LHSReplacement = SC.IC.getConst(Val);
 
-        auto Cond = IC.getInst(Inst::Eq, 1, {LHSReplacement, RHSReplacement});
-        InstMapping Mapping {Cond, IC.getConst(llvm::APInt(1, true))};
-        auto Query = BuildQuery(IC, {}, {}, Mapping, &ModelVars, true);
+        auto Cond = SC.IC.getInst(Inst::Eq, 1, {LHSReplacement, RHSReplacement});
+        InstMapping Mapping {Cond, SC.IC.getConst(llvm::APInt(1, true))};
+        auto Query = BuildQuery(SC.IC, {}, {}, Mapping, &ModelVars, true);
         if (StatsLevel > 3) {
           llvm::errs() << Query << "\n";
 
@@ -128,7 +128,7 @@ bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
 
         bool Result;
         std::vector<llvm::APInt> Models(ModelVars.size());
-        auto EC = SMTSolver->isSatisfiable(Query, Result, Models.size(), &Models, 1000);
+        auto EC = SC.SMTSolver->isSatisfiable(Query, Result, Models.size(), &Models, 1000);
 
         if (EC) {
           llvm::errs() << "Solver error in Pruning. " << EC.message() << " \n";
@@ -162,20 +162,18 @@ bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
   return false;
 }
 
-PruningManager::PruningManager(
-  souper::Inst* LHS_, std::vector<Inst *> &Inputs_, unsigned StatsLevel_,
-  InstContext &IC_, SMTLIBSolver *SMTSolver_)
-                  : LHS(LHS_), IC(IC_), NumPruned(0),
-                    TotalGuesses(0),
-                    StatsLevel(StatsLevel_), SMTSolver(SMTSolver_),
-                    InputVars(Inputs_) {}
+PruningManager::PruningManager(SynthesisContext &SC_,
+                               std::vector< souper::Inst* >& Inputs_,
+                               unsigned int StatsLevel_)
+                  : SC(SC_), NumPruned(0), TotalGuesses(0),
+                    StatsLevel(StatsLevel_), InputVars(Inputs_) {}
 
 void PruningManager::init() {
 
   InputVals = generateInputSets(InputVars);
 
   for (auto &&Input : InputVals) {
-    LHSValues.push_back(evaluateInst(LHS, Input));
+    LHSValues.push_back(evaluateInst(SC.LHS, Input));
   }
 
   if (StatsLevel > 1) {
@@ -260,6 +258,11 @@ std::vector<ValueCache> PruningManager::generateInputSets(
   }
 
   return InputSets;
+}
+
+std::vector<ValueCache> PruningManager::generateInputSetsWithSolver(std::vector<Inst *> &Inputs) {
+  // TODO: Generate Inputs with solver
+  return generateInputSets(Inputs);
 }
 
 }
