@@ -962,4 +962,18 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
   return EB->BuildQuery(BPCs, PCs, Mapping, ModelVars, Negate);
 }
 
+Inst *getUBInstCondition(InstContext &IC, Inst *Root) {
+  std::unique_ptr<ExprBuilder> EB;
+  switch (SMTExprBuilder) {
+  case ExprBuilder::KLEE:
+    EB = createKLEEBuilder(IC);
+    break;
+  default:
+    llvm::report_fatal_error("cannot reach here");
+    break;
+  }
+
+  return EB->getUBInstCondition(Root);
+}
+
 }

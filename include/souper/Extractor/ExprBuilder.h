@@ -55,6 +55,7 @@ public:
                  std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
 
   Inst *getDataflowConditions(Inst *I);
+  Inst *getUBInstCondition(Inst *Root);
 
 protected:
   InstContext *LIC;
@@ -76,7 +77,6 @@ protected:
 
   void setBlockPCMap(const BlockPCs &BPCs);
 
-  Inst *getUBInstCondition(Inst *Root);
   Inst *getBlockPCs(Inst *Root);
   std::map<Inst *, Inst *> getUBInstConstraints(Inst *Root);
   std::vector<Inst *> getUBPathInsts(Inst *Root);
@@ -110,6 +110,7 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
        std::vector<Inst *> *ModelVars, bool Negate=false);
 
 std::unique_ptr<ExprBuilder> createKLEEBuilder(InstContext &IC);
+Inst *getUBInstCondition(InstContext &IC, Inst *Root);
 }
 
 #endif  // SOUPER_EXTRACTOR_EXPRBUILDER_H
