@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Parser/Parser.h"
@@ -32,6 +33,36 @@ static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::init(1),
      cl::desc("Control the verbose level of debug output (default=1). "
      "The larger the number is, the more fine-grained debug "
      "information will be printed."));
+
+namespace {
+  enum class CompareDataflowResult {
+    SAME,
+    LESS,
+    GREATER,
+    INCOMPARABLE
+  };
+
+  CompareDataflowResult compareKnownBits(KnownBits &a, KnownBits &b) {
+    assert(!a.hasConflict() && !b.hasConflict() && "Can't compare conflicting KnownBits operands!");
+
+    APInt unknownA = ~(a.One ^ a.Zero);
+    APInt unknownB = ~(b.One ^ b.Zero);
+
+    // report if there's any conflict in known bits
+    if (!((a.Zero & b.One).isNullValue()) || !((a.One & b.Zero).isNullValue()))
+      return CompareDataflowResult::INCOMPARABLE;
+
+    if ((unknownA | unknownB).countPopulation() >
+	std::max(unknownA.countPopulation(), unknownB.countPopulation()))
+      return CompareDataflowResult::INCOMPARABLE;
+    else if (unknownA.countPopulation() > unknownB.countPopulation())
+      return CompareDataflowResult::LESS;
+    else if (unknownA.countPopulation() < unknownB.countPopulation())
+      return CompareDataflowResult::GREATER;
+    else
+      return CompareDataflowResult::SAME;
+  }
+} // anonymous
 
 // TODO could support poison, undef, and UB here
 static bool parseInput(const std::string &S, std::string &Name,
@@ -89,6 +120,12 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
     std::vector<Inst *> Vars;
     findVars(Rep.Mapping.LHS, Vars);
 
+    if (InputValueStrings.size() < Vars.size()) {
+      llvm::errs() << "Error: One or more variables in LHS are not given any value. "
+	"Use -input-values= param to give each variable a value before interpreting.\n";
+      return 1;
+    }
+
     ValueCache InputValues;
     for (auto S : InputValueStrings) {
       std::string Name, Val;
@@ -122,9 +159,51 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
       }
     }
 
-    auto Res = evaluateInst(Rep.Mapping.LHS, InputValues);
-    Res.print(llvm::outs());
-    llvm::outs() << "\n";
+    // Known bits interpreter
+    llvm::outs() << "\n -------- KnownBits Interpreter ----------- \n";
+    auto KB = findKnownBits(Rep.Mapping.LHS, InputValues);
+    auto KBSolver = findKnownBitsUsingSolver(Rep.Mapping.LHS, S);
+    llvm::outs() << "KnownBits result: \n" << knownBitsString(KB) << '\n';
+    llvm::outs() << "KnownBits result using solver: \n" << knownBitsString(KBSolver) << "\n\n";
+
+    switch(compareKnownBits(KB, KBSolver)) {
+    case CompareDataflowResult::SAME:
+      llvm::errs() << "Same precision.\n";
+      break;
+    case CompareDataflowResult::LESS:
+      llvm::errs() << "Dataflow is less precise than solver.\n";
+      break;
+    case CompareDataflowResult::GREATER:
+      llvm::errs() << "Dataflow is more precise than solver.\n";
+      break;
+    case CompareDataflowResult::INCOMPARABLE:
+      llvm::errs() << "Reults are incomparable.\n";
+      break;
+    }
+
+    // Constant Ranges interpreter
+    llvm::outs() << "\n -------- ConstantRanges Interpreter ----------- \n";
+    auto CR = findConstantRange(Rep.Mapping.LHS, InputValues);
+    auto CRSolver = findConstantRangeUsingSolver(Rep.Mapping.LHS, S);
+    llvm::outs() << "ConstantRange result: \n" << CR << '\n';
+    llvm::outs() << "ConstantRange result using solver: \n" << CRSolver << "\n\n";
+
+    if (CR == CRSolver)
+      llvm::errs() << "Same precision.\n";
+    else if (CR.contains(CRSolver))
+      llvm::errs() << "Dataflow is less precise than solver.\n";
+    else if (CRSolver.contains(CR))
+      llvm::errs() << "Dataflow is more precise than solver.\n";
+    else
+      llvm::errs() << "Reults are incomparable.\n";
+
+    if (isConcrete(Rep.Mapping.LHS)) {
+      llvm::outs() << " -------- Concrete Interpreter ----------- \n";
+      auto Res = evaluateInst(Rep.Mapping.LHS, InputValues);
+      Res.print(llvm::outs());
+      llvm::outs() << "\n";
+    }
+
     Index++;
   }
 

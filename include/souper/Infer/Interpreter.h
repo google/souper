@@ -1,6 +1,7 @@
 #ifndef SOUPER_INTERPRTER_H
 #define SOUPER_INTERPRTER_H
 
+#include "souper/Extractor/Solver.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/IR/ConstantRange.h"
 
@@ -69,11 +70,14 @@ using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;
 
 EvalValue evaluateInst(Inst* Root, ValueCache &Cache);
 llvm::KnownBits findKnownBits(Inst* I, ValueCache& C, bool PartialEval = true);
+llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S);
 llvm::ConstantRange findConstantRange(souper::Inst* I,
                                       souper::ValueCache& C,
                                       bool PartialEval = true);
+llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst* I, Solver *S);
 bool isConcrete(souper::Inst *I, bool ConsiderConsts = true,
                                  bool ConsiderHoles = true);
+std::string knownBitsString(llvm::KnownBits KB);
 }
 
 

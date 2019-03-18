@@ -607,7 +607,7 @@ namespace souper {
 #undef CR2
 #undef VAL
 
-  llvm::ConstantRange findConstantRangeUsingSolver(Inst *I) {
+  llvm::ConstantRange findConstantRangeUsingSolver(Inst *I, Solver *S) {
     // FIXME implement this
     llvm::ConstantRange Result(I->Width);
     return Result;

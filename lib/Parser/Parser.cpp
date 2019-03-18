@@ -122,7 +122,8 @@ FoundChar:
       const char *NameBegin = Begin;
       while (Begin != End && ((*Begin >= '0' && *Begin <= '9') ||
                               (*Begin >= 'A' && *Begin <= 'Z') ||
-                              (*Begin >= 'a' && *Begin <= 'z'))) {
+                              (*Begin >= 'a' && *Begin <= 'z') ||
+                              (*Begin == '_'))) {
         ++Begin;
       }
       if (Begin == NameBegin) {
