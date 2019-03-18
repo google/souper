@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-# Copyright 2015 The Souper Authors. All rights reserved.
+# Copyright 2019 The Souper Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,4 +18,4 @@ if [ -z "$LIT_ARGS" ]; then
   LIT_ARGS="-vs"
 fi
 
-${LLVM_BINDIR}/llvm-lit $LIT_ARGS ${CMAKE_BINARY_DIR}/test
+${LLVM_BINDIR}/llvm-lit $LIT_ARGS ${CMAKE_BINARY_DIR}/test/$1
