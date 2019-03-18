@@ -1,0 +1,23 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; Test if input specialization works correctly
+
+;CHECK: shl 4294889519:i32, %Y
+; UB in LHS
+%Y:i32 = var
+%Op1 = shl 77777, %Y
+%r = sub 0, %Op1
+infer %r
+
+;CHECK: add 4:i32, %X
+; UB in PC
+%Y:i32 = var
+%X:i32 = var
+%Op1 = shl 13, %Y
+%cmp:i1 = eq %Op1, 104:i32
+pc %cmp 1:i1
+%add = add %Y, %X
+%result = add %add, 1:i32
+infer %result

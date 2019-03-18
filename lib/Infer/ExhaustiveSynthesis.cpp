@@ -179,6 +179,7 @@ struct SynthesisContext {
   InstContext &IC;
   SMTLIBSolver *SMTSolver;
   Inst *LHS;
+  Inst *LHSUB;
   const std::vector<InstMapping> &PCs;
   const BlockPCs &BPCs;
   unsigned Timeout;
@@ -404,6 +405,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
 }
 
 APInt getNextInputVal(Inst *Var,
+                      Inst *LHSUB,
                       const BlockPCs &BPCs,
                       const std::vector<InstMapping> &PCs,
                       std::map<Inst *, std::vector<llvm::APInt>> &TriedVars,
@@ -421,9 +423,12 @@ APInt getNextInputVal(Inst *Var,
 
   HasNextInputValue = true;
   Inst *Ante = IC.getConst(APInt(1, true));
+  Ante = IC.getInst(Inst::And, 1, {Ante, LHSUB});
   for (auto PC : PCs ) {
     Inst* Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+    Inst* PCUB = getUBInstCondition(IC, Eq);
     Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+    Ante = IC.getInst(Inst::And, 1, {Ante, PCUB});
   }
 
   // If a variable is neither found in PCs or TriedVar, return APInt(0)
@@ -458,7 +463,7 @@ APInt getNextInputVal(Inst *Var,
       // unsat, then clear the state and call the getNextInputVal() again to
       // get a new guess
       TriedVars.erase(Var);
-      return getNextInputVal(Var, BPCs, PCs, TriedVars, IC,
+      return getNextInputVal(Var, LHSUB, BPCs, PCs, TriedVars, IC,
                              SMTSolver, Timeout, HasNextInputValue);
     } else {
       // No guess record for Var found and query tells unsat, we can conclude
@@ -737,7 +742,7 @@ findSatisfyingConstantMap(SynthesisContext &SC, InstConstList &BadConsts,
 
       std::map<Inst *, llvm::APInt> VarMap;
       for (auto Var: Vars) {
-        APInt NextInput = getNextInputVal(Var, SC.BPCs, SC.PCs, TriedVars, SC.IC,
+        APInt NextInput = getNextInputVal(Var, SC.LHSUB, SC.BPCs, SC.PCs, TriedVars, SC.IC,
                                           SC.SMTSolver, SC.Timeout,
                                           HasNextInputValue);
         if (!HasNextInputValue)
@@ -829,7 +834,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const std::vector<InstMapping> &PCs,
                                 Inst *LHS, Inst *&RHS,
                                 InstContext &IC, unsigned Timeout) {
-  SynthesisContext SC{IC, SMTSolver, LHS, PCs, BPCs, Timeout};
+  SynthesisContext SC{IC, SMTSolver, LHS, getUBInstCondition(SC.IC, SC.LHS), PCs, BPCs, Timeout};
 
   std::vector<Inst *> Guesses;
   std::error_code EC;
