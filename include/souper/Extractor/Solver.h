@@ -37,6 +37,9 @@ public:
           const std::vector<InstMapping> &PCs, 
           InstMapping Mapping, bool &IsValid,
           std::vector<std::pair<Inst *, llvm::APInt>> *Model) = 0;
+  virtual llvm::KnownBits findKnownBitsUsingSolver(const BlockPCs &BPCs,
+                                                   const std::vector<InstMapping> &PCs,
+                                                   Inst *LHS, InstContext &IC) = 0;
   virtual std::string getName() = 0;
 };
 
