@@ -1,3 +1,4 @@
+#include "souper/Extractor/Solver.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Infer/AbstractInterpreter.h"
 
@@ -506,9 +507,11 @@ namespace souper {
 #undef KB0
 #undef KB1
 
-  llvm::KnownBits findKnownBitsUsingSolver(Inst *I) {
-      llvm::KnownBits Result(I->Width);
-      return Result;
+  llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S) {
+    BlockPCs BPCs;
+    std::vector<InstMapping> PCs;
+    InstContext IC;
+    return S->findKnownBitsUsingSolver(BPCs, PCs, I, IC);
   }
 
 #define CR0 findConstantRange(I->Ops[0], C, PartialEval)
@@ -605,6 +608,7 @@ namespace souper {
 #undef VAL
 
   llvm::ConstantRange findConstantRangeUsingSolver(Inst *I) {
+    // FIXME implement this
     llvm::ConstantRange Result(I->Width);
     return Result;
   }
