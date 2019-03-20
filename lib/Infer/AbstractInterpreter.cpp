@@ -506,6 +506,11 @@ namespace souper {
 #undef KB0
 #undef KB1
 
+  llvm::KnownBits findKnownBitsUsingSolver(Inst *I) {
+      llvm::KnownBits Result(I->Width);
+      return Result;
+  }
+
 #define CR0 findConstantRange(I->Ops[0], C, PartialEval)
 #define CR1 findConstantRange(I->Ops[1], C, PartialEval)
 #define CR2 findConstantRange(I->Ops[2], C, PartialEval)
@@ -598,4 +603,9 @@ namespace souper {
 #undef CR1
 #undef CR2
 #undef VAL
+
+  llvm::ConstantRange findConstantRangeUsingSolver(Inst *I) {
+    llvm::ConstantRange Result(I->Width);
+    return Result;
+  }
 }
