@@ -1,3 +1,6 @@
+#ifndef SOUPER_PRUNING_H
+#define SOUPER_PRUNING_H
+
 #include "llvm/ADT/APInt.h"
 
 #include "souper/Extractor/Solver.h"
@@ -42,3 +45,5 @@ private:
 };
 
 }
+
+#endif
