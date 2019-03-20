@@ -48,7 +48,7 @@ namespace {
       }
       // gtest doesn't allow putting fatal failures in non-void returning
       // functions;
-      llvm_unreachable();
+      report_fatal_error("faulty nextKB!");
     }
     return false;
   }
@@ -90,7 +90,7 @@ namespace {
 	return x;
       }
     }
-    llvm_unreachable();
+    report_fatal_error("faulty setLowest!");
   }
 
   KnownBits clearLowest(KnownBits x) {
@@ -100,7 +100,7 @@ namespace {
 	return x;
       }
     }
-    llvm_unreachable();
+    report_fatal_error("faulty clearLowest!");
   }
 
   KnownBits bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
@@ -211,7 +211,7 @@ namespace {
 	rcInit = false;
       break;
     default:
-      llvm_unreachable();
+      report_fatal_error("unhandled case in bruteForce!");
     }
 
     if (rcInit) {
@@ -291,7 +291,7 @@ namespace {
 	  Res1 = BinaryTransferFunctionsKB::sle(x, y);
 	  break;
 	default:
-	  llvm_unreachable();
+	  report_fatal_error("unhandled case in testFn!");
 	}
 
 	KnownBits Res2 = bruteForce(x, y, pred);
