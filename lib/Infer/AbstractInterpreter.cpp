@@ -293,25 +293,15 @@ namespace souper {
           (I->Name.find(ReservedInstPrefix) != std::string::npos));
   }
 
-  bool hasReservedHelper(Inst *I, std::set<Inst *> &Visited,
-                         bool ConsiderConsts,
-                         bool ConsiderHoles) {
-    if (ConsiderConsts && isReservedConst(I)) {
-      return true;
-    }
-    if (ConsiderHoles && isReservedInst(I)) {
-      return true;
-    }
-    if (Visited.insert(I).second)
-      for (auto Op : I->Ops)
-        if (hasReservedHelper(Op, Visited, ConsiderConsts, ConsiderHoles))
-          return true;
-    return false;
-  }
-
   bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
-    std::set<Inst *> Visited;
-    return !hasReservedHelper(I, Visited, ConsiderConsts, ConsiderHoles);
+    return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst* instr) {
+			      if (ConsiderConsts && isReservedConst(instr))
+				return true;
+			      if (ConsiderHoles && isReservedInst(instr))
+				return true;
+
+			      return false;
+			    });
   }
 
   EvalValue getValue(Inst *I, ValueCache &C, bool PartialEval) {

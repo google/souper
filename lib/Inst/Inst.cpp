@@ -939,6 +939,8 @@ void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
   }
 }
 
+
+// TODO: Convert to a more generic getGivenInst similar to hasGivenInst below
 void souper::getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts) {
   // breadth-first search
   std::set<Inst *> Visited;
@@ -958,7 +960,7 @@ void souper::getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts) {
   }
 }
 
-bool souper::hasReservedInst(Inst *Root) {
+bool souper::hasGivenInst(Inst *Root, std::function<bool(Inst*)> InstTester) {
   // breadth-first search
   std::set<Inst *> Visited;
   std::queue<Inst *> Q;
@@ -966,7 +968,7 @@ bool souper::hasReservedInst(Inst *Root) {
   while (!Q.empty()) {
     Inst *I = Q.front();
     Q.pop();
-    if (I->K == Inst::ReservedInst)
+    if (InstTester(I))
       return true;
     if (!Visited.insert(I).second)
       continue;
