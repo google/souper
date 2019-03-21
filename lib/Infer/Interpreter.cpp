@@ -5,8 +5,93 @@ namespace souper {
 #define ARG1 Args[1].getValue()
 #define ARG2 Args[2].getValue()
 
-  EvalValue evaluateSingleInst(Inst *Inst, std::vector<EvalValue> &Args) {
+  EvalValue evaluateAddNSW(llvm::APInt a, llvm::APInt b) {
+    bool Ov;
+    auto Res = a.sadd_ov(b, Ov);
+    if (Ov)
+      return EvalValue::poison();
+    else
+      return Res;
+  }
 
+  EvalValue evaluateAddNUW(llvm::APInt a, llvm::APInt b) {
+    bool Ov;
+    auto Res = a.uadd_ov(b, Ov);
+    if (Ov)
+      return EvalValue::poison();
+    else
+      return Res;
+  }
+
+  EvalValue evaluateAddNW(llvm::APInt a, llvm::APInt b) {
+    bool Ov1, Ov2;
+    auto Res1 = a.sadd_ov(b, Ov1);
+    auto Res2 = a.uadd_ov(b, Ov2);
+    if (Ov1 || Ov2)
+      return EvalValue::poison();
+    else
+      return Res1;
+  }
+
+  EvalValue evaluateSubNSW(llvm::APInt a, llvm::APInt b) {
+    bool Ov;
+    auto Res = a.ssub_ov(b, Ov);
+    if (Ov)
+      return EvalValue::poison();
+    else
+      return Res;
+  }
+
+  EvalValue evaluateSubNUW(llvm::APInt a, llvm::APInt b) {
+    bool Ov;
+    auto Res = a.usub_ov(b, Ov);
+    if (Ov)
+      return EvalValue::poison();
+    else
+      return Res;
+  }
+
+  EvalValue evaluateSubNW(llvm::APInt a, llvm::APInt b) {
+    bool Ov1, Ov2;
+    auto Res1 = a.ssub_ov(b, Ov1);
+    auto Res2 = a.usub_ov(b, Ov2);
+    if (Ov1 || Ov2)
+      return EvalValue::poison();
+    else
+      return Res1;
+  }
+
+  EvalValue evaluateUDiv(llvm::APInt a, llvm::APInt b) {
+    if (b == 0)
+      return EvalValue::ub();
+    return {a.udiv(b)};
+  }
+
+  EvalValue evaluateURem(llvm::APInt a, llvm::APInt b) {
+    if (b == 0)
+      return EvalValue::ub();
+    return {a.urem(b)};
+  }
+
+  EvalValue evaluateShl(llvm::APInt a, llvm::APInt b) {
+    if (b.uge(a.getBitWidth()))
+      return EvalValue::poison();
+    return {a << b};
+  }
+
+  EvalValue evaluateLShr(llvm::APInt a, llvm::APInt b) {
+    if (b.uge(a.getBitWidth()))
+      return EvalValue::poison();
+    return {a.lshr(b)};
+  }
+
+  EvalValue evaluateAShr(llvm::APInt a, llvm::APInt b) {
+    if (b.uge(a.getBitWidth()))
+      return EvalValue::poison();
+    return {a.ashr(b)};
+  }
+
+  EvalValue evaluateSingleInst(Inst *Inst, std::vector<EvalValue> &Args) {
     // UB propagates unconditionally
     for (auto &A : Args)
       if (A.K == EvalValue::ValueKind::UB)
@@ -40,64 +125,26 @@ namespace souper {
     case Inst::Add:
       return {ARG0 + ARG1};
 
-    case Inst::AddNSW:{
-      bool Ov;
-      auto Res = ARG0.sadd_ov(ARG1, Ov);
-      if (Ov)
-        return EvalValue::poison();
-      else
-        return Res;
-    }
+    case Inst::AddNSW:
+      return evaluateAddNSW(ARG0, ARG1);
 
-    case Inst::AddNUW:{
-      bool Ov;
-      auto Res = ARG0.uadd_ov(ARG1, Ov);
-      if (Ov)
-        return EvalValue::poison();
-      else
-        return Res;
-    }
+    case Inst::AddNUW:
+      return evaluateAddNUW(ARG0, ARG1);
 
-    case Inst::AddNW:{
-      bool Ov1, Ov2;
-      auto Res1 = ARG0.sadd_ov(ARG1, Ov1);
-      auto Res2 = ARG0.uadd_ov(ARG1, Ov2);
-      if (Ov1 || Ov2)
-        return EvalValue::poison();
-      else
-        return Res1;
-    }
+    case Inst::AddNW:
+      return evaluateAddNW(ARG0, ARG1);
 
     case Inst::Sub:
       return {ARG0 - ARG1};
 
-    case Inst::SubNSW:{
-      bool Ov;
-      auto Res = ARG0.ssub_ov(ARG1, Ov);
-      if (Ov)
-        return EvalValue::poison();
-      else
-        return Res;
-    }
+    case Inst::SubNSW:
+      return evaluateSubNSW(ARG0, ARG1);
 
-    case Inst::SubNUW:{
-      bool Ov;
-      auto Res = ARG0.usub_ov(ARG1, Ov);
-      if (Ov)
-        return EvalValue::poison();
-      else
-        return Res;
-    }
+    case Inst::SubNUW:
+      return evaluateSubNUW(ARG0, ARG1);
 
-    case Inst::SubNW:{
-      bool Ov1, Ov2;
-      auto Res1 = ARG0.ssub_ov(ARG1, Ov1);
-      auto Res2 = ARG0.usub_ov(ARG1, Ov2);
-      if (Ov1 || Ov2)
-        return EvalValue::poison();
-      else
-        return Res1;
-    }
+    case Inst::SubNW:
+      return evaluateSubNW(ARG0, ARG1);
 
     case Inst::Mul:
       return {ARG0 * ARG1};
@@ -138,9 +185,7 @@ namespace souper {
       return {ARG0.udiv(ARG1)};
 
     case Inst::UDiv:
-      if (ARG1 == 0)
-        return EvalValue::ub();
-      return {ARG0.udiv(ARG1)};
+      return evaluateUDiv(ARG0, ARG1);
 
     case Inst::SDivExact:
       if (ARG1 == 0 ||
@@ -157,9 +202,7 @@ namespace souper {
       return {ARG0.sdiv(ARG1)};
 
     case Inst::URem:
-      if (ARG1 == 0)
-        return EvalValue::ub();
-      return {ARG0.urem(ARG1)};
+      return evaluateURem(ARG0, ARG1);
 
     case Inst::SRem:
       if (ARG1 == 0 ||
@@ -177,9 +220,7 @@ namespace souper {
       return {ARG0 ^ ARG1};
 
     case Inst::Shl:
-      if (ARG1.uge(ARG0.getBitWidth()))
-        return EvalValue::poison();
-      return {ARG0 << ARG1};
+      return evaluateShl(ARG0, ARG1);
 
     case Inst::ShlNSW:{
       bool Ov;
@@ -207,9 +248,7 @@ namespace souper {
     }
 
     case Inst::LShr:
-      if (ARG1.uge(ARG0.getBitWidth()))
-        return EvalValue::poison();
-      return {ARG0.lshr(ARG1)};
+      return evaluateLShr(ARG0, ARG1);
 
     case Inst::LShrExact:{
       if (ARG1.uge(ARG0.getBitWidth()))
@@ -221,9 +260,7 @@ namespace souper {
     }
 
     case Inst::AShr:
-      if (ARG1.uge(ARG0.getBitWidth()))
-        return EvalValue::poison();
-      return {ARG0.ashr(ARG1)};
+      return evaluateAShr(ARG0, ARG1);
 
     case Inst::AShrExact:{
       if (ARG1.uge(ARG0.getBitWidth()))
