@@ -388,7 +388,7 @@ namespace souper {
     }
     case Inst::LShr : {
       if (isReservedConst(I->Ops[1])) {
-	Result.Zero.setLowBits(1);
+	Result.Zero.setHighBits(1);
 	return Result;
       }
       return BinaryTransferFunctionsKB::lshr(KB0, KB1);
