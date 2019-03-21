@@ -30,6 +30,14 @@ namespace {
     Max.clearBit(x.getBitWidth() - 1);
     return Max;
   }
+
+  KnownBits getMostPreciseKnownBits(KnownBits a, KnownBits b) {
+    unsigned unknownCountA =
+      a.getBitWidth() - (a.Zero.countPopulation() + a.One.countPopulation());
+    unsigned unknownCountB =
+      b.getBitWidth() - (b.Zero.countPopulation() + b.One.countPopulation());
+    return unknownCountA < unknownCountB ? a : b;
+  }
 } // anonymous
 
 namespace souper {
@@ -71,6 +79,10 @@ namespace souper {
       auto resultSize = lhs.getBitWidth() + rhs.getBitWidth() - 1;
       if (resultSize - confirmedLeadingZeros < lhs.getBitWidth())
 	Result.Zero.setHighBits(lhs.getBitWidth() - (resultSize - confirmedLeadingZeros));
+
+      // two numbers odd means reuslt is odd
+      if (lhs.One[0] && rhs.One[0])
+	Result.One.setLowBits(1);
 
       return Result;
     }
@@ -143,18 +155,16 @@ namespace souper {
         if (Val < 0 || Val >= width) {
           return Result;
         }
+
         Op0KB.One <<= Val;
         Op0KB.Zero <<= Val;
         Op0KB.Zero.setLowBits(Val);
         // setLowBits takes an unsigned int, so getLimitedValue is harmless
         return Op0KB;
-      } else if (!rhs.isZero()) {
-	auto confirmedTrailingZeros = rhs.countMinTrailingZeros();
-	auto minNum = 1 << (confirmedTrailingZeros - 1);
-	// otherwise, it's poison
-	if (minNum < width)
-	  Result.Zero.setLowBits(minNum);
       }
+
+      unsigned minValue = rhs.One.getLimitedValue();
+      Result.Zero.setLowBits(std::min(lhs.countMinTrailingZeros() + minValue, width));
 
       return Result;
     }
@@ -174,13 +184,10 @@ namespace souper {
         Op0KB.Zero.setHighBits(Val);
         // setHighBits takes an unsigned int, so getLimitedValue is harmless
         return Op0KB;
-      } else if (!rhs.isZero()) {
-	auto confirmedTrailingZeros = rhs.countMinTrailingZeros();
-	auto minNum = 1 << (confirmedTrailingZeros - 1);
-	// otherwise, it's poison
-	if (minNum < width)
-	  Result.Zero.setHighBits(minNum);
       }
+
+      unsigned minValue = rhs.One.getLimitedValue();
+      Result.Zero.setHighBits(std::min(minValue + lhs.countMinLeadingZeros(), width));
 
       return Result;
     }
@@ -189,16 +196,13 @@ namespace souper {
       llvm::KnownBits Result(lhs.getBitWidth());
       const auto width = Result.getBitWidth();
 
-      auto confirmedTrailingZeros = rhs.countMinTrailingZeros();
-      auto minNum = 1 << (confirmedTrailingZeros - 1);
+      unsigned minValue = rhs.One.getLimitedValue();
       if (lhs.One.isSignBitSet()) {
 	// confirmed: sign bit = 1
-	if (minNum < width)
-	  Result.One.setHighBits(minNum + 1);
+	Result.One.setHighBits(std::min(lhs.countMinLeadingOnes() + minValue, width));
       } else if (lhs.Zero.isSignBitSet()) {
 	// confirmed: sign bit = 0
-	if (minNum < width)
-	  Result.Zero.setHighBits(minNum + 1);
+	Result.Zero.setHighBits(std::min(lhs.countMinLeadingZeros() + minValue, width));
       }
       return Result;
     }
@@ -379,24 +383,28 @@ namespace souper {
       // BinaryTransferFunctionsKB but this one gives significant pruning; so,
       // let's keep it here.
       // Note that only code inside BinaryTransferFunctionsKB is testable from
-      // unit tests. Put minimum code outside it which you are sure of being correct.
-      if (isReservedConst(I->Ops[1])) {
+      // unit tests. Put minimum code outside it which you are sure of being
+      // correct.
+      if (isReservedConst(I->Ops[1]))
 	Result.Zero.setLowBits(1);
-	return Result;
-      }
-      return BinaryTransferFunctionsKB::shl(KB0, KB1);
+      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::shl(KB0, KB1));
     }
     case Inst::LShr : {
-      if (isReservedConst(I->Ops[1])) {
+      if (isReservedConst(I->Ops[1]))
 	Result.Zero.setHighBits(1);
-	return Result;
-      }
-      return BinaryTransferFunctionsKB::lshr(KB0, KB1);
+      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::lshr(KB0, KB1));
     }
 //   case LShrExact:
 //     return "lshrexact";
     case Inst::AShr:
-      return BinaryTransferFunctionsKB::ashr(KB0, KB1);
+      if (isReservedConst(I->Ops[1])) {
+	if (KB0.Zero[KB0.getBitWidth() - 1])
+	  Result.Zero.setHighBits(2);
+	if (KB0.One[KB0.getBitWidth() - 1])
+	  Result.One.setHighBits(2);
+      }
+
+      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::ashr(KB0, KB1));
 //   case AShrExact:
 //     return "ashrexact";
 //   case Select:

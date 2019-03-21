@@ -30,6 +30,32 @@ constexpr int WIDTH = 4;
 
 namespace {
 
+  struct EvalValueKB : public EvalValue {
+    KnownBits ValueKB;
+
+    EvalValueKB(KnownBits Val) {
+      K = ValueKind::Val;
+      ValueKB = Val;
+    }
+
+    EvalValueKB(EvalValue &Val) : EvalValue(Val) {
+      if (hasValue()) {
+	ValueKB.One = Val.getValue();
+	ValueKB.Zero = ~Val.getValue();
+      }
+    }
+
+    KnownBits getValueKB() {
+      if (K != ValueKind::Val) {
+	llvm::errs() << "EvalValueKB: KnownBits not initialized.\n";
+	llvm::report_fatal_error("exiting");
+      }
+
+      return ValueKB;
+    }
+  };
+
+
   bool nextKB(llvm::KnownBits &x) {
     for (int i = 0; i < x.getBitWidth(); i++) {
       if (!x.Zero[i] && !x.One[i]) {
@@ -70,17 +96,27 @@ namespace {
 
   bool isConcrete(KnownBits x) { return (x.Zero | x.One).isAllOnesValue(); }
 
-  KnownBits merge(KnownBits a, KnownBits b) {
-    assert(a.getBitWidth() == b.getBitWidth() && "Can only merge KnownBits of same width.");
+  EvalValueKB merge(EvalValueKB a, EvalValueKB b) {
+    if (!a.hasValue())
+      return b;
+    if (!b.hasValue())
+      return a;
 
-    KnownBits res(a.getBitWidth());
-    for (unsigned i = 0; i < a.getBitWidth(); i++) {
-      if (a.One[i] == b.One[i] && b.One[i])
-	a.One.setBit(i);
-      if (a.Zero[i] == b.Zero[i] && a.Zero[i])
-	a.Zero.setBit(i);
+    // FIXME: Handle other ValueKind types. how?
+    assert(a.hasValue() && b.hasValue());
+    auto aVal = a.getValueKB();
+    auto bVal = b.getValueKB();
+    assert(aVal.getBitWidth() == bVal.getBitWidth() && "Can only merge KnownBits of same width.");
+
+    KnownBits res(aVal.getBitWidth());
+    for (unsigned i = 0; i < aVal.getBitWidth(); i++) {
+      if (aVal.One[i] == bVal.One[i] && bVal.One[i])
+	res.One.setBit(i);
+      if (aVal.Zero[i] == bVal.Zero[i] && aVal.Zero[i])
+	res.Zero.setBit(i);
     }
-    return res;
+
+    return EvalValueKB(res);
   }
 
   KnownBits setLowest(KnownBits x) {
@@ -103,7 +139,7 @@ namespace {
     report_fatal_error("faulty clearLowest!");
   }
 
-  KnownBits bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
+  EvalValueKB bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
     if (!isConcrete(x))
       return merge(bruteForce(setLowest(x), y, Pred),
 		   bruteForce(clearLowest(x), y, Pred));
@@ -113,36 +149,42 @@ namespace {
     auto xc = x.getConstant();
     auto yc = y.getConstant();
 
-    KnownBits res(x.getBitWidth());
+    EvalValue res;
     bool rcInit = true;
     APInt rc(x.getBitWidth(), 0);
     switch (Pred) {
     case Inst::AddNUW:
-    case Inst::AddNSW:
+      res = evaluateAddNUW(xc, yc);
+      break;
     case Inst::AddNW:
+      res = evaluateAddNW(xc, yc);
+      break;
+    case Inst::AddNSW:
+      res = evaluateAddNSW(xc, yc);
+      break;
     case Inst::Add:
-      rc = xc + yc;
+      res = EvalValue(xc + yc);
       break;
     case Inst::SubNUW:
+      res = evaluateSubNUW(xc, yc);
+      break;
     case Inst::SubNSW:
+      res = evaluateSubNSW(xc, yc);
+      break;
     case Inst::SubNW:
+      res = evaluateSubNW(xc, yc);
+      break;
     case Inst::Sub:
-      rc = xc - yc;
+      res = EvalValue(xc - yc);
       break;
     case Inst::Mul:
-      rc = xc * yc;
+      res = EvalValue(xc * yc);
       break;
     case Inst::UDiv:
-      if (yc != 0)
-	rc = xc.udiv(yc);
-      else
-	rcInit = false;
+      res = evaluateUDiv(xc, yc);
       break;
     case Inst::URem:
-      if (yc != 0)
-	rc = xc.urem(yc);
-      else
-	rcInit = false;
+      res = evaluateURem(xc, yc);
       break;
     case Inst::And:
       rc = xc & yc;
@@ -154,70 +196,42 @@ namespace {
       rc = xc ^ yc;
       break;
     case Inst::Shl:
-      rc = xc << yc;
+      res = evaluateShl(xc, yc);
       break;
     case Inst::LShr:
-      if (yc.getLimitedValue() < res.getBitWidth())
-	rc = xc.lshr(yc.getLimitedValue());
-      else
-	rcInit = false;
+      res = evaluateLShr(xc, yc);
       break;
     case Inst::AShr:
-      if (yc.getLimitedValue() < res.getBitWidth())
-	rc = xc.ashr(yc.getLimitedValue());
-      else
-	rcInit = false;
+      res = evaluateAShr(xc, yc);
       break;
     case Inst::Eq:
-      res = KnownBits(1);
-      if (xc.eq(yc))
-	rc = APInt(1, 1);
-      else
-	rcInit = false;
+      rc = xc.eq(yc) ? APInt(1, 1) : APInt(1, 0);
+      res = EvalValue(rc);
       break;
     case Inst::Ne:
-      res = KnownBits(1);
-      if (xc.ne(yc))
-	rc = APInt(1, 1);
-      else
-	rcInit = false;
+      rc = xc.ne(yc) ? APInt(1, 1) : APInt(1, 0);
+      res = EvalValue(rc);
       break;
     case Inst::Ult:
-      res = KnownBits(1);
-      if (xc.ult(yc))
-	rc = APInt(1, 1);
-      else
-	rcInit = false;
+      rc = xc.ult(yc) ? APInt(1, 1) : APInt(1, 0);
+      res = EvalValue(rc);
       break;
     case Inst::Slt:
-      res = KnownBits(1);
-      if (xc.slt(yc))
-	rc = APInt(1, 1);
-      else
-	rcInit = false;
+      rc = xc.slt(yc) ? APInt(1, 1) : APInt(1, 0);
+      res = EvalValue(rc);
       break;
     case Inst::Ule:
-      res = KnownBits(1);
-      if (xc.ule(yc))
-	rc = APInt(1, 1);
-      else
-	rcInit = false;
+      rc = xc.ule(yc) ? APInt(1, 1) : APInt(1, 0);
+      res = EvalValue(rc);
       break;
     case Inst::Sle:
-      res = KnownBits(1);
-      if (xc.sle(yc))
-	rc = APInt(1, 1);
-      else
-	rcInit = false;
+      rc = xc.sle(yc) ? APInt(1, 1) : APInt(1, 0);
+      res = EvalValue(rc);
       break;
     default:
       report_fatal_error("unhandled case in bruteForce!");
     }
 
-    if (rcInit) {
-      res.One = rc;
-      res.Zero = ~rc;
-    }
     return res;
   }
 
@@ -226,92 +240,99 @@ namespace {
     do {
       llvm::KnownBits y(WIDTH);
       do {
-	KnownBits Res1;
-
+	KnownBits Calculated;
 	switch(pred) {
 	case Inst::AddNUW:
 	case Inst::AddNW:
 	case Inst::Add:
-	  Res1 = BinaryTransferFunctionsKB::add(x, y);
+	  Calculated = BinaryTransferFunctionsKB::add(x, y);
 	  break;
 	case Inst::AddNSW:
-	  Res1 = BinaryTransferFunctionsKB::addnsw(x, y);
+	  Calculated = BinaryTransferFunctionsKB::addnsw(x, y);
 	  break;
 	case Inst::SubNUW:
 	case Inst::SubNW:
 	case Inst::Sub:
-	  Res1 = BinaryTransferFunctionsKB::sub(x, y);
+	  Calculated = BinaryTransferFunctionsKB::sub(x, y);
 	  break;
 	case Inst::SubNSW:
-	  Res1 = BinaryTransferFunctionsKB::subnsw(x, y);
+	  Calculated = BinaryTransferFunctionsKB::subnsw(x, y);
 	  break;
 	case Inst::Mul:
-	  Res1 = BinaryTransferFunctionsKB::mul(x, y);
+	  Calculated = BinaryTransferFunctionsKB::mul(x, y);
 	  break;
 	case Inst::UDiv:
-	  Res1 = BinaryTransferFunctionsKB::udiv(x, y);
+	  Calculated = BinaryTransferFunctionsKB::udiv(x, y);
 	  break;
 	case Inst::URem:
-	  Res1 = BinaryTransferFunctionsKB::urem(x, y);
+	  Calculated = BinaryTransferFunctionsKB::urem(x, y);
 	  break;
 	case Inst::And:
-	  Res1 = BinaryTransferFunctionsKB::and_(x, y);
+	  Calculated = BinaryTransferFunctionsKB::and_(x, y);
 	  break;
 	case Inst::Or:
-	  Res1 = BinaryTransferFunctionsKB::or_(x, y);
+	  Calculated = BinaryTransferFunctionsKB::or_(x, y);
 	  break;
 	case Inst::Xor:
-	  Res1 = BinaryTransferFunctionsKB::xor_(x, y);
+	  Calculated = BinaryTransferFunctionsKB::xor_(x, y);
 	  break;
 	case Inst::Shl:
-	  Res1 = BinaryTransferFunctionsKB::shl(x, y);
+	  Calculated = BinaryTransferFunctionsKB::shl(x, y);
 	  break;
 	case Inst::LShr:
-	  Res1 = BinaryTransferFunctionsKB::lshr(x, y);
+	  Calculated = BinaryTransferFunctionsKB::lshr(x, y);
 	  break;
 	case Inst::AShr:
-	  Res1 = BinaryTransferFunctionsKB::ashr(x, y);
+	  Calculated = BinaryTransferFunctionsKB::ashr(x, y);
 	  break;
 	case Inst::Eq:
-	  Res1 = BinaryTransferFunctionsKB::eq(x, y);
+	  Calculated = BinaryTransferFunctionsKB::eq(x, y);
 	  break;
 	case Inst::Ne:
-	  Res1 = BinaryTransferFunctionsKB::ne(x, y);
+	  Calculated = BinaryTransferFunctionsKB::ne(x, y);
 	  break;
 	case Inst::Ult:
-	  Res1 = BinaryTransferFunctionsKB::ult(x, y);
+	  Calculated = BinaryTransferFunctionsKB::ult(x, y);
 	  break;
 	case Inst::Slt:
-	  Res1 = BinaryTransferFunctionsKB::slt(x, y);
+	  Calculated = BinaryTransferFunctionsKB::slt(x, y);
 	  break;
 	case Inst::Ule:
-	  Res1 = BinaryTransferFunctionsKB::ule(x, y);
+	  Calculated = BinaryTransferFunctionsKB::ule(x, y);
 	  break;
 	case Inst::Sle:
-	  Res1 = BinaryTransferFunctionsKB::sle(x, y);
+	  Calculated = BinaryTransferFunctionsKB::sle(x, y);
 	  break;
 	default:
 	  report_fatal_error("unhandled case in testFn!");
 	}
 
-	KnownBits Res2 = bruteForce(x, y, pred);
-	if (Res1.getBitWidth() != Res2.getBitWidth()) {
+	EvalValueKB Expected = bruteForce(x, y, pred);
+	// expected value is poison/ub; so let binary transfer functions do
+	// whatever they want without complaining
+	if (!Expected.hasValue())
+	  continue;
+
+	if (Calculated.getBitWidth() != Expected.ValueKB.getBitWidth()) {
 	  llvm::errs() << "Expected and Given have unequal bitwidths - Expected: "
-		       << Res2.getBitWidth() << ", Given: " << Res1.getBitWidth() << '\n';
+		       << Expected.ValueKB.getBitWidth() << ", Given: " << Calculated.getBitWidth() << '\n';
 	  return false;
 	}
-	if (Res1.hasConflict() || Res2.hasConflict()) {
+	if (Calculated.hasConflict() || Expected.ValueKB.hasConflict()) {
 	  llvm::errs() << "Expected or Given result has a conflict\n";
 	  return false;
 	}
 
-	for (unsigned i = 0; i < Res1.getBitWidth(); i++) {
-	  if ((Res1.Zero[i] && Res2.One[i]) || (Res1.One[i] && Res2.Zero[i])) {
+	for (unsigned i = 0; i < Calculated.getBitWidth(); i++) {
+	  if ((Calculated.Zero[i] && Expected.ValueKB.One[i]) ||
+	      (Calculated.One[i] && Expected.ValueKB.Zero[i]) ||
+	      (Calculated.One[i] && !Expected.ValueKB.One[i]) ||
+	      (Calculated.Zero[i] && !Expected.ValueKB.Zero[i])) {
 	    std::cout << "Unsound!! " << Inst::getKindName(pred) << std::endl;
 	    std::cout << knownBitsString(x) << ' ' << Inst::getKindName(pred)
 		      << ' ' << knownBitsString(y) << std::endl;
-	    std::cout << "Calculated: " << knownBitsString(Res1) << '\n';
-	    std::cout << "Expected: " << knownBitsString(Res2) << '\n';
+	    std::cout << "Calculated: " << knownBitsString(Calculated) << '\n';
+	    std::cout << "Expected: " << knownBitsString(Expected.ValueKB) << '\n';
 	    return false;
 	  }
 	}
