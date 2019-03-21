@@ -507,9 +507,8 @@ namespace souper {
 #undef KB0
 #undef KB1
 
-  llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S) {
+  llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
     BlockPCs BPCs;
-    std::vector<InstMapping> PCs;
     InstContext IC;
     return S->findKnownBitsUsingSolver(BPCs, PCs, I, IC);
   }
@@ -607,7 +606,7 @@ namespace souper {
 #undef CR2
 #undef VAL
 
-  llvm::ConstantRange findConstantRangeUsingSolver(Inst *I, Solver *S) {
+  llvm::ConstantRange findConstantRangeUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
     // FIXME implement this
     llvm::ConstantRange Result(I->Width);
     return Result;

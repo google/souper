@@ -70,11 +70,11 @@ using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;
 
 EvalValue evaluateInst(Inst* Root, ValueCache &Cache);
 llvm::KnownBits findKnownBits(Inst* I, ValueCache& C, bool PartialEval = true);
-llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S);
+llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs);
 llvm::ConstantRange findConstantRange(souper::Inst* I,
                                       souper::ValueCache& C,
                                       bool PartialEval = true);
-llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst* I, Solver *S);
+llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst* I, Solver *S, std::vector<InstMapping> &PCs);
 bool isConcrete(souper::Inst *I, bool ConsiderConsts = true,
                                  bool ConsiderHoles = true);
 std::string knownBitsString(llvm::KnownBits KB);

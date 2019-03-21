@@ -127,6 +127,7 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
     }
 
     ValueCache InputValues;
+    std::vector<InstMapping> InputValuesInstMappings;
     for (auto S : InputValueStrings) {
       std::string Name, Val;
       if (!parseInput(S, Name, Val)) {
@@ -145,7 +146,9 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
 	    llvm::errs() << "Error: duplicate value for %" << V->Name << "\n";
 	    return 1;
 	  }
-          InputValues[V] = APInt(V->Width, Val, 10);
+	  APInt ValObj = APInt(V->Width, Val, 10);
+          InputValues[V] = ValObj;
+	  InputValuesInstMappings.emplace_back(V, IC.getConst(ValObj));
           Found = true;
           if (DebugLevel > 3)
             llvm::outs() << "var '" << V->Name << "' gets value '" <<
@@ -162,7 +165,7 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
     // Known bits interpreter
     llvm::outs() << "\n -------- KnownBits Interpreter ----------- \n";
     auto KB = findKnownBits(Rep.Mapping.LHS, InputValues);
-    auto KBSolver = findKnownBitsUsingSolver(Rep.Mapping.LHS, S);
+    auto KBSolver = findKnownBitsUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
     llvm::outs() << "KnownBits result: \n" << knownBitsString(KB) << '\n';
     llvm::outs() << "KnownBits result using solver: \n" << knownBitsString(KBSolver) << "\n\n";
 
@@ -184,7 +187,7 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
     // Constant Ranges interpreter
     llvm::outs() << "\n -------- ConstantRanges Interpreter ----------- \n";
     auto CR = findConstantRange(Rep.Mapping.LHS, InputValues);
-    auto CRSolver = findConstantRangeUsingSolver(Rep.Mapping.LHS, S);
+    auto CRSolver = findConstantRangeUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
     llvm::outs() << "ConstantRange result: \n" << CR << '\n';
     llvm::outs() << "ConstantRange result using solver: \n" << CRSolver << "\n\n";
 
