@@ -196,7 +196,8 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
   std::vector<Inst *> Comps(Inputs.begin(), Inputs.end());
 
-  Comps.push_back(IC.getReservedInst(0));
+  Inst *I1 = IC.getReservedInst(0);
+  Comps.push_back(I1);
   // TODO enforce permitted widths
   // TODO try both the source and dest width, if they're different
   if (Width > 1) {
@@ -226,15 +227,30 @@ void getGuesses(std::vector<Inst *> &Guesses,
   }
 
   // Binary instructions (TODO add div/rem)
-  Comps.push_back(IC.getReservedConst());
+  Inst *C1 = IC.getReservedConst();
+  Comps.push_back(C1);
   // reservedinst starts with width 0
-  Comps.push_back(IC.getReservedInst(0));
+  Inst *I2 = IC.getReservedInst(0);
+  Comps.push_back(I2);
 
   for (auto K : BinaryOperators) {
     for (auto I = Comps.begin(); I != Comps.end(); ++I) {
+      // Prune: only one of (mul x, C), (mul C, x) is allowed
+      if (Inst::isCommutative(K) && (*I)->K == Inst::ReservedConst)
+        continue;
+
+      // Prune: I1 should only be the first argument
+      if ((*I)->K == Inst::ReservedInst && (*I) != I1)
+        continue;
+
       // PRUNE: don't try commutative operators both ways
       auto Start = Inst::isCommutative(K) ? I : Comps.begin();
       for (auto J = Start; J != Comps.end(); ++J) {
+
+        // Prune: I2 should only be the second argument
+        if ((*J)->K == Inst::ReservedInst && (*J) != I2)
+          continue;
+
         // PRUNE: never useful to div, rem, sub, and, or, xor,
         // icmp, select a value against itself
         if ((*I == *J) && (Inst::isCmp(K) || K == Inst::And || K == Inst::Or ||
@@ -317,11 +333,23 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
   // Deal with select instruction separately, since some guesses might
   // need two reserved per select instruction
-  Comps.push_back(IC.getReservedConst());
-  Comps.push_back(IC.getReservedInst(0));
+  Inst *C2 = IC.getReservedConst();
+  Comps.push_back(C2);
+  Inst *I3 = IC.getReservedInst(0);
+  Comps.push_back(I3);
 
   for (auto I = Comps.begin(); I != Comps.end(); ++I) {
+    if ((*I)->K == Inst::ReservedInst && (*I) != I1)
+      continue;
+    if ((*I)->K == Inst::ReservedConst && (*I) != C1)
+      continue;
+
     for (auto J = Comps.begin(); J != Comps.end(); ++J) {
+      if ((*J)->K == Inst::ReservedInst && (*J) != I2)
+        continue;
+      if ((*J)->K == Inst::ReservedConst && (*J) != C2)
+        continue;
+
       // Prune (select cond, x, x)
       if (I == J)
         continue;
@@ -346,6 +374,8 @@ void getGuesses(std::vector<Inst *> &Guesses,
       }
 
       for (auto L : Comps) {
+        if (L->K == Inst::ReservedInst && L != I3)
+          continue;
         for (auto V1i : V1) {
           for (auto V2i : V2) {
 
