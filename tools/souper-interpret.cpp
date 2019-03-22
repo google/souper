@@ -171,16 +171,16 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
 
     switch(compareKnownBits(KB, KBSolver)) {
     case CompareDataflowResult::SAME:
-      llvm::errs() << "Same precision.\n";
+      llvm::outs() << "Same precision.\n";
       break;
     case CompareDataflowResult::LESS:
-      llvm::errs() << "Dataflow is less precise than solver.\n";
+      llvm::outs() << "Dataflow is less precise than solver.\n";
       break;
     case CompareDataflowResult::GREATER:
-      llvm::errs() << "Dataflow is more precise than solver.\n";
+      llvm::outs() << "Dataflow is more precise than solver.\n";
       break;
     case CompareDataflowResult::INCOMPARABLE:
-      llvm::errs() << "Reults are incomparable.\n";
+      llvm::outs() << "Reults are incomparable.\n";
       break;
     }
 
@@ -192,13 +192,13 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
     llvm::outs() << "ConstantRange result using solver: \n" << CRSolver << "\n\n";
 
     if (CR == CRSolver)
-      llvm::errs() << "Same precision.\n";
+      llvm::outs() << "Same precision.\n";
     else if (CR.contains(CRSolver))
-      llvm::errs() << "Dataflow is less precise than solver.\n";
+      llvm::outs() << "Dataflow is less precise than solver.\n";
     else if (CRSolver.contains(CR))
-      llvm::errs() << "Dataflow is more precise than solver.\n";
+      llvm::outs() << "Dataflow is more precise than solver.\n";
     else
-      llvm::errs() << "Reults are incomparable.\n";
+      llvm::outs() << "Reults are incomparable.\n";
 
     if (isConcrete(Rep.Mapping.LHS)) {
       llvm::outs() << " -------- Concrete Interpreter ----------- \n";

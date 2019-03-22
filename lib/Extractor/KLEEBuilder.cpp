@@ -124,6 +124,7 @@ private:
       assert(0 && "unexpected kind");
     case Inst::Const:
       return klee::ConstantExpr::alloc(I->Val);
+    case Inst::ReservedInst:
     case Inst::Var:
       return makeSizedArrayRead(I->Width, I->Name, I);
     case Inst::Phi: {

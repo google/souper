@@ -1254,6 +1254,10 @@ bool Parser::parseLine(std::string &ErrStr) {
           return false;
         }
         if (!consumeToken(ErrStr)) return false;
+      } else if (IK == Inst::ReservedInst) {
+        Inst *I = IC.getReservedInst(InstWidth);
+        Context.setInst(InstName, I);
+        return true;
       }
 
       std::vector<Inst *> Ops;
