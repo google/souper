@@ -1,0 +1,13 @@
+; RUN: %souper-interpret %solver -input-values=%0=0 %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: KnownBits result:
+; CHECK-NEXT: 00000000
+
+; CHECK: ConstantRange result:
+; CHECK-NEXT: [0,1)
+
+%0:i8 = var
+%1:i8 = reservedinst
+%2 = mul %1, %0
+infer %2

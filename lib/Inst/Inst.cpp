@@ -503,6 +503,8 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("smul.with.overflow", Inst::SMulWithOverflow)
                    .Case("umul.with.overflow", Inst::UMulWithOverflow)
                    .Case("extractvalue", Inst::ExtractValue)
+                   .Case("reservedinst", Inst::ReservedInst)
+                   .Case("reservedconst", Inst::ReservedConst)
                    .Default(Inst::None);
 }
 
@@ -931,7 +933,8 @@ void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
     if (!Visited.insert(I).second)
       continue;
     if (I->K == Inst::Var &&
-        I->Name.find(ReservedConstPrefix) == std::string::npos) {
+        (I->Name.find(ReservedConstPrefix) == std::string::npos &&
+	 I->Name.find(ReservedInstPrefix) == std::string::npos)) {
       Vars.push_back(I);
     }
     for (auto Op : I->Ops)
