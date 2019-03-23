@@ -88,7 +88,7 @@ bool Inst::operator<(const Inst &Other) const {
 
   if (HarvestFrom != Other.HarvestFrom)
     return HarvestFrom < Other.HarvestFrom;
-  llvm_unreachable("Should have found an unequal operand");
+  return false;
 }
 
 const std::vector<Inst *> &Inst::orderedOps() const {
@@ -938,10 +938,8 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
     Q.pop();
     ++Benefit;
     if (Visited.insert(I).second) {
-      if (I->K != Inst::Phi) {
-        for (auto Op : I->Ops)
-          Q.push(std::make_tuple(Op, Benefit));
-      }
+      for (auto Op : I->Ops)
+        Q.push(std::make_tuple(Op, Benefit));
       if (Benefit > 1 && I->Available && I->K != Inst::Const
           && I->K != Inst::UntypedConst) {
         if (WidthMustMatch && I->Width != Root->Width)

@@ -20,6 +20,9 @@
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Value.h"
+
+#include "souper/SMTLIB2/Solver.h"
+
 #include <map>
 #include <memory>
 #include <set>
@@ -246,6 +249,16 @@ public:
                 llvm::APInt DemandedBits, bool Available);
 };
 
+struct SynthesisContext {
+  InstContext &IC;
+  SMTLIBSolver *SMTSolver;
+  Inst *LHS;
+  Inst *LHSUB;
+  const std::vector<InstMapping> &PCs;
+  const BlockPCs &BPCs;
+  unsigned Timeout;
+};
+
 int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
 int instCount(Inst *I);
 int benefit(Inst *LHS, Inst *RHS);
@@ -287,6 +300,8 @@ void findVars(Inst *Root, std::vector<Inst *> &Vars);
 bool hasGivenInst(Inst *Root, std::function<bool(Inst*)> InstTester);
 void getHoles(Inst *Root, std::vector<Inst *> &Holes);
 void getConstants(Inst *Root, std::set<Inst *> &ConstSet);
+
+void getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts);
 
 void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                       std::map<Inst *, Inst *> &InstCache,

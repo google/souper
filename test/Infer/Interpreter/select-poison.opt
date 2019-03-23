@@ -4,7 +4,7 @@
 
 ; RUN: %souper-interpret %solver -input-values=%0=255,%1=1 %s > %t 2>&1
 ; RUN: %FileCheck -check-prefix=TEST2 %s < %t
-; TEST2: Value: Undefined
+; TEST2: Value: Poison
 
 %0:i8 = var
 %1:i8 = var

@@ -37,6 +37,7 @@ struct EvalValue {
   bool hasValue() {
     return K == ValueKind::Val;
   }
+
   llvm::APInt getValue() {
     if (K != ValueKind::Val) {
       llvm::errs() << "Interpreter: expected number but got ";
@@ -80,30 +81,39 @@ struct EvalValue {
     }
   }
 };
+
 using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;
 
-EvalValue evaluateAddNSW(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateAddNUW(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateAddNW(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateSubNSW(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateSubNUW(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateSubNW(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateUDiv(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateURem(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateShl(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateLShr(llvm::APInt a, llvm::APInt b);
-EvalValue evaluateAShr(llvm::APInt a, llvm::APInt b);
+EvalValue evaluateAddNSW(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateAddNUW(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateAddNW(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateSubNSW(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateSubNUW(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateSubNW(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateUDiv(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateURem(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateShl(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateLShr(llvm::APInt A, llvm::APInt B);
+EvalValue evaluateAShr(llvm::APInt A, llvm::APInt B);
 
-EvalValue evaluateInst(Inst* Root, ValueCache &Cache);
-llvm::KnownBits findKnownBits(Inst* I, ValueCache& C, bool PartialEval = true);
-llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs);
-llvm::ConstantRange findConstantRange(souper::Inst* I,
-                                      souper::ValueCache& C,
-                                      bool PartialEval = true);
-llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst* I, Solver *S, std::vector<InstMapping> &PCs);
-bool isConcrete(souper::Inst *I, bool ConsiderConsts = true,
-                                 bool ConsiderHoles = true);
-std::string knownBitsString(llvm::KnownBits KB);
+  class ConcreteInterpreter {
+    ValueCache Cache;
+    bool CacheWritable = false;
+
+    EvalValue evaluateSingleInst(Inst *I, std::vector<EvalValue> &Args);
+
+  public:
+    ConcreteInterpreter() {}
+    ConcreteInterpreter(ValueCache &Input) : Cache(Input) {}
+    ConcreteInterpreter(Inst *I, ValueCache &Input) : Cache(Input) {
+      CacheWritable = true;
+      evaluateInst(I);
+      CacheWritable = false;
+    }
+
+    EvalValue evaluateInst(Inst *Root);
+  };
+
 }
 
 
