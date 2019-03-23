@@ -648,15 +648,18 @@ bool isBigQuerySat(SynthesisContext &SC,
 
 void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
                             std::vector<Inst *> &Guesses) {
-  std::vector<Inst *> Inputs;
-  findCands(LHS, Inputs, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+  std::vector<Inst *> Cands;
+  findCands(LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
   if (DebugLevel > 1)
-    llvm::errs() << "got " << Inputs.size() << " candidates from LHS\n";
+    llvm::errs() << "got " << Cands.size() << " candidates from LHS\n";
 
   int LHSCost = souper::cost(LHS, /*IgnoreDepsWithExternalUses=*/true);
 
   int TooExpensive = 0;
 
+
+  std::vector<Inst *> Inputs;
+  findVars(LHS, Inputs);
   PruningManager DataflowPruning(LHS, Inputs, DebugLevel, IC, Solver);
   // Cheaper tests go first
   std::vector<PruneFunc> PruneFuncs = {CostPrune};
@@ -670,14 +673,14 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
   // TODO(manasij7479) : If RHS is concrete, evaluate both sides
   // TODO(regehr?) : Solver assisted pruning (should be the last component)
 
-  getGuesses(Guesses, Inputs, LHS->Width,
+  getGuesses(Guesses, Cands, LHS->Width,
              LHSCost, IC, nullptr, nullptr, TooExpensive, PruneCallback);
   if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::errs());
   }
 
   // add nops guesses separately
-  for (auto I : Inputs) {
+  for (auto I : Cands) {
     for (auto V : matchWidth(I, LHS->Width, IC))
       addGuess(V, LHSCost, Guesses, TooExpensive);
   }

@@ -120,7 +120,13 @@ namespace souper {
 
     case Inst::Phi:
       // FIXME should return all values not just one of them
-      return ARG0;
+      // At this moment, the only situation where evaluateInst is called on an
+      // Instcontaining Phi is for the purpose of partial evaluation during
+      // abstract interpretation. In this case, it is okay to return one of the
+      // operands. If we ever want to deterministically interpret an LHS
+      // containing a phi, this needs to start returning a list, or there needs
+      // to be enough information in BlockPCs to interpret ARG0
+      return ARG1;;
 
     case Inst::Add:
       return {ARG0 + ARG1};

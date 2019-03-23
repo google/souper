@@ -26,66 +26,103 @@ std::string getUniqueName() {
 bool PruningManager::isInfeasible(souper::Inst *RHS,
                                  unsigned StatsLevel) {
   for (int I = 0; I < InputVals.size(); ++I) {
-    auto C = LHSValues[I];
-    if (C.hasValue()) {
-      auto Val = C.getValue();
-      if (StatsLevel > 2) {
-        llvm::errs() << "  Input:\n";
-        for (auto &&p : InputVals[I]) {
-          if (p.second.hasValue()) {
-            llvm::errs() << "  Var " << p.first->Name << " : "
-                         << p.second.getValue() << "\n";
-          }
-        }
-        llvm::errs() << "  LHS value = " << Val << "\n";
-      }
 
-      if (!isConcrete(RHS)) {
-        auto CR = findConstantRange(RHS, InputVals[I]);
-        if (StatsLevel > 2)
-          llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
-        if (!CR.contains(Val)) {
-          if (StatsLevel > 2) {
-            llvm::errs() << "  pruned using CR! ";
-            if (!isConcrete(RHS, false, true)) {
-              llvm::errs() << "Inst had a hole.";
-            } else {
-              llvm::errs() << "Inst had a symbolic const.";
-            }
-            llvm::errs() << "\n";
-          }
-          return true;
-        }
-        auto KB = findKnownBits(RHS, InputVals[I]);
-        if (StatsLevel > 2)
-          llvm::errs() << "  RHS KnownBits = " << knownBitsString(KB) << "\n";
-        if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
-          if (StatsLevel > 2) {
-            llvm::errs() << "  pruned using KB! ";
-            if (!isConcrete(RHS, false, true)) {
-              llvm::errs() << "Inst had a hole.";
-            } else {
-              llvm::errs() << "Inst had a symbolic const.";
-            }
-            llvm::errs() << "\n";
-          }
-          return true;
-        }
-      } else {
-        auto RHSV = evaluateInst(RHS, InputVals[I]);
-        if (RHSV.hasValue()) {
-          if (Val != RHSV.getValue()) {
-            if (StatsLevel > 2) {
-              llvm::errs() << "  RHS value = " << RHSV.getValue() << "\n";
-              llvm::errs() << "  pruned using concrete interpreter!\n";
-            }
-            return true;
-          }
+    if (StatsLevel > 2) {
+      llvm::errs() << "  Input:\n";
+      for (auto &&p : InputVals[I]) {
+        if (p.second.hasValue()) {
+          llvm::errs() << "  Var " << p.first->Name << " : "
+                        << p.second.getValue() << "\n";
         }
       }
     }
+
+    if (LHSHasPhi) {
+      auto LHSCR = LHSConstantRange[I];
+      auto RHSCR = findConstantRange(RHS, InputVals[I]);
+      if (LHSCR.intersectWith(RHSCR).isEmptySet()) {
+        if (StatsLevel > 2) {
+          llvm::errs() << "  LHS ConstantRange = " << LHSCR << "\n";
+          llvm::errs() << "  RHS ConstantRange = " << RHSCR << "\n";
+          llvm::errs() << "  pruned phi-LHS using CR! ";
+            if (!isConcrete(RHS, false, true)) {
+              llvm::errs() << "Inst had a hole.";
+            } else {
+              llvm::errs() << "Inst had a symbolic const.";
+            }
+        }
+        return true;
+      }
+
+      auto LHSKB = LHSKnownBits[I];
+      auto RHSKB = findKnownBits(RHS, InputVals[I]);
+      if ((LHSKB.Zero & RHSKB.One) != 0 || (LHSKB.One & RHSKB.Zero) != 0) {
+        if (StatsLevel > 2) {
+          llvm::errs() << "  LHS KnownBits = " << knownBitsString(LHSKB) << "\n";
+          llvm::errs() << "  RHS KnownBits = " << knownBitsString(RHSKB) << "\n";
+          llvm::errs() << "  pruned phi-LHS using KB! ";
+            if (!isConcrete(RHS, false, true)) {
+              llvm::errs() << "Inst had a hole.";
+            } else {
+              llvm::errs() << "Inst had a symbolic const.";
+            }
+        }
+        return true;
+      }
+
+    } else {
+      auto C = LHSValues[I];
+      if (C.hasValue()) {
+        auto Val = C.getValue();
+        llvm::errs() << "  LHS value = " << Val << "\n";
+        if (!isConcrete(RHS)) {
+          auto CR = findConstantRange(RHS, InputVals[I]);
+          if (StatsLevel > 2)
+            llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
+          if (!CR.contains(Val)) {
+            if (StatsLevel > 2) {
+              llvm::errs() << "  pruned using CR! ";
+              if (!isConcrete(RHS, false, true)) {
+                llvm::errs() << "Inst had a hole.";
+              } else {
+                llvm::errs() << "Inst had a symbolic const.";
+              }
+              llvm::errs() << "\n";
+            }
+            return true;
+          }
+          auto KB = findKnownBits(RHS, InputVals[I]);
+          if (StatsLevel > 2)
+            llvm::errs() << "  RHS KnownBits = " << knownBitsString(KB) << "\n";
+          if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
+            if (StatsLevel > 2) {
+              llvm::errs() << "  pruned using KB! ";
+              if (!isConcrete(RHS, false, true)) {
+                llvm::errs() << "Inst had a hole.";
+              } else {
+                llvm::errs() << "Inst had a symbolic const.";
+              }
+              llvm::errs() << "\n";
+            }
+            return true;
+          }
+        } else {
+          auto RHSV = evaluateInst(RHS, InputVals[I]);
+          if (RHSV.hasValue()) {
+            if (Val != RHSV.getValue()) {
+              if (StatsLevel > 2) {
+                llvm::errs() << "  RHS value = " << RHSV.getValue() << "\n";
+                llvm::errs() << "  pruned using concrete interpreter!\n";
+              }
+              return true;
+            }
+          }
+        }
+      }
+      return isInfeasibleWithSolver(RHS, StatsLevel);
+    }
   }
-  return isInfeasibleWithSolver(RHS, StatsLevel);
+  return false;
 }
 
 bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
@@ -174,8 +211,18 @@ void PruningManager::init() {
 
   InputVals = generateInputSets(InputVars);
 
-  for (auto &&Input : InputVals) {
-    LHSValues.push_back(evaluateInst(LHS, Input));
+  if (!hasGivenInst(LHS, [](Inst *I){ return I->K == Inst::Phi;})) {
+    // No phi nodes, can deterministically evaluate
+    for (auto &&Input : InputVals) {
+      LHSValues.push_back(evaluateInst(LHS, Input));
+    }
+  } else {
+    // Have to abstract interpret LHS because of phi
+    LHSHasPhi = true;
+    for (auto &&Input : InputVals) {
+      LHSKnownBits.push_back(findKnownBits(LHS, Input, true));
+      LHSConstantRange.push_back(findConstantRange(LHS, Input, true));
+    }
   }
 
   if (StatsLevel > 1) {

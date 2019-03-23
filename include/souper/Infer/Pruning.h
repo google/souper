@@ -25,13 +25,16 @@ public:
 
   bool isInfeasible(Inst *RHS, unsigned StatsLevel);
   bool isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel);
-
   void init();
   // double init antipattern, required because init should
   // not be called when pruning is disabled
 private:
   Inst *LHS;
   std::vector<EvalValue> LHSValues;
+  std::vector<llvm::KnownBits> LHSKnownBits;
+  std::vector<llvm::ConstantRange> LHSConstantRange;
+  bool LHSHasPhi = false;
+
   InstContext &IC;
   SMTLIBSolver *S;
   PruneFunc DataflowPrune;
