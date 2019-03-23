@@ -15,10 +15,6 @@
 #include "souper/Infer/Interpreter.h"
 
 namespace souper {
-#define ARG0 Args[0].getValue()
-#define ARG1 Args[1].getValue()
-#define ARG2 Args[2].getValue()
-
   EvalValue evaluateAddNSW(llvm::APInt a, llvm::APInt b) {
     bool Ov;
     auto Res = a.sadd_ov(b, Ov);
@@ -105,14 +101,18 @@ namespace souper {
     return {a.ashr(b)};
   }
 
-  EvalValue evaluateSingleInst(Inst *Inst, std::vector<EvalValue> &Args) {
+#define ARG0 Args[0].getValue()
+#define ARG1 Args[1].getValue()
+#define ARG2 Args[2].getValue()
+
+  EvalValue ConcreteInterpreter::evaluateSingleInst(Inst *Inst, std::vector<EvalValue> &Args) {
     // UB propagates unconditionally
     for (auto &A : Args)
       if (A.K == EvalValue::ValueKind::UB)
         return EvalValue::ub();
 
     // phi and select only take poison from their chosen input
-    if (Inst->K != Inst::Phi && Inst->K != Inst::Select) {
+    if (Inst->K != Inst::Select) {
       for (auto &A : Args)
         if (A.K == EvalValue::ValueKind::Poison)
           return EvalValue::poison();
@@ -134,7 +134,13 @@ namespace souper {
 
     case Inst::Phi:
       // FIXME should return all values not just one of them
-      return ARG0;
+      // At this moment, the only situation where evaluateInst is called on an
+      // Instcontaining Phi is for the purpose of partial evaluation during
+      // abstract interpretation. In this case, it is okay to return one of the
+      // operands. If we ever want to deterministically interpret an LHS
+      // containing a phi, this needs to start returning a list, or there needs
+      // to be enough information in BlockPCs to interpret ARG0
+      return Args[0];
 
     case Inst::Add:
       return {ARG0 + ARG1};
@@ -287,7 +293,7 @@ namespace souper {
 
     case Inst::Select:
       if (!Args[0].hasValue())
-        return EvalValue::ub();
+        return Args[0];
       return ARG0.getBoolValue() ? Args[1] : Args[2];
 
     case Inst::ZExt:
@@ -375,19 +381,17 @@ namespace souper {
 #undef ARG1
 #undef ARG2
 
-  EvalValue evaluateInst(Inst *Root, ValueCache &Cache) {
-    // TODO populate cache and look things up in it
-    // needed?
-    if (Root->K == Inst::Var) {
+  EvalValue ConcreteInterpreter::evaluateInst(Inst *Root) {
+    if (Cache.find(Root) != Cache.end())
       return Cache[Root];
-    } else {
-      // TODO SmallVector
-      std::vector<EvalValue> EvaluatedArgs;
-      for (auto &&I : Root->Ops)
-        EvaluatedArgs.push_back(evaluateInst(I, Cache));
-      auto Result = evaluateSingleInst(Root, EvaluatedArgs);
-      //Cache[Root] = Result;
-      return Result;
-    }
+
+    // TODO SmallVector
+    std::vector<EvalValue> EvaluatedArgs;
+    for (auto &&I : Root->Ops)
+      EvaluatedArgs.push_back(evaluateInst(I));
+    auto Result = evaluateSingleInst(Root, EvaluatedArgs);
+    if (CacheWritable)
+      Cache[Root] = Result;
+    return Result;
   }
 }

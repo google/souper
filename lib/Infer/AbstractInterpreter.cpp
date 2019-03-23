@@ -20,108 +20,125 @@ using namespace llvm;
 
 namespace {
 
-  APInt getUMin(const KnownBits &x) { return x.One; }
+  APInt getUMin(const KnownBits &X) { return X.One; }
 
-  APInt getUMax(const KnownBits &x) { return ~x.Zero; }
+  APInt getUMax(const KnownBits &X) { return ~X.Zero; }
 
-  bool isSignKnown(const KnownBits &x) {
-    unsigned W = x.getBitWidth();
-    return x.One[W - 1] || x.Zero[W - 1];
+  bool isSignKnown(const KnownBits &X) {
+    unsigned W = X.getBitWidth();
+    return X.One[W - 1] || X.Zero[W - 1];
   }
 
-  APInt getSMin(const KnownBits &x) {
-    if (isSignKnown(x))
-      return x.One;
-    APInt Min = x.One;
-    Min.setBit(x.getBitWidth() - 1);
+  APInt getSMin(const KnownBits &X) {
+    if (isSignKnown(X))
+      return X.One;
+    APInt Min = X.One;
+    Min.setBit(X.getBitWidth() - 1);
     return Min;
   }
 
-  APInt getSMax(const KnownBits &x) {
-    if (isSignKnown(x))
-      return ~x.Zero;
-    APInt Max = ~x.Zero;
-    Max.clearBit(x.getBitWidth() - 1);
+  APInt getSMax(const KnownBits &X) {
+    if (isSignKnown(X))
+      return ~X.Zero;
+    APInt Max = ~X.Zero;
+    Max.clearBit(X.getBitWidth() - 1);
     return Max;
   }
 
-  KnownBits getMostPreciseKnownBits(KnownBits a, KnownBits b) {
-    unsigned unknownCountA =
-      a.getBitWidth() - (a.Zero.countPopulation() + a.One.countPopulation());
-    unsigned unknownCountB =
-      b.getBitWidth() - (b.Zero.countPopulation() + b.One.countPopulation());
-    return unknownCountA < unknownCountB ? a : b;
-  }
+
 } // anonymous
 
 namespace souper {
 
+  KnownBits KnownBitsAnalysis::getMostPreciseKnownBits(KnownBits A, KnownBits B) {
+    unsigned unknownCountA =
+      A.getBitWidth() - (A.Zero.countPopulation() + A.One.countPopulation());
+    unsigned unknownCountB =
+      B.getBitWidth() - (B.Zero.countPopulation() + B.One.countPopulation());
+    return unknownCountA < unknownCountB ? A : B;
+  }
+
+  std::string KnownBitsAnalysis::knownBitsString(llvm::KnownBits KB) {
+    std::string S = "";
+    for (int I = 0; I < KB.getBitWidth(); I++) {
+      if (KB.Zero.isNegative())
+        S += "0";
+      else if (KB.One.isNegative())
+        S += "1";
+      else
+        S += "?";
+      KB.Zero <<= 1;
+      KB.One <<= 1;
+    }
+    return S;
+  }
+
   namespace BinaryTransferFunctionsKB {
-    llvm::KnownBits add(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits add(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/false,
-                                               lhs, rhs);
+                                               LHS, RHS);
     }
 
-    llvm::KnownBits addnsw(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits addnsw(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/true,
-                                               lhs, rhs);
+                                               LHS, RHS);
     }
 
-    llvm::KnownBits sub(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits sub(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/false,
-                                               lhs, rhs);
+                                               LHS, RHS);
     }
 
-    llvm::KnownBits subnsw(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits subnsw(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/false, /*NSW=*/true,
-                                               lhs, rhs);
+                                               LHS, RHS);
     }
 
-    llvm::KnownBits mul(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      llvm::KnownBits Result(lhs.getBitWidth());
+    llvm::KnownBits mul(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
+      llvm::KnownBits Result(LHS.getBitWidth());
 
       // TODO: Below only takes into account leading and trailing zeros. Maybe
       // also do something with leading ones or trailing ones for improvement?
-      auto trailingZeros0 = lhs.countMinTrailingZeros();
-      auto trailingZeros1 = rhs.countMinTrailingZeros();
-      Result.Zero.setLowBits(std::min(trailingZeros0 + trailingZeros1, lhs.getBitWidth()));
+      auto trailingZeros0 = LHS.countMinTrailingZeros();
+      auto trailingZeros1 = RHS.countMinTrailingZeros();
+      Result.Zero.setLowBits(std::min(trailingZeros0 + trailingZeros1, LHS.getBitWidth()));
 
       // check for leading zeros
-      auto lz0 = lhs.countMinLeadingZeros();
-      auto lz1 = rhs.countMinLeadingZeros();
+      auto lz0 = LHS.countMinLeadingZeros();
+      auto lz1 = RHS.countMinLeadingZeros();
       auto confirmedLeadingZeros = lz0 + lz1 - 1;
-      auto resultSize = lhs.getBitWidth() + rhs.getBitWidth() - 1;
-      if (resultSize - confirmedLeadingZeros < lhs.getBitWidth())
-	Result.Zero.setHighBits(lhs.getBitWidth() - (resultSize - confirmedLeadingZeros));
+      auto resultSize = LHS.getBitWidth() + RHS.getBitWidth() - 1;
+      if (resultSize - confirmedLeadingZeros < LHS.getBitWidth())
+        Result.Zero.setHighBits(LHS.getBitWidth() - (resultSize - confirmedLeadingZeros));
 
       // two numbers odd means reuslt is odd
-      if (lhs.One[0] && rhs.One[0])
-	Result.One.setLowBits(1);
+      if (LHS.One[0] && RHS.One[0])
+        Result.One.setLowBits(1);
 
       return Result;
     }
 
-    llvm::KnownBits udiv(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      llvm::KnownBits Result(lhs.getBitWidth());
+    llvm::KnownBits udiv(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
+      llvm::KnownBits Result(LHS.getBitWidth());
       const auto width = Result.getBitWidth();
 
-      unsigned LeadZ = lhs.countMinLeadingZeros();
-      unsigned RHSMaxLeadingZeros = rhs.countMaxLeadingZeros();
+      unsigned LeadZ = LHS.countMinLeadingZeros();
+      unsigned RHSMaxLeadingZeros = RHS.countMaxLeadingZeros();
       if (RHSMaxLeadingZeros != width)
         LeadZ = std::min(width, LeadZ + width - RHSMaxLeadingZeros - 1);
       Result.Zero.setHighBits(LeadZ);
       return Result;
     }
 
-    llvm::KnownBits urem(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      llvm::KnownBits Result(lhs.getBitWidth());
+    llvm::KnownBits urem(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
+      llvm::KnownBits Result(LHS.getBitWidth());
       const auto width = Result.getBitWidth();
 
-      if (rhs.isConstant()) {
-        auto RA = rhs.getConstant();
+      if (RHS.isConstant()) {
+        auto RA = RHS.getConstant();
         if (RA.isPowerOf2()) {
           auto LowBits = (RA - 1);
-          Result = lhs;
+          Result = LHS;
           Result.Zero |= ~LowBits;
           Result.One &= LowBits;
           return Result;
@@ -129,43 +146,43 @@ namespace souper {
       }
 
       unsigned Leaders =
-        std::max(lhs.countMinLeadingZeros(), rhs.countMinLeadingZeros());
+        std::max(LHS.countMinLeadingZeros(), RHS.countMinLeadingZeros());
       Result.resetAll();
       Result.Zero.setHighBits(Leaders);
       return Result;
     }
 
-    llvm::KnownBits and_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      auto result = lhs;
-      result.One &= rhs.One;
-      result.Zero |= rhs.Zero;
+    llvm::KnownBits and_(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
+      auto result = LHS;
+      result.One &= RHS.One;
+      result.Zero |= RHS.Zero;
       return result;
     }
 
-    llvm::KnownBits or_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      auto result = lhs;
-      result.One |= rhs.One;
-      result.Zero &= rhs.Zero;
+    llvm::KnownBits or_(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
+      auto result = LHS;
+      result.One |= RHS.One;
+      result.Zero &= RHS.Zero;
       return result;
     }
 
-    llvm::KnownBits xor_(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      auto result = lhs;
+    llvm::KnownBits xor_(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
+      auto result = LHS;
       llvm::APInt KnownZeroOut =
-        (lhs.Zero & rhs.Zero) | (lhs.One & rhs.One);
-      result.One = (lhs.Zero & rhs.One) | (lhs.One & rhs.Zero);
+        (LHS.Zero & RHS.Zero) | (LHS.One & RHS.One);
+      result.One = (LHS.Zero & RHS.One) | (LHS.One & RHS.Zero);
       result.Zero = std::move(KnownZeroOut);
       // ^ logic copied from LLVM ValueTracking.cpp
       return result;
     }
 
-    llvm::KnownBits shl(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      llvm::KnownBits Result(lhs.getBitWidth());
+    llvm::KnownBits shl(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
+      llvm::KnownBits Result(LHS.getBitWidth());
       const auto width = Result.getBitWidth();
 
-      auto Op0KB = lhs;
-      if (rhs.isConstant()) {
-        auto Val = rhs.getConstant().getLimitedValue();
+      auto Op0KB = LHS;
+      if (RHS.isConstant()) {
+        auto Val = RHS.getConstant().getLimitedValue();
         if (Val < 0 || Val >= width) {
           return Result;
         }
@@ -177,19 +194,19 @@ namespace souper {
         return Op0KB;
       }
 
-      unsigned minValue = rhs.One.getLimitedValue();
-      Result.Zero.setLowBits(std::min(lhs.countMinTrailingZeros() + minValue, width));
+      unsigned minValue = RHS.One.getLimitedValue();
+      Result.Zero.setLowBits(std::min(LHS.countMinTrailingZeros() + minValue, width));
 
       return Result;
     }
 
-    llvm::KnownBits lshr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      llvm::KnownBits Result(lhs.getBitWidth());
+    llvm::KnownBits lshr(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
+      llvm::KnownBits Result(LHS.getBitWidth());
       const auto width = Result.getBitWidth();
 
-      auto Op0KB = lhs;
-      if (rhs.isConstant()) {
-        auto Val = rhs.getConstant().getLimitedValue();
+      auto Op0KB = LHS;
+      if (RHS.isConstant()) {
+        auto Val = RHS.getConstant().getLimitedValue();
         if (Val < 0 || Val >= width) {
           return Result;
         }
@@ -200,83 +217,83 @@ namespace souper {
         return Op0KB;
       }
 
-      unsigned minValue = rhs.One.getLimitedValue();
-      Result.Zero.setHighBits(std::min(minValue + lhs.countMinLeadingZeros(), width));
+      unsigned minValue = RHS.One.getLimitedValue();
+      Result.Zero.setHighBits(std::min(minValue + LHS.countMinLeadingZeros(), width));
 
       return Result;
     }
 
-    llvm::KnownBits ashr(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
-      llvm::KnownBits Result(lhs.getBitWidth());
+    llvm::KnownBits ashr(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
+      llvm::KnownBits Result(LHS.getBitWidth());
       const auto width = Result.getBitWidth();
 
-      unsigned minValue = rhs.One.getLimitedValue();
-      if (lhs.One.isSignBitSet()) {
-	// confirmed: sign bit = 1
-	Result.One.setHighBits(std::min(lhs.countMinLeadingOnes() + minValue, width));
-      } else if (lhs.Zero.isSignBitSet()) {
-	// confirmed: sign bit = 0
-	Result.Zero.setHighBits(std::min(lhs.countMinLeadingZeros() + minValue, width));
+      unsigned minValue = RHS.One.getLimitedValue();
+      if (LHS.One.isSignBitSet()) {
+        // confirmed: sign bit = 1
+        Result.One.setHighBits(std::min(LHS.countMinLeadingOnes() + minValue, width));
+      } else if (LHS.Zero.isSignBitSet()) {
+        // confirmed: sign bit = 0
+        Result.Zero.setHighBits(std::min(LHS.countMinLeadingZeros() + minValue, width));
       }
       return Result;
     }
 
-    llvm::KnownBits eq(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits eq(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       llvm::KnownBits Result(1);
-      if (lhs.isConstant() && rhs.isConstant() && (lhs.getConstant() == rhs.getConstant())) {
-	Result.One.setBit(0);
-	return Result;
+      if (LHS.isConstant() && RHS.isConstant() && (LHS.getConstant() == RHS.getConstant())) {
+        Result.One.setBit(0);
+        return Result;
       }
-      if (((lhs.One & rhs.Zero) != 0) || ((lhs.Zero & rhs.One) != 0)) {
-	Result.Zero.setBit(0);
-	return Result;
+      if (((LHS.One & RHS.Zero) != 0) || ((LHS.Zero & RHS.One) != 0)) {
+        Result.Zero.setBit(0);
+        return Result;
       }
       return Result;
     }
 
-    llvm::KnownBits ne(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits ne(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       llvm::KnownBits Result(1);
 
-      if (lhs.isConstant() && rhs.isConstant() && (lhs.getConstant() == rhs.getConstant()))
-	Result.Zero.setBit(0);
-      if (((lhs.One & rhs.Zero) != 0) || ((lhs.Zero & rhs.One) != 0))
-	Result.One.setBit(0);
+      if (LHS.isConstant() && RHS.isConstant() && (LHS.getConstant() == RHS.getConstant()))
+        Result.Zero.setBit(0);
+      if (((LHS.One & RHS.Zero) != 0) || ((LHS.Zero & RHS.One) != 0))
+        Result.One.setBit(0);
       return Result;
     }
 
-    llvm::KnownBits ult(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits ult(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       llvm::KnownBits Result(1);
-      if (getUMax(lhs).ult(getUMin(rhs)))
-	Result.One.setBit(0);
-      if (getUMin(lhs).uge(getUMax(rhs)))
-	Result.Zero.setBit(0);
+      if (getUMax(LHS).ult(getUMin(RHS)))
+        Result.One.setBit(0);
+      if (getUMin(LHS).uge(getUMax(RHS)))
+        Result.Zero.setBit(0);
       return Result;
     }
 
-    llvm::KnownBits slt(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits slt(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       llvm::KnownBits Result(1);
-      if (getSMax(lhs).slt(getSMin(rhs)))
-	Result.One.setBit(0);
-      if (getSMin(lhs).sge(getSMax(rhs)))
-	Result.Zero.setBit(0);
+      if (getSMax(LHS).slt(getSMin(RHS)))
+        Result.One.setBit(0);
+      if (getSMin(LHS).sge(getSMax(RHS)))
+        Result.Zero.setBit(0);
       return Result;
     }
 
-    llvm::KnownBits ule(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits ule(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       llvm::KnownBits Result(1);
-      if (getUMax(lhs).ule(getUMin(rhs)))
-	Result.One.setBit(0);
-      if (getUMin(lhs).ugt(getUMax(rhs)))
-	Result.Zero.setBit(0);
+      if (getUMax(LHS).ule(getUMin(RHS)))
+        Result.One.setBit(0);
+      if (getUMin(LHS).ugt(getUMax(RHS)))
+        Result.Zero.setBit(0);
       return Result;
     }
 
-    llvm::KnownBits sle(const llvm::KnownBits &lhs, const llvm::KnownBits &rhs) {
+    llvm::KnownBits sle(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       llvm::KnownBits Result(1);
-      if (getSMax(lhs).sle(getSMin(rhs)))
-	Result.One.setBit(0);
-      if (getSMin(lhs).sgt(getSMax(rhs)))
-	Result.Zero.setBit(0);
+      if (getSMax(LHS).sle(getSMin(RHS)))
+        Result.One.setBit(0);
+      if (getSMin(LHS).sgt(getSMax(RHS)))
+        Result.Zero.setBit(0);
       return Result;
     }
   }
@@ -291,7 +308,7 @@ namespace souper {
   }
 
   bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
-    return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst* instr) {
+    return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst *instr) {
 			      if (ConsiderConsts && isReservedConst(instr))
 				return true;
 			      if (ConsiderHoles && isHole(instr))
@@ -301,57 +318,112 @@ namespace souper {
 			    });
   }
 
-  EvalValue getValue(Inst *I, ValueCache &C, bool PartialEval) {
+  // Tries to get the concrete value from @I
+  EvalValue getValue(Inst *I, ConcreteInterpreter &CI) {
     if (I->K == Inst::Const)
       return {I->Val};
-    if (C.find(I) != C.end()) {
-      return C[I];
-    } else {
-      if (PartialEval && isConcrete(I)) {
-        return evaluateInst(I, C);
-      }
-    }
+    else if (I->K == Inst::Var && !isReservedConst(I))
+      // evaluateInst will only give us input value of the variable; it doesn't
+      // evaluate anything.
+      return CI.evaluateInst(I);
+
+    if (isConcrete(I))
+      return CI.evaluateInst(I);
+
     // unimplemented
     return EvalValue();
   }
 
-#define KB0 findKnownBits(I->Ops[0], C, PartialEval)
-#define KB1 findKnownBits(I->Ops[1], C, PartialEval)
-#define VAL(INST) getValue(INST, C, PartialEval)
+#define KB0 findKnownBits(I->Ops[0], CI)
+#define KB1 findKnownBits(I->Ops[1], CI)
+#define KB2 findKnownBits(I->Ops[2], CI)
+#define VAL(INST) getValue(INST, CI)
 
-  llvm::KnownBits findKnownBits(Inst *I, ValueCache &C, bool PartialEval) {
+  llvm::KnownBits mergeKnownBits(std::vector<llvm::KnownBits> Vec) {
+    assert(Vec.size() > 0);
+
+    auto Width = Vec[0].getBitWidth();
+#ifndef NDEBUG
+    for (unsigned i = 1; i < Vec.size(); i++) {
+      if (Width != Vec[i].getBitWidth())
+        llvm::report_fatal_error("mergeKnownBits: bitwidth should be same of all inputs");
+    }
+#endif
+
+    APInt OneResult = APInt::getAllOnesValue(Width);
+    APInt ZeroResult = APInt::getAllOnesValue(Width);
+    for (unsigned i = 0; i < Vec.size(); i++) {
+      OneResult &= Vec[i].One;
+      ZeroResult &= Vec[i].Zero;
+    }
+
+    KnownBits Result(Width);
+    Result.One = OneResult;
+    Result.Zero = ZeroResult;
+
+    return Result;
+  }
+
+  bool KnownBitsAnalysis::cacheHasValue(Inst *I) {
+    if (KBCache.find(I) != KBCache.end())
+      return true;
+
+    if (I->K == Inst::Var && (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())) {
+      llvm::KnownBits metadataKB;
+      metadataKB.Zero = I->KnownZeros;
+      metadataKB.One = I->KnownOnes;
+
+      KBCache.emplace(I, std::move(metadataKB));
+      return true;
+    }
+
+    return false;
+  }
+
+  llvm::KnownBits KnownBitsAnalysis::findKnownBits(Inst *I, ConcreteInterpreter &CI) {
     llvm::KnownBits Result(I->Width);
 
-    EvalValue RootVal = VAL(I);
-    if (RootVal.hasValue()) {
-      Result.One = RootVal.getValue();
-      Result.Zero = ~RootVal.getValue();
+    if (cacheHasValue(I))
+      return KBCache.at(I);
+
+    EvalValue V = VAL(I);
+    if (V.hasValue()) {
+      Result.One = V.getValue();
+      Result.Zero = ~V.getValue();
+
+      // cache before returning
+      KBCache.emplace(I, Result);
+
       return Result;
     }
 
-    for (auto Op : I->Ops) {
-      if (findKnownBits(Op, C, PartialEval).hasConflict()) {
-	assert(false && "Conflict KB");
-      }
-    }
-
     switch(I->K) {
-//   case Phi:
-//     return "phi";
+    case Inst::Phi: {
+      std::vector<llvm::KnownBits> vec;
+      for (auto &Op : I->Ops) {
+        vec.emplace_back(findKnownBits(Op, CI));
+      }
+      Result = mergeKnownBits(vec);
+    }
     case Inst::AddNUW :
     case Inst::AddNW :
     case Inst::Add:
-      return BinaryTransferFunctionsKB::add(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::add(KB0, KB1);
+      break;
     case Inst::AddNSW:
-      return BinaryTransferFunctionsKB::addnsw(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::addnsw(KB0, KB1);
+      break;
     case Inst::SubNUW :
     case Inst::SubNW :
     case Inst::Sub:
-      return BinaryTransferFunctionsKB::sub(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::sub(KB0, KB1);
+      break;
     case Inst::SubNSW:
-      return BinaryTransferFunctionsKB::subnsw(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::subnsw(KB0, KB1);
+      break;
     case Inst::Mul:
-      return BinaryTransferFunctionsKB::mul(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::mul(KB0, KB1);
+      break;
 //   case MulNSW:
 //     return "mulnsw";
 //   case MulNUW:
@@ -359,7 +431,8 @@ namespace souper {
 //   case MulNW:
 //     return "mulnw";
     case Inst::UDiv:
-      return BinaryTransferFunctionsKB::udiv(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::udiv(KB0, KB1);
+      break;
 //   case SDiv:
 //     return "sdiv";
 //   case UDivExact:
@@ -367,15 +440,19 @@ namespace souper {
 //   case SDivExact:
 //     return "sdivexact";
     case Inst::URem:
-      return BinaryTransferFunctionsKB::urem(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::urem(KB0, KB1);
+      break;
 //   case SRem:
 //     return "srem";
     case Inst::And :
-      return BinaryTransferFunctionsKB::and_(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::and_(KB0, KB1);
+      break;
     case Inst::Or :
-      return BinaryTransferFunctionsKB::or_(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::or_(KB0, KB1);
+      break;
     case Inst::Xor :
-      return BinaryTransferFunctionsKB::xor_(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::xor_(KB0, KB1);
+      break;
     case Inst::ShlNSW :
     case Inst::ShlNUW :
     case Inst::ShlNW : // TODO: Rethink if these make sense
@@ -386,99 +463,123 @@ namespace souper {
       // Note that only code inside BinaryTransferFunctionsKB is testable from
       // unit tests. Put minimum code outside it which you are sure of being
       // correct.
+      // Synthesized constant cannot be zero.
       if (isReservedConst(I->Ops[1]))
-	Result.Zero.setLowBits(1);
-      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::shl(KB0, KB1));
+        Result.Zero.setLowBits(1);
+      Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::shl(KB0, KB1));
+      break;
     }
     case Inst::LShr : {
+      // Synthesized constant cannot be zero.
       if (isReservedConst(I->Ops[1]))
-	Result.Zero.setHighBits(1);
-      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::lshr(KB0, KB1));
+        Result.Zero.setHighBits(1);
+      Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::lshr(KB0, KB1));
+      break;
     }
 //   case LShrExact:
 //     return "lshrexact";
     case Inst::AShr:
+      // Synthesized constant cannot be zero.
       if (isReservedConst(I->Ops[1])) {
-	if (KB0.Zero[KB0.getBitWidth() - 1])
-	  Result.Zero.setHighBits(2);
-	if (KB0.One[KB0.getBitWidth() - 1])
-	  Result.One.setHighBits(2);
+        if (KB0.Zero[KB0.getBitWidth() - 1])
+          Result.Zero.setHighBits(2);
+        if (KB0.One[KB0.getBitWidth() - 1])
+          Result.One.setHighBits(2);
       }
 
-      return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::ashr(KB0, KB1));
+      Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::ashr(KB0, KB1));
+      break;
 //   case AShrExact:
 //     return "ashrexact";
-//   case Select:
-//     return "select";
-    case Inst::ZExt:
-      return KB0.zext(I->Width);
+    case Inst::Select:
+      if (KB0.One.getBoolValue())
+        Result = KB1;
+      else if (KB0.Zero.getBoolValue())
+        Result = KB2;
+      else
+        Result = mergeKnownBits({KB1, KB2});
+      break;
+    case Inst::ZExt: {
+      // below code copied from LLVM master. Directly use KnownBits::zext() when
+      // we move to LLVM9
+      unsigned OldBitWidth = KB0.getBitWidth();
+      APInt NewZero = KB0.Zero.zext(I->Width);
+      NewZero.setBitsFrom(OldBitWidth);
+      Result.Zero = NewZero;
+      Result.One = KB0.One.zext(I->Width);
+      break;
+    }
     case Inst::SExt:
-      return KB0.sext(I->Width);
+      Result = KB0.sext(I->Width);
+      break;
     case Inst::Trunc:
-      return KB0.trunc(I->Width);
+      Result = KB0.trunc(I->Width);
+      break;
     case Inst::Eq: {
       // Below implementation, because it contains isReservedConst, is
       // difficult to put inside BinaryTransferFunctionsKB but it's able to
       // prune more stuff; so, let's keep both
       Inst *Constant = nullptr;
       llvm::KnownBits Other;
+      // Synthesized constant cannot be zero.
       if (isReservedConst(I->Ops[0])) {
         Constant = I->Ops[0];
         Other = KB1;
       } else if (isReservedConst(I->Ops[1])) {
         Constant = I->Ops[1];
         Other = KB0;
-      } else {
-        return Result;
       }
 
       // Constants are never equal to 0
-      if (Other.Zero.isAllOnesValue()) {
+      if (Constant != nullptr && Other.Zero.isAllOnesValue()) {
         Result.Zero.setBit(0);
-        return Result;
-      } else {
-        return Result;
       }
 
       // Fallback to our tested implmentation
-      return BinaryTransferFunctionsKB::eq(KB0, KB1);
+      Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::eq(KB0, KB1));
+      break;
     }
     case Inst::Ne:
-      return BinaryTransferFunctionsKB::ne(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::ne(KB0, KB1);
+      break;
     case Inst::Ult:
-      return BinaryTransferFunctionsKB::ult(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::ult(KB0, KB1);
+      break;
     case Inst::Slt:
-      return BinaryTransferFunctionsKB::slt(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::slt(KB0, KB1);
+      break;
     case Inst::Ule:
-      return BinaryTransferFunctionsKB::ule(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::ule(KB0, KB1);
+      break;
     case Inst::Sle:
-      return BinaryTransferFunctionsKB::sle(KB0, KB1);
+      Result = BinaryTransferFunctionsKB::sle(KB0, KB1);
+      break;
     case Inst::CtPop: {
-      int activeBits = std::ceil(std::log2(KB0.countMaxPopulation()));
-      Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
-      return Result;
+      APInt val(KB0.getBitWidth(), KB0.countMaxPopulation());
+      Result.Zero.setHighBits(KB0.getBitWidth() - val.getActiveBits());
+      break;
     }
     case Inst::BSwap: {
-      auto Op0KB = KB0;
-      Op0KB.One = Op0KB.One.byteSwap();
-      Op0KB.Zero = Op0KB.Zero.byteSwap();
-      return Op0KB;
+      Result = KB0;
+      Result.One = Result.One.byteSwap();
+      Result.Zero = Result.Zero.byteSwap();
+      break;
     }
     case Inst::BitReverse: {
-      auto Op0KB = KB0;
-      Op0KB.One = Op0KB.One.reverseBits();
-      Op0KB.Zero = Op0KB.Zero.reverseBits();
-      return Op0KB;
+      Result = KB0;
+      Result.One = Result.One.reverseBits();
+      Result.Zero = Result.Zero.reverseBits();
+      break;
     }
     case Inst::Cttz: {
-      int activeBits = std::ceil(std::log2(KB0.countMaxTrailingZeros()));
-      Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
-      return Result;
+      APInt val(KB0.getBitWidth(), KB0.countMaxTrailingZeros());
+      Result.Zero.setHighBits(KB0.getBitWidth() - val.getActiveBits());
+      break;
     }
     case Inst::Ctlz: {
-      int activeBits = std::ceil(std::log2(KB0.countMaxLeadingZeros()));
-      Result.Zero.setHighBits(KB0.getBitWidth() - activeBits);
-      return Result;
+      APInt val(KB0.getBitWidth(), KB0.countMaxLeadingZeros());
+      Result.Zero.setHighBits(KB0.getBitWidth() - val.getActiveBits());
+      break;
     }
 //   case FShl:
 //     return "fshl";
@@ -509,97 +610,197 @@ namespace souper {
 //   case SMulO:
 //   case UMulO:
     default :
-      return Result;
+      break;
     }
+
+    assert(!Result.hasConflict() && "Conflict in resulting KB!");
+
+    KBCache.emplace(I, Result);
+    return KBCache.at(I);
   }
 
 #undef KB0
 #undef KB1
+#undef KB2
 
-  llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
+  llvm::KnownBits KnownBitsAnalysis::findKnownBitsUsingSolver(Inst *I,
+                                                              Solver *S,
+                                                              std::vector<InstMapping> &PCs) {
     BlockPCs BPCs;
     InstContext IC;
     return S->findKnownBitsUsingSolver(BPCs, PCs, I, IC);
   }
 
-#define CR0 findConstantRange(I->Ops[0], C, PartialEval)
-#define CR1 findConstantRange(I->Ops[1], C, PartialEval)
-#define CR2 findConstantRange(I->Ops[2], C, PartialEval)
+#define CR0 findConstantRange(I->Ops[0], CI)
+#define CR1 findConstantRange(I->Ops[1], CI)
+#define CR2 findConstantRange(I->Ops[2], CI)
 
-  llvm::ConstantRange findConstantRange(Inst *I,
-                                        ValueCache &C, bool PartialEval) {
+  bool ConstantRangeAnalysis::cacheHasValue(Inst *I) {
+    if (CRCache.find(I) != CRCache.end())
+      return true;
+
+    if (I->K == Inst::Var && !I->Range.isFullSet()) {
+      CRCache.emplace(I, I->Range);
+      return true;
+    }
+
+    return false;
+  }
+
+  llvm::ConstantRange ConstantRangeAnalysis::findConstantRange(Inst *I,
+                                                               ConcreteInterpreter &CI) {
     llvm::ConstantRange Result(I->Width);
 
-    if (PartialEval && isConcrete(I)) {
-      auto RootVal = evaluateInst(I, C);
-      if (RootVal.hasValue()) {
-        return llvm::ConstantRange(RootVal.getValue());
-      }
+    if (cacheHasValue(I))
+      return CRCache.at(I);
+
+    EvalValue V = VAL(I);
+    if (V.hasValue()) {
+      CRCache.emplace(I, llvm::ConstantRange(V.getValue()));
+      return CRCache.at(I);
     }
 
     switch (I->K) {
     case Inst::Const:
-    case Inst::Var : {
-      EvalValue V = VAL(I);
-      if (V.hasValue()) {
-        return llvm::ConstantRange(V.getValue());
-      } else {
-        if (isReservedConst(I)) {
-          return llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
-        }
-        return Result; // Whole range
-      }
-    }
+    case Inst::Var :
+      if (isReservedConst(I))
+        Result = llvm::ConstantRange(llvm::APInt(I->Width, 0)).inverse();
+      break;
     case Inst::Trunc:
-      return CR0.truncate(I->Width);
+      Result = CR0.truncate(I->Width);
+      break;
     case Inst::SExt:
-      return CR0.signExtend(I->Width);
+      Result = CR0.signExtend(I->Width);
+      break;
     case Inst::ZExt:
-      return CR0.zeroExtend(I->Width);
+      Result = CR0.zeroExtend(I->Width);
+      break;
     case souper::Inst::AddNUW :
     case souper::Inst::AddNW : // TODO: Rethink if these make sense
     case Inst::Add:
-      return CR0.add(CR1);
+      Result = CR0.add(CR1);
+      break;
     case Inst::AddNSW: {
       auto V1 = VAL(I->Ops[1]);
       if (V1.hasValue()) {
-        return CR0.addWithNoSignedWrap(V1.getValue());
-      } else {
-        return Result; // full range, can we do better?
+        Result = CR0.addWithNoSignedWrap(V1.getValue());
       }
+      break;
     }
     case souper::Inst::SubNSW :
     case souper::Inst::SubNUW :
     case souper::Inst::SubNW : // TODO: Rethink if these make sense
     case Inst::Sub:
-      return CR0.sub(CR1);
+      Result = CR0.sub(CR1);
+      break;
     case souper::Inst::MulNSW :
     case souper::Inst::MulNUW :
     case souper::Inst::MulNW : // TODO: Rethink if these make sense
     case Inst::Mul:
-      return CR0.multiply(CR1);
-    case Inst::And:
-      return CR0.binaryAnd(CR1);
-    case Inst::Or:
-      return CR0.binaryOr(CR1);
+      Result = CR0.multiply(CR1);
+      break;
+    case Inst::And: {
+      if (CR0.isEmptySet() || CR1.isEmptySet()) {
+        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
+        break;
+      }
+
+      APInt umin = APIntOps::umin(CR1.getUnsignedMax(), CR0.getUnsignedMax());
+      if (umin.isAllOnesValue()) {
+        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
+        break;
+      }
+
+      APInt res = APInt::getNullValue(CR0.getBitWidth());
+
+      const APInt upper1 = CR0.getUnsignedMax();
+      const APInt upper2 = CR1.getUnsignedMax();
+      APInt lower1 = CR0.getUnsignedMin();
+      APInt lower2 = CR1.getUnsignedMin();
+      const APInt tmp = lower1 & lower2;
+      const unsigned bitPos = CR0.getBitWidth() - tmp.countLeadingZeros();
+      // if there are no zeros from bitPos upto both barriers, lower bound have bit
+      // set at bitPos. Barrier is the point beyond which you cannot set the bit
+      // because it will be greater than the upper bound then
+      if (!CR0.isWrappedSet() && !CR1.isWrappedSet() &&
+          (lower1.countLeadingZeros() == upper1.countLeadingZeros()) &&
+          (lower2.countLeadingZeros() == upper2.countLeadingZeros()) &&
+          bitPos > 0) {
+        lower1.lshrInPlace(bitPos - 1);
+        lower2.lshrInPlace(bitPos - 1);
+        if (lower1.countTrailingOnes() == (CR0.getBitWidth() - lower1.countLeadingZeros()) &&
+            lower2.countTrailingOnes() == (CR0.getBitWidth() - lower2.countLeadingZeros())) {
+          res = APInt::getOneBitSet(CR0.getBitWidth(), bitPos - 1);
+        }
+      }
+
+      Result = llvm::ConstantRange(std::move(res), std::move(umin) + 1);
+      break;
+    }
+    case Inst::Or: {
+      if (CR0.isEmptySet() || CR1.isEmptySet()) {
+        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
+        break;
+      }
+
+      APInt umax = APIntOps::umax(CR0.getUnsignedMin(), CR1.getUnsignedMin());
+      APInt res = APInt::getNullValue(CR0.getBitWidth());
+      if (!CR0.isWrappedSet() && !CR1.isWrappedSet()) {
+        APInt umaxupper = APIntOps::umax(CR0.getUnsignedMax(), CR1.getUnsignedMax());
+        APInt uminupper = APIntOps::umin(CR0.getUnsignedMax(), CR1.getUnsignedMax());
+        res = APInt::getLowBitsSet(CR0.getBitWidth(),
+                                   CR0.getBitWidth() - uminupper.countLeadingZeros());
+        res = res | umaxupper;
+        res = res + 1;
+      }
+
+      if (umax == res)
+        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
+      else
+        Result = llvm::ConstantRange(std::move(umax), std::move(res));
+      break;
+    }
     case souper::Inst::ShlNSW :
     case souper::Inst::ShlNUW :
     case souper::Inst::ShlNW : // TODO: Rethink if these make sense
     case Inst::Shl:
-      return CR0.shl(CR1);
+      Result = CR0.shl(CR1);
+      break;
     case Inst::AShr:
-      return CR0.ashr(CR1);
+      Result = CR0.ashr(CR1);
+      break;
     case Inst::LShr:
-      return CR0.lshr(CR1);
+      Result = CR0.lshr(CR1);
+      break;
     case Inst::UDiv:
-      return CR0.udiv(CR1);
+      Result = CR0.udiv(CR1);
+      break;
     case Inst::Ctlz:
     case Inst::Cttz:
+      // Synthesized constant cannot be zero.
+      Result = llvm::ConstantRange(llvm::APInt(I->Width, 0),
+                                   llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ?
+                                               I->Ops[0]->Width :
+                                               (I->Ops[0]->Width + 1)));
+      break;
     case Inst::CtPop:
-      return llvm::ConstantRange(llvm::APInt(I->Width, 0),
-                                 llvm::APInt(I->Width, I->Ops[0]->Width + 1));
+      // Synthesized constant cannot be zero.
+      Result = llvm::ConstantRange(llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ? 1 : 0),
+                                   llvm::APInt(I->Width, I->Ops[0]->Width + 1));
+      break;
+    case Inst::Phi:
+      Result = CR0.unionWith(CR1);
+      break;
     case Inst::Select:
-      return CR1.unionWith(CR2);
+      if (CR0.getSetSize() == 1) {
+        if (CR0.contains(APInt(1, 1)))
+          Result = CR1;
+        else if (CR0.contains(APInt(1, 0)))
+          Result = CR2;
+      } else {
+        Result = CR1.unionWith(CR2);
+      }
+      break;
       //     case Inst::SDiv: {
       //       auto R0 = FindConstantRange(I->Ops[0], C);
       //       auto R1 = FindConstantRange(I->Ops[1], C);
@@ -607,15 +808,20 @@ namespace souper {
       //     }
       // TODO: Xor pattern for not, truncs and extends, etc
     default:
-      return Result;
+      break;
     }
+
+    CRCache.emplace(I, Result);
+    return CRCache.at(I);
   }
 #undef CR0
 #undef CR1
 #undef CR2
 #undef VAL
 
-  llvm::ConstantRange findConstantRangeUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
+  llvm::ConstantRange ConstantRangeAnalysis::findConstantRangeUsingSolver(Inst *I,
+									  Solver *S,
+									  std::vector<InstMapping> &PCs) {
     // FIXME implement this
     llvm::ConstantRange Result(I->Width);
     return Result;

@@ -1,0 +1,12 @@
+; REQUIRES: solver
+
+; RUN: %souper-interpret %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: ConstantRange result:
+; CHECK-NEXT: [-8,0)
+
+%0:i8 = reservedconst (range=[-8,0))
+%1:i8 = hole
+%2 = or %0, %1
+infer %2
