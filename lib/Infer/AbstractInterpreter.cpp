@@ -319,7 +319,19 @@ namespace souper {
 
 #define KB0 findKnownBits(I->Ops[0], C, PartialEval)
 #define KB1 findKnownBits(I->Ops[1], C, PartialEval)
+#define KB2 findKnownBits(I->Ops[2], C, PartialEval)
 #define VAL(INST) getValue(INST, C, PartialEval)
+
+  llvm::KnownBits mergeKnownBits(llvm::KnownBits A, llvm::KnownBits B) {
+    KnownBits Result(A.getBitWidth());
+    for (unsigned i = 0; i < A.getBitWidth(); i++) {
+      if (A.One[i] == B.One[i] && B.One[i])
+        Result.One.setBit(i);
+      if (A.Zero[i] == B.Zero[i] && A.Zero[i])
+        Result.Zero.setBit(i);
+    }
+    return Result;
+  }
 
   llvm::KnownBits findKnownBits(Inst *I, ValueCache &C, bool PartialEval) {
     llvm::KnownBits Result(I->Width);
@@ -338,8 +350,8 @@ namespace souper {
     }
 
     switch(I->K) {
-//   case Phi:
-//     return "phi";
+    case Inst::Phi:
+      return mergeKnownBits(KB1, KB2);
     case Inst::AddNUW :
     case Inst::AddNW :
     case Inst::Add:
@@ -410,8 +422,8 @@ namespace souper {
       return getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::ashr(KB0, KB1));
 //   case AShrExact:
 //     return "ashrexact";
-//   case Select:
-//     return "select";
+    case Inst::Select:
+      return mergeKnownBits(KB1, KB2);
     case Inst::ZExt:
       return KB0.zext(I->Width);
     case Inst::SExt:
@@ -517,6 +529,7 @@ namespace souper {
 
 #undef KB0
 #undef KB1
+#undef KB2
 
   llvm::KnownBits findKnownBitsUsingSolver(Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
     BlockPCs BPCs;
@@ -600,6 +613,7 @@ namespace souper {
     case Inst::CtPop:
       return llvm::ConstantRange(llvm::APInt(I->Width, 0),
                                  llvm::APInt(I->Width, I->Ops[0]->Width + 1));
+    case Inst::Phi: LLVM_FALLTHROUGH;
     case Inst::Select:
       return CR1.unionWith(CR2);
       //     case Inst::SDiv: {
