@@ -13,8 +13,11 @@
 // limitations under the License.
 
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/GraphWriter.h"
+
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/GetSolverFromArgs.h"
+#include "souper/Inst/InstGraph.h"
 
 using namespace llvm;
 using namespace souper;
@@ -51,6 +54,10 @@ static cl::opt<bool> ParseLHSOnly("parse-lhs-only",
     cl::desc("Only parse the LHS, don't call infer() (default=false)"),
     cl::init(false));
 
+static cl::opt<bool> EmitLHSDot("emit-lhs-dot",
+    cl::desc("Emit DOT format DAG for LHS of given souper IR (default=false)"),
+    cl::init(false));
+
 int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
   std::string ErrStr;
@@ -66,6 +73,13 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   if (!ErrStr.empty()) {
     llvm::errs() << ErrStr << '\n';
     return 1;
+  }
+
+  if (EmitLHSDot) {
+    llvm::outs() << "; emitting DOT for parsed LHS souper IR ...\n";
+    for (auto &Rep : Reps) {
+      llvm::WriteGraph(llvm::outs(), Rep.Mapping.LHS);
+    }
   }
 
   if (ParseOnly || ParseLHSOnly) {

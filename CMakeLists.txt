@@ -206,6 +206,7 @@ add_library(souperInfer STATIC
 set(SOUPER_INST_FILES
   lib/Inst/Inst.cpp
   include/souper/Inst/Inst.h
+  include/souper/Inst/InstGraph.h
 )
 
 add_library(souperInst STATIC
