@@ -1,0 +1,16 @@
+; RUN: %souper-check %solver -parse-lhs-only -emit-lhs-dot %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: digraph "Souper IR graph"  {
+; CHECK: rankdir="BT";
+; CHECK: label="{mul|
+; CHECK: label="{shl|
+; CHECK: label="{Var 1|
+; CHECK: label="{Var 0|
+; CHECK: label="{6|
+
+%0:i8 = var
+%1:i8 = var
+%2 = shl %1, %0
+%3 = mul %2, 6
+infer %3
