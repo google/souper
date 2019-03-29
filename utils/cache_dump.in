@@ -54,6 +54,7 @@ END
 }
 
 my $RAW = 0;
+my $REDISPORT = 6379;
 my $NOOPTS = 0;
 my $SORT = "size";
 my $REDUCE = 0;
@@ -67,6 +68,7 @@ GetOptions(
     "merge" => \$MERGE,
     "noopts" => \$NOOPTS,
     "parse" => \$PARSE,
+    "redis-port=i" => \$REDISPORT,
     "sort=s" => \$SORT,
     "raw"  => \$RAW,
     "reduce" => \$REDUCE,
@@ -86,7 +88,7 @@ my %sprofile_locs;
 my %dprofile_locs;
 my %toprint;
 
-my $r = Redis->new();
+my $r = Redis->new(server => "localhost:" . $REDISPORT);
 $r->ping || die "no server?";
 my @all_keys = $r->keys('*');
 
