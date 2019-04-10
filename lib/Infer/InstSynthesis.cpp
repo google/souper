@@ -175,7 +175,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       // Negate the query to get a SAT model.
       // Don't use original BPCs/PCs, they are useless
       std::string QueryStr = BuildQuery(IC, {}, LoopPCs, Mapping,
-                                        &ModelInsts, /*Negate=*/true);
+                                        &ModelInsts, /*Precondition=*/0, /*Negate=*/true);
       if (QueryStr.empty())
         return std::make_error_code(std::errc::value_too_large);
       bool IsSat;
@@ -231,7 +231,7 @@ std::error_code InstSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       ModelInsts.clear();
       ModelVals.clear();
       InstMapping CandMapping(LHS, Cand);
-      QueryStr = BuildQuery(IC, BPCs, PCs, CandMapping, &ModelInsts, /*Negate=*/false);
+      QueryStr = BuildQuery(IC, BPCs, PCs, CandMapping, &ModelInsts, /*Precondition=*/0, /*Negate=*/false);
       if (QueryStr.empty())
         return std::make_error_code(std::errc::value_too_large);
       EC = SMTSolver->isSatisfiable(QueryStr, IsSat, ModelInsts.size(),
@@ -1360,7 +1360,7 @@ std::error_code InstSynthesis::getInitialConcreteInputs(std::vector<std::map<Ins
     InstMapping Mapping(LHS, LIC->createVar(LHS->Width, "output"));
     // Negate the query to get a SAT model
     std::string QueryStr = BuildQuery(*LIC, *LBPCs, InputPCs, Mapping,
-                                      &ModelInsts, /*Negate=*/true);
+                                      &ModelInsts, /*Precondition=*/0,/*Negate=*/true);
     if (QueryStr.empty())
       return std::make_error_code(std::errc::value_too_large);
     bool IsSat;

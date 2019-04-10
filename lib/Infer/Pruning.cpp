@@ -116,7 +116,7 @@ bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
 
         auto Cond = IC.getInst(Inst::Eq, 1, {LHSReplacement, RHSReplacement});
         InstMapping Mapping {Cond, IC.getConst(llvm::APInt(1, true))};
-        auto Query = BuildQuery(IC, {}, {}, Mapping, &ModelVars, true);
+        auto Query = BuildQuery(IC, {}, {}, Mapping, &ModelVars, 0, true);
         if (StatsLevel > 3) {
           llvm::errs() << Query << "\n";
 

@@ -16,6 +16,7 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Support/CommandLine.h"
 #include "souper/Infer/AliveDriver.h"
+#include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Infer/ExhaustiveSynthesis.h"
 #include "souper/Infer/Pruning.h"
 
@@ -106,23 +107,23 @@ namespace {
 // aggressively avoid calling into the solver
 
 void hasConstantHelper(Inst *I, std::set<Inst *> &Visited,
-                       std::vector<Inst *> &ConstList) {
+                       std::set<Inst *> &ConstSet) {
   // FIXME this only works for one constant and keying by name is bad
   if (I->K == Inst::Var && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
     // FIXME use a less stupid sentinel
-    ConstList.push_back(I);
+    ConstSet.insert(I);
   } else {
     if (Visited.insert(I).second)
       for (auto Op : I->Ops)
-        hasConstantHelper(Op, Visited, ConstList);
+        hasConstantHelper(Op, Visited, ConstSet);
   }
 }
 
 // TODO do this a more efficient way
 // TODO do this a better way, checking for constants by name is dumb
-void hasConstant(Inst *I, std::vector<Inst *> &ConstList) {
+void hasConstant(Inst *I, std::set<Inst *> &ConstSet) {
   std::set<Inst *> Visited;
-  hasConstantHelper(I, Visited, ConstList);
+  hasConstantHelper(I, Visited, ConstSet);
 }
 
 // TODO small vector by reference?
@@ -481,7 +482,7 @@ APInt getNextInputVal(Inst *Var,
 
   std::vector<Inst *> ModelInsts;
   std::vector<llvm::APInt> ModelVals;
-  std::string Query = BuildQuery(IC, {}, {}, Mapping, &ModelInsts, /*Negate=*/ true);
+  std::string Query = BuildQuery(IC, {}, {}, Mapping, &ModelInsts, 0, /*Negate=*/ true);
 
   bool PCQueryIsSat;
   std::error_code EC;
@@ -559,7 +560,7 @@ bool canDifferInLSB(SynthesisContext &SC, Inst *RHSGuess) {
 
   InstMapping NewMapping{NewLHS, NewRHS};
 
-  auto Query = BuildQuery(SC.IC, SC.BPCs, SC.PCs, NewMapping, 0);
+  auto Query = BuildQuery(SC.IC, SC.BPCs, SC.PCs, NewMapping, 0, 0);
 
   bool QueryIsSat;
   auto EC = SC.SMTSolver->isSatisfiable(Query, QueryIsSat, 0, 0, SC.Timeout);
@@ -656,7 +657,7 @@ bool isBigQuerySat(SynthesisContext &SC,
 
   // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
   InstMapping Mapping(Ante, SC.IC.getConst(APInt(1, true)));
-  std::string Query = BuildQuery(SC.IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/false);
+  std::string Query = BuildQuery(SC.IC, BPCsCopy, PCsCopy, Mapping, 0, 0, /*Negate=*/false);
   if (Query.empty()) {
     if (DebugLevel > 2)
       llvm::errs() << "Big Query is too big, skipping\n";
@@ -728,6 +729,7 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
 
 typedef std::map<Inst*, std::vector<llvm::APInt>> InstConstList;
 
+#if 0
 std::map<Inst *, llvm::APInt>
 findSatisfyingConstantMap(SynthesisContext &SC, InstConstList &BadConsts,
                           InstConstList &TriedVars,
@@ -801,7 +803,7 @@ findSatisfyingConstantMap(SynthesisContext &SC, InstConstList &BadConsts,
 
   std::vector<Inst *> ModelInsts;
   std::vector<llvm::APInt> ModelVals;
-  std::string Query = BuildQuery(SC.IC, SC.BPCs, SC.PCs, Mapping, &ModelInsts, /*Negate=*/true);
+  std::string Query = BuildQuery(SC.IC, SC.BPCs, SC.PCs, Mapping, &ModelInsts, 0, /*Negate=*/true);
 
   bool FirstSmallQueryIsSat;
   EC = SC.SMTSolver->isSatisfiable(Query, FirstSmallQueryIsSat,
@@ -833,6 +835,7 @@ findSatisfyingConstantMap(SynthesisContext &SC, InstConstList &BadConsts,
   }
   return ConstMap;
 }
+#endif
 
 std::error_code isConcreteCandidateSat(
   SynthesisContext &SC, std::map<Inst *, llvm::APInt> &ConstMap,
@@ -848,7 +851,7 @@ std::error_code isConcreteCandidateSat(
 
   InstMapping Mapping(SC.LHS, RHSGuess);
 
-  std::string Query2 = BuildQuery(SC.IC, BPCsCopy, PCsCopy, Mapping, 0);
+  std::string Query2 = BuildQuery(SC.IC, BPCsCopy, PCsCopy, Mapping, 0, 0);
 
   EC = SC.SMTSolver->isSatisfiable(Query2, IsSat, 0, 0, SC.Timeout);
   if (EC && DebugLevel > 1) {
@@ -884,7 +887,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     }
   }
   // find the valid one
-  int Unsat = 0;
   int GuessIndex = -1;
 
   std::vector<Inst *> Vars;
@@ -899,78 +901,46 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       llvm::errs() << "\n";
     }
 
-    std::vector<Inst *> ConstList;
-    hasConstant(I, ConstList);
-    bool GuessHasConstant = !ConstList.empty();
+    std::set<Inst *> ConstSet;
+    hasConstant(I, ConstSet);
+    bool GuessHasConstant = !ConstSet.empty();
+    std::map <Inst *, llvm::APInt> ResultConstMap;
+    if (!GuessHasConstant) {
+      bool IsSAT;
 
-    int Tries = 0;
-    std::map<Inst *, std::vector<llvm::APInt>> TriedVars;
-    std::map<Inst*, std::vector<llvm::APInt>> BadConsts;
-
-  again:
-    if (Tries > 0 && DebugLevel > 3)
-      llvm::errs() << "\n\nagain:\n";
-
-    std::map<Inst *, llvm::APInt> ConstMap;
-
-    if (GuessHasConstant) {
-      ConstMap = findSatisfyingConstantMap(SC, BadConsts, TriedVars,
-                                           ConstList, Vars, I, Unsat);
-      if (ConstMap.empty()) {
-        continue; // This guess doesn't work
+      EC = isConcreteCandidateSat(SC, ResultConstMap, I, IsSAT);
+      if (EC) {
+        return EC;
       }
-    }
-
-    Inst *ConcreteRHS = getInstCopy(I, IC, InstCache, BlockCache, &ConstMap, false);
-    if (LSBPruning && !GuessHasConstant && canDifferInLSB(SC, ConcreteRHS)) {
-      continue;
-      // Guess doesn't work, found model for which they differ in LSB
-      // TODO Utilize this for the mysterious constant synthesis 'loop'
-    }
-
-    bool SecondSmallQueryIsSat;
-    EC = isConcreteCandidateSat(SC, ConstMap, ConcreteRHS, SecondSmallQueryIsSat);
-    if (EC) {
-      return EC;
-    }
-    if (SecondSmallQueryIsSat) {
-      if (DebugLevel > 3)
-        llvm::errs() << "second query is SAT-- constant doesn't work\n";
-      Tries++;
-      // TODO tune max tries
-      if (GuessHasConstant) {
-        if (Tries < MaxTries) {
-          goto again;
-        } else {
-          if (DebugLevel > 3)
-            llvm::errs() << "number of constant synthesis tries exceeds MaxTries (default=30)\n";
-        }
+      if (IsSAT) {
+        if (DebugLevel > 3)
+          llvm::errs() << "second query is SAT-- constant doesn't work\n";
+        continue;
+      } else {
+        if (DebugLevel > 3)
+          llvm::errs() << "query is UNSAT\n";
+        RHS = I;
+        return EC;
       }
     } else {
-      if (DebugLevel > 2) {
-        if (GuessHasConstant) {
-          llvm::errs() << "second query is UNSAT-- works for all values of this constant\n";
-          llvm::errs() << Tries <<  " tries were made for synthesizing constants\n";
-        } else {
-          assert(Tries == 1);
-          llvm::errs() << "second query is UNSAT-- this guess works\n";
-        }
-      }
-      RHS = ConcreteRHS;
-      return EC;
-    }
-    if (DebugLevel > 2) {
-      if (GuessHasConstant) {
-        llvm::errs() << "constant synthesis failed after " << Tries <<  " tries\n";
+      // guess has constant
+
+      ConstantSynthesis CS;
+
+      EC = CS.synthesize(SMTSolver, BPCs, PCs, InstMapping (LHS, I), ConstSet,
+                         ResultConstMap, IC, /*MaxTries=*/MaxTries, Timeout);
+      if (!ResultConstMap.empty()) {
+        RHS = getInstCopy(I, IC, InstCache, BlockCache, &ResultConstMap, false);
+
+        ReplacementContext RC;
+        RC.printInst(RHS, llvm::errs(), true);
+
+        return EC;
       } else {
-        assert(Tries == 1);
-        llvm::errs() << "refinement check fails for RHS with no constants\n";
+        continue;
       }
     }
   }
-  if (DebugLevel > 2)
-    llvm::errs() << Unsat << " were unsat.\n";
-  // TODO maybe add back consistency checks between big and small queries
 
   return EC;
 }

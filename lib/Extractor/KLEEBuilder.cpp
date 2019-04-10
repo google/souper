@@ -41,7 +41,7 @@ public:
                          const std::vector<InstMapping> &PCs,
                          InstMapping Mapping,
                          std::vector<Inst *> *ModelVars, bool Negate) override {
-    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
+    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, /*Precondition=*/0, Negate);
     if (!Cand)
       return std::string();
     ref<Expr> E = get(Cand);
@@ -59,11 +59,12 @@ public:
   std::string BuildQuery(const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,
                          InstMapping Mapping,
-                         std::vector<Inst *> *ModelVars, bool Negate) override {
+                         std::vector<Inst *> *ModelVars,
+                         Inst *Precondition, bool Negate) override {
     std::string SMTStr;
     llvm::raw_string_ostream SMTSS(SMTStr);
     ConstraintManager Manager;
-    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Negate);
+    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Precondition, Negate);
     if (!Cand)
       return std::string();
     ref<Expr> E = get(Cand);

@@ -23,6 +23,7 @@
 #include "llvm/Support/KnownBits.h"
 #include "souper/Extractor/Solver.h"
 #include "souper/Infer/AliveDriver.h"
+#include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Infer/ExhaustiveSynthesis.h"
 #include "souper/Infer/InstSynthesis.h"
 #include "souper/KVStore/KVStore.h"
@@ -107,7 +108,7 @@ public:
           }
           // TODO: Propagate errors from Alive backend, exit early for errors
         } else {
-          std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0);
+          std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0, /*Precondition=*/0);
           if (Query.empty())
             return std::make_error_code(std::errc::value_too_large);
           bool IsSat;
@@ -123,14 +124,9 @@ public:
     }
 
     if (InferInts && SMTSolver->supportsModels() && LHS->Width > 1) {
-      std::vector<Inst *> ModelInsts;
-      std::vector<llvm::APInt> ModelVals;
-      Inst *I = IC.createVar(LHS->Width, "constant");
-      InstMapping Mapping(LHS, I);
-
       if (UseAlive) {
         //Try to synthesize a constant at the root
-        I = IC.createVar(LHS->Width, "reservedconst_0");
+        Inst *C = IC.createVar(LHS->Width, "reservedconst_0");
 
         Inst *Ante = IC.getConst(llvm::APInt(1, true));
         for (auto PC : PCs ) {
@@ -139,44 +135,22 @@ public:
         }
 
         AliveDriver Synthesizer(LHS, Ante, IC);
-        auto ConstantMap = Synthesizer.synthesizeConstants(I);
-        if (ConstantMap.find(I) != ConstantMap.end()) {
-          RHS = IC.getConst(ConstantMap[I]);
+        auto ConstantMap = Synthesizer.synthesizeConstants(C);
+        if (ConstantMap.find(C) != ConstantMap.end()) {
+          RHS = IC.getConst(ConstantMap[C]);
           return std::error_code();
         }
         // TODO: Propagate errors from Alive backend, exit early for errors
       } else {
-        std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Negate=*/true);
-        if (Query.empty())
-          return std::make_error_code(std::errc::value_too_large);
-        bool IsSat;
-        EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInsts.size(),
-                                    &ModelVals, Timeout);
-        if (EC)
-          return EC;
-        if (IsSat) {
-          // We found a model for a constant
-          Inst *Const = 0;
-          for (unsigned J = 0; J != ModelInsts.size(); ++J) {
-            if (ModelInsts[J]->Name == "constant") {
-              Const = IC.getConst(ModelVals[J]);
-              break;
-            }
-          }
-          if (!Const)
-            report_fatal_error("there must be a model for the constant");
-          // Check if the constant is valid for all inputs
-          InstMapping ConstMapping(LHS, Const);
-          std::string Query = BuildQuery(IC, BPCs, PCs, ConstMapping, 0);
-          if (Query.empty())
-            return std::make_error_code(std::errc::value_too_large);
-          EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
-          if (EC)
-            return EC;
-          if (!IsSat) {
-            RHS = Const;
-            return EC;
-          }
+        Inst *C = IC.createVar(LHS->Width, "constant");
+        std::map<Inst *, llvm::APInt> ResultMap;
+        std::set<Inst*> ConstSet{C};
+        ConstantSynthesis CS;
+        EC = CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, C), ConstSet,
+                           ResultMap, IC, /*MaxTries=*/1, Timeout);
+        if (ResultMap.find(C) != ResultMap.end()) {
+          RHS = IC.getConst(ResultMap[C]);
+          return std::error_code();
         }
       }
     }
@@ -205,7 +179,8 @@ public:
 
       // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
       InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
-      std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0, /*Negate=*/true);
+      std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0,
+                                     /*Precondition=*/0, /*Negate=*/true);
       if (Query.empty())
         return std::make_error_code(std::errc::value_too_large);
       bool BigQueryIsSat;
@@ -218,7 +193,7 @@ public:
         // find the nop
         for (auto I : Guesses) {
           InstMapping Mapping(LHS, I);
-          std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0);
+          std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0, /*Precondition=*/0);
           if (Query.empty())
             continue;
           EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, 0, 0, Timeout);
@@ -278,7 +253,7 @@ public:
     std::string Query;
     if (Model && SMTSolver->supportsModels()) {
       std::vector<Inst *> ModelInsts;
-      std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts);
+      std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Precondition=*/0);
       if (Query.empty())
         return std::make_error_code(std::errc::value_too_large);
       bool IsSat;
@@ -295,7 +270,7 @@ public:
       }
       return EC;
     } else {
-      std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0);
+      std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0, /*Precondition=*/0);
       if (Query.empty())
         return std::make_error_code(std::errc::value_too_large);
       bool IsSat;
@@ -313,7 +288,7 @@ public:
                                    { IC.getConst(Zeros | Ones), LHS }),
                         IC.getConst(Ones));
     bool IsSat;
-    auto Q = BuildQuery(IC, BPCs, PCs, Mapping, 0);
+    auto Q = BuildQuery(IC, BPCs, PCs, Mapping, 0, /*Precondition=*/0);
     std::error_code EC = SMTSolver->isSatisfiable(Q, IsSat, 0, 0, Timeout);
     if (EC)
       return false;
