@@ -10,4 +10,4 @@
 infer %3
 ; result can be (x + 12) << 5 or x * 32 + 384
 ; CHECK: %4:i16 = {{add 12:i16, %0|mul 32:i16, %0}}
-; CHECK: %5:i16 = {{shl %4, 5:i16|add 384:i16, %4}}
+; CHECK: %5:i16 = {{mul 32:i16, %4|shl %4, 5:i16|add 384:i16, %4}}

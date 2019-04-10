@@ -881,7 +881,7 @@ std::vector<Inst *> ExprBuilder::getVarInsts(const std::vector<Inst *> Insts) {
 // Return a candidate which must be proven valid for the candidate to apply.
 Inst *ExprBuilder::GetCandidateExprForReplacement(
     const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-    InstMapping Mapping, bool Negate) {
+    InstMapping Mapping, Inst *Precondition, bool Negate) {
   Inst *Result = nullptr;
 
   // Build LHS
@@ -933,6 +933,8 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
   else        // (LHS == RHS)
     Result = LIC->getInst(Inst::Eq, 1, {LHS, RHS});
 
+  if (Precondition)
+    Ante = LIC->getInst(Inst::And, 1, {Ante, Precondition});
   // Result && RHS UB
   if (Mapping.RHS->K != Inst::Const)
     Result = LIC->getInst(Inst::And, 1, {Result, RHSUB});
@@ -948,7 +950,7 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
     const std::vector<InstMapping> &PCs, InstMapping Mapping,
-    std::vector<Inst *> *ModelVars, bool Negate) {
+    std::vector<Inst *> *ModelVars, Inst *Precondition, bool Negate) {
   std::unique_ptr<ExprBuilder> EB;
   switch (SMTExprBuilder) {
   case ExprBuilder::KLEE:
@@ -959,7 +961,7 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
     break;
   }
 
-  return EB->BuildQuery(BPCs, PCs, Mapping, ModelVars, Negate);
+  return EB->BuildQuery(BPCs, PCs, Mapping, ModelVars, Precondition, Negate);
 }
 
 Inst *getUBInstCondition(InstContext &IC, Inst *Root) {

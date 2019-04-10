@@ -188,6 +188,8 @@ add_library(souperKVStore STATIC
 set(SOUPER_INFER_FILES
   lib/Infer/InstSynthesis.cpp
   include/souper/Infer/InstSynthesis.h
+  lib/Infer/ConstantSynthesis.cpp
+  include/souper/Infer/ConstantSynthesis.h
   lib/Infer/ExhaustiveSynthesis.cpp
   include/souper/Infer/ExhaustiveSynthesis.h
   lib/Infer/AliveDriver.cpp
