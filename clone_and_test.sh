@@ -43,6 +43,7 @@ mkdir build-release
 cd build-release
 PATH=/usr/src/souper/third_party/llvm/Release/bin:$PATH cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS='-Werror' -DTEST_SOLVER=-z3-path=$Z3 -DTEST_SYNTHESIS=ON -DTEST_LONG_DURATION_SYNTHESIS=OFF -DCMAKE_BUILD_TYPE=Release ..
 ninja
+sudo ulimit -s 30000
 LIT_ARGS="-v -vv" ./run_lit
 #LIT_ARGS="-v -vv --vg --vg-arg=--trace-children-skip=$Z3 --vg-arg=--suppressions=$SRCDIR/valgrind.supp" ./run_lit
 cd ..
