@@ -15,8 +15,9 @@
 #include "klee/Expr.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprSMTLIBPrinter.h"
-#include "llvm/Analysis/LoopInfo.h"
 #include "souper/Extractor/ExprBuilder.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/Analysis/LoopInfo.h"
 
 using namespace klee;
 using namespace souper;
@@ -44,6 +45,7 @@ public:
     Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, /*Precondition=*/0, Negate);
     if (!Cand)
       return std::string();
+    prepopulateExprMap(Cand);
     ref<Expr> E = get(Cand);
 
     std::string SStr;
@@ -67,6 +69,7 @@ public:
     Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Precondition, Negate);
     if (!Cand)
       return std::string();
+    prepopulateExprMap(Cand);
     ref<Expr> E = get(Cand);
     Query KQuery(Manager, E);
     ExprSMTLIBPrinter Printer;
@@ -427,6 +430,50 @@ private:
       assert(E->getWidth() == I->Width);
     }
     return E;
+  }
+
+  // get() is recursive. It already has problems with running out of stack
+  // space with very trivial inputs, since there are a lot of IR instructions
+  // it knows how to produce, and thus a lot of possible replacements.
+  // But it has built-in caching. And recursion only kicks in if the Inst is not
+  // found in cache. Thus we simply need to *try* to prepopulate the cache.
+  // Note that we can't really split `get()` into `getSimple()` and
+  // `getOrBuildRecursive()` because we won't reach every single of these Inst
+  // because we only look at Ops...
+  void prepopulateExprMap(Inst *Root) {
+    // Collect all Inst that are reachable from this root. Go Use->Def.
+    // An assumption is being made that there are no circular references.
+    // Note that we really do want a simple vector, and do want duplicate
+    // elements. In other words, if we have already added that Inst into vector,
+    // we "move" it to the back of the vector. But without actually moving.
+    llvm::SmallVector<Inst *, 32> AllInst;
+    AllInst.emplace_back(Root);
+    // Visit every Inst in the vector, but address them by index,
+    // since we will be appending new entries at the end.
+    for (size_t InstNum = 0; InstNum < AllInst.size(); InstNum++) {
+      Inst *CurrInst = AllInst[InstNum];
+      const std::vector<Inst *> &Ops = CurrInst->orderedOps();
+      AllInst.insert(AllInst.end(), Ops.rbegin(), Ops.rend());
+    }
+
+    // And now, 'get()' every Inst, going in Def->Use direction.
+    // That is, when we visit Inst N2, that has Ops N0 and N1,
+    // the Inst's for N0 and N1 were already generated.
+    llvm::for_each(llvm::reverse(AllInst), [this](Inst *CurrInst) {
+      switch (CurrInst->K) {
+      case Inst::UntypedConst:
+      case Inst::SAddWithOverflow:
+      case Inst::UAddWithOverflow:
+      case Inst::SSubWithOverflow:
+      case Inst::USubWithOverflow:
+      case Inst::SMulWithOverflow:
+      case Inst::UMulWithOverflow:
+        return; // Avoid pre-generation for some Inst'ructions.
+      default:
+        break;
+      }
+      (void)get(CurrInst);
+    });
   }
 
   ref<Expr> makeSizedArrayRead(unsigned Width, llvm::StringRef Name, Inst *Origin) {

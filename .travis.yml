@@ -5,6 +5,6 @@ services:
 install:
  - printenv | grep '^TRAVIS_' > my_env
  - docker pull regehr/souperweb:latest
- - docker run --ulimit stack=32768:32768 --env-file my_env -it -d --name souperweb regehr/souperweb bash
+ - docker run --env-file my_env -it -d --name souperweb regehr/souperweb bash
 script:
  - docker exec souperweb /usr/src/souper/clone_and_test.sh
