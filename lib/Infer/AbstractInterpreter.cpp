@@ -45,10 +45,81 @@ namespace {
     return Max;
   }
 
+ ConstantRange KBToCR(const KnownBits &KB) {
+    ConstantRange CR1(getSMin(KB), getSMax(KB));
+    ConstantRange CR2(getSMin(KB), getSMax(KB));
+    return CR1.getSetSize().ult(CR2.getSetSize()) ? CR1 : CR2;
+  }
 
+  KnownBits CRToKB(const ConstantRange &CR) {
+    KnownBits Res(CR.getBitWidth());
+    if (CR.isFullSet())
+      return Res;
+    if (CR.isEmptySet()) {
+      Res.setAllZero();
+      return Res;
+    }
+    if (CR.isWrappedSet())
+      return Res; // TODO look for opportunities in wrapped case
+    const APInt &L = CR.getLower();
+    const APInt &U = CR.getUpper();
+    for (unsigned I = 0; I < L.getBitWidth(); ++I) {
+      // initial guess is bit from lower bound
+      bool V = L[I];
+      APInt Boundary = L;
+      // gotta be multiple faster ways to do this...
+      for (unsigned J = 0; J < I; ++J)
+        Boundary.setBit(J);
+      if (U.ugt(Boundary + 1))
+        continue;
+      if (V)
+	Res.One.setBit(I);
+      else
+	Res.Zero.setBit(I);
+    }
+    return Res;
+  }
+
+  unsigned numKnown(const KnownBits &KB) {
+    return KB.Zero.countPopulation() + KB.One.countPopulation();
+  }
+
+  KnownBits intersect(const KnownBits &KB1, const KnownBits &KB2) {
+    // ugh the constructor we want is private
+    KnownBits Res(KB1.getBitWidth());
+    Res.Zero = KB1.Zero | KB2.Zero;
+    Res.One = KB1.One | KB2.One;
+    return Res;
+  }
 } // anonymous
 
 namespace souper {
+
+  // approximate reduced product for known bits + constant range
+  void improveKBCR(KnownBits &KB, ConstantRange &CR) {
+    while (1) {
+      // measure
+      APInt SS = CR.getSetSize();
+      unsigned NK = numKnown(KB);
+      // mutual shootdown
+      auto KB2 = CRToKB(CR);
+      auto CR2 = KBToCR(KB);
+      CR = CR.intersectWith(CR2);
+      KB = intersect(KB, KB2);
+      // done when no more improvements
+      assert(CR.getSetSize().ule(SS));
+      assert(numKnown(KB) >= NK);
+      if (SS == CR.getSetSize() && NK == numKnown(KB))
+	break;
+    }
+  }
+
+  bool KnownBitsAnalysis::isConflictingKB(const KnownBits &A, const KnownBits &B) {
+    if ((A.One & B.Zero) != 0 || (A.Zero & B.One) != 0) {
+      return true;
+    }
+    return false;
+  }
 
   KnownBits KnownBitsAnalysis::getMostPreciseKnownBits(KnownBits A, KnownBits B) {
     unsigned unknownCountA =
@@ -296,11 +367,71 @@ namespace souper {
         Result.Zero.setBit(0);
       return Result;
     }
-  }
+
+  } // ns BinaryTransferFunctionsKB
+
+
+  namespace BinaryTransferFunctionsCR {
+    llvm::ConstantRange binaryOr(const llvm::ConstantRange &LHS, const llvm::ConstantRange &RHS) {
+      if (LHS.isEmptySet() || RHS.isEmptySet())
+        return llvm::ConstantRange(LHS.getBitWidth(), /*isFullSet=*/false);
+
+      APInt umax = APIntOps::umax(LHS.getUnsignedMin(), RHS.getUnsignedMin());
+      APInt res = APInt::getNullValue(LHS.getBitWidth());
+      if (!LHS.isWrappedSet() && !RHS.isWrappedSet()) {
+        APInt umaxupper = APIntOps::umax(LHS.getUnsignedMax(), RHS.getUnsignedMax());
+        APInt uminupper = APIntOps::umin(LHS.getUnsignedMax(), RHS.getUnsignedMax());
+        res = APInt::getLowBitsSet(LHS.getBitWidth(),
+                                   LHS.getBitWidth() - uminupper.countLeadingZeros());
+        res = res | umaxupper;
+        res = res + 1;
+      }
+
+      if (umax != res)
+        return llvm::ConstantRange(std::move(umax), std::move(res));
+
+      return llvm::ConstantRange(LHS.getBitWidth(), /*isFullSet=*/true);
+    }
+
+    llvm::ConstantRange binaryAnd(const llvm::ConstantRange &LHS, const llvm::ConstantRange &RHS) {
+      if (LHS.isEmptySet() || RHS.isEmptySet())
+        return llvm::ConstantRange(LHS.getBitWidth(), /*isFullSet=*/false);
+
+      APInt umin = APIntOps::umin(RHS.getUnsignedMax(), LHS.getUnsignedMax());
+      if (umin.isAllOnesValue())
+        return llvm::ConstantRange(LHS.getBitWidth(), /*isFullSet=*/true);
+
+      APInt res = APInt::getNullValue(LHS.getBitWidth());
+
+      const APInt upper1 = LHS.getUnsignedMax();
+      const APInt upper2 = RHS.getUnsignedMax();
+      APInt lower1 = LHS.getUnsignedMin();
+      APInt lower2 = RHS.getUnsignedMin();
+      const APInt tmp = lower1 & lower2;
+      const unsigned bitPos = LHS.getBitWidth() - tmp.countLeadingZeros();
+      // if there are no zeros from bitPos upto both barriers, lower bound have bit
+      // set at bitPos. Barrier is the point beyond which you cannot set the bit
+      // because it will be greater than the upper bound then
+      if (!LHS.isWrappedSet() && !RHS.isWrappedSet() &&
+          (lower1.countLeadingZeros() == upper1.countLeadingZeros()) &&
+          (lower2.countLeadingZeros() == upper2.countLeadingZeros()) &&
+          bitPos > 0) {
+        lower1.lshrInPlace(bitPos - 1);
+        lower2.lshrInPlace(bitPos - 1);
+        if (lower1.countTrailingOnes() == (LHS.getBitWidth() - lower1.countLeadingZeros()) &&
+            lower2.countTrailingOnes() == (LHS.getBitWidth() - lower2.countLeadingZeros())) {
+          res = APInt::getOneBitSet(LHS.getBitWidth(), bitPos - 1);
+        }
+      }
+
+      return llvm::ConstantRange(std::move(res), std::move(umin) + 1);
+    }
+
+  } // ns BinaryTransferFunctionsCR
 
   bool isReservedConst(Inst *I) {
     return I->K == Inst::ReservedConst ||
-           (I->K == Inst::Var && I->SynthesisConstID != 0);
+      (I->K == Inst::Var && I->SynthesisConstID != 0);
   }
 
   bool isHole(Inst *I) {
@@ -339,7 +470,7 @@ namespace souper {
 #define KB2 findKnownBits(I->Ops[2], CI)
 #define VAL(INST) getValue(INST, CI)
 
-  llvm::KnownBits mergeKnownBits(std::vector<llvm::KnownBits> Vec) {
+  llvm::KnownBits KnownBitsAnalysis::mergeKnownBits(std::vector<llvm::KnownBits> Vec) {
     assert(Vec.size() > 0);
 
     auto Width = Vec[0].getBitWidth();
@@ -699,67 +830,12 @@ namespace souper {
     case Inst::Mul:
       Result = CR0.multiply(CR1);
       break;
-    case Inst::And: {
-      if (CR0.isEmptySet() || CR1.isEmptySet()) {
-        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
-        break;
-      }
-
-      APInt umin = APIntOps::umin(CR1.getUnsignedMax(), CR0.getUnsignedMax());
-      if (umin.isAllOnesValue()) {
-        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
-        break;
-      }
-
-      APInt res = APInt::getNullValue(CR0.getBitWidth());
-
-      const APInt upper1 = CR0.getUnsignedMax();
-      const APInt upper2 = CR1.getUnsignedMax();
-      APInt lower1 = CR0.getUnsignedMin();
-      APInt lower2 = CR1.getUnsignedMin();
-      const APInt tmp = lower1 & lower2;
-      const unsigned bitPos = CR0.getBitWidth() - tmp.countLeadingZeros();
-      // if there are no zeros from bitPos upto both barriers, lower bound have bit
-      // set at bitPos. Barrier is the point beyond which you cannot set the bit
-      // because it will be greater than the upper bound then
-      if (!CR0.isWrappedSet() && !CR1.isWrappedSet() &&
-          (lower1.countLeadingZeros() == upper1.countLeadingZeros()) &&
-          (lower2.countLeadingZeros() == upper2.countLeadingZeros()) &&
-          bitPos > 0) {
-        lower1.lshrInPlace(bitPos - 1);
-        lower2.lshrInPlace(bitPos - 1);
-        if (lower1.countTrailingOnes() == (CR0.getBitWidth() - lower1.countLeadingZeros()) &&
-            lower2.countTrailingOnes() == (CR0.getBitWidth() - lower2.countLeadingZeros())) {
-          res = APInt::getOneBitSet(CR0.getBitWidth(), bitPos - 1);
-        }
-      }
-
-      Result = llvm::ConstantRange(std::move(res), std::move(umin) + 1);
+    case Inst::And:
+      Result = BinaryTransferFunctionsCR::binaryAnd(CR0, CR1);
       break;
-    }
-    case Inst::Or: {
-      if (CR0.isEmptySet() || CR1.isEmptySet()) {
-        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/false);
-        break;
-      }
-
-      APInt umax = APIntOps::umax(CR0.getUnsignedMin(), CR1.getUnsignedMin());
-      APInt res = APInt::getNullValue(CR0.getBitWidth());
-      if (!CR0.isWrappedSet() && !CR1.isWrappedSet()) {
-        APInt umaxupper = APIntOps::umax(CR0.getUnsignedMax(), CR1.getUnsignedMax());
-        APInt uminupper = APIntOps::umin(CR0.getUnsignedMax(), CR1.getUnsignedMax());
-        res = APInt::getLowBitsSet(CR0.getBitWidth(),
-                                   CR0.getBitWidth() - uminupper.countLeadingZeros());
-        res = res | umaxupper;
-        res = res + 1;
-      }
-
-      if (umax == res)
-        Result = llvm::ConstantRange(CR0.getBitWidth(), /*isFullSet=*/true);
-      else
-        Result = llvm::ConstantRange(std::move(umax), std::move(res));
+    case Inst::Or:
+      Result = BinaryTransferFunctionsCR::binaryOr(CR0, CR1);
       break;
-    }
     case souper::Inst::ShlNSW :
     case souper::Inst::ShlNUW :
     case souper::Inst::ShlNW : // TODO: Rethink if these make sense

@@ -310,6 +310,7 @@ add_executable(parser_tests
 )
 
 add_executable(interpreter_tests
+  unittests/Interpreter/InterpreterInfra.cpp
   unittests/Interpreter/InterpreterTests.cpp)
 
 set(LLVM_LDFLAGS "${LLVM_LDFLAGS} ${ALIVE_LDFLAGS}")
@@ -383,7 +384,7 @@ configure_file(
 
 add_custom_target(check
   COMMAND ${CMAKE_BINARY_DIR}/run_lit
-  DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souper-interpret souperPass souperPassProfileAll count-insts
+  DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souper-interpret souperPass souperPassProfileAll count-insts interpreter_tests
   USES_TERMINAL)
 
 find_program(GO_EXECUTABLE NAMES go DOC "go executable")
