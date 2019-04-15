@@ -46,9 +46,16 @@ namespace souper {
     llvm::KnownBits sle(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS);
   }
 
+  namespace BinaryTransferFunctionsCR {
+    llvm::ConstantRange binaryOr(const llvm::ConstantRange &LHS, const llvm::ConstantRange &RHS);
+    llvm::ConstantRange binaryAnd(const llvm::ConstantRange &LHS, const llvm::ConstantRange &RHS);
+  }
+
   bool isConcrete(souper::Inst *I,
                   bool ConsiderConsts = true,
                   bool ConsiderHoles = true);
+
+  void improveKBCR(llvm::KnownBits &KB, llvm::ConstantRange &CR);
 
   class KnownBitsAnalysis {
     std::unordered_map<Inst*, llvm::KnownBits> KBCache;
@@ -67,6 +74,10 @@ namespace souper {
     static std::string knownBitsString(llvm::KnownBits KB);
 
     static llvm::KnownBits getMostPreciseKnownBits(llvm::KnownBits A, llvm::KnownBits B);
+
+    static llvm::KnownBits mergeKnownBits(std::vector<llvm::KnownBits> Vec);
+
+    static bool isConflictingKB(const llvm::KnownBits &A, const llvm::KnownBits &B);
   };
 
   class ConstantRangeAnalysis {
