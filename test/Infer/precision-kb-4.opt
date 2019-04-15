@@ -1,0 +1,10 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -infer-known-bits %s
+
+; CHECK: knownBits from souper: 0000xxxx
+
+%0:i4 = var
+%1:i8 = var
+%2:i8 = zext %0
+%3:i8 = lshr %2, %1
+infer %3

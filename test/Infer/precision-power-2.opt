@@ -1,0 +1,9 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -infer-known-bits %s
+
+; CHECK: known powerOfTwo from souper:   true
+
+%0:i64 = var (range=[1,0))
+%1:i64 = sub 0:i64, %0
+%2:i64 = and %0, %1
+infer %2

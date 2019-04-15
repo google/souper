@@ -1,0 +1,8 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -infer-known-bits %s
+
+; CHECK: knownBits from souper: 00000xxx
+
+%0:i8 = var (range=[0,5))
+%1:i8 = add 1:i8, %0
+infer %1

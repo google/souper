@@ -1,0 +1,10 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -infer-neg %s
+
+; CHECK: known negative from Souper:   true
+
+%0:i32 = var
+%1:i32 = mulnsw 10:i32, %0
+%2:i32 = srem %1, 10:i32
+%3:i1 = eq 0:i32, %2
+infer %3

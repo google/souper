@@ -1,0 +1,10 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -infer-known-bits %s
+
+; CHECK: known powerOfTwo from souper:   true
+
+%0:i32 = var
+%1:i32 = and 7:i32, %0
+%2:i32 = shl 1:i32, %1
+%3:i8 = trunc %2
+infer %3

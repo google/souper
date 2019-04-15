@@ -14,6 +14,7 @@
 
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/GraphWriter.h"
+#include "llvm/Support/KnownBits.h"
 
 #include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Inst/InstGraph.h"
@@ -30,6 +31,30 @@ InputFilename(cl::Positional, cl::desc("<input souper optimization>"),
 static cl::opt<bool> PrintCounterExample("print-counterexample",
     cl::desc("Print counterexample (default=true)"),
     cl::init(true));
+
+static cl::opt<bool> InferNeg("infer-neg",
+    cl::desc("Compute Negative for the candidate (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> InferKnownBits("infer-known-bits",
+    cl::desc("Compute known bits for the candidate (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> InferNonNeg("infer-non-neg",
+    cl::desc("Compute non-negative for the candidate (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> InferPowerTwo("infer-power-two",
+    cl::desc("Compute power of two for the candidate (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> InferNonZero("infer-non-zero",
+    cl::desc("Compute non zero for the candidate (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> InferSignBits("infer-sign-bits",
+    cl::desc("Compute sign bits for the candidate (default=false)"),
+    cl::init(false));
 
 static cl::opt<bool> PrintRepl("print-replacement",
     cl::desc("Print the replacement, if valid (default=false)"),
@@ -62,6 +87,13 @@ static cl::opt<bool> ParseLHSOnly("parse-lhs-only",
 static cl::opt<bool> EmitLHSDot("emit-lhs-dot",
     cl::desc("Emit DOT format DAG for LHS of given souper IR (default=false)"),
     cl::init(false));
+
+std::string convertToStr(bool Fact) {
+    if (Fact)
+      return "true";
+    else
+      return "false";
+}
 
 int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
@@ -96,6 +128,91 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   int Ret = 0;
   int Success = 0, Fail = 0, Error = 0;
   for (auto Rep : Reps) {
+    if (InferNeg) {
+      bool Negative;
+      if (std::error_code EC = S->negative(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
+                                           Negative, IC)) {
+        llvm::errs() << "Error: " << EC.message() << '\n';
+        Ret = 1;
+        ++Error;
+      } else {
+        llvm::outs() << "known negative from souper: "
+                     << convertToStr(Negative) << "\n";
+        ++Success;
+      }
+    }
+
+    if (InferNonNeg) {
+      bool NonNegative;
+      if (std::error_code EC = S->nonNegative(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
+                                              NonNegative, IC)) {
+        llvm::errs() << "Error: " << EC.message() << '\n';
+        Ret = 1;
+        ++Error;
+      } else {
+        llvm::outs() << "known nonNegative from souper: "
+                     << convertToStr(NonNegative) << "\n";
+        ++Success;
+      }
+    }
+
+    if (InferKnownBits) {
+      unsigned W = Rep.Mapping.LHS->Width;
+      KnownBits Known(W);
+      if (std::error_code EC = S->knownBits(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
+                                            Known, IC)) {
+        llvm::errs() << "Error: " << EC.message() << '\n';
+        Ret = 1;
+        ++Error;
+      } else {
+        llvm::outs() << "knownBits from souper: "
+                     << Inst::getKnownBitsString(Known.Zero, Known.One) << "\n";
+        ++Success;
+      }
+    }
+
+    if (InferPowerTwo) {
+      bool PowTwo;
+      if (std::error_code EC = S->powerTwo(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
+                                           PowTwo, IC)) {
+        llvm::errs() << "Error: " << EC.message() << '\n';
+        Ret = 1;
+        ++Error;
+      } else {
+        llvm::outs() << "known powerOfTwo from souper: "
+                     << convertToStr(PowTwo) << "\n";
+        ++Success;
+      }
+    }
+
+    if (InferNonZero) {
+      bool NonZero;
+      if (std::error_code EC = S->nonZero(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
+                                          NonZero, IC)) {
+        llvm::errs() << "Error: " << EC.message() << '\n';
+        Ret = 1;
+        ++Error;
+      } else {
+        llvm::outs() << "known nonZero from souper: "
+                     << convertToStr(NonZero) << "\n";
+        ++Success;
+      }
+    }
+
+    if (InferSignBits) {
+      unsigned SignBits;
+      if (std::error_code EC = S->signBits(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
+                                           SignBits, IC)) {
+        llvm::errs() << "Error: " << EC.message() << '\n';
+        Ret = 1;
+        ++Error;
+      } else {
+        llvm::outs() << "known signBits from souper: "
+                     << std::to_string(SignBits) << "\n";
+        ++Success;
+      }
+    }
+
     if (InferRHS || ReInferRHS) {
       int OldCost;
       if (ReInferRHS) {
