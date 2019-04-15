@@ -1,0 +1,15 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -infer-non-neg %s
+
+; CHECK: known nonNegative from Souper:   true
+
+%0 = block 2
+%1:i64 = var
+%2:i32 = trunc %1
+%3:i32 = and 65535:i32, %2
+%4 = block 3
+%5:i32 = var
+%6:i32 = lshr %5, 16:i32
+%7:i32 = phi %4, %6, 0:i32, 59:i32
+%8:i32 = phi %0, %3, %7
+infer %8

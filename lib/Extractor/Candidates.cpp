@@ -59,6 +59,30 @@ static llvm::cl::opt<bool> HarvestUses(
     "souper-harvest-uses",
     llvm::cl::desc("Harvest operands (default=false)"),
     llvm::cl::init(false));
+static llvm::cl::opt<bool> PrintNegAtReturn(
+    "print-neg-at-return",
+    llvm::cl::desc("Print negative dfa in each value returned from a function (default=false)"),
+    llvm::cl::init(false));
+static llvm::cl::opt<bool> PrintNonNegAtReturn(
+    "print-nonneg-at-return",
+    llvm::cl::desc("Print non-negative dfa in each value returned from a function (default=false)"),
+    llvm::cl::init(false));
+static llvm::cl::opt<bool> PrintKnownAtReturn(
+    "print-known-at-return",
+    llvm::cl::desc("Print known bits in each value returned from a function (default=false)"),
+    llvm::cl::init(false));
+static llvm::cl::opt<bool> PrintPowerTwoAtReturn(
+    "print-power-two-at-return",
+    llvm::cl::desc("Print power two dfa in each value returned from a function (default=false)"),
+    llvm::cl::init(false));
+static llvm::cl::opt<bool> PrintNonZeroAtReturn(
+    "print-non-zero-at-return",
+    llvm::cl::desc("Print non zero dfa in each value returned from a function (default=false)"),
+    llvm::cl::init(false));
+static llvm::cl::opt<bool> PrintSignBitsAtReturn(
+    "print-sign-bits-at-return",
+    llvm::cl::desc("Print sign bits dfa in each value returned from a function (default=false)"),
+    llvm::cl::init(false));
 
 extern bool UseAlive;
 
@@ -847,6 +871,61 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
     for (auto &I : BB) {
+      if (isa<ReturnInst>(I)) {
+        if (PrintNegAtReturn) {
+          auto V = I.getOperand(0);
+          auto DL = F.getParent()->getDataLayout();
+          bool Negative = isKnownNegative(V, DL);
+          if (Negative)
+            llvm::outs() << "known negative from compiler: " << "true" << "\n";
+          else
+            llvm::outs() << "known negative from compiler: " << "false" << "\n";
+        }
+        if (PrintNonNegAtReturn) {
+          auto V = I.getOperand(0);
+          auto DL = F.getParent()->getDataLayout();
+          bool NonNegative = isKnownNonNegative(V, DL);
+          if (NonNegative)
+            llvm::outs() << "known nonNegative from compiler: " << "true" << "\n";
+          else
+            llvm::outs() << "known nonNegative from compiler: " << "false" << "\n";
+        }
+        if (PrintKnownAtReturn) {
+          auto V = I.getOperand(0);
+          auto DL = F.getParent()->getDataLayout();
+          unsigned Width = DL.getTypeSizeInBits(V->getType());
+          KnownBits Known(Width);
+          computeKnownBits(V, Known, DL);
+          llvm::outs() << "knownBits from compiler: " << Inst::getKnownBitsString(Known.Zero, Known.One) << "\n";
+        }
+        if (PrintPowerTwoAtReturn) {
+          auto V = I.getOperand(0);
+          auto DL = F.getParent()->getDataLayout();
+          bool PowerTwo = isKnownToBeAPowerOfTwo(V, DL);
+          if (PowerTwo)
+            llvm::outs() << "known powerOfTwo from compiler: " << "true" << "\n";
+          else
+            llvm::outs() << "known powerOfTwo from compiler: " << "false" << "\n";
+        }
+        if (PrintNonZeroAtReturn) {
+          auto V = I.getOperand(0);
+          auto DL = F.getParent()->getDataLayout();
+          bool NonZero = isKnownNonZero(V, DL);
+          if (NonZero)
+            llvm::outs() << "known nonZero from compiler: " << "true" << "\n";
+          else
+            llvm::outs() << "known nonZero from compiler: " << "false" << "\n";
+        }
+        if (PrintSignBitsAtReturn) {
+          auto V = I.getOperand(0);
+          auto DL = F.getParent()->getDataLayout();
+          unsigned NumSignBits = ComputeNumSignBits(V, DL);
+          if (NumSignBits > 1)
+            llvm::outs() << "known signBits from compiler: " << NumSignBits << "\n";
+          else
+            llvm::outs() << "known signBits from compiler: 1\n";
+        }
+      }
       // Harvest Uses (Operands)
       if (HarvestUses) {
         std::unordered_set<llvm::Instruction *> Visited;

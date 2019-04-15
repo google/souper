@@ -1,0 +1,8 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -infer-non-zero %s
+
+; CHECK: known nonZero from Souper:   true
+
+%0:i64 = var (range=[0,-1))
+%1:i64 = addnuw 1:i64, %0
+infer %1

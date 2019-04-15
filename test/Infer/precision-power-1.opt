@@ -1,0 +1,7 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -infer-known-bits %s
+
+; CHECK: known powerOfTwo from souper:   true
+
+%0:i8 = var (range=[1,3))
+infer %0

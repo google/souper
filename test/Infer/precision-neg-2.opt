@@ -1,0 +1,10 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-rhs -infer-neg %s
+
+; CHECK: known negative from Souper:   true
+
+%0 = block 2
+%1:i64 = var
+%2:i64 = phi %0, %1, 0:i64
+%3:i1 = eq %2, %2
+infer %3

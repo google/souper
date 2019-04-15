@@ -46,6 +46,36 @@ public:
                                                    const std::vector<InstMapping> &PCs,
                                                    Inst *LHS, InstContext &IC) = 0;
   virtual std::string getName() = 0;
+  virtual
+  std::error_code negative(const BlockPCs &BPCs,
+                           const std::vector<InstMapping> &PCs,
+                           Inst *LHS, bool &Negative,
+                           InstContext &IC) = 0;
+  virtual
+  std::error_code knownBits(const BlockPCs &BPCs,
+                            const std::vector<InstMapping> &PCs,
+                            Inst *LHS, llvm::KnownBits &Known,
+                            InstContext &IC) = 0;
+  virtual
+  std::error_code nonNegative(const BlockPCs &BPCs,
+                              const std::vector<InstMapping> &PCs,
+                              Inst *LHS, bool &NonNegative,
+                              InstContext &IC) = 0;
+  virtual
+  std::error_code powerTwo(const BlockPCs &BPCs,
+                           const std::vector<InstMapping> &PCs,
+                           Inst *LHS, bool &PowerTwo,
+                           InstContext &IC) = 0;
+  virtual
+  std::error_code nonZero(const BlockPCs &BPCs,
+                          const std::vector<InstMapping> &PCs,
+                          Inst *LHS, bool &NonZero,
+                          InstContext &IC) = 0;
+  virtual
+  std::error_code signBits(const BlockPCs &BPCs,
+                           const std::vector<InstMapping> &PCs,
+                           Inst *LHS, unsigned &SignBits,
+                           InstContext &IC) = 0;
 };
 
 std::unique_ptr<Solver> createBaseSolver(
