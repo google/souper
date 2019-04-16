@@ -1258,8 +1258,8 @@ bool Parser::parseLine(std::string &ErrStr) {
           return false;
         }
         if (!consumeToken(ErrStr)) return false;
-      } else if (IK == Inst::ReservedInst) {
-        Inst *I = IC.getReservedInst(InstWidth);
+      } else if (IK == Inst::Hole) {
+        Inst *I = IC.createHole(InstWidth);
         Context.setInst(InstName, I);
         return true;
       }

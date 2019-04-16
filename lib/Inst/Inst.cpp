@@ -443,6 +443,8 @@ const char *Inst::getKindName(Kind K) {
     return "reservedconst";
   case ReservedInst:
     return "reservedinst";
+  case Hole:
+    return "hole";
   case SAddO:
   case UAddO:
   case SSubO:
@@ -516,6 +518,7 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("usub.sat", Inst::USubSat)
                    .Case("extractvalue", Inst::ExtractValue)
                    .Case("reservedinst", Inst::ReservedInst)
+                   .Case("hole", Inst::Hole)
                    .Case("reservedconst", Inst::ReservedConst)
                    .Default(Inst::None);
 }
@@ -594,10 +597,18 @@ Inst *InstContext::getReservedConst() {
   return N;
 }
 
-Inst *InstContext::getReservedInst(int Width) {
+Inst *InstContext::getReservedInst() {
   auto N = new Inst;
   Insts.emplace_back(N);
   N->K = Inst::ReservedInst;
+  N->Width = 0;
+  return N;
+}
+
+Inst *InstContext::createHole(unsigned Width) {
+  auto N = new Inst;
+  Insts.emplace_back(N);
+  N->K = Inst::Hole;
   N->Width = Width;
   return N;
 }
@@ -804,7 +815,7 @@ static int countHelper(Inst *I, std::set<Inst *> &Visited) {
 
   int Count;
 
-  if (I->K == Inst::Var || I->K == Inst::Const || I->K == Inst::ReservedInst)
+  if (I->K == Inst::Var || I->K == Inst::Const || I->K == Inst::Hole)
     Count = 0;
   else
     Count = 1;
@@ -951,8 +962,7 @@ void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
     if (!Visited.insert(I).second)
       continue;
     if (I->K == Inst::Var &&
-        (I->Name.find(ReservedConstPrefix) == std::string::npos &&
-	 I->Name.find(ReservedInstPrefix) == std::string::npos)) {
+        (I->Name.find(ReservedConstPrefix) == std::string::npos)) {
       Vars.push_back(I);
     }
     for (auto Op : I->Ops)
@@ -962,7 +972,7 @@ void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
 
 
 // TODO: Convert to a more generic getGivenInst similar to hasGivenInst below
-void souper::getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts) {
+void souper::getHoles(Inst *Root, std::vector<Inst *> &Holes) {
   // breadth-first search
   std::set<Inst *> Visited;
   std::queue<Inst *> Q;
@@ -972,9 +982,9 @@ void souper::getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts) {
     Q.pop();
     if (!Visited.insert(I).second)
       continue;
-    if (I->K == Inst::ReservedInst) {
+    if (I->K == Inst::Hole) {
       assert(I->Width > 0);
-      ReservedInsts.push_back(I);
+      Holes.push_back(I);
     }
     for (auto Op : I->Ops)
       Q.push(Op);

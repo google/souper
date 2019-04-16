@@ -516,7 +516,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
       ExprCache[I] = Builder.var(t, Name);
       return translateDataflowFacts(I, F, ExprCache);
     }
-    case souper::Inst::ReservedInst: {
+    case souper::Inst::Hole: {
 //       ExprCache[I] = Builder.freeze(t, getUniqueName(),Builder.var(t, getUniqueName()));
       ExprCache[I] = Builder.var(t, getUniqueName());
       return true;
