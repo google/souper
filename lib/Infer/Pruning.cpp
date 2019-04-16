@@ -110,7 +110,7 @@ bool PruningManager::isInfeasibleWithSolver(Inst *RHS, unsigned StatsLevel) {
       auto Val = C.getValue();
       if (!isConcrete(RHS, false, true)) {
         std::vector<Inst *> Holes, ModelVars;
-        getReservedInsts(RHS, Holes);
+        getHoles(RHS, Holes);
         std::map<Inst *, Inst *> InstCache;
         std::vector<Inst *> Empty;
         for (auto *Hole : Holes) {

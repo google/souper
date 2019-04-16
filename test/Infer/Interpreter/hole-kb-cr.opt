@@ -8,6 +8,6 @@
 ; CHECK-NEXT: [0,1)
 
 %0:i8 = var
-%1:i8 = reservedinst
-%2 = mul %1, %0
+%1:i8 = hole
+%2:i8 = mul %1, %0
 infer %2

@@ -1,0 +1,27 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-exhaustive-synthesis-num-instructions=1 %solver %s > %t1
+
+; CHECK: trunc %0
+%0:i8 = var
+%1:i8 = and %0, 1
+; CHECK: trunc %0
+%2:i1 = eq %1, 1
+infer %2
+
+; CHECK: sext %0
+%0:i4 = var
+%1:i8 = zext %0
+%2:i8 = and %1, 8:i8
+%3:i8 = or %1, 240:i8
+%4:i1 = eq 0:i8, %2
+%5:i8 = select %4, %1, %3
+infer %5
+
+; CHECK: zext %0
+%0:i4 = var
+%1:i8 = sext %0
+%2:i8 = and %1, 8:i8
+%3:i8 = and %1, 15:i8
+%4:i1 = eq 0:i8, %2
+%5:i8 = select %4, %1, %3
+infer %5

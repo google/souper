@@ -287,17 +287,15 @@ namespace souper {
           (I->Name.find(ReservedConstPrefix) != std::string::npos));
   }
 
-  bool isReservedInst(Inst *I) {
-    return I->K == Inst::ReservedInst ||
-          (I->K == Inst::Var &&
-          (I->Name.find(ReservedInstPrefix) != std::string::npos));
+  bool isHole(Inst *I) {
+    return I->K == Inst::Hole;
   }
 
   bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
     return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst* instr) {
 			      if (ConsiderConsts && isReservedConst(instr))
 				return true;
-			      if (ConsiderHoles && isReservedInst(instr))
+			      if (ConsiderHoles && isHole(instr))
 				return true;
 
 			      return false;
