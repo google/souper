@@ -50,6 +50,7 @@ struct Inst : llvm::FoldingSetNode {
     UntypedConst,
     Var,
     Phi,
+    Hole,
 
     Add,
     AddNSW,
@@ -224,8 +225,9 @@ public:
   Inst *getConst(const llvm::APInt &I);
   Inst *getUntypedConst(const llvm::APInt &I);
   Inst *getReservedConst();
-  Inst *getReservedInst(int Width);
+  Inst *getReservedInst();
 
+  Inst *createHole(unsigned Width);
   Inst *createVar(unsigned Width, llvm::StringRef Name);
   Inst *createVar(unsigned Width, llvm::StringRef Name,
                   llvm::ConstantRange Range,
@@ -281,7 +283,7 @@ Inst *instJoin(Inst *I, Inst *Reserved, Inst *NewInst, InstContext &IC);
 void findVars(Inst *Root, std::vector<Inst *> &Vars);
 
 bool hasGivenInst(Inst *Root, std::function<bool(Inst*)> InstTester);
-void getReservedInsts(Inst *Root, std::vector<Inst *> &ReservedInsts);
+void getHoles(Inst *Root, std::vector<Inst *> &Holes);
 
 void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                       std::map<Inst *, Inst *> &InstCache,

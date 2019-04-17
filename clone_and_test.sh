@@ -1,7 +1,5 @@
 #!/bin/bash -ex
 
-ulimit -s 30000
-
 # get travis env
 echo "TRAVIS_EVENT_TYPE: ${TRAVIS_EVENT_TYPE}"
 echo "TRAVIS_BRANCH: ${TRAVIS_BRANCH}"

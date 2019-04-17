@@ -128,19 +128,6 @@ void hasConstant(Inst *I, std::set<Inst *> &ConstSet) {
   hasConstantHelper(I, Visited, ConstSet);
 }
 
-// TODO small vector by reference?
-std::vector<Inst *> matchWidth(Inst *I, unsigned NewW, InstContext &IC) {
-  int OldW = Inst::isCmp(I->K) ? 1 : I->Width;
-  if (OldW > NewW)
-    return { IC.getInst(Inst::Trunc, NewW, { I }) };
-  if (OldW < NewW)
-    return {
-            IC.getInst(Inst::SExt, NewW, { I }),
-            IC.getInst(Inst::ZExt, NewW, { I }),
-    };
-  return { I };
-}
-
 void addGuess(Inst *RHS, int MaxCost, std::vector<Inst *> &Guesses,
               int &TooExpensive) {
   if (souper::cost(RHS) < MaxCost)
@@ -199,30 +186,56 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
   std::vector<Inst *> Comps(Inputs.begin(), Inputs.end());
 
-  Inst *I1 = IC.getReservedInst(0);
+  Inst *I1 = IC.getReservedInst();
   Comps.push_back(I1);
   // TODO enforce permitted widths
   // TODO try both the source and dest width, if they're different
-  if (Width > 1) {
-    for (auto K : UnaryOperators) {
-      for (auto Comp : Comps) {
-        // Prune: unary operation on constant
-        if (Comp->K == Inst::ReservedConst)
-          continue;
 
-        if (K == Inst::BSwap && Width % 16 != 0) {
-          continue;
-        }
+  // Conversion Operators
+  for (auto Comp : Comps) {
+    if (Comp->Width == Width)
+      continue;
 
-        if (Comp->K == Inst::ReservedInst && Comp->Width == 0) {
-          auto V = IC.getReservedInst(Width);
-          auto N = IC.getInst(K, Width, { V });
-          addGuess(N, LHSCost, PartialGuesses, TooExpensive);
-          continue;
-        }
+    if (Comp->K == Inst::ReservedInst)
+      continue;
 
-        for (auto V : matchWidth(Comp, Width, IC)) {
-          auto N = IC.getInst(K, Width, { V });
+    if (Comp->K == Inst::ReservedConst)
+      continue;
+
+    if (Width > Comp->Width) {
+      auto NSExt = IC.getInst(Inst::SExt, Width, { Comp });
+      auto NZExt = IC.getInst(Inst::ZExt, Width, { Comp });
+      addGuess(NSExt, LHSCost, PartialGuesses, TooExpensive);
+      addGuess(NZExt, LHSCost, PartialGuesses, TooExpensive);
+      continue;
+    } else {
+      auto NTrunc = IC.getInst(Inst::Trunc, Width, { Comp });
+      addGuess(NTrunc, LHSCost, PartialGuesses, TooExpensive);
+    }
+
+    // Unary Operators
+    if (Width > 1) {
+      for (auto K : UnaryOperators) {
+        for (auto Comp : Comps) {
+          if (Comp->Width != Width)
+            continue;
+
+          // Prune: unary operation on constant
+          if (Comp->K == Inst::ReservedConst)
+            continue;
+
+          if (K == Inst::BSwap && Width % 16 != 0) {
+            continue;
+          }
+
+          if (Comp->K == Inst::ReservedInst) {
+            auto V = IC.createHole(Width);
+            auto N = IC.getInst(K, Width, { V });
+            addGuess(N, LHSCost, PartialGuesses, TooExpensive);
+            continue;
+          }
+
+          auto N = IC.getInst(K, Width, { Comp });
           addGuess(N, LHSCost, PartialGuesses, TooExpensive);
         }
       }
@@ -233,10 +246,17 @@ void getGuesses(std::vector<Inst *> &Guesses,
   Inst *C1 = IC.getReservedConst();
   Comps.push_back(C1);
   // reservedinst starts with width 0
-  Inst *I2 = IC.getReservedInst(0);
+  Inst *I2 = IC.getReservedInst();
   Comps.push_back(I2);
 
   for (auto K : BinaryOperators) {
+    if (Inst::isCmp(K) && Width != 1)
+      continue;
+
+    // PRUNE: one-bit shifts don't make sense
+    if (Inst::isShift(K) && Width == 1)
+      continue;
+
     for (auto I = Comps.begin(); I != Comps.end(); ++I) {
       // Prune: only one of (mul x, C), (mul C, x) is allowed
       if (Inst::isCommutative(K) && (*I)->K == Inst::ReservedConst)
@@ -249,7 +269,6 @@ void getGuesses(std::vector<Inst *> &Guesses,
       // PRUNE: don't try commutative operators both ways
       auto Start = Inst::isCommutative(K) ? I : Comps.begin();
       for (auto J = Start; J != Comps.end(); ++J) {
-
         // Prune: I2 should only be the second argument
         if ((*J)->K == Inst::ReservedInst && (*J) != I2)
           continue;
@@ -261,75 +280,79 @@ void getGuesses(std::vector<Inst *> &Guesses,
                            K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
                            K == Inst::Select))
           continue;
+
         // PRUNE: never operate on two constants
         if ((*I)->K == Inst::ReservedConst && (*J)->K == Inst::ReservedConst)
           continue;
-        /*
-         * there are three obvious choices of width for an
-         * operator: left input, right input, or output, so try
-         * them all (in the future we'd also like to explore
-         * things like synthesizing double-width operations)
-         */
-        llvm::SmallSetVector<int, 4> Widths;
-        if ((*I)->K != Inst::ReservedConst &&
-            !((*I)->K == Inst::ReservedInst && (*I)->Width == 0))
-          Widths.insert((*I)->Width);
-        if ((*J)->K != Inst::ReservedConst &&
-            !((*J)->K == Inst::ReservedInst && (*J)->Width == 0)) {
-          Widths.insert((*J)->Width);
-        }
-        if (!Inst::isCmp(K))
-          Widths.insert(Width);
 
-        // both lhs and rhs are reservedinst and it is an comparison
-        // TODO: fix this
-        if (Inst::isCmp(K) && Widths.empty()) {
-          continue;
-        }
+        // see if we need to make a var representing a constant
+        // that we don't know yet
 
-        if (Widths.size() < 1)
-          llvm::report_fatal_error("no widths to work with");
+        Inst *V1, *V2;
+        if (Inst::isCmp(K)) {
 
-        for (auto OpWidth : Widths) {
-          if (OpWidth < 1)
-            llvm::report_fatal_error("bad width");
-          // PRUNE: one-bit shifts don't make sense
-          if (Inst::isShift(K) && OpWidth == 1)
+          if ((*I)->Width == 0 && (*J)->Width == 0) {
+            // TODO: support (cmp hole, hole);
             continue;
+          }
 
-          // see if we need to make a var representing a constant
-          // that we don't know yet
-          std::vector<Inst *> V1, V2;
-          if ((*I)->K == Inst::ReservedConst) {
-            auto C = IC.createVar(OpWidth, (*I)->Name);
-            V1.push_back(C);
-          } else if ((*I)->K == Inst::ReservedInst && (*I)->Width == 0) {
-            auto N = IC.getReservedInst(OpWidth);
-            V1.push_back(N);
-          } else {
-            V1 = matchWidth(*I, OpWidth, IC);
-          }
-          if ((*J)->K == Inst::ReservedConst) {
-            auto C = IC.createVar(OpWidth, (*J)->Name);
-            V2.push_back(C);
-          } else if ((*J)->K == Inst::ReservedInst && (*J)->Width == 0) {
-            auto N = IC.getReservedInst(OpWidth);
-            V2.push_back(N);
-          } else {
-            V2 = matchWidth(*J, OpWidth, IC);
-          }
-          for (auto V1i : V1) {
-            for (auto V2i : V2) {
-              // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
-              if (K == Inst::Sub && V2i->Name.find(ReservedConstPrefix) != std::string::npos)
-                continue;
-              auto N = IC.getInst(K, Inst::isCmp(K) ? 1 : OpWidth, { V1i, V2i });
-              for (auto MatchedWidthN : matchWidth(N, Width, IC)) {
-                addGuess(MatchedWidthN, LHSCost, PartialGuesses, TooExpensive);
-              }
+          if ((*I)->Width == 0) {
+            if ((*I)->K == Inst::ReservedConst) {
+              // (cmp const, comp)
+              V1 = IC.createVar((*J)->Width, (*I)->Name);
+            } else if ((*I)->K == Inst::ReservedInst) {
+              // (cmp hole, comp)
+              V1 = IC.createHole((*J)->Width);
             }
+          } else {
+            V1 = *I;
+          }
+
+          if ((*J)->Width == 0) {
+            if ((*J)->K == Inst::ReservedConst) {
+              // (cmp comp, const)
+              V2 = IC.createVar((*I)->Width, (*J)->Name);
+            } else if ((*J)->K == Inst::ReservedInst) {
+              // (cmp comp, hole)
+              V2 = IC.createHole((*I)->Width);
+            }
+          } else {
+            V2 = *J;
+          }
+        } else {
+          if ((*I)->K == Inst::ReservedConst) {
+            // (binop const, comp)
+            V1 = IC.createVar(Width, (*I)->Name);
+          } else if ((*I)->K == Inst::ReservedInst) {
+            // (binop hole, comp)
+            V1 = IC.createHole(Width);
+          } else {
+            V1 = *I;
+          }
+
+          if ((*J)->K == Inst::ReservedConst) {
+            // (binop comp, const)
+            V2 = IC.createVar(Width, (*J)->Name);
+          } else if ((*J)->K == Inst::ReservedInst) {
+            // (binop comp, hole)
+            V2 = IC.createHole(Width);
+          } else {
+            V2 = *J;
           }
         }
+
+        if (V1->Width != V2->Width)
+          continue;
+
+        if (!Inst::isCmp(K) && V1->Width != Width)
+          continue;
+
+        // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
+        if (K == Inst::Sub && V2->Name.find(ReservedConstPrefix) != std::string::npos)
+          continue;
+
+        auto N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, { V1, V2 });
+        addGuess(N, LHSCost, PartialGuesses, TooExpensive);
       }
     }
   }
@@ -338,7 +361,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
   // need two reserved per select instruction
   Inst *C2 = IC.getReservedConst();
   Comps.push_back(C2);
-  Inst *I3 = IC.getReservedInst(0);
+  Inst *I3 = IC.getReservedInst();
   Comps.push_back(I3);
 
   for (auto I = Comps.begin(); I != Comps.end(); ++I) {
@@ -356,49 +379,53 @@ void getGuesses(std::vector<Inst *> &Guesses,
       // Prune (select cond, x, x)
       if (I == J)
         continue;
-      std::vector<Inst *> V1, V2;
+      Inst *V1, *V2;
       if ((*I)->K == Inst::ReservedConst) {
-        auto C = IC.createVar(Width, (*I)->Name);
-        V1.push_back(C);
-      } else if ((*I)->K == Inst::ReservedInst && (*I)->Width == 0) {
-        auto N = IC.getReservedInst(Width);
-        V1.push_back(N);
+        V1 = IC.createVar(Width, (*I)->Name);
+      } else if ((*I)->K == Inst::ReservedInst) {
+        V1 = IC.createHole(Width);
       } else {
-        V1 = matchWidth(*I, Width, IC);
+        V1 = *I;
       }
       if ((*J)->K == Inst::ReservedConst) {
-        auto C = IC.createVar(Width, (*J)->Name);
-        V2.push_back(C);
-      } else if ((*J)->K == Inst::ReservedInst && (*J)->Width == 0) {
-        auto N = IC.getReservedInst(Width);
-        V2.push_back(N);
+        V2 = IC.createVar(Width, (*J)->Name);
+      } else if ((*J)->K == Inst::ReservedInst) {
+        V2 = IC.createHole(Width);
       } else {
-        V2 = matchWidth(*J, Width, IC);
+        V2 = *J;
       }
+
+      if (V1->Width != V2->Width)
+        continue;
+
+      if (V1->Width != Width)
+        continue;
+
+      assert(V1->Width == V2->Width);
 
       for (auto L : Comps) {
         if (L->K == Inst::ReservedInst && L != I3)
           continue;
-        for (auto V1i : V1) {
-          for (auto V2i : V2) {
 
-            // (select i1, c, c)
-            // PRUNE: a select's control input should never be constant
-            if (L->K == Inst::ReservedConst)
-              continue;
+        // (select i1, c, c)
+        // PRUNE: a select's control input should never be constant
+        if (L->K == Inst::ReservedConst)
+          continue;
 
-            Inst *V;
-            if (L->K == Inst::ReservedInst && L->Width == 0) {
-              V = IC.getReservedInst(1);
-            } else {
-              V = matchWidth(L, 1, IC)[0];
-            }
-
-            auto SelectInst = IC.getInst(Inst::Select,
-                                         Width, { V, V1i, V2i });
-            addGuess(SelectInst, LHSCost, PartialGuesses, TooExpensive);
-          }
+        Inst *V;
+        if (L->K == Inst::ReservedInst) {
+          V = IC.createHole(1);
+        } else {
+          V = L;
         }
+
+        if (V->Width != 1)
+          continue;
+
+
+        auto SelectInst = IC.getInst(Inst::Select, Width, { V, V1, V2 });
+
+        addGuess(SelectInst, LHSCost, PartialGuesses, TooExpensive);
       }
     }
   }
@@ -416,7 +443,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
     // get all empty slots from the newly plugged inst
     std::vector<Inst *> CurrSlots;
-    getReservedInsts(JoinedGuess, CurrSlots);
+    getHoles(JoinedGuess, CurrSlots);
 
     // if no empty slot, then push the guess to the result list
     if (CurrSlots.empty()) {
@@ -711,8 +738,8 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
 
   // add nops guesses separately
   for (auto I : Inputs) {
-    for (auto V : matchWidth(I, LHS->Width, IC))
-      addGuess(V, LHSCost, Guesses, TooExpensive);
+    if (I->Width == LHS->Width)
+      addGuess(I, LHSCost, Guesses, TooExpensive);
   }
 
   // one of the real advantages of this approach to synthesis vs
@@ -933,10 +960,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                          ResultConstMap, IC, /*MaxTries=*/MaxTries, Timeout);
       if (!ResultConstMap.empty()) {
         RHS = getInstCopy(I, IC, InstCache, BlockCache, &ResultConstMap, false);
-
-        ReplacementContext RC;
-        RC.printInst(RHS, llvm::errs(), true);
-
         return EC;
       } else {
         continue;
