@@ -960,10 +960,6 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                          ResultConstMap, IC, /*MaxTries=*/MaxTries, Timeout);
       if (!ResultConstMap.empty()) {
         RHS = getInstCopy(I, IC, InstCache, BlockCache, &ResultConstMap, false);
-
-        ReplacementContext RC;
-        RC.printInst(RHS, llvm::errs(), true);
-
         return EC;
       } else {
         continue;
