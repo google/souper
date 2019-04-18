@@ -970,6 +970,27 @@ void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
   }
 }
 
+void hasConstantHelper(Inst *I, std::set<Inst *> &Visited,
+                       std::set<Inst *> &ConstSet) {
+  // FIXME this only works for one constant and keying by name is bad
+  if (I->K == Inst::Var && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
+    // FIXME use a less stupid sentinel
+    ConstSet.insert(I);
+  } else {
+    if (Visited.insert(I).second)
+      for (auto Op : I->Ops)
+        hasConstantHelper(Op, Visited, ConstSet);
+  }
+}
+
+// TODO do this a more efficient way
+// TODO do this a better way, checking for constants by name is dumb
+void souper::getConstants(Inst *I, std::set<Inst *> &ConstSet) {
+  std::set<Inst *> Visited;
+  hasConstantHelper(I, Visited, ConstSet);
+}
+
+
 
 // TODO: Convert to a more generic getGivenInst similar to hasGivenInst below
 void souper::getHoles(Inst *Root, std::vector<Inst *> &Holes) {

@@ -280,6 +280,19 @@ public:
     }
   }
 
+  std::error_code inferConst(const BlockPCs &BPCs,
+                             const std::vector<InstMapping> &PCs,
+                             Inst *LHS, Inst *&RHS,
+                             std::set<Inst *> &ConstSet,
+                             std::map<Inst *, llvm::APInt> &ResultMap,
+                             InstContext &IC) override {
+    ConstantSynthesis CS;
+    return CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, RHS),
+                         ConstSet, ResultMap, IC, 30, Timeout);
+  }
+
+
+
   bool testKnown(const BlockPCs &BPCs,
 		 const std::vector<InstMapping> &PCs,
 		 APInt &Zeros, APInt &Ones, Inst *LHS,
@@ -360,6 +373,14 @@ public:
       return ent->second.first;
     }
   }
+  std::error_code inferConst(const BlockPCs &BPCs,
+                             const std::vector<InstMapping> &PCs,
+                             Inst *LHS, Inst *&RHS,
+                             std::set<Inst *> &ConstSet,
+                             std::map<Inst *, llvm::APInt> &ResultMap,
+                             InstContext &IC) override {
+    return UnderlyingSolver->inferConst(BPCs, PCs, LHS, RHS, ConstSet, ResultMap, IC);
+  }
 
   std::error_code isValid(InstContext &IC, const BlockPCs &BPCs,
                           const std::vector<InstMapping> &PCs,
@@ -405,6 +426,16 @@ public:
   ExternalCachingSolver(std::unique_ptr<Solver> UnderlyingSolver, KVStore *KV)
       : UnderlyingSolver(std::move(UnderlyingSolver)), KV(KV) {
   }
+
+  std::error_code inferConst(const BlockPCs &BPCs,
+                             const std::vector<InstMapping> &PCs,
+                             Inst *LHS, Inst *&RHS,
+                             std::set<Inst *> &ConstSet,
+                             std::map<Inst *, llvm::APInt> &ResultMap,
+                             InstContext &IC) override {
+    return UnderlyingSolver->inferConst(BPCs, PCs, LHS, RHS, ConstSet, ResultMap, IC);
+  }
+
 
   std::error_code infer(const BlockPCs &BPCs,
                         const std::vector<InstMapping> &PCs,

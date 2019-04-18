@@ -284,6 +284,7 @@ void findVars(Inst *Root, std::vector<Inst *> &Vars);
 
 bool hasGivenInst(Inst *Root, std::function<bool(Inst*)> InstTester);
 void getHoles(Inst *Root, std::vector<Inst *> &Holes);
+void getConstants(Inst *Root, std::set<Inst *> &ConstSet);
 
 void separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                       std::map<Inst *, Inst *> &InstCache,
