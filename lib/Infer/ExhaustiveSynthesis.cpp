@@ -108,26 +108,6 @@ namespace {
 // experiment with synthesizing at reduced bitwidth, then expanding the result
 // aggressively avoid calling into the solver
 
-void hasConstantHelper(Inst *I, std::set<Inst *> &Visited,
-                       std::set<Inst *> &ConstSet) {
-  // FIXME this only works for one constant and keying by name is bad
-  if (I->K == Inst::Var && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
-    // FIXME use a less stupid sentinel
-    ConstSet.insert(I);
-  } else {
-    if (Visited.insert(I).second)
-      for (auto Op : I->Ops)
-        hasConstantHelper(Op, Visited, ConstSet);
-  }
-}
-
-// TODO do this a more efficient way
-// TODO do this a better way, checking for constants by name is dumb
-void hasConstant(Inst *I, std::set<Inst *> &ConstSet) {
-  std::set<Inst *> Visited;
-  hasConstantHelper(I, Visited, ConstSet);
-}
-
 void addGuess(Inst *RHS, int MaxCost, std::vector<Inst *> &Guesses,
               int &TooExpensive) {
   if (souper::cost(RHS) < MaxCost)
@@ -931,7 +911,7 @@ ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     }
 
     std::set<Inst *> ConstSet;
-    hasConstant(I, ConstSet);
+    souper::getConstants(I, ConstSet);
     bool GuessHasConstant = !ConstSet.empty();
     std::map <Inst *, llvm::APInt> ResultConstMap;
     if (!GuessHasConstant) {

@@ -15,9 +15,10 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/GraphWriter.h"
 
+#include "souper/Infer/ConstantSynthesis.h"
+#include "souper/Inst/InstGraph.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/GetSolverFromArgs.h"
-#include "souper/Inst/InstGraph.h"
 
 using namespace llvm;
 using namespace souper;
@@ -40,6 +41,10 @@ static cl::opt<bool> PrintReplSplit("print-replacement-split", cl::Hidden,
 
 static cl::opt<bool> InferRHS("infer-rhs",
     cl::desc("Try to infer a RHS for a Souper LHS (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> InferConst("infer-const",
+    cl::desc("Try to infer constants for a Souper replacement (default=false)"),
     cl::init(false));
 
 static cl::opt<bool> ReInferRHS("reinfer-rhs",
@@ -137,6 +142,34 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
           PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
                               Rep.Mapping.LHS, Context);
         }
+      }
+    } else if (InferConst) {
+      ConstantSynthesis CS;
+      std::map <Inst *, llvm::APInt> ResultConstMap;
+
+      std::set<Inst *> ConstSet;
+      souper::getConstants(Rep.Mapping.RHS, ConstSet);
+      if (ConstSet.empty()) {
+        llvm::outs() << "; No reservedconst found in RHS\n";
+      } else {
+        if (std::error_code EC = S->inferConst(Rep.BPCs, Rep.PCs,
+                                               Rep.Mapping.LHS, Rep.Mapping.RHS,
+                                               ConstSet, ResultConstMap, IC)) {
+          llvm::errs() << EC.message() << '\n';
+          Ret = 1;
+          ++Error;
+        }
+
+        if (!ResultConstMap.empty()) {
+          for (auto Const : ResultConstMap) {
+            llvm::outs() << Const.first->Name;
+            llvm::outs() << ": ";
+            llvm::outs() << Const.second;
+            llvm::outs() << "\n";
+          }
+          ++Success;
+        } else
+          ++Fail;
       }
     } else {
       bool Valid;
