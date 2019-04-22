@@ -166,20 +166,9 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
   std::vector<Inst *> Comps(Inputs.begin(), Inputs.end());
 
-  Inst *I1 = IC.getReservedInst();
-  Comps.push_back(I1);
-  // TODO enforce permitted widths
-  // TODO try both the source and dest width, if they're different
-
   // Conversion Operators
   for (auto Comp : Comps) {
     if (Comp->Width == Width)
-      continue;
-
-    if (Comp->K == Inst::ReservedInst)
-      continue;
-
-    if (Comp->K == Inst::ReservedConst)
       continue;
 
     if (Width > Comp->Width) {
@@ -187,37 +176,38 @@ void getGuesses(std::vector<Inst *> &Guesses,
       auto NZExt = IC.getInst(Inst::ZExt, Width, { Comp });
       addGuess(NSExt, LHSCost, PartialGuesses, TooExpensive);
       addGuess(NZExt, LHSCost, PartialGuesses, TooExpensive);
-      continue;
     } else {
       auto NTrunc = IC.getInst(Inst::Trunc, Width, { Comp });
       addGuess(NTrunc, LHSCost, PartialGuesses, TooExpensive);
     }
+  }
 
-    // Unary Operators
-    if (Width > 1) {
-      for (auto K : UnaryOperators) {
-        for (auto Comp : Comps) {
-          if (Comp->Width != Width)
-            continue;
+  Inst *I1 = IC.getReservedInst();
+  Comps.push_back(I1);
 
-          // Prune: unary operation on constant
-          if (Comp->K == Inst::ReservedConst)
-            continue;
-
-          if (K == Inst::BSwap && Width % 16 != 0) {
-            continue;
-          }
-
-          if (Comp->K == Inst::ReservedInst) {
-            auto V = IC.createHole(Width);
-            auto N = IC.getInst(K, Width, { V });
-            addGuess(N, LHSCost, PartialGuesses, TooExpensive);
-            continue;
-          }
-
-          auto N = IC.getInst(K, Width, { Comp });
+  // Unary Operators
+  if (Width > 1) {
+    for (auto K : UnaryOperators) {
+      for (auto Comp : Comps) {
+        if (Comp->K == Inst::ReservedInst) {
+          auto V = IC.createHole(Width);
+          auto N = IC.getInst(K, Width, { V });
           addGuess(N, LHSCost, PartialGuesses, TooExpensive);
+          continue;
         }
+
+        if (Comp->Width != Width)
+          continue;
+
+        // Prune: unary operation on constant
+        if (Comp->K == Inst::ReservedConst)
+          continue;
+
+        if (K == Inst::BSwap && Width % 16 != 0)
+          continue;
+
+        auto N = IC.getInst(K, Width, { Comp });
+        addGuess(N, LHSCost, PartialGuesses, TooExpensive);
       }
     }
   }

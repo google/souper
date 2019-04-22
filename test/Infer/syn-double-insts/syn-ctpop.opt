@@ -4,7 +4,7 @@
 
 ; synthesis ctpop
 
-; Need 15 min~
+; Need 5 min~
 
 %0:i16 = var
 %1:i16 = and %0, 255:i16
