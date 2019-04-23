@@ -307,6 +307,7 @@ struct Parser {
   std::vector<ReplacementContext> *RCsIn, *RCsOut;
   ReplacementContext Context;
   int Index = 0;
+  int ReservedConstCounter = 0;
 
   std::vector<InstMapping> PCs;
   BlockPCs BPCs;
@@ -1073,7 +1074,7 @@ bool Parser::parseLine(std::string &ErrStr) {
 
       Block *B = 0;
 
-      if (IK == Inst::Var) {
+      if (IK == Inst::Var || IK == Inst::ReservedConst) {
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
                     ConstOne(InstWidth, 1, false), Lower(InstWidth, 0, false),
                     Upper(InstWidth, 0, false);
@@ -1231,8 +1232,15 @@ bool Parser::parseLine(std::string &ErrStr) {
               return false;
           }
         }
-        Inst *I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
-                               NonNegative, PowOfTwo, Negative, SignBits);
+        Inst *I;
+        if (IK == Inst::Var)
+          I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
+                           NonNegative, PowOfTwo, Negative, SignBits, 0);
+        else if (IK == Inst::ReservedConst)
+          I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
+                           NonNegative, PowOfTwo, Negative, SignBits,
+                           ++ReservedConstCounter);
+
         Context.setInst(InstName, I);
         return true;
       }

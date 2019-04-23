@@ -124,10 +124,9 @@ public:
     }
 
     if (InferInts && SMTSolver->supportsModels() && LHS->Width > 1) {
-      if (UseAlive) {
-        //Try to synthesize a constant at the root
-        Inst *C = IC.createVar(LHS->Width, "reservedconst_0");
+      Inst *C = IC.createSynthesisConstant(LHS->Width, /*SynthesisConstID=*/1);
 
+      if (UseAlive) {
         Inst *Ante = IC.getConst(llvm::APInt(1, true));
         for (auto PC : PCs ) {
           Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
@@ -142,7 +141,6 @@ public:
         }
         // TODO: Propagate errors from Alive backend, exit early for errors
       } else {
-        Inst *C = IC.createVar(LHS->Width, "constant");
         std::map<Inst *, llvm::APInt> ResultMap;
         std::set<Inst*> ConstSet{C};
         ConstantSynthesis CS;
@@ -287,8 +285,16 @@ public:
                              std::map<Inst *, llvm::APInt> &ResultMap,
                              InstContext &IC) override {
     ConstantSynthesis CS;
-    return CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, RHS),
-                         ConstSet, ResultMap, IC, 30, Timeout);
+    std::error_code EC = CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, RHS),
+                                       ConstSet, ResultMap, IC, 30, Timeout);
+
+    if (EC || ResultMap.empty())
+      return EC;
+
+    std::map<Inst *, Inst *> InstCache;
+    std::map<Block *, Block *> BlockCache;
+    RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ResultMap, false);
+    return EC;
   }
 
 

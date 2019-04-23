@@ -592,7 +592,7 @@ Inst *InstContext::getReservedConst() {
   auto N = new Inst;
   Insts.emplace_back(N);
   N->K = Inst::ReservedConst;
-  N->Name = ReservedConstPrefix + std::to_string(ReservedConstCounter++);
+  N->SynthesisConstID = ++ReservedConstCounter;
   N->Width = 0;
   return N;
 }
@@ -617,7 +617,7 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
                              llvm::ConstantRange Range,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
                              bool NonNegative, bool PowOfTwo, bool Negative,
-                             unsigned NumSignBits) {
+                             unsigned NumSignBits, unsigned SynthesisConstID) {
   // Create a new vector of Insts if Width is not found in VarInstsByWidth
   auto &InstList = VarInstsByWidth[Width];
   unsigned Number = InstList.size();
@@ -637,15 +637,25 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   I->PowOfTwo = PowOfTwo;
   I->Negative = Negative;
   I->NumSignBits = NumSignBits;
+  I->SynthesisConstID = SynthesisConstID;
   return I;
 }
 
 Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
   return createVar(Width, Name, /*Range=*/llvm::ConstantRange(Width, /*isFullSet=*/ true),
+                    /*KnownZero=*/ llvm::APInt(Width, 0), /*KnownOne=*/ llvm::APInt(Width, 0),
+                    /*NonZero=*/ false, /*NonNegative=*/ false, /*PowerOfTwo=*/ false,
+                    /*Negative=*/ false, /*SignBits=*/ 1, /*SynthesisConstID=*/0);
+}
+
+Inst *InstContext::createSynthesisConstant(unsigned Width, unsigned SynthesisConstID) {
+  return createVar(Width,  ReservedConstPrefix + std::to_string(SynthesisConstID),
+                   /*Range=*/llvm::ConstantRange(Width, /*isFullSet=*/ true),
                    /*KnownZero=*/ llvm::APInt(Width, 0), /*KnownOne=*/ llvm::APInt(Width, 0),
                    /*NonZero=*/ false, /*NonNegative=*/ false, /*PowerOfTwo=*/ false,
-                   /*Negative=*/ false, /*SignBits=*/ 1);
+                   /*Negative=*/ false, /*SignBits=*/ 1, /*SynthesisConstID=*/SynthesisConstID);
 }
+
 
 Block *InstContext::createBlock(unsigned Preds) {
   auto &BlockList = BlocksByPreds[Preds];
@@ -961,10 +971,8 @@ void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
     Q.pop();
     if (!Visited.insert(I).second)
       continue;
-    if (I->K == Inst::Var &&
-        (I->Name.find(ReservedConstPrefix) == std::string::npos)) {
+    if (I->K == Inst::Var && I->SynthesisConstID == 0)
       Vars.push_back(I);
-    }
     for (auto Op : I->Ops)
       Q.push(Op);
   }
@@ -972,9 +980,7 @@ void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
 
 void hasConstantHelper(Inst *I, std::set<Inst *> &Visited,
                        std::set<Inst *> &ConstSet) {
-  // FIXME this only works for one constant and keying by name is bad
-  if (I->K == Inst::Var && (I->Name.find(ReservedConstPrefix) != std::string::npos)) {
-    // FIXME use a less stupid sentinel
+  if (I->K == Inst::Var && I->SynthesisConstID != 0) {
     ConstSet.insert(I);
   } else {
     if (Visited.insert(I).second)
@@ -984,7 +990,6 @@ void hasConstantHelper(Inst *I, std::set<Inst *> &Visited,
 }
 
 // TODO do this a more efficient way
-// TODO do this a better way, checking for constants by name is dumb
 void souper::getConstants(Inst *I, std::set<Inst *> &ConstSet) {
   std::set<Inst *> Visited;
   hasConstantHelper(I, Visited, ConstSet);
@@ -1059,11 +1064,11 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
       }
     }
     if (!Copy) {
-      if (CloneVars &&
-          I->Name.find(ReservedConstPrefix) == std::string::npos)
+      if (CloneVars && I->SynthesisConstID == 0)
         Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
                             I->KnownOnes, I->NonZero, I->NonNegative,
-                            I->PowOfTwo, I->Negative, I->NumSignBits);
+                            I->PowOfTwo, I->Negative, I->NumSignBits,
+                            I->SynthesisConstID);
       else {
         Copy = I;
       }
@@ -1099,10 +1104,12 @@ Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
   if (I == EmptyInst) {
     Copy = NewInst;
   } else if (I->K == Inst::Var) {
-    if (I->Name.find(ReservedConstPrefix) != std::string::npos) {
+    // copy constant
+    if (I->SynthesisConstID != 0) {
       Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
                           I->KnownOnes, I->NonZero, I->NonNegative,
-                          I->PowOfTwo, I->Negative, I->NumSignBits);
+                          I->PowOfTwo, I->Negative, I->NumSignBits,
+                          I->SynthesisConstID);
     } else {
       Copy = I;
     }

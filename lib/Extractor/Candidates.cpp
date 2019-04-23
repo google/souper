@@ -208,7 +208,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
     }
 
   return IC.createVar(Width, Name, Range, Known.Zero, Known.One, NonZero, NonNegative,
-                      PowOfTwo, Negative, NumSignBits);
+                      PowOfTwo, Negative, NumSignBits, 0);
 }
 
 Inst *ExprBuilder::buildConstant(Constant *c) {

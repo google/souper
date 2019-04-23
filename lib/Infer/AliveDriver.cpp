@@ -1,5 +1,6 @@
 #include "souper/Extractor/ExprBuilder.h"
 #include "souper/Infer/AliveDriver.h"
+#include "souper/Inst/Inst.h"
 
 #include "alive2/ir/constant.h"
 #include "alive2/ir/function.h"
@@ -154,8 +155,8 @@ private:
 void getReservedConsts(souper::Inst *I,
                        std::map<std::string, souper::Inst *> &Result,
                        std::set<souper::Inst *> &Visited) {
-  if (startsWith("reservedconst_", I->Name)) {
-    Result["%" + I->Name] = I;
+  if (I->K == souper::Inst::Var && I->SynthesisConstID != 0) {
+    Result["%" + souper::ReservedConstPrefix + std::to_string(I->SynthesisConstID)] = I;
   }
   for (auto &&Op : I->Ops) {
     if (Visited.find(Op) == Visited.end()) {
@@ -315,6 +316,8 @@ souper::AliveDriver::synthesizeConstants(souper::Inst *RHS) {
   std::map<std::string, Inst *> Consts;
   std::set<Inst *> Visited;
   getReservedConsts(RHS, Consts, Visited);
+  ReplacementContext RC;
+  RC.printInst(RHS, llvm::errs(), true);
   assert(!Consts.empty());
   RExprCache.clear();
   IR::Function RHSF;
@@ -496,10 +499,10 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
   if (NamesCache.find(I) != NamesCache.end()) {
     Name = NamesCache[I];
   } else if (I->Name != "") {
-    if (startsWith("reservedconst_", I->Name)) {
+    if (I->SynthesisConstID != 0) {
       // No way to avoid string matching without
       // changes in Inst and ExhaustiveSynthesis
-      Name = "%" + I->Name;
+      Name = "%" + souper::ReservedConstPrefix + std::to_string(I->SynthesisConstID);
     } else {
       Name = "%var_" + I->Name;
     }
