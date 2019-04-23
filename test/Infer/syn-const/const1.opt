@@ -3,12 +3,12 @@
 ; RUN: %souper-check %solver -infer-const  %s > %t
 ; RUN: %FileCheck %s < %t
 
-; CHECK: reservedconst_1: 2
+; CHECK: add 2:i8, %0
 
 %0:i8 = var
 %1:i8 = add %0, 1:i8
 %2:i8 = add %1, 1:i8
 infer %2
-%reservedconst_1:i8 = var
-%4:i8 = add %0, %reservedconst_1
+%3:i8 = reservedconst
+%4:i8 = add %0, %3
 result %4

@@ -161,15 +161,14 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
         }
 
         if (!ResultConstMap.empty()) {
-          for (auto Const : ResultConstMap) {
-            llvm::outs() << Const.first->Name;
-            llvm::outs() << ": ";
-            llvm::outs() << Const.second;
-            llvm::outs() << "\n";
-          }
+          ReplacementContext Context;
+          llvm::outs() << "; RHS inferred successfully\n";
+          PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
           ++Success;
-        } else
+        } else {
           ++Fail;
+          llvm::outs() << "; Failed to infer RHS\n";
+        }
       }
     } else {
       bool Valid;

@@ -160,6 +160,7 @@ struct Inst : llvm::FoldingSetNode {
   bool Negative;
   unsigned NumSignBits;
   llvm::APInt DemandedBits;
+  unsigned SynthesisConstID;
   HarvestType HarvestKind;
   llvm::BasicBlock* HarvestFrom;
   llvm::ConstantRange Range=llvm::ConstantRange(1);
@@ -228,12 +229,13 @@ public:
   Inst *getReservedInst();
 
   Inst *createHole(unsigned Width);
+  Inst *createSynthesisConstant(unsigned Width, unsigned SynthesisConstID);
   Inst *createVar(unsigned Width, llvm::StringRef Name);
   Inst *createVar(unsigned Width, llvm::StringRef Name,
                   llvm::ConstantRange Range,
                   llvm::APInt Zero, llvm::APInt One,
                   bool NonZero, bool NonNegative, bool PowOfTwo,
-                  bool Negative, unsigned NumSignBits);
+                  bool Negative, unsigned NumSignBits, unsigned SynthesisConstID);
   Block *createBlock(unsigned Preds);
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);

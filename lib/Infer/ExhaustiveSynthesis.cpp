@@ -279,7 +279,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
           if ((*I)->Width == 0) {
             if ((*I)->K == Inst::ReservedConst) {
               // (cmp const, comp)
-              V1 = IC.createVar((*J)->Width, (*I)->Name);
+              V1 = IC.createSynthesisConstant((*J)->Width, (*I)->SynthesisConstID);
             } else if ((*I)->K == Inst::ReservedInst) {
               // (cmp hole, comp)
               V1 = IC.createHole((*J)->Width);
@@ -291,7 +291,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
           if ((*J)->Width == 0) {
             if ((*J)->K == Inst::ReservedConst) {
               // (cmp comp, const)
-              V2 = IC.createVar((*I)->Width, (*J)->Name);
+              V2 = IC.createSynthesisConstant((*I)->Width, (*J)->SynthesisConstID);
             } else if ((*J)->K == Inst::ReservedInst) {
               // (cmp comp, hole)
               V2 = IC.createHole((*I)->Width);
@@ -302,7 +302,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
         } else {
           if ((*I)->K == Inst::ReservedConst) {
             // (binop const, comp)
-            V1 = IC.createVar(Width, (*I)->Name);
+            V1 = IC.createSynthesisConstant(Width, (*I)->SynthesisConstID);
           } else if ((*I)->K == Inst::ReservedInst) {
             // (binop hole, comp)
             V1 = IC.createHole(Width);
@@ -312,7 +312,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
           if ((*J)->K == Inst::ReservedConst) {
             // (binop comp, const)
-            V2 = IC.createVar(Width, (*J)->Name);
+            V2 = IC.createSynthesisConstant(Width, (*J)->SynthesisConstID);
           } else if ((*J)->K == Inst::ReservedInst) {
             // (binop comp, hole)
             V2 = IC.createHole(Width);
@@ -328,7 +328,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
           continue;
 
         // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
-        if (K == Inst::Sub && V2->Name.find(ReservedConstPrefix) != std::string::npos)
+        if (K == Inst::Sub && V2->SynthesisConstID != 0)
           continue;
 
         auto N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, { V1, V2 });
@@ -361,14 +361,14 @@ void getGuesses(std::vector<Inst *> &Guesses,
         continue;
       Inst *V1, *V2;
       if ((*I)->K == Inst::ReservedConst) {
-        V1 = IC.createVar(Width, (*I)->Name);
+        V1 = IC.createSynthesisConstant(Width, (*I)->SynthesisConstID);
       } else if ((*I)->K == Inst::ReservedInst) {
         V1 = IC.createHole(Width);
       } else {
         V1 = *I;
       }
       if ((*J)->K == Inst::ReservedConst) {
-        V2 = IC.createVar(Width, (*J)->Name);
+        V2 = IC.createSynthesisConstant(Width, (*J)->SynthesisConstID);
       } else if ((*J)->K == Inst::ReservedInst) {
         V2 = IC.createHole(Width);
       } else {
@@ -528,7 +528,7 @@ APInt getNextInputVal(Inst *Var,
 
 Inst *findConst(souper::Inst *I,
                 std::set<const Inst *> &Visited) {
-  if (I->Name.find(ReservedConstPrefix) != std::string::npos) {
+  if (I->K == Inst::Var && I->SynthesisConstID != 0) {
     return I;
   } else {
     for (auto &&Op : I->Ops) {
@@ -738,7 +738,7 @@ void generateAndSortGuesses(InstContext &IC, Inst *LHS, SMTLIBSolver *Solver,
 
 typedef std::map<Inst*, std::vector<llvm::APInt>> InstConstList;
 
-#if 0
+#if (false)
 std::map<Inst *, llvm::APInt>
 findSatisfyingConstantMap(SynthesisContext &SC, InstConstList &BadConsts,
                           InstConstList &TriedVars,

@@ -283,8 +283,7 @@ namespace souper {
 
   bool isReservedConst(Inst *I) {
     return I->K == Inst::ReservedConst ||
-          (I->K == Inst::Var &&
-          (I->Name.find(ReservedConstPrefix) != std::string::npos));
+           (I->K == Inst::Var && I->SynthesisConstID != 0);
   }
 
   bool isHole(Inst *I) {
