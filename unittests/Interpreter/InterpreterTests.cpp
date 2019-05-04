@@ -78,7 +78,7 @@ TEST(InterpreterTests, KBCRReduction) {
 	ASSERT_TRUE(false);
       }
 
-      if (!ExhaustiveCR.contains(CalculatedCR)) {
+      if (!CalculatedCR.contains(ExhaustiveCR)) {
 	outs() << "Unsound!! CR KB reduction for CR\n";
 	outs() << "Original KB: " << KnownBitsAnalysis::knownBitsString(KB) << "\n";
 	outs() << "Original CR: " << CR << "\n";
