@@ -52,7 +52,8 @@ namespace souper {
 
 
     class CRTesting {
-      bool ok(const llvm::ConstantRange &R, const bool Table[]);
+      // Checks if the range @R contains all values given in the @Table
+      bool rangeContainsAll(const llvm::ConstantRange &R, const bool Table[]);
 
       // Find the largest hole and build a llvm::ConstantRange around it
       llvm::ConstantRange bestCR(const bool Table[], const int Width);
