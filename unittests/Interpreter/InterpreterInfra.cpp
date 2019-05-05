@@ -330,7 +330,7 @@ bool KBTesting::testFn(Inst::Kind pred) {
 // CRTesting Implementation
 // -----------------------------
 
-bool CRTesting::ok(const ConstantRange &R, const bool Table[]) {
+bool CRTesting::rangeContainsAll(const ConstantRange &R, const bool Table[]) {
   const int Range = 1 << WIDTH;
   for (int i = 0; i < Range; ++i) {
     if (Table[i]) {
@@ -398,16 +398,16 @@ ConstantRange CRTesting::bestCR(const bool Table[], const int Width) {
     R = ConstantRange(Lo, Hi);
   }
 
-  assert(ok(R, Table));
+  assert(rangeContainsAll(R, Table));
   if (Pop == 1) {
     assert(R.getLower().getLimitedValue() == Any);
     assert(R.getUpper().getLimitedValue() == (Any + 1) % Range);
   } else {
     APInt L1 = R.getLower() + 1;
     ConstantRange R2(L1, R.getUpper());
-    assert(!ok(R2, Table));
+    assert(!rangeContainsAll(R2, Table));
     ConstantRange R3(R.getLower(), R.getUpper() - 1);
-    assert(!ok(R3, Table));
+    assert(!rangeContainsAll(R3, Table));
   }
 
   return R;
