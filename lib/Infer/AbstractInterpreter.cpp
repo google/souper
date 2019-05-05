@@ -87,8 +87,8 @@ namespace {
   KnownBits intersect(const KnownBits &KB1, const KnownBits &KB2) {
     // ugh the constructor we want is private
     KnownBits Res(KB1.getBitWidth());
-    Res.Zero = KB1.Zero | KB2.Zero;
-    Res.One = KB1.One | KB2.One;
+    Res.Zero = KB1.Zero & KB2.Zero;
+    Res.One = KB1.One & KB2.One;
     return Res;
   }
 } // anonymous
