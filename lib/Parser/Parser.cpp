@@ -1213,6 +1213,7 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   if (!consumeToken(ErrStr))
                     return false;
+                  Range = llvm::ConstantRange(Lower, Upper);
                 } else {
                   ErrStr = makeErrStr(TP, "invalid data flow fact type");
                   return false;
@@ -1227,7 +1228,6 @@ bool Parser::parseLine(std::string &ErrStr) {
               ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact");
               return false;
             }
-            Range = llvm::ConstantRange(Lower, Upper);
             if (!consumeToken(ErrStr))
               return false;
           }
