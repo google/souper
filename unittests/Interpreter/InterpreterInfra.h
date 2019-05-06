@@ -127,16 +127,14 @@ namespace souper {
       if (ResultSet.none())
 	return ResultKB;
 
-      unsigned I = 0;
-      while (!ResultSet[I++]);
-
-      llvm::APInt AndResult(WIDTH, I);
-      llvm::APInt OrResult(WIDTH, I);
+      llvm::APInt AndResult = llvm::APInt::getAllOnesValue(WIDTH);
+      llvm::APInt OrResult = llvm::APInt::getNullValue(WIDTH);
 
       for (int I = 0; I < SetSize; I++) {
 	if (ResultSet[I]) {
-	  AndResult &= llvm::APInt(WIDTH, I);
-	  OrResult |= llvm::APInt(WIDTH, I);
+	  auto Tmp = llvm::APInt(WIDTH, I);
+	  AndResult &= Tmp;
+	  OrResult |= Tmp;
 	}
       }
 
