@@ -40,9 +40,6 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::error_code EC;
 
   for (int I = 0 ; I < MaxTries; I ++)  {
-    std::map<Inst *, Inst *> InstCache;
-    std::map<Block *, Block *> BlockCache;
-
     bool IsSat;
     std::vector<Inst *> ModelInstsFirstQuery;
     std::vector<llvm::APInt> ModelValsFirstQuery;
@@ -102,18 +99,23 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     }
     TriedAnte = IC.getInst(Inst::And, 1, {TriedAnte, TriedAnteLocal});
 
+
+    std::map<Inst *, Inst *> InstCache;
+    std::map<Block *, Block *> BlockCache;
+    Inst *LHSCopy = getInstCopy(Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, false);
+    Inst *RHSCopy = getInstCopy(Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, false);
+
     BlockPCs BPCsCopy;
     std::vector<InstMapping> PCsCopy;
-
-    Inst *SecondQueryAnte = getInstCopy(Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, false);
+    separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
+    separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
 
     // check if the constant is valid for all inputs
     std::vector<Inst *> ModelInstsSecondQuery;
     std::vector<llvm::APInt> ModelValsSecondQuery;
 
-    Query = BuildQuery(IC, BPCs, PCs, InstMapping(Mapping.LHS, SecondQueryAnte),
+    Query = BuildQuery(IC, BPCsCopy, PCsCopy, InstMapping(LHSCopy, RHSCopy),
                        &ModelInstsSecondQuery, 0);
-
 
     if (Query.empty())
       return std::make_error_code(std::errc::value_too_large);

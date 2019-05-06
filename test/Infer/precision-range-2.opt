@@ -1,0 +1,8 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-range -infer-rhs %s | %FileCheck %s
+
+; CHECK: known range from souper: [1,7)
+
+%0:i64 = var (range=[1,7))
+%1:i64 = and 4294967295:i64, %0
+infer %1

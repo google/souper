@@ -1,0 +1,10 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-range -infer-rhs %s | %FileCheck %s
+
+; CHECK: known range from souper: [0,53)
+
+%0:i32 = var
+%1:i1 = ult %0, 53:i32
+pc %1 1:i1
+%2:i64 = zext %0
+infer %2

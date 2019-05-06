@@ -1,0 +1,21 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-range -infer-rhs %s | %FileCheck %s
+
+; CHECK: known range from souper: [0,16)
+
+%0:i32 = var
+%1:i1 = eq 22:i32, %0
+%2:i32 = var
+%3:i1 = eq 4294967295:i32, %2
+%4:i32 = var
+%5:i1 = eq 22:i32, %4
+%6:i32 = var
+%7:i1 = eq 4294967295:i32, %6
+%8:i32 = select %7, 0:i32, 1:i32
+%9:i32 = or 2:i32, %8
+%10:i32 = select %5, %8, %9
+%11:i32 = or 4:i32, %10
+%12:i32 = select %3, %10, %11
+%13:i32 = or 8:i32, %12
+%14:i32 = select %1, %12, %13
+infer %14

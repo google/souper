@@ -56,6 +56,10 @@ static cl::opt<bool> InferSignBits("infer-sign-bits",
     cl::desc("Compute sign bits for the candidate (default=false)"),
     cl::init(false));
 
+static cl::opt<bool> InferRange("infer-range",
+    cl::desc("Compute range for the candidate (default=false)"),
+    cl::init(false));
+
 static cl::opt<bool> PrintRepl("print-replacement",
     cl::desc("Print the replacement, if valid (default=false)"),
     cl::init(false));
@@ -211,6 +215,15 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
                      << std::to_string(SignBits) << "\n";
         ++Success;
       }
+    }
+
+    if (InferRange) {
+      unsigned W = Rep.Mapping.LHS->Width;
+      llvm::ConstantRange Range = S->constantRange(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS, IC);
+
+      llvm::outs() << "known range from souper: " << "[" << Range.getLower()
+                   << "," << Range.getUpper() << ")" << "\n";
+      ++Success;
     }
 
     if (InferRHS || ReInferRHS) {

@@ -670,13 +670,15 @@ Block *InstContext::createBlock(unsigned Preds) {
   return B;
 }
 
-Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
+Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops, llvm::APInt DemandedBits) {
   llvm::FoldingSetNodeID ID;
   ID.AddInteger(Inst::Phi);
   ID.AddInteger(Ops[0]->Width);
   ID.AddPointer(B);
   for (auto O : Ops)
     ID.AddPointer(O);
+  if (!DemandedBits.isAllOnesValue())
+    ID.Add(DemandedBits);
 
   void *IP = 0;
   if (Inst *I = InstSet.FindNodeOrInsertPos(ID, IP))
@@ -688,9 +690,16 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
   N->Width = Ops[0]->Width;
   N->B = B;
   N->Ops = Ops;
+  N->DemandedBits = DemandedBits;
   InstSet.InsertNode(N, IP);
   return N;
 }
+
+Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
+  llvm::APInt DemandedBits = llvm::APInt::getAllOnesValue(Ops[0]->Width);
+  return getPhi(B, Ops, DemandedBits);
+}
+
 
 Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
                            const std::vector<Inst *> &Ops,
@@ -1075,14 +1084,14 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
     if (!BlockCache.count(I->B)) {
       auto BlockCopy = IC.createBlock(I->B->Preds);
       BlockCache[I->B] = BlockCopy;
-      Copy = IC.getPhi(BlockCopy, Ops);
+      Copy = IC.getPhi(BlockCopy, Ops, I->DemandedBits);
     } else {
-      Copy = IC.getPhi(BlockCache.at(I->B), Ops);
+      Copy = IC.getPhi(BlockCache.at(I->B), Ops, I->DemandedBits);
     }
   } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
     return I;
   } else {
-    Copy = IC.getInst(I->K, I->Width, Ops);
+    Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits, I->Available);
   }
   assert(Copy);
   InstCache[I] = Copy;

@@ -1,0 +1,8 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-range -infer-rhs %s | %FileCheck %s
+
+; CHECK: known range from souper: [0,129)
+
+%0:i64 = var
+%1:i64 = udiv 128:i64, %0
+infer %1

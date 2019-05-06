@@ -1,0 +1,9 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-range -infer-rhs %s | %FileCheck %s
+
+; CHECK: known range from souper: [0,5)
+
+%0:i32 = var
+%1:i32 = shl 1:i32, %0
+%2:i32 = and 6:i32, %1
+infer %2

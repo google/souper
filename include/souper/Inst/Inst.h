@@ -242,6 +242,7 @@ public:
   Block *createBlock(unsigned Preds);
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);
+  Inst *getPhi(Block *B, const std::vector<Inst *> &Ops, llvm::APInt Demandedbits);
 
   Inst *getInst(Inst::Kind K, unsigned Width, const std::vector<Inst *> &Ops,
                 bool Available=true);

@@ -1,0 +1,9 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-range -infer-rhs %s | %FileCheck %s
+
+; CHECK: known range from souper: [1,0)
+
+%0:i8 = var
+%1:i1 = eq 0:i8, %0
+%2:i8 = select %1, 1:i8, %0
+infer %2
