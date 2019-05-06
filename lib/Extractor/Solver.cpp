@@ -472,6 +472,84 @@ public:
     return !IsSat;
   }
 
+  void testRange(const BlockPCs &BPCs,
+                 const std::vector<InstMapping> &PCs,
+                 Inst *LHS, llvm::APInt &C,
+                 llvm::APInt &ResultX,
+                 bool &IsFound,
+                 InstContext &IC) {
+    unsigned W = LHS->Width;
+
+    Inst *ReservedX = IC.createSynthesisConstant(W, 1);
+    Inst *CVal = IC.getConst(C);
+    Inst *LowerVal = ReservedX;
+    Inst *UpperValOverflow = IC.getInst(Inst::UAddWithOverflow, W + 1,
+                                        {IC.getInst(Inst::Add, W, {LowerVal, CVal}),
+                                         IC.getInst(Inst::UAddO, 1, {LowerVal, CVal})});
+
+    Inst *IsOverflow = IC.getInst(Inst::ExtractValue, 1, {UpperValOverflow, IC.getUntypedConst(llvm::APInt(W, 1))});
+    Inst *UpperVal = IC.getInst(Inst::ExtractValue, W, {UpperValOverflow, IC.getUntypedConst(llvm::APInt(W, 0))});
+
+    Inst *GuessLowerPartNonWrapped = IC.getInst(Inst::Ule, 1, {LowerVal, LHS});
+    Inst *GuessUpperPartNonWrapped = IC.getInst(Inst::Ult, 1, {LHS, UpperVal});
+
+    // non-wrapped, x <= LHS < x+c
+    Inst *GuessAnd = IC.getInst(Inst::And, 1, { GuessLowerPartNonWrapped, GuessUpperPartNonWrapped });
+    // wrapped, LHS < x+c \/ LHS >= x
+    Inst *GuessOr = IC.getInst(Inst::Or, 1, { GuessLowerPartNonWrapped, GuessUpperPartNonWrapped });
+
+    // if x+c overflows, treat it as wrapped.
+    Inst *Guess = IC.getInst(Inst::Select, 1, {IsOverflow, GuessOr, GuessAnd});
+
+    std::set<Inst *> ConstSet{ReservedX};
+    std::map <Inst *, llvm::APInt> ResultMap;
+    ConstantSynthesis CS;
+    CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(Guess, IC.getConst(APInt(1, true))),
+                  ConstSet, ResultMap, IC, /*MaxTries=*/30, Timeout);
+    if (ResultMap.empty()) {
+      IsFound = false;
+    } else {
+      IsFound = true;
+      ResultX = ResultMap[ReservedX];
+    }
+  }
+
+  llvm::ConstantRange constantRange(const BlockPCs &BPCs,
+                                    const std::vector<InstMapping> &PCs,
+                                    Inst *LHS,
+                                    InstContext &IC) override {
+    unsigned W = LHS->Width;
+
+    APInt L = APInt(W, 1), R = APInt::getAllOnesValue(W);
+    APInt BinSearchResultX, BinSearchResultC;
+    bool BinSearchHasResult = false;
+
+    while (L.ule(R)) {
+      APInt M = L + ((R - L)).lshr(1);
+      APInt BinSearchX;
+      bool Found = false;
+      testRange(BPCs, PCs, LHS, M, BinSearchX, Found, IC);
+      if (Found) {
+        R = M - 1;
+
+        // record result
+        BinSearchResultX = BinSearchX;
+        BinSearchResultC = M;
+        BinSearchHasResult = true;
+      } else {
+        if (L == R)
+          break;
+        L = M + 1;
+      }
+    }
+
+    if (BinSearchHasResult) {
+      return llvm::ConstantRange(BinSearchResultX, BinSearchResultX + BinSearchResultC);
+    } else {
+      return llvm::ConstantRange (W, true);
+    }
+  }
+
   llvm::KnownBits findKnownBitsUsingSolver(const BlockPCs &BPCs,
                                            const std::vector<InstMapping> &PCs,
                                            Inst *LHS, InstContext &IC) override {
@@ -544,6 +622,13 @@ public:
                              std::map<Inst *, llvm::APInt> &ResultMap,
                              InstContext &IC) override {
     return UnderlyingSolver->inferConst(BPCs, PCs, LHS, RHS, ConstSet, ResultMap, IC);
+  }
+
+  llvm::ConstantRange constantRange(const BlockPCs &BPCs,
+                                    const std::vector<InstMapping> &PCs,
+                                    Inst *LHS,
+                                    InstContext &IC) override {
+    return UnderlyingSolver->constantRange(BPCs, PCs, LHS, IC);
   }
 
   std::error_code isValid(InstContext &IC, const BlockPCs &BPCs,
@@ -678,6 +763,13 @@ public:
       KV->hSet(LHSStr, "result", RHSStr);
       return EC;
     }
+  }
+
+  llvm::ConstantRange constantRange(const BlockPCs &BPCs,
+                                    const std::vector<InstMapping> &PCs,
+                                    Inst *LHS,
+                                    InstContext &IC) override {
+    return UnderlyingSolver->constantRange(BPCs, PCs, LHS, IC);
   }
 
   std::error_code isValid(InstContext &IC, const BlockPCs &BPCs,

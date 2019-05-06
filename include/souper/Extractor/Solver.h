@@ -45,7 +45,13 @@ public:
   virtual llvm::KnownBits findKnownBitsUsingSolver(const BlockPCs &BPCs,
                                                    const std::vector<InstMapping> &PCs,
                                                    Inst *LHS, InstContext &IC) = 0;
+
   virtual std::string getName() = 0;
+
+  virtual
+  llvm::ConstantRange constantRange(const BlockPCs &BPCs,
+                                    const std::vector<InstMapping> &PCs,
+                                    Inst *LHS, InstContext &IC) = 0;
   virtual
   std::error_code negative(const BlockPCs &BPCs,
                            const std::vector<InstMapping> &PCs,

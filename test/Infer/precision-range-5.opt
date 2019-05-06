@@ -1,0 +1,8 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-range -infer-rhs %s | %FileCheck %s
+
+; CHECK: known range from souper: [1,0)
+
+%0:i8 = var
+%1:i8 = addnuw 1:i8, %0
+infer %1
