@@ -1199,6 +1199,7 @@ bool Parser::parseLine(std::string &ErrStr) {
                   }
                   if (Upper.getBitWidth() != InstWidth)
                     Upper = Upper.sextOrTrunc(InstWidth);
+                  Range = llvm::ConstantRange(Lower, Upper);
 
                   if (Lower == Upper && !Lower.isMinValue() && !Lower.isMaxValue()) {
                     ErrStr = makeErrStr(TP, "range with lower == upper is invalid unless it is empty or full set");
@@ -1227,7 +1228,6 @@ bool Parser::parseLine(std::string &ErrStr) {
               ErrStr = makeErrStr(TP, "expected ')' to complete data flow fact");
               return false;
             }
-            Range = llvm::ConstantRange(Lower, Upper);
             if (!consumeToken(ErrStr))
               return false;
           }
