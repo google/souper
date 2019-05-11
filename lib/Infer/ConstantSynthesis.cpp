@@ -61,7 +61,10 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                   &ModelValsFirstQuery, Timeout);
 
     if (EC) {
-      llvm::report_fatal_error("ConstantSynthesis: solver returns error on first query");
+      if (DebugLevel > 3) {
+        llvm::errs()<<"ConstantSynthesis: solver returns error on first query\n";
+      }
+      return EC;
     }
 
     if (!IsSat) {
@@ -118,7 +121,10 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     EC = SMTSolver->isSatisfiable(Query, IsSat, ModelInstsSecondQuery.size(),
                                   &ModelValsSecondQuery, Timeout);
     if (EC) {
-      llvm::report_fatal_error("ConstantSynthesis: solver returns error on second query");
+      if (DebugLevel > 3) {
+        llvm::errs()<<"ConstantSynthesis: solver returns error on second query\n";
+      }
+      return EC;
     }
 
     if (!IsSat) {
@@ -154,7 +160,7 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   if (DebugLevel > 3) {
     llvm::errs() << "number of constant synthesis tries exceeds MaxTries(";
     llvm::errs() << MaxTries;
-    llvm::errs() << "\n";
+    llvm::errs() << ")\n";
   }
   return EC;
 }
