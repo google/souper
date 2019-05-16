@@ -109,19 +109,19 @@ sub souper_known ($) {
     while (my $line = <INF>) {
         chomp $line;
         if ($NEG) {
-            if ($line =~ /known negative from souper: (.*)$/) {
+            if ($line =~ /negative from souper: (.*)$/) {
                 $k = $1;
             }
         } elsif ($NONNEG) {
-            if ($line =~ /known nonNegative from souper: (.*)$/) {
+            if ($line =~ /nonNegative from souper: (.*)$/) {
                 $k = $1;
             }
         } elsif ($NONZERO) {
-            if ($line =~ /known nonZero from souper: (.*)$/) {
+            if ($line =~ /nonZero from souper: (.*)$/) {
                 $k = $1;
             }
         } elsif ($POWERTWO) {
-            if ($line =~ /known powerOfTwo from souper: (.*)$/) {
+            if ($line =~ /powerOfTwo from souper: (.*)$/) {
                 $k = $1;
             }
         } elsif ($KNOWNBITS) {
@@ -129,7 +129,7 @@ sub souper_known ($) {
                 $k = $1;
             }
         } elsif ($SIGNBITS) {
-            if ($line =~ /known signBits from souper: (.*)$/) {
+            if ($line =~ /signBits from souper: (.*)$/) {
                 $k = $1;
             }
         }
@@ -282,27 +282,27 @@ sub llvm_known($) {
     while (my $line = <INF>) {
         chomp $line;
         if ($NEG) {
-            if ($line =~ /known negative from compiler: (.*)$/) {
+            if ($line =~ /negative from compiler: (.*)$/) {
                 $known = $1;
             }
         } elsif ($NONNEG) {
-            if ($line =~ /known nonNegative from compiler: (.*)$/) {
+            if ($line =~ /nonNegative from compiler: (.*)$/) {
                 $known = $1;
             }
         } elsif ($NONZERO) {
-            if ($line =~ /known nonZero from compiler: (.*)$/) {
+            if ($line =~ /nonZero from compiler: (.*)$/) {
                 $known = $1;
             }
         } elsif ($POWERTWO) {
-            if ($line =~ /known powerOfTwo from compiler: (.*)$/) {
+            if ($line =~ /powerOfTwo from compiler: (.*)$/) {
                 $known = $1;
             }
         } elsif ($KNOWNBITS) {
-            if ($line =~ /knownBits from compiler: (.*)$/) {
+            if ($line =~ /known bits from compiler: (.*)$/) {
                 $known = $1;
             }
         } elsif ($SIGNBITS) {
-            if ($line =~ /known signBits from compiler: (.*)$/) {
+            if ($line =~ /signBits from compiler: (.*)$/) {
                 $known = $1;
             }
         }

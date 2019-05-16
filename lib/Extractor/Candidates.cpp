@@ -83,6 +83,10 @@ static llvm::cl::opt<bool> PrintSignBitsAtReturn(
     "print-sign-bits-at-return",
     llvm::cl::desc("Print sign bits dfa in each value returned from a function (default=false)"),
     llvm::cl::init(false));
+static llvm::cl::opt<bool> PrintRangeAtReturn(
+    "print-range-at-return",
+    llvm::cl::desc("Print range inforation in each value returned from a function (default=false)"),
+    llvm::cl::init(false));
 
 extern bool UseAlive;
 
@@ -861,6 +865,63 @@ std::tuple<BlockPCs, std::vector<InstMapping>> GetRelevantPCs(
   return std::make_tuple(RelevantBPCs, RelevantPCs);
 }
 
+std::string convertBoolToStr(bool b) {
+  return b ? "true" : "false";
+}
+
+void PrintDataflowInfo(Function &F, Instruction &I, LazyValueInfo *LVI,
+                       ScalarEvolution *SE) {
+  auto V = I.getOperand(0);
+  auto DL = F.getParent()->getDataLayout();
+  if (PrintNegAtReturn) {
+    bool Negative = isKnownNegative(V, DL);
+    llvm::outs() << "negative from compiler: " << convertBoolToStr(Negative)
+                 << "\n";
+  }
+  if (PrintNonNegAtReturn) {
+    bool NonNegative = isKnownNonNegative(V, DL);
+    llvm::outs() << "nonNegative from compiler: "
+                 << convertBoolToStr(NonNegative) << "\n";
+  }
+  if (PrintKnownAtReturn) {
+    unsigned Width = DL.getTypeSizeInBits(V->getType());
+    KnownBits Known(Width);
+    computeKnownBits(V, Known, DL);
+    llvm::outs() << "known bits from compiler: "
+                 << Inst::getKnownBitsString(Known.Zero, Known.One) << "\n";
+  }
+  if (PrintPowerTwoAtReturn) {
+    bool PowerTwo = isKnownToBeAPowerOfTwo(V, DL);
+    llvm::outs() << "powerOfTwo from compiler: " << convertBoolToStr(PowerTwo)
+                 << "\n";
+  }
+  if (PrintNonZeroAtReturn) {
+    bool NonZero = isKnownNonZero(V, DL);
+    llvm::outs() << "nonZero from compiler: " << convertBoolToStr(NonZero)
+                 << "\n";
+  }
+  if (PrintSignBitsAtReturn) {
+    unsigned NumSignBits = ComputeNumSignBits(V, DL);
+    llvm::outs() << "signBits from compiler: " << NumSignBits << "\n";
+  }
+  if (PrintRangeAtReturn) {
+    unsigned Width = DL.getTypeSizeInBits(V->getType());
+    ConstantRange Range = llvm::ConstantRange(Width, /*isFullSet=*/true);
+    if (V->getType()->isIntegerTy()) {
+      if (Instruction *I = dyn_cast<Instruction>(V)) {
+        BasicBlock *BB = I->getParent();
+        auto LVIRange = LVI->getConstantRange(V, BB);
+        auto SC = SE->getSCEV(V);
+        auto R1 = LVIRange.intersectWith(SE->getSignedRange(SC));
+        auto R2 = LVIRange.intersectWith(SE->getUnsignedRange(SC));
+        Range = R1.getSetSize().ult(R2.getSetSize()) ? R1 : R2;
+      }
+    }
+    llvm::outs() << "range from compiler: [" << Range.getLower() << ","
+                 << Range.getUpper() << ")" << "\n";
+  }
+}
+
 void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
                            LazyValueInfo *LVI, ScalarEvolution *SE,
                            TargetLibraryInfo *TLI,
@@ -872,61 +933,8 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
   for (auto &BB : F) {
     std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
     for (auto &I : BB) {
-      if (isa<ReturnInst>(I)) {
-        if (PrintNegAtReturn) {
-          auto V = I.getOperand(0);
-          auto DL = F.getParent()->getDataLayout();
-          bool Negative = isKnownNegative(V, DL);
-          if (Negative)
-            llvm::outs() << "known negative from compiler: " << "true" << "\n";
-          else
-            llvm::outs() << "known negative from compiler: " << "false" << "\n";
-        }
-        if (PrintNonNegAtReturn) {
-          auto V = I.getOperand(0);
-          auto DL = F.getParent()->getDataLayout();
-          bool NonNegative = isKnownNonNegative(V, DL);
-          if (NonNegative)
-            llvm::outs() << "known nonNegative from compiler: " << "true" << "\n";
-          else
-            llvm::outs() << "known nonNegative from compiler: " << "false" << "\n";
-        }
-        if (PrintKnownAtReturn) {
-          auto V = I.getOperand(0);
-          auto DL = F.getParent()->getDataLayout();
-          unsigned Width = DL.getTypeSizeInBits(V->getType());
-          KnownBits Known(Width);
-          computeKnownBits(V, Known, DL);
-          llvm::outs() << "knownBits from compiler: " << Inst::getKnownBitsString(Known.Zero, Known.One) << "\n";
-        }
-        if (PrintPowerTwoAtReturn) {
-          auto V = I.getOperand(0);
-          auto DL = F.getParent()->getDataLayout();
-          bool PowerTwo = isKnownToBeAPowerOfTwo(V, DL);
-          if (PowerTwo)
-            llvm::outs() << "known powerOfTwo from compiler: " << "true" << "\n";
-          else
-            llvm::outs() << "known powerOfTwo from compiler: " << "false" << "\n";
-        }
-        if (PrintNonZeroAtReturn) {
-          auto V = I.getOperand(0);
-          auto DL = F.getParent()->getDataLayout();
-          bool NonZero = isKnownNonZero(V, DL);
-          if (NonZero)
-            llvm::outs() << "known nonZero from compiler: " << "true" << "\n";
-          else
-            llvm::outs() << "known nonZero from compiler: " << "false" << "\n";
-        }
-        if (PrintSignBitsAtReturn) {
-          auto V = I.getOperand(0);
-          auto DL = F.getParent()->getDataLayout();
-          unsigned NumSignBits = ComputeNumSignBits(V, DL);
-          if (NumSignBits > 1)
-            llvm::outs() << "known signBits from compiler: " << NumSignBits << "\n";
-          else
-            llvm::outs() << "known signBits from compiler: 1\n";
-        }
-      }
+      if (isa<ReturnInst>(I))
+        PrintDataflowInfo(F, I, LVI, SE);
       // Harvest Uses (Operands)
       if (HarvestUses) {
         std::unordered_set<llvm::Instruction *> Visited;
