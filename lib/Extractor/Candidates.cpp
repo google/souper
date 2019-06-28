@@ -532,7 +532,8 @@ Inst *ExprBuilder::buildHelper(Value *V) {
     LibFunc Func;
     if (auto II = dyn_cast<IntrinsicInst>(Call)) {
       Inst *L = get(II->getOperand(0));
-      Inst *R = get(II->getOperand(1));
+      Inst *R = nullptr;
+      if(II->getNumOperands() > 1) R = get(II->getOperand(1));
       switch (II->getIntrinsicID()) {
         default:
           break;
