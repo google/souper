@@ -87,6 +87,19 @@ namespace souper {
     bool cacheHasValue(Inst *I);
 
   public:
+    ConstantRangeAnalysis() {}
+    ConstantRangeAnalysis(std::unordered_map<Inst*, llvm::ConstantRange> &Assumptions) {
+      for (auto &P : Assumptions) {
+        if (CRCache.find(P.first) != CRCache.end()) {
+          llvm::ConstantRange Existing = CRCache.find(P.first)->second;
+          llvm::ConstantRange Join = Existing.intersectWith(P.second);
+          CRCache.insert({P.first, Join});
+          // TODO Attn: Is there a situation where this needs to be union?
+        } else {
+          CRCache.insert({P.first, P.second});
+        }
+      }
+    }
     llvm::ConstantRange findConstantRange(souper::Inst *I,
                                           ConcreteInterpreter &CI);
 

@@ -377,21 +377,44 @@ Inst *ExprBuilder::getDataflowConditions(Inst *I) {
     Result = LIC->getInst(Inst::And, 1, {Result, SignBits});
   }
   // TODO: We might want to look into handling empty set later
-  if (!I->Range.isEmptySet() && !I->Range.isFullSet()) {
-    Inst *Lower = LIC->getConst(I->Range.getLower());
-    Inst *Upper = LIC->getConst(I->Range.getUpper());
- 
-    if (!I->Range.isWrappedSet()) {
-      Result = LIC->getInst(Inst::And, 1, {Result, LIC->getInst(Inst::And, 1,
-                            {LIC->getInst(Inst::Ule, 1, {Lower, I}),
-                             LIC->getInst(Inst::Ult, 1, {I, Upper})})});
+
+  auto mkCRCond = [this, I] (llvm::ConstantRange CR) {
+    if (!CR.isEmptySet() && !CR.isFullSet()) {
+      Inst *Lower = LIC->getConst(CR.getLower());
+      Inst *Upper = LIC->getConst(CR.getUpper());
+      if (!CR.isWrappedSet()) {
+        return LIC->getInst(Inst::And, 1,
+                           {LIC->getInst(Inst::Ule, 1, {Lower, I}),
+                            LIC->getInst(Inst::Ult, 1, {I, Upper})});
+      } else {
+        return LIC->getInst(Inst::Or, 1,
+                           {LIC->getInst(Inst::Ule, 1, {Lower, I}),
+                            LIC->getInst(Inst::Ult, 1, {I, Upper})});
+      }
     } else {
-      Result = LIC->getInst(Inst::And, 1, {Result, LIC->getInst(Inst::Or, 1,
-                            {LIC->getInst(Inst::Ule, 1, {Lower, I}),
-                             LIC->getInst(Inst::Ult, 1, {I, Upper})})});
+      return (souper::Inst *)nullptr;
+      // cast to help type inference, no unification apparently
     }
+  };
+
+  if (auto Cond = mkCRCond(I->Range)) {
+    Result = LIC->getInst(Inst::And, 1, {Result, Cond});
   }
 
+  std::vector<Inst *> CRConds;
+  for (auto R : I->RangeRefinement) {
+    if (auto Cond = mkCRCond(R)) {
+      CRConds.push_back(Cond);
+    }
+  }
+  if (!CRConds.empty()) {
+    Inst *CRRefinementCond = CRConds[0];
+    for (int i = 1; i < CRConds.size(); ++i) {
+      CRRefinementCond = LIC->getInst(Inst::Or, 1,
+                                      {CRRefinementCond, CRConds[i]});
+    }
+    Result = LIC->getInst(Inst::And, 1, {Result, CRRefinementCond});
+  }
   return Result;
 }
 
