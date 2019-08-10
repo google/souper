@@ -24,9 +24,91 @@ std::string getUniqueName() {
   return "dummy" + std::to_string(counter++);
 }
 
+llvm::ConstantRange mkCR(llvm::APInt Low, llvm::APInt High) {
+  return llvm::ConstantRange(Low, High);
+}
+
+llvm::ConstantRange mkCR(Inst *I, size_t Low, size_t High) {
+  return llvm::ConstantRange(llvm::APInt(I->Width, Low),
+                             llvm::APInt(I->Width, High));
+}
+
+bool isRangeInfeasible(Inst *C, llvm::APInt LHSV, Inst *RHS,
+                       llvm::ConstantRange Range, ConcreteInterpreter &I) {
+  std::unordered_map<Inst *, llvm::ConstantRange> CRCache;
+  CRCache.insert({C, Range});
+  return !ConstantRangeAnalysis(CRCache)
+         .findConstantRange(RHS, I)
+         .contains(LHSV);
+}
+
+#define MAX_PARTS 10
+// Synthesized constant can only be in one of the ranges returned by this function
+std::vector<llvm::ConstantRange> constantRangeNarrowing
+  (Inst *C, llvm::APInt LHSV, Inst *RHS, ConcreteInterpreter &I,
+   std::vector<llvm::ConstantRange> Stack,
+   size_t MinRangeSize = 4, size_t MaxPartitions = MAX_PARTS) {
+
+  if (Stack.size() >= MaxPartitions) {
+    return Stack;
+  }
+  std::vector<llvm::ConstantRange> Result;
+  auto testCR = [RHS, LHSV, C, &I] (llvm::ConstantRange CR) {
+    return !isRangeInfeasible(C, LHSV, RHS, CR, I);
+  };
+
+  while (!Stack.empty()) {
+    auto CR = Stack.back();
+    Stack.pop_back();
+    if (CR.isEmptySet()) {
+      continue;
+    }
+    if (testCR(CR)) {
+      // C could be in CR, subdivide
+      auto L = CR.getLower();
+      auto H = CR.getUpper();
+      auto Size = CR.getSetSize();
+
+      if (L.ugt(H)) {
+        // TODO(manasij): Bisect wrapped ranges instead of giving up.
+        Result.push_back(CR);
+      } else if (Size.getLimitedValue() < MinRangeSize
+                  || Result.size() + Stack.size() >= MaxPartitions) {
+        Result.push_back(CR);
+      } else {
+        auto Mid = (L + H).udiv(llvm::APInt(C->Width, 2));
+        auto Left = mkCR(L, Mid);
+        auto Right = mkCR(Mid, H);
+        if (testCR(Right)) {
+          Stack.push_back(Right);
+        }
+        if (testCR(Left)) {
+          Stack.push_back(Left);
+        }
+      }
+    }
+  }
+
+  return Result;
+}
+
 // TODO : Comment out debug stmts and conditions before benchmarking
 bool PruningManager::isInfeasible(souper::Inst *RHS,
                                  unsigned StatsLevel) {
+  bool HasHole = !isConcrete(RHS, false, true);
+  bool RHSIsConcrete = isConcrete(RHS);
+  std::map<Inst *, std::vector<llvm::ConstantRange>> ConstantLimits;
+  std::set<souper::Inst *> Constants;
+  getConstants(RHS, Constants);
+
+  if (!Constants.empty()) {
+    for (auto C : Constants) {
+      auto CutOff = 0xFFFFFF;
+      ConstantLimits[C].push_back(mkCR(C, 1, CutOff));
+      ConstantLimits[C].push_back(mkCR(C, 0, CutOff).inverse());
+    }
+  }
+
   for (int I = 0; I < InputVals.size(); ++I) {
     if (StatsLevel > 2) {
       llvm::errs() << "  Input:\n";
@@ -77,14 +159,14 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
         auto Val = C.getValue();
         if (StatsLevel > 2)
           llvm::errs() << "  LHS value = " << Val << "\n";
-        if (!isConcrete(RHS)) {
+        if (!RHSIsConcrete) {
           auto CR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
           if (StatsLevel > 2)
             llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
           if (!CR.contains(Val)) {
             if (StatsLevel > 2) {
               llvm::errs() << "  pruned using CR! ";
-              if (!isConcrete(RHS, false, true)) {
+              if (HasHole) {
                 llvm::errs() << "Inst had a hole.";
               } else {
                 llvm::errs() << "Inst had a symbolic const.";
@@ -99,7 +181,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
           if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
             if (StatsLevel > 2) {
               llvm::errs() << "  pruned using KB! ";
-              if (!isConcrete(RHS, false, true)) {
+              if (HasHole) {
                 llvm::errs() << "Inst had a hole.";
               } else {
                 llvm::errs() << "Inst had a symbolic const.";
@@ -107,6 +189,33 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
               llvm::errs() << "\n";
             }
             return true;
+          }
+
+          if (!HasHole) {
+            // !Concrete and !HasHole, must have a Symbolic Constant
+            for (auto C : Constants) {
+              if (ConstantLimits[C].size() <= MAX_PARTS) {
+                ConstantLimits[C] = constantRangeNarrowing(C, Val, RHS,
+                                      ConcreteInterpreters[I],
+                                      ConstantLimits[C]);
+                if (!ConstantLimits[C].empty()) {
+                  if (StatsLevel > 2) {
+                    llvm::errs() << "  Constant narrowing possibility. Refine restriction to: ";
+                    for (auto X : ConstantLimits[C]) {
+                      llvm::errs() << X << "\t";
+                    }
+                    llvm::errs() << "\n";
+                  }
+                } else {
+                  if (StatsLevel > 2) {
+                    llvm::errs() << "  pruned using disjoint CR! ";
+                      llvm::errs() << "Inst had a symbolic const.";
+                    llvm::errs() << "\n";
+                  }
+                  return true;
+                }
+              }
+            }
           }
         } else {
           auto RHSV = ConcreteInterpreters[I].evaluateInst(RHS);
@@ -123,6 +232,30 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       }
     }
   }
+
+  for (auto &C : ConstantLimits) {
+    auto &Rs = C.second;
+    if (!Rs.empty()) {
+      // The other case is handled in the input specialization loop
+      if (StatsLevel > 2) {
+        llvm::errs() << "  Constant narrowing possibility. Restrict to: ";
+        for (auto X : Rs) {
+          llvm::errs() << X << "\t";
+        }
+        llvm::errs() << "\n";
+      }
+
+      size_t ResidualSize = 0;
+      for (auto &&R : Rs) {
+        ResidualSize += R.getSetSize().getLimitedValue();
+      }
+
+      if (ResidualSize < 8192 && Rs.size() < 3) {
+        // TODO: Tune. These thresholds control when the solver is involved
+        C.first->RangeRefinement = Rs;
+      }
+    }
+}
 
   if (!LHSHasPhi) {
     return isInfeasibleWithSolver(RHS, StatsLevel);
