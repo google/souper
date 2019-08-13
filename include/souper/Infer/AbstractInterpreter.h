@@ -64,6 +64,22 @@ namespace souper {
     bool cacheHasValue(Inst *I);
 
   public:
+    KnownBitsAnalysis() {}
+    KnownBitsAnalysis(std::unordered_map<Inst*, llvm::KnownBits> &Assumptions) {
+      for (auto &P : Assumptions) {
+        if (KBCache.find(P.first) != KBCache.end()) {
+          llvm::KnownBits Existing = KBCache.find(P.first)->second;
+          llvm::KnownBits Join;
+          Join.Zero = P.second.Zero | Existing.Zero;
+          Join.One = P.second.One | Existing.One;
+          // What if this leads to a conflict?
+          KBCache.insert({P.first, Join});
+        } else {
+          KBCache.insert({P.first, P.second});
+        }
+      }
+    }
+
     llvm::KnownBits findKnownBits(Inst *I,
                                   ConcreteInterpreter &CI);
 

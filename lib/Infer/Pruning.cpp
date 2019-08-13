@@ -92,12 +92,43 @@ std::vector<llvm::ConstantRange> constantRangeNarrowing
   return Result;
 }
 
+std::pair<llvm::APInt, llvm::APInt> knownBitsNarrowing
+  (Inst *C, llvm::APInt LHSV, Inst *RHS, ConcreteInterpreter &I,
+   llvm::APInt KnownNotZero, llvm::APInt KnownNotOne) {
+
+  for (int i = 0; i < C->Width; ++i) {
+    llvm::KnownBits iZero(C->Width), iOne(C->Width);
+    iZero.Zero |= 1 << i;
+    iOne.One |= 1 << i;
+    std::unordered_map<souper::Inst *, llvm::KnownBits>
+      AssumeIZero{{C, iZero}},
+      AssumeIOne{{C, iOne}};
+
+    auto KB0 = KnownBitsAnalysis(AssumeIZero).findKnownBits(RHS, I);
+    auto KB1 = KnownBitsAnalysis(AssumeIOne).findKnownBits(RHS, I);
+
+    if ((KB0.Zero & LHSV) != 0 || (KB0.One & ~LHSV) != 0) {
+      KnownNotZero |= 1 << i;
+    }
+
+    if ((KB1.Zero & LHSV) != 0 || (KB1.One & ~LHSV) != 0) {
+      KnownNotOne |= 1 << i;
+    }
+  }
+
+  return {KnownNotZero, KnownNotOne};
+}
+
 // TODO : Comment out debug stmts and conditions before benchmarking
 bool PruningManager::isInfeasible(souper::Inst *RHS,
                                  unsigned StatsLevel) {
   bool HasHole = !isConcrete(RHS, false, true);
   bool RHSIsConcrete = isConcrete(RHS);
+
   std::map<Inst *, std::vector<llvm::ConstantRange>> ConstantLimits;
+  std::map<Inst *, llvm::APInt> ConstantKnownNotZero;
+  std::map<Inst *, llvm::APInt> ConstantKnownNotOne;
+
   std::set<souper::Inst *> Constants;
   getConstants(RHS, Constants);
 
@@ -106,6 +137,10 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       auto CutOff = 0xFFFFFF;
       ConstantLimits[C].push_back(mkCR(C, 1, CutOff));
       ConstantLimits[C].push_back(mkCR(C, 0, CutOff).inverse());
+      // ^ Initialize with full-set instead of this when we can gracefully deal with wrapped ranges
+
+      ConstantKnownNotOne[C] = llvm::APInt(C->Width, 0);
+      ConstantKnownNotZero[C] = llvm::APInt(C->Width, 0);
     }
   }
 
@@ -215,6 +250,32 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
                   return true;
                 }
               }
+
+              auto KBRefinement = knownBitsNarrowing(C, Val, RHS,
+                                    ConcreteInterpreters[I],
+                                    ConstantKnownNotZero[C],
+                                    ConstantKnownNotOne[C]);
+              ConstantKnownNotZero[C] = KBRefinement.first;
+              ConstantKnownNotOne[C] = KBRefinement.second;
+              llvm::KnownBits KNOTB;
+              KNOTB.Zero = ConstantKnownNotZero[C];
+              KNOTB.One = ConstantKnownNotOne[C];
+              if (KNOTB.hasConflict()) {
+                if (StatsLevel > 2) {
+                  llvm::errs() << KNOTB.Zero.toString(2, false) << "\t" << KNOTB.One.toString(2, false) << "\n";
+                  llvm::errs() << "  pruned using KB refinement! ";
+                  llvm::errs() << "Inst had a symbolic const.";
+                  llvm::errs() << "\n";
+                }
+                return true;
+              } else {
+                if (StatsLevel > 2) {
+                  llvm::errs() << "  KNOTB refined to: " <<
+                    Inst::getKnownBitsString(ConstantKnownNotZero[C],
+                                              ConstantKnownNotOne[C]) << "\n";
+                }
+              }
+
             }
           }
         } else {

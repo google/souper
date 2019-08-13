@@ -291,6 +291,7 @@ std::string Inst::getKnownBitsString(llvm::APInt Zero, llvm::APInt One) {
   std::string Str;
   for (int K = Zero.getBitWidth() - 1; K >= 0; --K) {
     if (Zero[K] && One[K])
+      // Note that this unreachable can be optimized away
       llvm_unreachable("KnownZero and KnownOnes bit can't be set to 1 together");
     if (Zero[K]) {
       Str.append("0");
