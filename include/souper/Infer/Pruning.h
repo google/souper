@@ -46,6 +46,7 @@ private:
   std::vector<ConcreteInterpreter> ConcreteInterpreters;
   std::vector<llvm::KnownBits> LHSKnownBits;
   std::vector<llvm::ConstantRange> LHSConstantRange;
+  llvm::KnownBits LHSKnownBitsNoSpec;
   bool LHSHasPhi = false;
 
   PruneFunc DataflowPrune;

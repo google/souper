@@ -56,6 +56,29 @@ TEST(InterpreterTests, CRTransferFunctions) {
   ASSERT_TRUE(crObj.testFn(Inst::Or));
 }
 
+TEST(InterpreterTests, RBTransferFunctions) {
+  RBTesting rbObj;
+  ASSERT_TRUE(rbObj.testFn(Inst::Add));
+  ASSERT_TRUE(rbObj.testFn(Inst::AddNSW));
+  ASSERT_TRUE(rbObj.testFn(Inst::Sub));
+  ASSERT_TRUE(rbObj.testFn(Inst::SubNSW));
+  ASSERT_TRUE(rbObj.testFn(Inst::Mul));
+  ASSERT_TRUE(rbObj.testFn(Inst::UDiv));
+  ASSERT_TRUE(rbObj.testFn(Inst::URem));
+  ASSERT_TRUE(rbObj.testFn(Inst::And));
+  ASSERT_TRUE(rbObj.testFn(Inst::Or));
+  ASSERT_TRUE(rbObj.testFn(Inst::Xor));
+  ASSERT_TRUE(rbObj.testFn(Inst::Shl));
+  ASSERT_TRUE(rbObj.testFn(Inst::LShr));
+  ASSERT_TRUE(rbObj.testFn(Inst::AShr));
+  ASSERT_TRUE(rbObj.testFn(Inst::Eq));
+  ASSERT_TRUE(rbObj.testFn(Inst::Ne));
+  ASSERT_TRUE(rbObj.testFn(Inst::Ult));
+  ASSERT_TRUE(rbObj.testFn(Inst::Slt));
+  ASSERT_TRUE(rbObj.testFn(Inst::Ule));
+  ASSERT_TRUE(rbObj.testFn(Inst::Sle));
+}
+
 TEST(InterpreterTests, KBCRReduction) {
   ConstantRange CR(WIDTH, /*isFullSet=*/false);
   KnownBits KB(WIDTH);
