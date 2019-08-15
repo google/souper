@@ -49,7 +49,11 @@ namespace souper {
       bool testFn(Inst::Kind pred);
     };
 
-
+    class RBTesting {
+    public:
+      bool testFn(Inst::Kind K);
+      static bool nextRB(llvm::APInt &Val);
+    };
 
     class CRTesting {
       // Checks if the range @R contains all values given in the @Table

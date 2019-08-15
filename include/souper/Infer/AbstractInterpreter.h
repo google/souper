@@ -81,7 +81,7 @@ namespace souper {
     }
 
     llvm::KnownBits findKnownBits(Inst *I,
-                                  ConcreteInterpreter &CI);
+                                  ConcreteInterpreter &CI, bool UsePartialEval = true);
 
     static llvm::KnownBits findKnownBitsUsingSolver(Inst *I,
                                                     Solver *S,
@@ -117,11 +117,17 @@ namespace souper {
       }
     }
     llvm::ConstantRange findConstantRange(souper::Inst *I,
-                                          ConcreteInterpreter &CI);
+                                          ConcreteInterpreter &CI, bool UsePartialEval = true);
 
     static llvm::ConstantRange findConstantRangeUsingSolver(souper::Inst *I,
                                                             Solver *S,
                                                             std::vector<InstMapping> &PCs);
+  };
+
+  class RestrictedBitsAnalysis {
+  public:
+    std::unordered_map<Inst *, llvm::APInt> RBCache;
+    llvm::APInt findRestrictedBits(souper::Inst *I);
   };
 }
 

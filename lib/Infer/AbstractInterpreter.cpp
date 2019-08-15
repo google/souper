@@ -465,9 +465,9 @@ namespace souper {
     return EvalValue();
   }
 
-#define KB0 findKnownBits(I->Ops[0], CI)
-#define KB1 findKnownBits(I->Ops[1], CI)
-#define KB2 findKnownBits(I->Ops[2], CI)
+#define KB0 findKnownBits(I->Ops[0], CI, UsePartialEval)
+#define KB1 findKnownBits(I->Ops[1], CI, UsePartialEval)
+#define KB2 findKnownBits(I->Ops[2], CI, UsePartialEval)
 #define VAL(INST) getValue(INST, CI)
 
   llvm::KnownBits KnownBitsAnalysis::mergeKnownBits(std::vector<llvm::KnownBits> Vec) {
@@ -511,12 +511,13 @@ namespace souper {
     return false;
   }
 
-  llvm::KnownBits KnownBitsAnalysis::findKnownBits(Inst *I, ConcreteInterpreter &CI) {
+  llvm::KnownBits KnownBitsAnalysis::findKnownBits(Inst *I, ConcreteInterpreter &CI, bool UsePartialEval) {
     llvm::KnownBits Result(I->Width);
 
     if (cacheHasValue(I))
       return KBCache.at(I);
 
+    if (UsePartialEval || I->K == Inst::Const) {
     EvalValue V = VAL(I);
     if (V.hasValue()) {
       Result.One = V.getValue();
@@ -527,6 +528,8 @@ namespace souper {
 
       return Result;
     }
+    }
+
 
     switch(I->K) {
     case Inst::Phi: {
@@ -762,9 +765,9 @@ namespace souper {
     return S->findKnownBitsUsingSolver(BPCs, PCs, I, IC);
   }
 
-#define CR0 findConstantRange(I->Ops[0], CI)
-#define CR1 findConstantRange(I->Ops[1], CI)
-#define CR2 findConstantRange(I->Ops[2], CI)
+#define CR0 findConstantRange(I->Ops[0], CI, UsePartialEval)
+#define CR1 findConstantRange(I->Ops[1], CI, UsePartialEval)
+#define CR2 findConstantRange(I->Ops[2], CI, UsePartialEval)
 
   bool ConstantRangeAnalysis::cacheHasValue(Inst *I) {
     if (CRCache.find(I) != CRCache.end())
@@ -779,16 +782,19 @@ namespace souper {
   }
 
   llvm::ConstantRange ConstantRangeAnalysis::findConstantRange(Inst *I,
-                                                               ConcreteInterpreter &CI) {
+                                                               ConcreteInterpreter &CI,
+                                                               bool UsePartialEval) {
     llvm::ConstantRange Result(I->Width);
 
     if (cacheHasValue(I))
       return CRCache.at(I);
 
+    if (UsePartialEval || I->K == Inst::Const) {
     EvalValue V = VAL(I);
     if (V.hasValue()) {
       CRCache.emplace(I, llvm::ConstantRange(V.getValue()));
       return CRCache.at(I);
+    }
     }
 
     switch (I->K) {
@@ -895,11 +901,100 @@ namespace souper {
 #undef CR2
 #undef VAL
 
-  llvm::ConstantRange ConstantRangeAnalysis::findConstantRangeUsingSolver(Inst *I,
-									  Solver *S,
-									  std::vector<InstMapping> &PCs) {
+  llvm::ConstantRange ConstantRangeAnalysis::findConstantRangeUsingSolver
+    (Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
     // FIXME implement this
     llvm::ConstantRange Result(I->Width);
     return Result;
   }
+#define RB0 findRestrictedBits(I->Ops[0])
+#define RB1 findRestrictedBits(I->Ops[1])
+#define RB2 findRestrictedBits(I->Ops[2])
+  llvm::APInt RestrictedBitsAnalysis::findRestrictedBits(souper::Inst *I) {
+    if (RBCache.find(I) != RBCache.end()) {
+      return RBCache[I];
+    }
+
+    llvm::APInt Result(I->Width, 0);
+    llvm::APInt AllZeroes = Result;
+    Result.setAllBits();
+
+    if (isReservedConst(I)) {
+      // nop, all bits set
+    } else if (I->K == Inst::Kind::Var) {
+      RBCache[I] = Result;
+      // ^ Restricts the variable
+      Result = AllZeroes;
+      // One variable can be considered unrestricted only once
+      // TODO Pick a better strategy. This one chooses the DFS winner.
+    } else switch (I->K) {
+      case Inst::And :
+      case Inst::Or : Result = RB0 | RB1; break;
+      case Inst::Xor : Result = RB0 & RB1; break;
+
+      // unrestricted if one of the inputs is unrestricted
+      case Inst::Ne :
+      case Inst::Eq :
+      case Inst::Ule :
+      case Inst::Sle :
+      case Inst::Add :
+      case Inst::Sub : {
+        if (RB0 == 0) {
+          Result = RB0;
+        } else if (RB1 == 0) {
+          Result = RB1;
+        }
+        break;
+      }
+
+      case Inst::BitReverse : Result = RB0.reverseBits(); break;
+      case Inst::Trunc : Result = RB0.trunc(I->Width);
+      case Inst::BSwap : Result = RB0.byteSwap();
+
+      case Inst::Select : {
+        auto Choice = std::pair{RB1, RB2};
+        if (Choice.first == 0 && Choice.second == 0) {
+          Result = AllZeroes;
+        } else if (RB0 == 0 && (Choice.first == 0 || Choice.second == 0)) {
+          Result = AllZeroes;
+        } else {
+          // nop, could be restricted
+        }
+        break;
+      }
+
+      // Only unrestricted if both inputs are unrestricted
+      // TODO Verify if N(S/U)?W variants fit in this category
+      case Inst::Mul :
+      case Inst::SDiv : case Inst::UDiv : case Inst::SRem : case Inst::URem :
+      case Inst::Slt : case Inst::Ult : case Inst::LShr : case Inst::AShr :
+      case Inst::Shl : {
+        if (RB0 == 0 && RB1 == 0) {
+          Result = AllZeroes;
+        }
+        break;
+      }
+
+      // Only log2(Width) low bits can be unrestricted
+      case Inst::Ctlz :
+      case Inst::Cttz :
+      case Inst::CtPop : {
+        if (RB0 == 0) {
+          Result = AllZeroes;
+          Result.setHighBits(I->Width - Log2_64(I->Width));
+          // TODO Check for off by one issues
+        }
+        break;
+      }
+
+      default : break; // TODO more precise transfer functions
+    }
+    if (I->K != Inst::Kind::Var) {
+      RBCache[I] = Result;
+    }
+    return Result;
+  }
 }
+#undef RB0
+#undef RB1
+#undef RB2

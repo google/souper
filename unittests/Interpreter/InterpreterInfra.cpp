@@ -513,7 +513,6 @@ bool CRTesting::testFn(Inst::Kind pred) {
   ConstantRange L(WIDTH, /*isFullSet=*/false);
   ConstantRange R(WIDTH, /*isFullSet=*/false);
   double FastBits = 0.0, PreciseBits = 0.0;
-  long count = 0;
   int Count = 0, PreciseCount = 0;
   do {
     do {
@@ -525,3 +524,121 @@ bool CRTesting::testFn(Inst::Kind pred) {
 
   return true;
 }
+
+bool RBTesting::nextRB(llvm::APInt& Val) {
+  if (Val.isAllOnesValue()) {
+    return false;
+  } else {
+    ++Val;
+    return true;
+  }
+}
+
+std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt X) {
+  std::vector<llvm::APInt> Result;
+  Result.push_back(llvm::APInt(WIDTH, 0));
+
+  for (int i = 0; i < WIDTH; ++i) {
+    if ( (X & (1 << i)) == 0 ) {
+      auto Copy = Result;
+      for (auto &Y : Copy) {
+        Result.push_back(Y | (1 << i));
+      }
+    }
+  }
+  return Result;
+}
+// Probably refactor to unify these two
+std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X) {
+  std::vector<llvm::APInt> Result;
+  Result.push_back(llvm::APInt(WIDTH, 0));
+
+  for (int i = 0; i < WIDTH; ++i) {
+    if ( (X & (1 << i)) != 0 ) {
+      auto Copy = Result;
+      for (auto &Y : Copy) {
+        Result.push_back(Y | 1 << i);
+      }
+    }
+  }
+  return Result;
+}
+
+llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY) {
+  llvm::APInt RB(WIDTH, 0);
+
+  auto XPartial = explodeRestrictedBits(RBX);
+  auto YPartial = explodeRestrictedBits(RBY);
+
+  for (auto P0 : XPartial) {
+    for (auto P1 : YPartial) {
+
+      auto I0 = explodeUnrestrictedBits(P0);
+      auto I1 = explodeUnrestrictedBits(P1);
+
+      std::map<int, std::pair<bool, bool>> Seen;
+
+      for (auto i0 : I0) {
+        for (auto i1 : I1) {
+          ValueCache C = {{{X, i0}, {Y, i1}}};
+          ConcreteInterpreter Interp(C);
+          auto Val_ = Interp.evaluateInst(I);
+          if (!Val_.hasValue()) {
+            continue;
+          }
+          auto Val = Val_.getValue();
+
+          for (int i = 0; i < WIDTH; ++i) {
+            if ((Val & (1 << i)) == 0) Seen[i].first = true;
+            if ((Val & (1 << i)) != 0) Seen[i].second = true;
+          }
+
+        }
+      }
+      for (int i = 0 ; i < WIDTH; ++i) {
+        if (!Seen[i].first || !Seen[i].second) {
+          RB = RB | (1 << i);
+        }
+      }
+    }
+  }
+  return RB;
+}
+
+bool RBTesting::testFn(Inst::Kind K) {
+  llvm::APInt RB0(WIDTH, 0);
+  llvm::APInt RB1(WIDTH, 0);
+  InstContext IC;
+  Inst *X = IC.createVar(WIDTH, "X");
+  Inst *Y = IC.createVar(WIDTH, "Y");
+  do {
+    do {
+      auto EffectiveWidth = WIDTH;
+      if (K == Inst::Eq || Inst::Ne || Inst::Sle || Inst::Slt || Inst::Ule || Inst::Ult) {
+        EffectiveWidth = 1;
+      }
+      auto Expr = IC.getInst(K, EffectiveWidth, {X, Y});
+      RestrictedBitsAnalysis RBA{{{X, RB0}, {Y, RB1}}};
+      auto RBComputed = RBA.findRestrictedBits(Expr);
+      auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1);
+      bool fail = false;
+      for (int i = 0; i < Expr->Width ; ++i) {
+        if ((RBComputed & (1 << i)) == 0) {
+          if ((RBExhaustive & (1 << i)) != 0) {
+            fail = true;
+          }
+        }
+      }
+      if (fail) {
+        llvm::outs() << "Inputs: " << RB0.toString(2, false) << ", " << RB1.toString(2, false) << "\n";
+        llvm::outs() << "Computed << " << RBComputed.toString(2, false) << "\n";
+        llvm::outs() << "Exhaustive << " << RBExhaustive.toString(2, false) << "\n";
+        return false;
+      }
+    } while (nextRB(RB1));
+  } while (nextRB(RB0));
+  return true;
+}
+
+
+
