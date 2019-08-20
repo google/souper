@@ -1,0 +1,15 @@
+; REQUIRES: solver, synthesis
+
+; RUN: %souper-check %solver -infer-const  %s > %t
+; RUN: %FileCheck %s < %t
+
+; CHECK: 72057594037927680:i64
+
+%0:i64 = var
+%1:i64 = shl %0, 8:i64
+%2:i64 = lshr %1, 16:i64
+%3:i64 = shl %2, 8:i64
+infer %3
+%4:i64 = reservedconst
+%5:i64 = and %0, %4
+result %5
