@@ -354,6 +354,18 @@ namespace souper {
       return {Output.extractBits(W, 0)};
     }
 
+    case Inst::SAddSat:
+      return { ARG0.sadd_sat(ARG1) };
+
+    case Inst::UAddSat:
+      return { ARG0.uadd_sat(ARG1) };
+
+    case Inst::SSubSat:
+      return { ARG0.ssub_sat(ARG1) };
+
+    case Inst::USubSat:
+      return { ARG0.usub_sat(ARG1) };
+
     // TODO implement these
     case Inst::ExtractValue:
     case Inst::SAddWithOverflow:
