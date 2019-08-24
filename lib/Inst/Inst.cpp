@@ -1090,7 +1090,7 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
       Copy = IC.getPhi(BlockCache.at(I->B), Ops, I->DemandedBits);
     }
   } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
-    return I;
+    Copy = I;
   } else {
     Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits, I->Available);
   }
@@ -1100,11 +1100,15 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
 }
 
 Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
+                       std::map<Inst *, Inst *> &InstCache,
                        InstContext &IC) {
+  if (InstCache.count(I))
+    return InstCache.at(I);
+
   std::vector<Inst *> Ops;
 
   for (auto const &Op : I->Ops) {
-    auto NewOp = instJoin(Op, EmptyInst, NewInst, IC);
+    auto NewOp = instJoin(Op, EmptyInst, NewInst, InstCache, IC);
     Ops.push_back(NewOp);
   }
 
@@ -1121,10 +1125,14 @@ Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
     } else {
       Copy = I;
     }
+  } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
+    Copy = I;
   } else {
     Copy = IC.getInst(I->K, I->Width, Ops);
   }
 
+  assert(Copy);
+  InstCache[I] = Copy;
   return Copy;
 }
 
