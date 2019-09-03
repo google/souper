@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/Support/raw_ostream.h"
@@ -23,6 +24,13 @@
 #include "gtest/gtest.h"
 
 #include <iostream>
+
+namespace {
+  static llvm::cl::opt<bool> CheckRBPrecision("check-rb-precision",
+  llvm::cl::desc("Print precision results from restricted bits exhaistive testing"),
+  llvm::cl::init(false));
+
+}
 
 using namespace llvm;
 using namespace souper;
@@ -58,25 +66,25 @@ TEST(InterpreterTests, CRTransferFunctions) {
 
 TEST(InterpreterTests, RBTransferFunctions) {
   RBTesting rbObj;
-  ASSERT_TRUE(rbObj.testFn(Inst::Add));
-  ASSERT_TRUE(rbObj.testFn(Inst::AddNSW));
-  ASSERT_TRUE(rbObj.testFn(Inst::Sub));
-  ASSERT_TRUE(rbObj.testFn(Inst::SubNSW));
-  ASSERT_TRUE(rbObj.testFn(Inst::Mul));
-  ASSERT_TRUE(rbObj.testFn(Inst::UDiv));
-  ASSERT_TRUE(rbObj.testFn(Inst::URem));
-  ASSERT_TRUE(rbObj.testFn(Inst::And));
-  ASSERT_TRUE(rbObj.testFn(Inst::Or));
-  ASSERT_TRUE(rbObj.testFn(Inst::Xor));
-  ASSERT_TRUE(rbObj.testFn(Inst::Shl));
-  ASSERT_TRUE(rbObj.testFn(Inst::LShr));
-  ASSERT_TRUE(rbObj.testFn(Inst::AShr));
-  ASSERT_TRUE(rbObj.testFn(Inst::Eq));
-  ASSERT_TRUE(rbObj.testFn(Inst::Ne));
-  ASSERT_TRUE(rbObj.testFn(Inst::Ult));
-  ASSERT_TRUE(rbObj.testFn(Inst::Slt));
-  ASSERT_TRUE(rbObj.testFn(Inst::Ule));
-  ASSERT_TRUE(rbObj.testFn(Inst::Sle));
+  ASSERT_TRUE(rbObj.testFn(Inst::Add, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::AddNSW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Sub, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::SubNSW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Mul, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::UDiv, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::URem, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::And, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Or, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Xor, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Shl, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::LShr, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::AShr, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Eq, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Ne, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Ult, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Slt, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Ule, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::Sle, CheckRBPrecision));
 }
 
 TEST(InterpreterTests, KBCRReduction) {

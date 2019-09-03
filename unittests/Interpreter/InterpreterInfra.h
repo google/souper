@@ -51,7 +51,7 @@ namespace souper {
 
     class RBTesting {
     public:
-      bool testFn(Inst::Kind K);
+      bool testFn(Inst::Kind K, bool CheckPrecision);
       static bool nextRB(llvm::APInt &Val);
     };
 
