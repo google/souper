@@ -605,7 +605,7 @@ llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt
   return RB;
 }
 
-bool RBTesting::testFn(Inst::Kind K) {
+bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
   llvm::APInt RB0(WIDTH, 0);
   llvm::APInt RB1(WIDTH, 0);
   InstContext IC;
@@ -622,18 +622,32 @@ bool RBTesting::testFn(Inst::Kind K) {
       auto RBComputed = RBA.findRestrictedBits(Expr);
       auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1);
       bool fail = false;
+      bool FoundMorePrecise = false;
       for (int i = 0; i < Expr->Width ; ++i) {
         if ((RBComputed & (1 << i)) == 0) {
           if ((RBExhaustive & (1 << i)) != 0) {
             fail = true;
           }
         }
+
+        if ((RBExhaustive & (1 << i)) == 0) {
+          if ((RBComputed & (1 << i)) != 0) {
+            FoundMorePrecise = true;
+          }
+        }
+
       }
       if (fail) {
         llvm::outs() << "Inputs: " << RB0.toString(2, false) << ", " << RB1.toString(2, false) << "\n";
         llvm::outs() << "Computed << " << RBComputed.toString(2, false) << "\n";
         llvm::outs() << "Exhaustive << " << RBExhaustive.toString(2, false) << "\n";
         return false;
+      }
+      if (CheckPrecision && FoundMorePrecise) {
+        llvm::outs() << "Found more precise result for : " << Inst::getKindName(K) << "\n";
+        llvm::outs() << "Inputs: " << RB0.toString(2, false) << ", " << RB1.toString(2, false) << "\n";
+        llvm::outs() << "Computed << " << RBComputed.toString(2, false) << "\n";
+        llvm::outs() << "Exhaustive << " << RBExhaustive.toString(2, false) << "\n";
       }
     } while (nextRB(RB1));
   } while (nextRB(RB0));
