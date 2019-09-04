@@ -410,7 +410,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
     if (CurrSlots.empty()) {
       std::vector<Inst *> empty;
       if (prune(JoinedGuess, empty)) {
-        Guesses.push_back(JoinedGuess);
+        addGuess(JoinedGuess, LHSCost, Guesses, TooExpensive);
       }
       continue;
     }
