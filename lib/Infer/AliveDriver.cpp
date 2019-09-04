@@ -180,8 +180,8 @@ performCegisFirstQuery(tools::Transform &t,
                        std::map<std::string, souper::Inst *> &SouperConsts,
                        smt::expr &TriedExpr) {
   IR::Value::reset_gbl_id();
-  IR::State SrcState(t.src);
-  IR::State TgtState(t.tgt);
+  IR::State SrcState(t.src, true);
+  IR::State TgtState(t.tgt, false);
   util::sym_exec(SrcState);
   util::sym_exec(TgtState);
 
@@ -235,7 +235,7 @@ synthesizeConstantUsingSolver(tools::Transform &t,
   std::map<std::string, souper::Inst *> &SouperConsts) {
 
   IR::Value::reset_gbl_id();
-  IR::State SrcState(t.src), tgt_state(t.tgt);
+  IR::State SrcState(t.src, true), tgt_state(t.tgt, false);
   util::sym_exec(SrcState);
   util::sym_exec(tgt_state);
 
@@ -248,8 +248,13 @@ synthesizeConstantUsingSolver(tools::Transform &t,
   QVars.insert(SrcRet.second.begin(), SrcRet.second.end());
 
   auto ErrF = [&](const smt::Result &r, bool print_var, const char *msg) {
-    tools::error(Errs, SrcState, tgt_state, r, print_var, nullptr,
-                 SrcRet.first, TgtRet.first, msg,false);
+//     tools::error(Errs, SrcState, tgt_state, r, print_var, nullptr,
+//                  SrcRet.first, TgtRet.first, msg,false);
+    //FIXME: temporarily disabled, find a way to pass a Type to tools::error
+    std::cerr << msg << "\n";
+    tools::TransformPrintOpts Opts;
+    Opts.print_fn_header = true;
+    t.print(std::cerr, Opts);
   };
 
   std::set<smt::expr> Vars;
