@@ -948,8 +948,8 @@ namespace souper {
       }
 
       case Inst::BitReverse : Result = RB0.reverseBits(); break;
-      case Inst::Trunc : Result = RB0.trunc(I->Width);
-      case Inst::BSwap : Result = RB0.byteSwap();
+      case Inst::Trunc : Result = RB0.trunc(I->Width); break;
+      case Inst::BSwap : Result = RB0.byteSwap(); break;
 
       case Inst::Select : {
         auto Choice = std::pair{RB1, RB2};
