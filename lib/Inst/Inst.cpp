@@ -786,6 +786,7 @@ int Inst::getCost(Inst::Kind K) {
     case Const:
     case Phi:
       return 0;
+    case BitReverse:
     case BSwap:
     case CtPop:
     case Cttz:
