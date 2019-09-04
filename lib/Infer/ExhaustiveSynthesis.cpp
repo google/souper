@@ -130,17 +130,9 @@ PruneFunc MkPruneFunc(std::vector<PruneFunc> Funcs) {
   };
 }
 
-// return false if successfully proved infeasible
-bool CostPrune(Inst *I, std::vector<Inst *> &ReservedInsts) {
-
-  // Cost exceeds LHS
+bool CountPrune(Inst *I, std::vector<Inst *> &ReservedInsts) {
   if (!ReservedInsts.empty() && instCount(I) >= MaxNumInstructions)
     return false;
-
-//   if (ReservedInsts.empty() && instCount(I) > MaxNumInstructions)
-//     return false;
-// TODO : Handle this logic here instead of comparing against TooExpensive
-//  at arbitrary places in the synthesis algorithm
 
   return true;
 }
@@ -681,7 +673,7 @@ void generateAndSortGuesses(SynthesisContext &SC,
   findVars(SC.LHS, Inputs);
   PruningManager DataflowPruning(SC, Inputs, DebugLevel);
   // Cheaper tests go first
-  std::vector<PruneFunc> PruneFuncs = {CostPrune};
+  std::vector<PruneFunc> PruneFuncs = {CountPrune};
   if (EnableDataflowPruning) {
     DataflowPruning.init();
     PruneFuncs.push_back(DataflowPruning.getPruneFunc());
