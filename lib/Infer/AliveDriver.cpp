@@ -79,6 +79,10 @@ public:
     return toValue(t, val);
   }
 
+  IR::Value *val(IR::Type &t, llvm::APInt val) {
+    return toValue(t, val);
+  }
+
   template<typename T>
   IR::Value *ret(IR::Type &t, T ret) {
     return append(
@@ -116,6 +120,13 @@ private:
 
   IR::Value *toValue(IR::Type &t, int64_t x) {
     auto c = std::make_unique<IR::IntConst>(t, x);
+    auto ptr = c.get();
+    F.addConstant(std::move(c));
+    return ptr;
+  }
+
+  IR::Value *toValue(IR::Type &t, llvm::APInt x) {
+    auto c = std::make_unique<IR::IntConst>(t, x.toString(10, false));
     auto ptr = c.get();
     F.addConstant(std::move(c));
     return ptr;
@@ -530,7 +541,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
       return true;
     }
     case souper::Inst::Const: {
-      ExprCache[I] = Builder.val(t, I->Val.getLimitedValue());
+      ExprCache[I] = Builder.val(t, I->Val);
       return true;
     }
 
@@ -551,6 +562,12 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     #define BINOPF(SOUPER, ALIVE, W) case souper::Inst::SOUPER: {\
       ExprCache[I] = Builder.binOp(t, Name, ExprCache[I->Ops[0]],\
       ExprCache[I->Ops[1]], IR::BinOp::ALIVE, IR::BinOp::W);     \
+      return true;                                               \
+    }
+
+    #define FAKEBINOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {\
+      ExprCache[I] = Builder.binOp(t, Name, ExprCache[I->Ops[0]],\
+      Builder.val(getType(1), 0), IR::BinOp::ALIVE);             \
       return true;                                               \
     }
 
@@ -577,8 +594,8 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     BINOPF(LShrExact, LShr, Exact);
     BINOP(AShr, AShr);
     BINOPF(AShrExact, AShr, Exact);
-    BINOP(Cttz, Cttz);
-    BINOP(Ctlz, Ctlz);
+    FAKEBINOP(Cttz, Cttz);
+    FAKEBINOP(Ctlz, Ctlz);
     BINOP(URem, URem);
     BINOP(SRem, SRem);
     BINOP(UDiv, UDiv);

@@ -27,7 +27,7 @@ klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=9823174bb34fcb9c8e33c37e7e04d46bfe3a29a5
 alive_repo=https://github.com/manasij7479/alive2.git
 z3_repo=https://github.com/Z3Prover/z3.git
-z3_branch=z3-4.8.4
+z3_commit=d44081db7d736945d450b0ecb93ec39602fc4bd5
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
@@ -40,9 +40,7 @@ z3_installdir=$(pwd)/third_party/z3-install
 git clone $z3_repo $z3_srcdir
 mkdir -p $z3_installdir
 
-(cd $z3_srcdir && git checkout $z3_branch &&
-python scripts/mk_make.py --staticlib --noomp --prefix=$z3_installdir &&
-cd build && make -j8 install)
+(cd $z3_srcdir && git checkout $z3_commit && python scripts/mk_make.py --staticlib --prefix=$z3_installdir && cd build && make -j8 install)
 
 export PATH=$z3_installdir/bin:$PATH
 
