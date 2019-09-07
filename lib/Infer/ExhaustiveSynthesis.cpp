@@ -71,7 +71,7 @@ namespace {
     cl::init(false));
   static cl::opt<bool> SynthesisConstWithCegisLoop("souper-synthesis-const-with-cegis",
     cl::desc("Synthesis constants with CEGIS (default=false)"),
-    cl::init(false));
+    cl::init(true));
 }
 
 // TODO
