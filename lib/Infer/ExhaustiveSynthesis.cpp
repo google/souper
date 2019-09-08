@@ -164,9 +164,6 @@ void getGuesses(std::vector<Inst *> &Guesses,
     }
   }
 
-  Inst *I1 = IC.getReservedInst();
-  Comps.push_back(I1);
-
   // Unary Operators
   if (Width > 1) {
     for (auto K : UnaryOperators) {
@@ -194,13 +191,15 @@ void getGuesses(std::vector<Inst *> &Guesses,
     }
   }
 
-  // Binary instructions (TODO add div/rem)
+  // reservedinst and reservedconsts starts with width 0
   Inst *C1 = IC.getReservedConst();
   Comps.push_back(C1);
-  // reservedinst starts with width 0
+  Inst *I1 = IC.getReservedInst();
   Inst *I2 = IC.getReservedInst();
+  Comps.push_back(I1);
   Comps.push_back(I2);
 
+  // Binary instructions (TODO add div/rem)
   for (auto K : BinaryOperators) {
     if (Inst::isCmp(K) && Width != 1)
       continue;
@@ -302,6 +301,16 @@ void getGuesses(std::vector<Inst *> &Guesses,
         // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
         if (K == Inst::Sub && V2->SynthesisConstID != 0)
           continue;
+
+        // PRUNE: don't synthesize "{ashr, lshr} x, x" as its results in either zero or poison
+        if ((K == Inst::AShr || K == Inst::LShr) &&
+            V1 == V2)
+            continue;
+
+        // PRUNE: don't synthesize "{sub, usub.sat, ssub.sat} x, x"
+        if ((K == Inst::Sub || K == Inst::USubSat || K == Inst::SSubSat) &&
+            V1 == V2)
+            continue;
 
         auto N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, { V1, V2 });
         addGuess(N, LHSCost, PartialGuesses, TooExpensive);
