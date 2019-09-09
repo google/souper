@@ -140,7 +140,9 @@ namespace souper {
       // operands. If we ever want to deterministically interpret an LHS
       // containing a phi, this needs to start returning a list, or there needs
       // to be enough information in BlockPCs to interpret ARG0
-      return Args[0];
+      if (Inst->B->ConcretePred == -1)
+        llvm::report_fatal_error("Interpreter can't find an input for block, exiting");
+      return Args[Inst->B->ConcretePred];
 
     case Inst::Add:
       return {ARG0 + ARG1};
