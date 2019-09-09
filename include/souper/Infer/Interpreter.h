@@ -83,6 +83,7 @@ struct EvalValue {
 };
 
 using ValueCache = std::unordered_map<souper::Inst *, EvalValue>;
+using BlockCache = std::unordered_set<souper::Block *>;
 
 EvalValue evaluateAddNSW(llvm::APInt A, llvm::APInt B);
 EvalValue evaluateAddNUW(llvm::APInt A, llvm::APInt B);

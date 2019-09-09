@@ -1,0 +1,11 @@
+; RUN: %souper-interpret %solver -input-values=%0=0  %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST1 %s < %t
+; TEST1: Value: 4
+
+; RUN: %souper-interpret %solver -input-values=%0=1  %s > %t 2>&1
+; RUN: %FileCheck -check-prefix=TEST2 %s < %t
+; TEST2: Value: 9
+
+%0 = block 2
+%1:i32 = phi %0, 4:i32, 9:i32
+infer %1

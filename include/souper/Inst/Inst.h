@@ -44,6 +44,7 @@ struct Block {
   std::string Name;
   unsigned Preds;
   unsigned Number;
+  unsigned ConcretePred = -1;
   std::vector<Inst *> PredVars;
 };
 

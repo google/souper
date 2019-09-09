@@ -117,10 +117,10 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
   unsigned Index = 0;
   int Ret = 0;
   int Success = 0, Fail = 0, Error = 0;
-  for (auto Rep : Reps) {
+  for (unsigned i = 0 ; i < Reps.size(); ++i) {
 
     std::vector<Inst *> Vars;
-    findVars(Rep.Mapping.LHS, Vars);
+    findVars(Reps[i].Mapping.LHS, Vars);
 
     if (InputValueStrings.size() < Vars.size()) {
       llvm::errs() << "Error: One or more variables in LHS are not given any value. "
@@ -130,6 +130,7 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
 
     ValueCache InputValues;
     std::vector<InstMapping> InputValuesInstMappings;
+    BlockCache BlockSet;
     for (auto S : InputValueStrings) {
       std::string Name, Val;
       if (!parseInput(S, Name, Val)) {
@@ -144,18 +145,36 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
             llvm::errs() << V->Width << " bits.\n";
             return 1;
           }
-	  if (InputValues.find(V) != InputValues.end()) {
-	    llvm::errs() << "Error: duplicate value for %" << V->Name << "\n";
-	    return 1;
-	  }
-	  APInt ValObj = APInt(V->Width, Val, 10);
+          if (InputValues.find(V) != InputValues.end()) {
+            llvm::errs() << "Error: duplicate value for %" << V->Name << "\n";
+            return 1;
+          }
+          APInt ValObj = APInt(V->Width, Val, 10);
           InputValues[V] = ValObj;
-	  InputValuesInstMappings.emplace_back(V, IC.getConst(ValObj));
+          InputValuesInstMappings.emplace_back(V, IC.getConst(ValObj));
           Found = true;
           if (DebugLevel > 3)
             llvm::outs() << "var '" << V->Name << "' gets value '" <<
               APInt(V->Width, Val, 10) << "'\n";
           break;
+        }
+      }
+      if (auto B = Contexts[i].getBlock(Name)) {
+        unsigned BlockValue = std::stoul(Val);
+        if (BlockValue  >= B->Preds) {
+          llvm::errs() << "Error: value '" << Val << "' is to large for block %";
+          llvm::errs() << B->Number << "\n";
+          return 1;
+        }
+        if (BlockSet.find(B) != BlockSet.end()) {
+          llvm::errs() << "Error: duplicate value for %" << B->Number << "\n";
+          return 1;
+        }
+        BlockSet.insert(B);
+        B->ConcretePred = BlockValue;
+        Found = true;
+        if (DebugLevel > 3) {
+          llvm::outs() << "block '" << B->Number << "' gets value '" << Val << "'\n";
         }
       }
       if (!Found) {
@@ -166,18 +185,18 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
 
     ConcreteInterpreter CI(InputValues);
     // Concrete Interpreter
-    if (isConcrete(Rep.Mapping.LHS)) {
+    if (isConcrete(Reps[i].Mapping.LHS)) {
       llvm::outs() << " -------- Concrete Interpreter ----------- \n";
-      CI = ConcreteInterpreter(Rep.Mapping.LHS, InputValues);
-      auto Res = CI.evaluateInst(Rep.Mapping.LHS);
+      CI = ConcreteInterpreter(Reps[i].Mapping.LHS, InputValues);
+      auto Res = CI.evaluateInst(Reps[i].Mapping.LHS);
       Res.print(llvm::outs());
       llvm::outs() << "\n";
     }
 
     // Known bits interpreter
     llvm::outs() << "\n -------- KnownBits Interpreter ----------- \n";
-    auto KB = KnownBitsAnalysis().findKnownBits(Rep.Mapping.LHS, CI);
-    auto KBSolver = KnownBitsAnalysis::findKnownBitsUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
+    auto KB = KnownBitsAnalysis().findKnownBits(Reps[i].Mapping.LHS, CI);
+    auto KBSolver = KnownBitsAnalysis::findKnownBitsUsingSolver(Reps[i].Mapping.LHS, S, InputValuesInstMappings);
     llvm::outs() << "KnownBits result: \n" << KnownBitsAnalysis::knownBitsString(KB) << '\n';
     llvm::outs() << "KnownBits result using solver: \n" << KnownBitsAnalysis::knownBitsString(KBSolver) << "\n\n";
 
@@ -198,8 +217,8 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
 
     // Constant Ranges interpreter
     llvm::outs() << "\n -------- ConstantRanges Interpreter ----------- \n";
-    auto CR = ConstantRangeAnalysis().findConstantRange(Rep.Mapping.LHS, CI);
-    auto CRSolver = ConstantRangeAnalysis::findConstantRangeUsingSolver(Rep.Mapping.LHS, S, InputValuesInstMappings);
+    auto CR = ConstantRangeAnalysis().findConstantRange(Reps[i].Mapping.LHS, CI);
+    auto CRSolver = ConstantRangeAnalysis::findConstantRangeUsingSolver(Reps[i].Mapping.LHS, S, InputValuesInstMappings);
     llvm::outs() << "ConstantRange result: \n" << CR << '\n';
     llvm::outs() << "ConstantRange result using solver: \n" << CRSolver << "\n\n";
 
