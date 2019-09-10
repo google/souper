@@ -47,6 +47,10 @@ static const std::vector<Inst::Kind> BinaryOperators = {
   Inst::SSubSat, Inst::USubSat
 };
 
+static const std::vector<Inst::Kind> TernaryOperators = {
+  Inst::Select, Inst::FShl, Inst::FShr
+};
+
 namespace {
   static cl::opt<unsigned, /*ExternalStorage=*/true>
     DebugFlagParser("souper-exhaustive-synthesis-debug-level",
@@ -322,71 +326,82 @@ void getGuesses(std::vector<Inst *> &Guesses,
   // need two reserved per select instruction
   Inst *C2 = IC.getReservedConst();
   Comps.push_back(C2);
+  Inst *C3 = IC.getReservedConst();
+  Comps.push_back(C3);
   Inst *I3 = IC.getReservedInst();
   Comps.push_back(I3);
 
-  for (auto I = Comps.begin(); I != Comps.end(); ++I) {
-    if ((*I)->K == Inst::ReservedInst && (*I) != I1)
-      continue;
-    if ((*I)->K == Inst::ReservedConst && (*I) != C1)
-      continue;
-
-    for (auto J = Comps.begin(); J != Comps.end(); ++J) {
-      if ((*J)->K == Inst::ReservedInst && (*J) != I2)
-        continue;
-      if ((*J)->K == Inst::ReservedConst && (*J) != C2)
+  for (auto Op : TernaryOperators) {
+    for (auto I : Comps) {
+      if (I->K == Inst::ReservedInst && I != I1)
         continue;
 
-      // Prune (select cond, x, x)
-      if (I == J)
+      if (I->K == Inst::ReservedConst && I != C1)
         continue;
-      Inst *V1, *V2;
-      if ((*I)->K == Inst::ReservedConst) {
-        V1 = IC.createSynthesisConstant(Width, (*I)->SynthesisConstID);
-      } else if ((*I)->K == Inst::ReservedInst) {
-        V1 = IC.createHole(Width);
+
+      // (select i1, c, c)
+      // PRUNE: a select's control input should never be constant
+      if (Op == Inst::Select && I->K == Inst::ReservedConst)
+        continue;
+
+      Inst *V1;
+      if (I->K == Inst::ReservedConst) {
+        V1 = IC.createSynthesisConstant(Width, I->SynthesisConstID);
+      } else if (I->K == Inst::ReservedInst) {
+        V1 = IC.createHole(Op == Inst::Select ? 1 : Width);
       } else {
-        V1 = *I;
-      }
-      if ((*J)->K == Inst::ReservedConst) {
-        V2 = IC.createSynthesisConstant(Width, (*J)->SynthesisConstID);
-      } else if ((*J)->K == Inst::ReservedInst) {
-        V2 = IC.createHole(Width);
-      } else {
-        V2 = *J;
+        V1 = I;
       }
 
-      if (V1->Width != V2->Width)
+      if (Op == Inst::Select && V1->Width != 1)
         continue;
 
-      if (V1->Width != Width)
-        continue;
-
-      assert(V1->Width == V2->Width);
-
-      for (auto L : Comps) {
-        if (L->K == Inst::ReservedInst && L != I3)
+      for (auto J : Comps) {
+        if (J->K == Inst::ReservedInst && J != I2)
+          continue;
+        if (J->K == Inst::ReservedConst && J != C2)
           continue;
 
-        // (select i1, c, c)
-        // PRUNE: a select's control input should never be constant
-        if (L->K == Inst::ReservedConst)
-          continue;
-
-        Inst *V;
-        if (L->K == Inst::ReservedInst) {
-          V = IC.createHole(1);
+        Inst *V2;
+        if (J->K == Inst::ReservedConst) {
+          V2 = IC.createSynthesisConstant(Width, J->SynthesisConstID);
+        } else if (J->K == Inst::ReservedInst) {
+          V2 = IC.createHole(Width);
         } else {
-          V = L;
+          V2 = J;
         }
 
-        if (V->Width != 1)
-          continue;
+        for (auto K : Comps) {
+          if (K->K == Inst::ReservedInst && K != I3)
+            continue;
 
+          // PRUNE: (select cond, x, x)
+          if (Op == Inst::Select && J == K)
+            continue;
 
-        auto SelectInst = IC.getInst(Inst::Select, Width, { V, V1, V2 });
+          // PRUNE: {fshl, fshr} c, c, c
+          if ((Op == Inst::FShl || Op == Inst::FShr) &&
+              I->K == Inst::ReservedConst && J->K == Inst::ReservedConst && K->K == Inst::ReservedConst)
+            continue;
 
-        addGuess(SelectInst, LHSCost, PartialGuesses, TooExpensive);
+          Inst *V3;
+          if (K->K == Inst::ReservedConst) {
+            V3 = IC.createSynthesisConstant(Width, K->SynthesisConstID);
+          } else if (K->K == Inst::ReservedInst) {
+            V3 = IC.createHole(Width);
+          } else {
+            V3 = K;
+          }
+
+          if (V2->Width != V3->Width)
+            continue;
+
+          if (V2->Width != Width)
+            continue;
+
+          auto N = IC.getInst(Op, Width, {V1, V2, V3});
+          addGuess(N, LHSCost, PartialGuesses, TooExpensive);
+        }
       }
     }
   }
