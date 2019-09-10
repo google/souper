@@ -39,6 +39,8 @@ static const std::vector<Inst::Kind> UnaryOperators = {
 
 static const std::vector<Inst::Kind> BinaryOperators = {
   Inst::Add, Inst::Sub, Inst::Mul,
+  Inst::UDiv, Inst::SDiv,
+  Inst::URem, Inst::SRem,
   Inst::And, Inst::Or, Inst::Xor,
   Inst::Shl, Inst::AShr, Inst::LShr,
   Inst::Eq, Inst::Ne, Inst::Ult,
@@ -199,7 +201,6 @@ void getGuesses(std::vector<Inst *> &Guesses,
   Comps.push_back(I1);
   Comps.push_back(I2);
 
-  // Binary instructions (TODO add div/rem)
   for (auto K : BinaryOperators) {
     if (Inst::isCmp(K) && Width != 1)
       continue;
@@ -304,6 +305,11 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
         // PRUNE: don't synthesize "{ashr, lshr} x, x" as its results in either zero or poison
         if ((K == Inst::AShr || K == Inst::LShr) &&
+            V1 == V2)
+            continue;
+
+        // PRUNE: don't synthesize "{udiv, sdiv, urem, srem x, x}"
+        if ((K == Inst::UDiv || K == Inst::SDiv || K == Inst::URem || K == Inst::SRem) &&
             V1 == V2)
             continue;
 
