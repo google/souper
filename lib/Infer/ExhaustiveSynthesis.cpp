@@ -231,11 +231,12 @@ void getGuesses(std::vector<Inst *> &Guesses,
           continue;
 
         // PRUNE: never useful to div, rem, sub, and, or, xor,
-        // icmp, select a value against itself
+        // icmp, select, usub.sat, ssub.sat, ashr, lshr a value against itself
         if ((*I == *J) && (Inst::isCmp(K) || K == Inst::And || K == Inst::Or ||
                            K == Inst::Xor || K == Inst::Sub || K == Inst::UDiv ||
                            K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
-                           K == Inst::Select))
+                           K == Inst::Select || K == Inst::USubSat || K == Inst::SSubSat ||
+                           K == Inst::AShr || K == Inst::LShr))
           continue;
 
         // PRUNE: never operate on two constants
@@ -307,21 +308,6 @@ void getGuesses(std::vector<Inst *> &Guesses,
         // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
         if (K == Inst::Sub && V2->SynthesisConstID != 0)
           continue;
-
-        // PRUNE: don't synthesize "{ashr, lshr} x, x" as its results in either zero or poison
-        if ((K == Inst::AShr || K == Inst::LShr) &&
-            V1 == V2)
-            continue;
-
-        // PRUNE: don't synthesize "{udiv, sdiv, urem, srem x, x}"
-        if ((K == Inst::UDiv || K == Inst::SDiv || K == Inst::URem || K == Inst::SRem) &&
-            V1 == V2)
-            continue;
-
-        // PRUNE: don't synthesize "{sub, usub.sat, ssub.sat} x, x"
-        if ((K == Inst::Sub || K == Inst::USubSat || K == Inst::SSubSat) &&
-            V1 == V2)
-            continue;
 
         auto N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, { V1, V2 });
         addGuess(N, LHSCost, PartialGuesses, TooExpensive);

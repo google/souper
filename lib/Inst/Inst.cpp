@@ -802,7 +802,6 @@ int Inst::getCost(Inst::Kind K) {
     case UAddSat:
     case SSubSat:
     case USubSat:
-      return 3;
     case Select:
       return 3;
     default:
