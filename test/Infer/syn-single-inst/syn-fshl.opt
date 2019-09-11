@@ -1,0 +1,13 @@
+; REQUIRES: solver, synthesis
+
+; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-exhaustive-synthesis-num-instructions=1 %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: fshl %0, %0, %1
+%0:i32 = var
+%1:i32 = var (range=[0, 31))
+%2 = sub 32, %1
+%3 = shl %0, %1
+%4 = lshr %0, %2
+%5 = or %3, %4
+infer %5
