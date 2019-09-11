@@ -34,12 +34,13 @@ class InstPrinter(object):
         if not int(node) in self.printed:
             is_printed = int(node) in self.printed
             nr = self.get_nr(node)
-            ikind = node['K']
+            ikind = str(node['K']).split('::')[-1].lower()
             res = '%%%d = %s ' % (nr, ikind)
             while start != end:
                 res += '%%%d, ' % (self.get_nr(start))
                 start += 1
-
+            
+            res = res.strip(', ')
             print (res)
 
     def to_string(self):
@@ -57,7 +58,7 @@ class InstPrinter(object):
 
         root = stack[-1]
         nr = self.get_nr(root)
-        ikind = root['K']
+        ikind = str(root['K']).split('::')[-1].lower()
         res = '%%%d = %s ' % (nr, ikind)
 
         start = root['Ops']['_M_impl']['_M_start']
@@ -66,6 +67,7 @@ class InstPrinter(object):
             res += '%%%d, ' % (self.get_nr(start))
             start += 1
 
+        res = res.strip(', ')
         print (res)
         return '---'
 
