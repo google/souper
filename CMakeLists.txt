@@ -382,6 +382,11 @@ configure_file(
   ${CMAKE_BINARY_DIR}/run_lit
 )
 
+configure_file(
+  ${CMAKE_SOURCE_DIR}/tools/gdbprinter.py
+  ${CMAKE_BINARY_DIR}/souper-check-gdb.py
+)
+
 add_custom_target(check
   COMMAND ${CMAKE_BINARY_DIR}/run_lit
   DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souper-interpret souperPass souperPassProfileAll count-insts interpreter_tests
