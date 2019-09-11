@@ -322,8 +322,8 @@ void getGuesses(std::vector<Inst *> &Guesses,
     }
   }
 
-  // Deal with select instruction separately, since some guesses might
-  // need two reserved per select instruction
+  // Deal with ternary instructions separately, since some guesses might
+  // need two reserved per instruction
   Inst *C2 = IC.getReservedConst();
   Comps.push_back(C2);
   Inst *C3 = IC.getReservedConst();
@@ -335,11 +335,10 @@ void getGuesses(std::vector<Inst *> &Guesses,
     for (auto I : Comps) {
       if (I->K == Inst::ReservedInst && I != I1)
         continue;
-
       if (I->K == Inst::ReservedConst && I != C1)
         continue;
 
-      // (select i1, c, c)
+      // (select c, x, y)
       // PRUNE: a select's control input should never be constant
       if (Op == Inst::Select && I->K == Inst::ReservedConst)
         continue;
@@ -371,17 +370,21 @@ void getGuesses(std::vector<Inst *> &Guesses,
           V2 = J;
         }
 
+        if (V2->Width != Width)
+          continue;
+
         for (auto K : Comps) {
           if (K->K == Inst::ReservedInst && K != I3)
+            continue;
+          if (K->K == Inst::ReservedConst && K != C3)
+            continue;
+
+          // PRUNE: ter-op c, c, c
+          if (I->K == Inst::ReservedConst && J->K == Inst::ReservedConst && K->K == Inst::ReservedConst)
             continue;
 
           // PRUNE: (select cond, x, x)
           if (Op == Inst::Select && J == K)
-            continue;
-
-          // PRUNE: {fshl, fshr} c, c, c
-          if ((Op == Inst::FShl || Op == Inst::FShr) &&
-              I->K == Inst::ReservedConst && J->K == Inst::ReservedConst && K->K == Inst::ReservedConst)
             continue;
 
           Inst *V3;
@@ -394,9 +397,6 @@ void getGuesses(std::vector<Inst *> &Guesses,
           }
 
           if (V2->Width != V3->Width)
-            continue;
-
-          if (V2->Width != Width)
             continue;
 
           auto N = IC.getInst(Op, Width, {V1, V2, V3});
