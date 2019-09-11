@@ -3,9 +3,9 @@
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,const,and,add,or,sub %s > %t1
 ; RUN: %FileCheck %s < %t1
 
-; CHECK: {{(%5:i32 = add %0, %0|%5:i32 = and %3, %2)}}
+; CHECK: {{(%5:i32 = add %0, %0|%5:i32 = and %3, %2|%5:i32 = add 4294967295:i32, %0)}}
 ; CHECK: {{(%6:i32 = or %0, %5|result %5)}}
-; CHECK: {{(%7:i32 = sub %0, %6)?}}
+; CHECK: {{(%7:i32 = sub %0, %6|%7:i32 = sub %6, 4294967295:i3)?}}
 ; CHECK: {{(%8:i32 = and %0, %7)?}}
 ; CHECK: {{(result %8)?}}
 
