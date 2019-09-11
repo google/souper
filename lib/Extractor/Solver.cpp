@@ -26,6 +26,7 @@
 #include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Infer/ExhaustiveSynthesis.h"
 #include "souper/Infer/InstSynthesis.h"
+#include "souper/Infer/Pruning.h"
 #include "souper/KVStore/KVStore.h"
 #include "souper/Parser/Parser.h"
 
@@ -67,6 +68,10 @@ static cl::opt<bool> EnableExhaustiveSynthesis("souper-exhaustive-synthesis",
 static cl::opt<int> MaxLHSSize("souper-max-lhs-size",
     cl::desc("Max size of LHS (in bytes) to put in external cache (default=1024)"),
     cl::init(1024));
+static cl::opt<int> MaxConstantSynthesisTries("souper-max-constant-synthesis-tries",
+    cl::desc("Max number of constant synthesis tries. (default=30)"),
+    cl::init(30));
+
 
 class BaseSolver : public Solver {
   std::unique_ptr<SMTLIBSolver> SMTSolver;
@@ -440,9 +445,16 @@ public:
                              std::set<Inst *> &ConstSet,
                              std::map<Inst *, llvm::APInt> &ResultMap,
                              InstContext &IC) override {
-    ConstantSynthesis CS;
+    SynthesisContext SC{IC, SMTSolver.get(), LHS, /*LHSUB*/nullptr, PCs, BPCs, Timeout};
+    // TODO: Construct LHSUB, a predicate which evaluates to true when corresponding inputs
+    // case LHS to evaluate to UB
+    std::vector<Inst *> Inputs;
+    findVars(LHS, Inputs);
+    PruningManager Pruner(SC, Inputs, DebugLevel);
+    Pruner.init();
+    ConstantSynthesis CS{&Pruner};
     std::error_code EC = CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, RHS),
-                                       ConstSet, ResultMap, IC, 30, Timeout);
+                                       ConstSet, ResultMap, IC, MaxConstantSynthesisTries, Timeout);
 
     if (EC || ResultMap.empty())
       return EC;
@@ -510,7 +522,7 @@ public:
     // the query to take care of UB, therefore, the new query is or(trunc(LHS), 1) = Guess(ReservedX, LHS)
     LHS = IC.getInst(Inst::Or, 1, {IC.getInst(Inst::Trunc, 1, {LHS}), IC.getConst(llvm::APInt(1, true))}),
     CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, Guess),
-                  ConstSet, ResultMap, IC, /*MaxTries=*/30, Timeout);
+                  ConstSet, ResultMap, IC, MaxConstantSynthesisTries, Timeout);
     if (ResultMap.empty()) {
       IsFound = false;
     } else {
