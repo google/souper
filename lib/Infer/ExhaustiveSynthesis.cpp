@@ -170,6 +170,9 @@ void getGuesses(std::vector<Inst *> &Guesses,
     }
   }
 
+  Inst *I1 = IC.getReservedInst();
+  Comps.push_back(I1);
+
   // Unary Operators
   if (Width > 1) {
     for (auto K : UnaryOperators) {
@@ -200,9 +203,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
   // reservedinst and reservedconsts starts with width 0
   Inst *C1 = IC.getReservedConst();
   Comps.push_back(C1);
-  Inst *I1 = IC.getReservedInst();
   Inst *I2 = IC.getReservedInst();
-  Comps.push_back(I1);
   Comps.push_back(I2);
 
   for (auto K : BinaryOperators) {
