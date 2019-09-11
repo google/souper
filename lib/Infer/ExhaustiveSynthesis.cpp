@@ -360,6 +360,8 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
       if (Op == Inst::Select && V1->Width != 1)
         continue;
+      if (Op != Inst::Select && V1->Width != Width)
+        continue;
 
       for (auto J : Comps) {
         if (J->K == Inst::ReservedInst && J != I2)
