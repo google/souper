@@ -177,6 +177,9 @@ void getGuesses(std::vector<Inst *> &Guesses,
   if (Width > 1) {
     for (auto K : UnaryOperators) {
       for (auto Comp : Comps) {
+        if (K == Inst::BSwap && Width % 16 != 0)
+          continue;
+
         if (Comp->K == Inst::ReservedInst) {
           auto V = IC.createHole(Width);
           auto N = IC.getInst(K, Width, { V });
@@ -189,9 +192,6 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
         // Prune: unary operation on constant
         if (Comp->K == Inst::ReservedConst)
-          continue;
-
-        if (K == Inst::BSwap && Width % 16 != 0)
           continue;
 
         auto N = IC.getInst(K, Width, { Comp });
