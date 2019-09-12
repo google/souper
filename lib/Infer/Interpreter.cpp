@@ -376,10 +376,10 @@ namespace souper {
     case Inst::UMulWithOverflow: {
       assert(ARG1.getBitWidth() == 1);
       unsigned W = ARG0.getBitWidth() + 1;
-      auto res = ARG0.zext(W);
+      auto Res = ARG0.zext(W);
       if (ARG1.isOneValue())
-        res.setSignBit();
-      return {res};
+        Res.setSignBit();
+      return {Res};
     }
     case Inst::SAddO: {
       bool Ov = false;

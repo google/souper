@@ -1,4 +1,4 @@
-; REQUIRES: solver, synthesis, unsupported
+; REQUIRES: solver, synthesis
 ; mark this case UNSUPPORTED until blockpc is supported by ExhaustiveSynthesis. InstSynthesis passes the case correctly.
 
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,sub %s > %t1 2>&1
