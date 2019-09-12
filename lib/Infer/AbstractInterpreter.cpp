@@ -944,6 +944,10 @@ namespace souper {
         } else if (RB1 == 0) {
           Result = RB1;
         }
+
+        if (Inst::isCmp(I->K) && Result.getBitWidth() > 1)
+          Result = Result.trunc(1);
+
         break;
       }
 
