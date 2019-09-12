@@ -545,8 +545,8 @@ std::vector<ValueCache> PruningManager::generateInputSets(
     std::string usedInput;
     for (auto &&I : Inputs) {
       if (I->K == souper::Inst::Var) {
-	usedInput.append(1, specialInputs[i]);
-	Cache[I] = getSpecialAPInt(specialInputs[i++], I->Width);
+        usedInput.append(1, specialInputs[i]);
+        Cache[I] = getSpecialAPInt(specialInputs[i++], I->Width);
       }
     }
 

@@ -542,7 +542,7 @@ Inst *ExprBuilder::buildHelper(Value *V) {
         case Intrinsic::bswap:
           return IC.getInst(Inst::BSwap, L->Width, {L});
         case Intrinsic::bitreverse:
-	  return IC.getInst(Inst::BitReverse, L->Width, {L});
+          return IC.getInst(Inst::BitReverse, L->Width, {L});
         case Intrinsic::cttz:
           return IC.getInst(Inst::Cttz, L->Width, {L});
         case Intrinsic::ctlz:
@@ -585,17 +585,17 @@ Inst *ExprBuilder::buildHelper(Value *V) {
           return IC.getInst(Inst::UMulWithOverflow, L->Width+1, {Mul, Overflow});
         }
         case Intrinsic::sadd_sat: {
-	  return IC.getInst(Inst::SAddSat, L->Width, {L, R});
-	}
+          return IC.getInst(Inst::SAddSat, L->Width, {L, R});
+        }
         case Intrinsic::uadd_sat: {
-	  return IC.getInst(Inst::UAddSat, L->Width, {L, R});
-	}
+          return IC.getInst(Inst::UAddSat, L->Width, {L, R});
+        }
         case Intrinsic::ssub_sat: {
-	  return IC.getInst(Inst::SSubSat, L->Width, {L, R});
-	}
+          return IC.getInst(Inst::SSubSat, L->Width, {L, R});
+        }
         case Intrinsic::usub_sat: {
-	  return IC.getInst(Inst::USubSat, L->Width, {L, R});
-	}
+          return IC.getInst(Inst::USubSat, L->Width, {L, R});
+        }
       }
     } else {
       Function* F = Call->getCalledFunction();

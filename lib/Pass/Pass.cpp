@@ -218,8 +218,8 @@ public:
         return Builder.CreateCall(F, V0);
       }
       case Inst::BitReverse:{
-	Function *F = Intrinsic::getDeclaration(M, Intrinsic::bitreverse, T);
-	return Builder.CreateCall(F, V0);
+        Function *F = Intrinsic::getDeclaration(M, Intrinsic::bitreverse, T);
+        return Builder.CreateCall(F, V0);
       }
       case Inst::Cttz:{
         Function *F = Intrinsic::getDeclaration(M, Intrinsic::cttz, T);
@@ -309,13 +309,13 @@ public:
           return Builder.CreateICmpSLE(V0, V1);
         }
       case Inst::SAddSat:
-	return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::sadd_sat, T), {V0, V1});
+        return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::sadd_sat, T), {V0, V1});
       case Inst::UAddSat:
-	return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::uadd_sat, T), {V0, V1});
+        return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::uadd_sat, T), {V0, V1});
       case Inst::SSubSat:
-	return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::ssub_sat, T), {V0, V1});
+        return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::ssub_sat, T), {V0, V1});
       case Inst::USubSat:
-	return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::usub_sat, T), {V0, V1});
+        return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::usub_sat, T), {V0, V1});
       default:
         break;
       }

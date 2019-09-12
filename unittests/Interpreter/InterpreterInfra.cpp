@@ -108,10 +108,10 @@ KnownBits KBTesting::clearLowest(KnownBits x) {
 EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
   if (!x.isConstant())
     return merge(bruteForce(setLowest(x), y, Pred),
-		 bruteForce(clearLowest(x), y, Pred));
+                 bruteForce(clearLowest(x), y, Pred));
   if (!y.isConstant())
     return merge(bruteForce(x, setLowest(y), Pred),
-		 bruteForce(x, clearLowest(y), Pred));
+                 bruteForce(x, clearLowest(y), Pred));
   auto xc = x.getConstant();
   auto yc = y.getConstant();
 
@@ -233,91 +233,91 @@ bool KBTesting::testFn(Inst::Kind pred) {
       case Inst::AddNUW:
       case Inst::AddNW:
       case Inst::Add:
-	Calculated = BinaryTransferFunctionsKB::add(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::add(x, y);
+        break;
       case Inst::AddNSW:
-	Calculated = BinaryTransferFunctionsKB::addnsw(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::addnsw(x, y);
+        break;
       case Inst::SubNUW:
       case Inst::SubNW:
       case Inst::Sub:
-	Calculated = BinaryTransferFunctionsKB::sub(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::sub(x, y);
+        break;
       case Inst::SubNSW:
-	Calculated = BinaryTransferFunctionsKB::subnsw(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::subnsw(x, y);
+        break;
       case Inst::Mul:
-	Calculated = BinaryTransferFunctionsKB::mul(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::mul(x, y);
+        break;
       case Inst::UDiv:
-	Calculated = BinaryTransferFunctionsKB::udiv(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::udiv(x, y);
+        break;
       case Inst::URem:
-	Calculated = BinaryTransferFunctionsKB::urem(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::urem(x, y);
+        break;
       case Inst::And:
-	Calculated = BinaryTransferFunctionsKB::and_(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::and_(x, y);
+        break;
       case Inst::Or:
-	Calculated = BinaryTransferFunctionsKB::or_(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::or_(x, y);
+        break;
       case Inst::Xor:
-	Calculated = BinaryTransferFunctionsKB::xor_(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::xor_(x, y);
+        break;
       case Inst::Shl:
-	Calculated = BinaryTransferFunctionsKB::shl(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::shl(x, y);
+        break;
       case Inst::LShr:
-	Calculated = BinaryTransferFunctionsKB::lshr(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::lshr(x, y);
+        break;
       case Inst::AShr:
-	Calculated = BinaryTransferFunctionsKB::ashr(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::ashr(x, y);
+        break;
       case Inst::Eq:
-	Calculated = BinaryTransferFunctionsKB::eq(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::eq(x, y);
+        break;
       case Inst::Ne:
-	Calculated = BinaryTransferFunctionsKB::ne(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::ne(x, y);
+        break;
       case Inst::Ult:
-	Calculated = BinaryTransferFunctionsKB::ult(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::ult(x, y);
+        break;
       case Inst::Slt:
-	Calculated = BinaryTransferFunctionsKB::slt(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::slt(x, y);
+        break;
       case Inst::Ule:
-	Calculated = BinaryTransferFunctionsKB::ule(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::ule(x, y);
+        break;
       case Inst::Sle:
-	Calculated = BinaryTransferFunctionsKB::sle(x, y);
-	break;
+        Calculated = BinaryTransferFunctionsKB::sle(x, y);
+        break;
       default:
-	report_fatal_error("unhandled case in testFn!");
+        report_fatal_error("unhandled case in testFn!");
       }
 
       EvalValueKB Expected = bruteForce(x, y, pred);
       // expected value is poison/ub; so let binary transfer functions do
       // whatever they want without complaining
       if (!Expected.hasValue())
-	continue;
+        continue;
 
       if (Calculated.getBitWidth() != Expected.ValueKB.getBitWidth()) {
-	llvm::errs() << "Expected and Given have unequal bitwidths - Expected: "
-		     << Expected.ValueKB.getBitWidth() << ", Given: " << Calculated.getBitWidth() << '\n';
-	return false;
+        llvm::errs() << "Expected and Given have unequal bitwidths - Expected: "
+                     << Expected.ValueKB.getBitWidth() << ", Given: " << Calculated.getBitWidth() << '\n';
+        return false;
       }
       if (Calculated.hasConflict() || Expected.ValueKB.hasConflict()) {
-	llvm::errs() << "Expected or Given result has a conflict\n";
-	return false;
+        llvm::errs() << "Expected or Given result has a conflict\n";
+        return false;
       }
 
       if (KnownBitsAnalysis::isConflictingKB(Calculated, Expected.ValueKB)) {
-	outs() << "Unsound!! " << Inst::getKindName(pred) << '\n';
-	outs() << KnownBitsAnalysis::knownBitsString(x) << ' ' << Inst::getKindName(pred)
-	       << ' ' << KnownBitsAnalysis::knownBitsString(y) << '\n';
-	outs() << "Calculated: " << KnownBitsAnalysis::knownBitsString(Calculated) << '\n';
-	outs() << "Expected: " << KnownBitsAnalysis::knownBitsString(Expected.ValueKB) << '\n';
-	return false;
+        outs() << "Unsound!! " << Inst::getKindName(pred) << '\n';
+        outs() << KnownBitsAnalysis::knownBitsString(x) << ' ' << Inst::getKindName(pred)
+               << ' ' << KnownBitsAnalysis::knownBitsString(y) << '\n';
+        outs() << "Calculated: " << KnownBitsAnalysis::knownBitsString(Calculated) << '\n';
+        outs() << "Expected: " << KnownBitsAnalysis::knownBitsString(Expected.ValueKB) << '\n';
+        return false;
       }
 
     } while(nextKB(y));
@@ -336,7 +336,7 @@ bool CRTesting::rangeContainsAll(const ConstantRange &R, const bool Table[]) {
     if (Table[i]) {
       APInt a(WIDTH, i);
       if (!R.contains(a))
-	return false;
+        return false;
     }
   }
   return true;
@@ -362,16 +362,16 @@ ConstantRange CRTesting::bestCR(const bool Table[], const int Width) {
   for (unsigned i = 0; i < Range; ++i) {
     if (Table[i]) {
       if (inHole) {
-	inHole = false;
-	if ((i - Hole) > MaxSize) {
-	  MaxHole = Hole;
-	  MaxSize = i - Hole;
-	}
+        inHole = false;
+        if ((i - Hole) > MaxSize) {
+          MaxHole = Hole;
+          MaxSize = i - Hole;
+        }
       }
     } else {
       if (!inHole) {
-	inHole = true;
-	Hole = i;
+        inHole = true;
+        Hole = i;
       }
     }
   }
@@ -414,7 +414,7 @@ ConstantRange CRTesting::bestCR(const bool Table[], const int Width) {
 }
 
 ConstantRange CRTesting::exhaustive(const ConstantRange &L, const ConstantRange &R,
-				    Inst::Kind pred, const ConstantRange &Untrusted) {
+                                    Inst::Kind pred, const ConstantRange &Untrusted) {
   if (L.isEmptySet() || R.isEmptySet())
     return ConstantRange(WIDTH, /*isFullSet=*/false);
   bool Table[1 << WIDTH];
@@ -427,35 +427,35 @@ ConstantRange CRTesting::exhaustive(const ConstantRange &L, const ConstantRange 
       APInt Val;
       switch (pred) {
       case Inst::And:
-	Val = LI & RI;
-	break;
+        Val = LI & RI;
+        break;
       case Inst::Or:
-	Val = LI | RI;
-	break;
+        Val = LI | RI;
+        break;
       case Inst::Add:
-	Val = LI + RI;
-	break;
+        Val = LI + RI;
+        break;
       case Inst::Sub:
-	Val = LI - RI;
-	break;
+        Val = LI - RI;
+        break;
       case Inst::Shl:
-	Val = LI.shl(RI);
-	break;
+        Val = LI.shl(RI);
+        break;
       case Inst::LShr:
-	Val = LI.lshr(RI);
-	break;
+        Val = LI.lshr(RI);
+        break;
       case Inst::AShr:
-	Val = LI.ashr(RI);
-	break;
+        Val = LI.ashr(RI);
+        break;
       default:
-	report_fatal_error("unknown opcode");
+        report_fatal_error("unknown opcode");
       }
       if (!Untrusted.contains(Val)) {
-	outs() << "Unsound! " << Inst::getKindName(pred) << '\n';
-	outs() << L << ' ' << Inst::getKindName(pred) << ' '
-	       << R << '\n';
-	outs() << "Calculated value " << Untrusted <<  " must contain: " << Val << '\n';
-	report_fatal_error("Unsound!");
+        outs() << "Unsound! " << Inst::getKindName(pred) << '\n';
+        outs() << L << ' ' << Inst::getKindName(pred) << ' '
+               << R << '\n';
+        outs() << "Calculated value " << Untrusted <<  " must contain: " << Val << '\n';
+        report_fatal_error("Unsound!");
       }
       Table[Val.getLimitedValue()] = true;
       ++RI;
@@ -466,7 +466,7 @@ ConstantRange CRTesting::exhaustive(const ConstantRange &L, const ConstantRange 
 }
 
 void CRTesting::check(const ConstantRange &L, const ConstantRange &R, Inst::Kind pred,
-		      double &FastBits, double &PreciseBits, int &Count, int &PreciseCount) {
+                      double &FastBits, double &PreciseBits, int &Count, int &PreciseCount) {
   ConstantRange FastRes(WIDTH, true);
   switch (pred) {
   case Inst::Or:
