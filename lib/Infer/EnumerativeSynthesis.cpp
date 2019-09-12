@@ -46,7 +46,17 @@ static const std::vector<Inst::Kind> BinaryOperators = {
   Inst::Eq, Inst::Ne, Inst::Ult,
   Inst::Slt, Inst::Ule, Inst::Sle,
   Inst::SAddSat, Inst::UAddSat,
-  Inst::SSubSat, Inst::USubSat
+  Inst::SSubSat, Inst::USubSat,
+
+  /* Overflow intrinsics are synthesized always with `extractvalue`.
+   * Main overflow intrinsics like {S,U}{Add,Sub,Mul}WithOverflow below means synthesizing
+   * extractvalue with index 0. On the other hand, synthesizing suboperations like {U,S}{Add,Sub,Mul}O
+   * means synthesizing extractvalue with index 1. */
+  Inst::SAddWithOverflow, Inst::UAddWithOverflow,
+  Inst::SSubWithOverflow, Inst::USubWithOverflow,
+  Inst::SMulWithOverflow, Inst::UMulWithOverflow,
+  Inst::SAddO, Inst::UAddO, Inst::SSubO,
+  Inst::USubO, Inst::SMulO, Inst::UMulO
 };
 
 static const std::vector<Inst::Kind> TernaryOperators = {
@@ -116,7 +126,9 @@ namespace {
 
 void addGuess(Inst *RHS, int MaxCost, std::vector<Inst *> &Guesses,
               int &TooExpensive) {
-  if (souper::cost(RHS) < MaxCost)
+  int cost = souper::cost(RHS);
+
+  if (cost < MaxCost)
     Guesses.push_back(RHS);
   else
     TooExpensive++;
@@ -207,7 +219,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
   Comps.push_back(I2);
 
   for (auto K : BinaryOperators) {
-    if (Inst::isCmp(K) && Width != 1)
+    if ((Inst::isCmp(K) || Inst::isOverflowIntrinsicSub(K)) && Width != 1)
       continue;
 
     // PRUNE: one-bit shifts don't make sense
@@ -232,11 +244,13 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
         // PRUNE: never useful to div, rem, sub, and, or, xor,
         // icmp, select, usub.sat, ssub.sat, ashr, lshr a value against itself
+        // Also do it for sub.overflow -- no sense to check for overflow when results = 0
         if ((*I == *J) && (Inst::isCmp(K) || K == Inst::And || K == Inst::Or ||
                            K == Inst::Xor || K == Inst::Sub || K == Inst::UDiv ||
                            K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
                            K == Inst::Select || K == Inst::USubSat || K == Inst::SSubSat ||
-                           K == Inst::AShr || K == Inst::LShr))
+                           K == Inst::AShr || K == Inst::LShr || K == Inst::SSubWithOverflow ||
+                           K == Inst::USubWithOverflow || K == Inst::SSubO || K == Inst::USubO))
           continue;
 
         // PRUNE: never operate on two constants
@@ -309,7 +323,23 @@ void getGuesses(std::vector<Inst *> &Guesses,
         if (K == Inst::Sub && V2->SynthesisConstID != 0)
           continue;
 
-        auto N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, { V1, V2 });
+        Inst *N = nullptr;
+        if (Inst::isOverflowIntrinsicMain(K)) {
+          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(K), Width, {V1, V2});
+          auto Comp1 = IC.getInst(Inst::getOverflowComplement(K), 1, {V1, V2});
+          auto Orig = IC.getInst(K, Width + 1, {Comp0, Comp1});
+          N = IC.getInst(Inst::ExtractValue, Width, {Orig, IC.getUntypedConst(llvm::APInt(1, 0))});
+        }
+        else if (Inst::isOverflowIntrinsicSub(K)) {
+          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)), Width, {V1, V2});
+          auto Comp1 = IC.getInst(K, 1, {V1, V2});
+          auto Orig = IC.getInst(Inst::getOverflowComplement(K), Width + 1, {V1, V2});
+          N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getUntypedConst(llvm::APInt(1, 1))});
+        }
+        else {
+          N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, {V1, V2});
+        }
+
         addGuess(N, LHSCost, PartialGuesses, TooExpensive);
       }
     }
