@@ -166,6 +166,13 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       ConcreteInterpreter CI(LHSCopy, VC);
       auto LHSV = CI.evaluateInst(LHSCopy);
 
+      if (!LHSV.hasValue()) {
+        if (DebugLevel > 3) {
+          llvm::errs() << "the model returned from second query evaluates to poison for LHS";
+        }
+        continue;
+      }
+
       std::map<Inst *, Inst *> InstCache;
       std::map<Block *, Block *> BlockCache;
       SubstAnte = IC.getInst(Inst::And, 1,

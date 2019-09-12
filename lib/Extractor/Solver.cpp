@@ -504,6 +504,10 @@ public:
     std::set<Inst *> ConstSet{ReservedX};
     std::map <Inst *, llvm::APInt> ResultMap;
     ConstantSynthesis CS;
+    // Before switching to ConcreteInterpreter for LHS simplification, the query is Guess(ReservedX, LHS) == 1
+    // Note there is a reservedconst (ReservedX) in left side of the query. After the switch, the left side
+    // of the query needs to be reservedconst free, and we still need LHS to stay on the left side of
+    // the query to take care of UB, therefore, the new query is or(trunc(LHS), 1) = Guess(ReservedX, LHS)
     LHS = IC.getInst(Inst::Or, 1, {IC.getInst(Inst::Trunc, 1, {LHS}), IC.getConst(llvm::APInt(1, true))}),
     CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, Guess),
                   ConstSet, ResultMap, IC, /*MaxTries=*/30, Timeout);
