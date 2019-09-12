@@ -167,10 +167,7 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       auto LHSV = CI.evaluateInst(LHSCopy);
 
       if (!LHSV.hasValue()) {
-        if (DebugLevel > 3) {
-          llvm::errs() << "the model returned from second query evaluates to poison for LHS";
-        }
-        continue;
+        llvm::report_fatal_error("the model returned from second query evaluates to poison for LHS");
       }
 
       std::map<Inst *, Inst *> InstCache;
