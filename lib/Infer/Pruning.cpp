@@ -287,7 +287,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
               KNOTB.One = ConstantKnownNotOne[C];
               if (KNOTB.hasConflict()) {
                 if (StatsLevel > 2) {
-                  llvm::errs() << KNOTB.Zero.toString(2, false) << "\t" << KNOTB.One.toString(2, false) << "\n";
+                  llvm::errs() << KNOTB.Zero.toString(2, false) << "\n" << KNOTB.One.toString(2, false) << "\n";
                   llvm::errs() << "  pruned using KB refinement! ";
                   llvm::errs() << "Inst had a symbolic const.";
                   llvm::errs() << "\n";
@@ -298,6 +298,22 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
                   llvm::errs() << "  KNOTB refined to: " <<
                     Inst::getKnownBitsString(ConstantKnownNotZero[C],
                                               ConstantKnownNotOne[C]) << "\n";
+                  if (KNOTB.isConstant()) {
+                    auto Const = ~KNOTB.getConstant();
+                    std::map<Inst *, llvm::APInt> CMap = {{C, Const}};
+
+                    std::map<Inst *, Inst *> InstCache;
+                    std::map<Block *, Block *> BlockCache;
+                    Inst *RHSCopy = getInstCopy(RHS, SC.IC, InstCache, BlockCache, &CMap, false);
+
+                    if (isInfeasible(RHSCopy, StatsLevel)) {
+                      if (StatsLevel > 2) {
+                        llvm::errs() << "  pruned using KNOTB instantiation!  ";
+                        llvm::errs() << "Inst had a symbolic const.\n";
+                      }
+                      return true;
+                    }
+                  }
                 }
               }
 
