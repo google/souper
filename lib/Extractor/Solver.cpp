@@ -564,11 +564,11 @@ public:
       APInt ZeroGuess = R.Zero | APInt::getOneBitSet(W, Pos);
       if (testKnown(BPCs, PCs, ZeroGuess, R.One, LHS, IC)) {
         R.Zero = ZeroGuess;
-	continue;
+        continue;
       }
       APInt OneGuess = R.One | APInt::getOneBitSet(W, Pos);
       if (testKnown(BPCs, PCs, R.Zero, OneGuess, LHS, IC)) {
-	R.One = OneGuess;
+        R.One = OneGuess;
         continue;
       }
     }

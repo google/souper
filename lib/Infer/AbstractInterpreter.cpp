@@ -73,9 +73,9 @@ namespace {
       if (U.ugt(Boundary + 1))
         continue;
       if (V)
-	Res.One.setBit(I);
+        Res.One.setBit(I);
       else
-	Res.Zero.setBit(I);
+        Res.Zero.setBit(I);
     }
     return Res;
   }
@@ -110,7 +110,7 @@ namespace souper {
       assert(CR.getSetSize().ule(SS));
       assert(numKnown(KB) >= NK);
       if (SS == CR.getSetSize() && NK == numKnown(KB))
-	break;
+        break;
     }
   }
 
@@ -440,13 +440,13 @@ namespace souper {
 
   bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
     return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst *instr) {
-			      if (ConsiderConsts && isReservedConst(instr))
-				return true;
-			      if (ConsiderHoles && isHole(instr))
-				return true;
+                              if (ConsiderConsts && isReservedConst(instr))
+                                return true;
+                              if (ConsiderHoles && isHole(instr))
+                                return true;
 
-			      return false;
-			    });
+                              return false;
+                            });
   }
 
   // Tries to get the concrete value from @I

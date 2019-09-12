@@ -299,7 +299,7 @@ private:
       constexpr unsigned bytelen = 8;
       ref<Expr> res = ExtractExpr::create(L, 0, bytelen);
       for (unsigned i = 1; i < L->getWidth() / bytelen; i++) {
-	res = ConcatExpr::create(res, ExtractExpr::create(L, i * bytelen, bytelen));
+        res = ConcatExpr::create(res, ExtractExpr::create(L, i * bytelen, bytelen));
       }
 
       return res;
@@ -308,8 +308,8 @@ private:
       ref<Expr> L = get(Ops[0]);
       auto res = ExtractExpr::create(L, 0, 1);
       for (unsigned i = 1; i < L->getWidth(); i++) {
-	auto tmp = ExtractExpr::create(L, i, 1);
-	res = ConcatExpr::create(res, tmp);
+        auto tmp = ExtractExpr::create(L, i, 1);
+        res = ConcatExpr::create(res, tmp);
       }
       return res;
     }

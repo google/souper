@@ -62,10 +62,10 @@ namespace souper {
       // Find the largest hole and build a llvm::ConstantRange around it
       llvm::ConstantRange bestCR(const bool Table[], const int Width);
       llvm::ConstantRange exhaustive(const llvm::ConstantRange &L, const llvm::ConstantRange &R,
-			       Inst::Kind pred, const llvm::ConstantRange &Untrusted);
+                                     Inst::Kind pred, const llvm::ConstantRange &Untrusted);
 
       void check(const llvm::ConstantRange &L, const llvm::ConstantRange &R, Inst::Kind pred,
-		 double &FastBits, double &PreciseBits, int &Count, int &PreciseCount);
+                 double &FastBits, double &PreciseBits, int &Count, int &PreciseCount);
 
     public:
 
@@ -84,13 +84,13 @@ namespace souper {
       std::bitset<SetSize> ResultSet(1);
       for (int Cnt = 0; Cnt < SetSize; Cnt++) {
 
-	llvm::KnownBits ValueKB;
-	auto Tmp = llvm::APInt(KB.getBitWidth(), Cnt);
-	ValueKB.One = Tmp;
-	ValueKB.Zero = ~Tmp;
+        llvm::KnownBits ValueKB;
+        auto Tmp = llvm::APInt(KB.getBitWidth(), Cnt);
+        ValueKB.One = Tmp;
+        ValueKB.Zero = ~Tmp;
 
-	if (KnownBitsAnalysis::isConflictingKB(ValueKB, KB))
-	  ResultSet[Cnt] = 0; // exclude this guy
+        if (KnownBitsAnalysis::isConflictingKB(ValueKB, KB))
+          ResultSet[Cnt] = 0; // exclude this guy
       }
 
       return ResultSet;
@@ -102,13 +102,13 @@ namespace souper {
 
       std::bitset<SetSize> ResultSet(0);
       if (CR.isFullSet()) {
-	ResultSet.set();
-	return ResultSet;
+        ResultSet.set();
+        return ResultSet;
       }
 
       for (int Cnt = 0; Cnt < SetSize; Cnt++) {
-	if (CR.contains(llvm::APInt(WIDTH, Cnt)))
-	  ResultSet[Cnt] = 1; // include this guy
+        if (CR.contains(llvm::APInt(WIDTH, Cnt)))
+          ResultSet[Cnt] = 1; // include this guy
       }
       return ResultSet;
     }
@@ -117,9 +117,9 @@ namespace souper {
     llvm::ConstantRange abstractizeCR(std::bitset<SetSize> &ResultSet) {
       llvm::ConstantRange ResultCR(WIDTH, false);
       for (unsigned I = 0; I < SetSize; I++) {
-	if (ResultSet[I]) {
-	  ResultCR = ResultCR.unionWith(llvm::APInt(WIDTH, I));
-	}
+        if (ResultSet[I]) {
+          ResultCR = ResultCR.unionWith(llvm::APInt(WIDTH, I));
+        }
       }
 
       return ResultCR;
@@ -129,17 +129,17 @@ namespace souper {
     llvm::KnownBits abstractizeKB(std::bitset<SetSize> &ResultSet) {
       llvm::KnownBits ResultKB(WIDTH);
       if (ResultSet.none())
-	return ResultKB;
+        return ResultKB;
 
       llvm::APInt AndResult = llvm::APInt::getAllOnesValue(WIDTH);
       llvm::APInt OrResult = llvm::APInt::getNullValue(WIDTH);
 
       for (int I = 0; I < SetSize; I++) {
-	if (ResultSet[I]) {
-	  auto Tmp = llvm::APInt(WIDTH, I);
-	  AndResult &= Tmp;
-	  OrResult |= Tmp;
-	}
+        if (ResultSet[I]) {
+          auto Tmp = llvm::APInt(WIDTH, I);
+          AndResult &= Tmp;
+          OrResult |= Tmp;
+        }
       }
 
       ResultKB.One = AndResult;
