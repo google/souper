@@ -452,6 +452,7 @@ const char *Inst::getKindName(Kind K) {
   case USubO:
   case SMulO:
   case UMulO:
+    return "o";
   default:
     llvm_unreachable("all cases covered");
   }
@@ -765,6 +766,10 @@ bool Inst::isCommutative(Inst::Kind K) {
   case Xor:
   case Eq:
   case Ne:
+  case SAddWithOverflow:
+  case UAddWithOverflow:
+  case SMulWithOverflow:
+  case UMulWithOverflow:
     return true;
   default:
     return false;
@@ -774,6 +779,67 @@ bool Inst::isCommutative(Inst::Kind K) {
 bool Inst::isCmp(Inst::Kind K) {
   return K == Inst::Eq || K == Inst::Ne || K == Inst::Ult ||
     K == Inst::Slt || K == Inst::Ule || K == Inst::Sle;
+}
+
+bool Inst::isOverflowIntrinsicMain(Kind K) {
+  return K == Inst::SAddWithOverflow || K == Inst::UAddWithOverflow ||
+         K == Inst::SSubWithOverflow || K == Inst::USubWithOverflow ||
+         K == Inst::SMulWithOverflow || K == Inst::UMulWithOverflow;
+}
+
+bool Inst::isOverflowIntrinsicSub(Kind K) {
+  return K == Inst::SAddO || K == Inst::UAddO ||
+         K == Inst::SSubO || K == Inst::USubO ||
+         K == Inst::SMulO || K == Inst::UMulO;
+}
+
+Inst::Kind Inst::getOverflowComplement(Kind K) {
+  switch (K) {
+    case Inst::SAddWithOverflow:
+      return Inst::SAddO;
+    case Inst::UAddWithOverflow:
+      return Inst::UAddO;
+    case Inst::SSubWithOverflow:
+      return Inst::SSubO;
+    case Inst::USubWithOverflow:
+      return Inst::USubO;
+    case Inst::SMulWithOverflow:
+      return Inst::SMulO;
+    case Inst::UMulWithOverflow:
+      return Inst::UMulO;
+
+    // reverse
+    case Inst::SAddO:
+      return Inst::SAddWithOverflow;
+    case Inst::UAddO:
+      return Inst::UAddWithOverflow;
+    case Inst::SSubO:
+      return Inst::SSubWithOverflow;
+    case Inst::USubO:
+      return Inst::USubWithOverflow;
+    case Inst::SMulO:
+      return Inst::SMulWithOverflow;
+    case Inst::UMulO:
+      return Inst::UMulWithOverflow;
+    default:
+      return K;
+  }
+}
+
+Inst::Kind Inst::getBasicInstrForOverflow(Inst::Kind K) {
+  switch (K) {
+    case Inst::SAddWithOverflow:
+    case Inst::UAddWithOverflow:
+      return Inst::Add;
+    case Inst::SSubWithOverflow:
+    case Inst::USubWithOverflow:
+      return Inst::Sub;
+    case Inst::SMulWithOverflow:
+    case Inst::UMulWithOverflow:
+      return Inst::Mul;
+    default:
+      return K;
+  }
 }
 
 bool Inst::isShift(Inst::Kind K) {

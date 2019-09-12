@@ -154,6 +154,12 @@ struct Inst : llvm::FoldingSetNode {
 
   static bool isAssociative(Kind K);
   static bool isCmp(Kind K);
+
+  static bool isOverflowIntrinsicMain(Kind K);
+  static bool isOverflowIntrinsicSub(Kind K);
+  static Kind getOverflowComplement(Kind K);
+  static Kind getBasicInstrForOverflow(Kind K);
+
   static bool isCommutative(Kind K);
   static bool isShift(Kind K);
   static int getCost(Kind K);
