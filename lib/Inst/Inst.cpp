@@ -1162,3 +1162,24 @@ void souper::separatePCs(const std::vector<InstMapping> &PCs,
     PCsCopy.emplace_back(getInstCopy(PC.LHS, IC, InstCache, BlockCache, ConstMap, CloneVars),
                          getInstCopy(PC.RHS, IC, InstCache, BlockCache, ConstMap, CloneVars));
 }
+
+
+std::vector<Block *> souper::getBlocksFromPhis(Inst *I) {
+  // breadth-first search
+  std::set<Inst *> Visited;
+  std::vector<Block *> Result;
+  std::queue<Inst *> Q;
+  // Populate the queue
+  Q.push(I);
+  while (!Q.empty()) {
+    Inst *I = Q.front();
+    Q.pop();
+    if (I->K == Inst::Phi)
+      Result.push_back(I->B);
+    if (Visited.insert(I).second)
+      for (auto Op : I->orderedOps())
+        Q.push(Op);
+  }
+
+  return Result;
+}

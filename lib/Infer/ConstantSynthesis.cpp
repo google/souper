@@ -17,6 +17,7 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/Support/CommandLine.h"
 #include "souper/Infer/ConstantSynthesis.h"
+#include "souper/Infer/Interpreter.h"
 
 extern unsigned DebugLevel;
 
@@ -104,6 +105,12 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     std::map<Block *, Block *> BlockCache;
     Inst *LHSCopy = getInstCopy(Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, false);
     Inst *RHSCopy = getInstCopy(Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, false);
+    std::vector<Block *> Blocks = getBlocksFromPhis(LHSCopy);
+    for (auto Block : Blocks) {
+      Block->ConcretePred = 0;
+    }
+
+
 
     BlockPCs BPCsCopy;
     std::vector<InstMapping> PCsCopy;
@@ -141,21 +148,32 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       }
 
       std::map<Inst *, llvm::APInt> SubstConstMap;
+      ValueCache VC;
       for (unsigned J = 0; J != ModelInstsSecondQuery.size(); ++J) {
         Inst* Var = ModelInstsSecondQuery[J];
+        if (Var->Name == "blockpred" && !ModelValsSecondQuery[J].isNullValue())
+          for (auto B : Blocks)
+            for (unsigned I = 0 ; I < B->PredVars.size(); ++I)
+              if (B->PredVars[I] == Var)
+                B->ConcretePred = I + 1;
 
         if (ConstSet.find(Var) == ConstSet.end()) {
           SubstConstMap.insert(std::pair<Inst *, llvm::APInt>(Var, ModelValsSecondQuery[J]));
+          VC.insert(std::pair<Inst *, llvm::APInt>(Var, ModelValsSecondQuery[J]));
         }
       }
+
+      ConcreteInterpreter CI(LHSCopy, VC);
+      auto LHSV = CI.evaluateInst(LHSCopy);
+
       std::map<Inst *, Inst *> InstCache;
       std::map<Block *, Block *> BlockCache;
       SubstAnte = IC.getInst(Inst::And, 1,
-                             {IC.getInst(Inst::Eq, 1, {getInstCopy(Mapping.LHS, IC, InstCache,
-                                                                   BlockCache, &SubstConstMap, true),
+                             {IC.getInst(Inst::Eq, 1, {IC.getConst(LHSV.getValue()),
                                                        getInstCopy(Mapping.RHS, IC, InstCache,
                                                                    BlockCache, &SubstConstMap, true)}),
                               SubstAnte});
+      assert(BlockCache.empty());
     }
   }
 

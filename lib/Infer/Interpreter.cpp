@@ -368,21 +368,55 @@ namespace souper {
     case Inst::USubSat:
       return { ARG0.usub_sat(ARG1) };
 
-    // TODO implement these
-    case Inst::ExtractValue:
     case Inst::SAddWithOverflow:
-    case Inst::SAddO:
     case Inst::UAddWithOverflow:
-    case Inst::UAddO:
     case Inst::SSubWithOverflow:
-    case Inst::SSubO:
     case Inst::USubWithOverflow:
-    case Inst::USubO:
     case Inst::SMulWithOverflow:
-    case Inst::SMulO:
-    case Inst::UMulWithOverflow:
-    case Inst::UMulO:
-      return {EvalValue()};
+    case Inst::UMulWithOverflow: {
+      assert(ARG1.getBitWidth() == 1);
+      unsigned W = ARG0.getBitWidth() + 1;
+      auto res = ARG0.zext(W);
+      if (ARG1.isOneValue())
+        res.setSignBit();
+      return {res};
+    }
+    case Inst::SAddO: {
+      bool Ov = false;
+      (void)ARG0.sadd_ov(ARG1, Ov);
+      return { llvm::APInt(1, Ov) };
+    }
+    case Inst::UAddO: {
+      bool Ov = false;
+      (void)ARG0.uadd_ov(ARG1, Ov);
+      return { llvm::APInt(1, Ov) };
+    }
+    case Inst::SSubO: {
+      bool Ov = false;
+      (void)ARG0.ssub_ov(ARG1, Ov);
+      return { llvm::APInt(1, Ov) };
+    }
+    case Inst::USubO: {
+      bool Ov = false;
+      (void)ARG0.usub_ov(ARG1, Ov);
+      return { llvm::APInt(1, Ov) };
+    }
+    case Inst::SMulO: {
+      bool Ov = false;
+      (void)ARG0.smul_ov(ARG1, Ov) ;
+      return { llvm::APInt(1, Ov) };
+    }
+    case Inst::UMulO: {
+      bool Ov = false;
+      (void)ARG0.umul_ov(ARG1, Ov);
+      return { llvm::APInt(1, Ov) };
+    }
+    case Inst::ExtractValue: {
+      if (ARG1.isNullValue())
+        return {ARG0.trunc(ARG0.getBitWidth() - 1)};
+      else
+        return {ARG0.getHiBits(1).trunc(1)};
+    }
 
     default:
       llvm::report_fatal_error("unimplemented instruction kind " +

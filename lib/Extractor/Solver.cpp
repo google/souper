@@ -504,7 +504,8 @@ public:
     std::set<Inst *> ConstSet{ReservedX};
     std::map <Inst *, llvm::APInt> ResultMap;
     ConstantSynthesis CS;
-    CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(Guess, IC.getConst(APInt(1, true))),
+    LHS = IC.getInst(Inst::Or, 1, {IC.getInst(Inst::Trunc, 1, {LHS}), IC.getConst(llvm::APInt(1, true))}),
+    CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, Guess),
                   ConstSet, ResultMap, IC, /*MaxTries=*/30, Timeout);
     if (ResultMap.empty()) {
       IsFound = false;
