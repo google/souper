@@ -322,6 +322,8 @@ void separatePCs(const std::vector<InstMapping> &PCs,
                  std::map<Inst *, llvm::APInt> *ConstMap,
                  bool CloneVars);
 
+std::vector<Block *> getBlocksFromPhis(Inst *I);
+
 }
 
 #endif  // SOUPER_INST_INST_H
