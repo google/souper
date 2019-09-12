@@ -151,7 +151,7 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       ValueCache VC;
       for (unsigned J = 0; J != ModelInstsSecondQuery.size(); ++J) {
         Inst* Var = ModelInstsSecondQuery[J];
-        if (Var->Name == "blockpred" && !ModelValsSecondQuery[J].isNullValue())
+        if (Var->Name == BlockPred && !ModelValsSecondQuery[J].isNullValue())
           for (auto B : Blocks)
             for (unsigned I = 0 ; I < B->PredVars.size(); ++I)
               if (B->PredVars[I] == Var)
