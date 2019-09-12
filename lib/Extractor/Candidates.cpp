@@ -185,7 +185,7 @@ bool ExprBuilder::isLoopEntryPoint(PHINode *Phi) {
   BasicBlock *BB = Phi->getParent();
   // If LLVM can determine if BB is a loop header, simply return true.
   // Presumably, this should handle structured loops.
-  if (LI->isLoopHeader(BB))
+  if (LI && LI->isLoopHeader(BB))
     return true;
   if (Phi->getNumIncomingValues() <= 1)
     return false;
@@ -439,7 +439,9 @@ Inst *ExprBuilder::buildHelper(Value *V) {
       return makeArrayRead(V); // could be a vector operation
     Inst *C = get(Sel->getCondition()), *T = get(Sel->getTrueValue()),
          *F = get(Sel->getFalseValue());
-    return IC.getInst(Inst::Select, T->Width, {C, T, F});
+    if (C && T && F)
+      return IC.getInst(Inst::Select, T->Width, {C, T, F});
+    return makeArrayRead(V);
   } else if (auto Cast = dyn_cast<CastInst>(V)) {
     Inst *Op = get(Cast->getOperand(0));
     unsigned DestSize = DL.getTypeSizeInBits(Cast->getType());
@@ -493,17 +495,21 @@ Inst *ExprBuilder::buildHelper(Value *V) {
     }
     if (!isLoopEntryPoint(Phi)) {
       BasicBlock *BB = Phi->getParent();
-      BlockInfo &BI = EBC.BlockMap[BB];
-      if (!BI.B) {
-        std::copy(Phi->block_begin(), Phi->block_end(),
-                  std::back_inserter(BI.Preds));
-        BI.B = IC.createBlock(BI.Preds.size());
+      if (BB) {
+        BlockInfo &BI = EBC.BlockMap[BB];
+        if (!BI.B) {
+          std::copy(Phi->block_begin(), Phi->block_end(),
+                    std::back_inserter(BI.Preds));
+          BI.B = IC.createBlock(BI.Preds.size());
+        }
+        std::vector<Inst *> Incomings;
+        for (auto Pred : BI.Preds) {
+          Incomings.push_back(get(Phi->getIncomingValueForBlock(Pred)));
+        }
+        return IC.getPhi(BI.B, Incomings);
+      } else {
+        return makeArrayRead(V);
       }
-      std::vector<Inst *> Incomings;
-      for (auto Pred : BI.Preds) {
-        Incomings.push_back(get(Phi->getIncomingValueForBlock(Pred)));
-      }
-      return IC.getPhi(BI.B, Incomings);
     }
   } else if (auto EV = dyn_cast<ExtractValueInst>(V)) {
     Inst *L = get(EV->getOperand(0));
