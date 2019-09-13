@@ -1,0 +1,8 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-demanded-bits %s | %FileCheck %s
+
+; CHECK: demanded-bits from souper for %0 : 1111111111111000
+
+%0:i16 = var
+%1:i16 = udiv %0, 1000:i16
+infer %1

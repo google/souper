@@ -1,0 +1,9 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-demanded-bits %s | %FileCheck %s
+
+; CHECK: demanded-bits from souper for %0 : 00000011
+
+%0:i8 = var
+%1:i32 = zext %0
+%2:i32 = shlnw %1, 8:i32
+infer %2 (demandedBits=00000000000000000000001111100000)

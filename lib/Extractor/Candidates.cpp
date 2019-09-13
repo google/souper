@@ -87,6 +87,10 @@ static llvm::cl::opt<bool> PrintRangeAtReturn(
     "print-range-at-return",
     llvm::cl::desc("Print range inforation in each value returned from a function (default=false)"),
     llvm::cl::init(false));
+static llvm::cl::opt<bool> PrintDemandedBitsAtReturn(
+    "print-demanded-bits-from-harvester",
+    llvm::cl::desc("Print demanded bits (default=false)"),
+    llvm::cl::init(false));
 
 extern bool UseAlive;
 
@@ -935,6 +939,31 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
     for (auto &I : BB) {
       if (isa<ReturnInst>(I))
         PrintDataflowInfo(F, I, LVI, SE);
+
+      // Note: Demanded bits is a backward dataflow analysis and it computes
+      // the dataflow fact at the leaves of a DAG (input parameters of a given
+      // function). The API 'getDemandedBits' computes demanded bits for an
+      // LLVM instruction, and to avoid computation of this fact for each
+      // instruction, we special-cased it to only compute demanded bits for an
+      // "addition of input variable with zero" (add x, 0) instruction only.
+      // This is just a hack to make it work.
+      if (PrintDemandedBitsAtReturn && I.getType()->isIntegerTy()) {
+        if (auto BO = dyn_cast<BinaryOperator>(&I)) {
+          auto AddOp = BO->getOpcode();
+          if (AddOp == Instruction::Add) {
+            if (auto ConstZeroOp = dyn_cast<ConstantInt>(BO->getOperand(1))) {
+              if (ConstZeroOp->isZero()) {
+                APInt DemandedBitsVal = DB->getDemandedBits(&I);
+                llvm::outs() << "demanded-bits from compiler for "
+                             << I.getName() << " : "
+                             << Inst::getDemandedBitsString(DemandedBitsVal)
+                             << "\n";
+              }
+            }
+          }
+        }
+      }
+
       // Harvest Uses (Operands)
       if (HarvestUses) {
         std::unordered_set<llvm::Instruction *> Visited;

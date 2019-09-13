@@ -81,6 +81,148 @@ public:
   BaseSolver(std::unique_ptr<SMTLIBSolver> SMTSolver, unsigned Timeout)
       : SMTSolver(std::move(SMTSolver)), Timeout(Timeout) {}
 
+  void findVarsAndWidth(Inst *Node, std::map<std::string, unsigned> &VarsVect,
+                        std::set<Inst *> &Visited) {
+    if (!Visited.insert(Node).second)
+      return;
+    if (Node->K == Inst::Var) {
+      std::string Name = Node->Name;
+      VarsVect.insert(std::pair<std::string, unsigned>(Name, Node->Width));
+    }
+    for (auto const &Op : Node->Ops) {
+      findVarsAndWidth(Op, VarsVect, Visited);
+    }
+  }
+
+  void findMoreVarsViaPC(Inst *Node,
+                         std::map<std::string, unsigned> &VarsVect,
+                         std::set<Inst *> &Visited) {
+    if (!Visited.insert(Node).second)
+      return;
+    if (Node->K == Inst::Var) {
+      std::string Name = Node->Name;
+      VarsVect.insert(std::pair<std::string, unsigned>(Name, Node->Width));
+    }
+    for (auto const &Op : Node->Ops) {
+      findMoreVarsViaPC(Op, VarsVect, Visited);
+    }
+  }
+
+  llvm::APInt getClearedBit(unsigned Pos, unsigned W) {
+    APInt AllOnes = APInt::getAllOnesValue(W);
+    AllOnes.clearBit(Pos);
+    return AllOnes;
+  }
+
+  Inst* traverse(Inst *Node, unsigned BitPos, InstContext &IC,
+                 std::string VarName,
+                 std::map<Inst *, Inst *> &InstCache, bool SetBit) {
+    if (InstCache.count(Node))
+      return InstCache.at(Node);
+    std::vector<Inst *> Ops;
+    for (auto const &Op : Node->Ops) {
+      if (SetBit)
+        Ops.push_back(traverse(Op, BitPos, IC, VarName, InstCache, true));
+      else
+        Ops.push_back(traverse(Op, BitPos, IC, VarName, InstCache, false));
+    }
+
+    Inst *Copy = nullptr;
+    if (Node->K == Inst::Var && Node->Name == VarName) {
+      unsigned VarWidth = Node->Width;
+      if (SetBit) {
+        APInt SetBit = APInt::getOneBitSet(VarWidth, BitPos);
+        Inst *SetMask = IC.getInst(Inst::Or, VarWidth,
+                                   {Node, IC.getConst(SetBit)});
+        Copy = SetMask;
+      } else {
+        APInt ClearBit = getClearedBit(BitPos, VarWidth);
+        Inst *ClearMask = IC.getInst(Inst::And, VarWidth,
+                                     {Node, IC.getConst(ClearBit)});
+        Copy = ClearMask;
+      }
+    } else if (Node->K == Inst::Var && Node->Name != VarName) {
+      Copy = Node;
+    } else if (Node->K == Inst::Const || Node->K == Inst::UntypedConst) {
+      Copy = Node;
+    } else if (Node->K == Inst::Phi) {
+      Copy = IC.getPhi(Node->B, Ops);
+    } else {
+      Copy = IC.getInst(Node->K, Node->Width, Ops);
+    }
+    assert(Copy);
+    InstCache[Node] = Copy;
+    return Copy;
+  }
+
+  bool testDB(const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+              Inst *LHS, Inst *NewLHS, InstContext &IC) {
+    unsigned W = LHS->Width;
+    Inst *Ne = IC.getInst(Inst::Ne, 1, {LHS, NewLHS});
+    Inst *Ante = IC.getConst(APInt(1, 1));
+    Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
+    APInt TrueGuess(1, 1, false);
+    Inst *True = IC.getConst(TrueGuess);
+    InstMapping Mapping(Ante, True);
+
+    bool IsSat;
+    std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0,
+                                   /*Precondition=*/0, true);
+    std::error_code EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
+
+    if (EC)
+      llvm::report_fatal_error("stopping due to error");
+    return !IsSat;
+  }
+
+  std::error_code testDemandedBits(const BlockPCs &BPCs,
+                                   const std::vector<InstMapping> &PCs,
+                                   Inst *LHS,
+                                   std::map<std::string, APInt> &ResDBVect,
+                                   InstContext &IC) override {
+    unsigned W = LHS->Width;
+
+    if (!LHS->DemandedBits.isAllOnesValue()) {
+      LHS = IC.getInst(Inst::And, W, {LHS, IC.getConst(LHS->DemandedBits)});
+    }
+
+    std::map<Inst *, Inst *> InstCache;
+    std::map<Block *, Block *> BlockCache;
+
+    std::map<std::string, unsigned> VarsVect;
+    std::set<Inst *> Visited;
+    findVarsAndWidth(LHS, VarsVect, Visited);
+
+    for (auto const &PC : PCs) {
+      Visited.clear();
+      findMoreVarsViaPC(PC.LHS, VarsVect, Visited);
+      Visited.clear();
+      findMoreVarsViaPC(PC.RHS, VarsVect, Visited);
+    }
+
+    for (std::map<std::string,unsigned>::iterator it = VarsVect.begin();
+         it != VarsVect.end(); ++it) {
+       std::string VarName = it->first;
+       unsigned VarWidth = VarsVect[VarName];
+       APInt ResultDB = APInt::getNullValue(VarWidth);
+
+      for (unsigned Bit=0; Bit<VarWidth; Bit++) {
+        std::map<Inst *, Inst *> InstCache;
+        Inst *SetLHS = traverse(LHS, Bit, IC, VarName, InstCache, true);
+        InstCache.clear();
+        Inst *ClearLHS = traverse(LHS, Bit, IC, VarName, InstCache, false);
+        if (testDB(BPCs, PCs, LHS, SetLHS, IC) &&
+            testDB(BPCs, PCs, LHS, ClearLHS, IC)) {
+          ResultDB = ResultDB;
+        } else {
+          ResultDB |= APInt::getOneBitSet(VarWidth, Bit);
+        }
+      }
+      ResDBVect[VarName] = ResultDB;
+    }
+    return std::error_code();
+  }
+
   bool testZeroMSB(const BlockPCs &BPCs,
                    const std::vector<InstMapping> &PCs,
                    Inst *LHS, InstContext &IC) {
@@ -656,6 +798,14 @@ public:
     return UnderlyingSolver->getName() + " + internal cache";
   }
 
+  std::error_code testDemandedBits(const BlockPCs &BPCs,
+                                   const std::vector<InstMapping> &PCs,
+                                   Inst *LHS,
+                                   std::map<std::string,APInt> &DBitsVect,
+                                   InstContext &IC) override {
+    return UnderlyingSolver->testDemandedBits(BPCs, PCs, LHS, DBitsVect, IC);
+  }
+
   std::error_code nonNegative(const BlockPCs &BPCs,
                               const std::vector<InstMapping> &PCs,
                               Inst *LHS, bool &NonNegative,
@@ -775,6 +925,14 @@ public:
 
   std::string getName() override {
     return UnderlyingSolver->getName() + " + external cache";
+  }
+
+  std::error_code testDemandedBits(const BlockPCs &BPCs,
+                                   const std::vector<InstMapping> &PCs,
+                                   Inst *LHS,
+                                   std::map<std::string, APInt> &DBitsVect,
+                                   InstContext &IC) override {
+    return UnderlyingSolver->testDemandedBits(BPCs, PCs, LHS, DBitsVect, IC);
   }
 
   std::error_code nonNegative(const BlockPCs &BPCs,

@@ -37,24 +37,25 @@ sub runit ($) {
 sub usage() {
     print <<'END';
 Options:
-  -nonNeg      Infer nonNegative DFA
-  -neg         Infer Neg DFA
-  -knownbits   Infer known bits
-  -powerTwo    Infer power of two dfa
-  -nonZero    Infer non Zero dfa
-  -signBits    Infer number of sign bits dfa
-  -merge       Merge optimizations that differ only in bitwidths and constants
-  -noopts      Dump not-optimizations instead of optimizations
-  -parse       Ensure that each LHS in the cache parses as Souper
+  -nonNeg       Infer nonNegative DFA
+  -neg          Infer Neg DFA
+  -knownbits    Infer known bits
+  -powerTwo     Infer power of two dfa
+  -nonZero      Infer non Zero dfa
+  -signBits     Infer number of sign bits dfa
+  -demandedbits Infer demanded bits
+  -merge        Merge optimizations that differ only in bitwidths and constants
+  -noopts       Dump not-optimizations instead of optimizations
+  -parse        Ensure that each LHS in the cache parses as Souper
   -sort=size|sprofile|dprofile|combined
-               Sort optimizations by increasing size (default), decreasing
-               static profile count, or decreasing dynamic profile count
-  -raw         Dump all keys and values and exit, ignoring all other options
-  -reduce      Attempt to reduce the size of each optimization
-  -triage      Attempt to avoid reporting optimizations that LLVM can do
-  -weaken      Weaken dataflow facts
+                Sort optimizations by increasing size (default), decreasing
+                static profile count, or decreasing dynamic profile count
+  -raw          Dump all keys and values and exit, ignoring all other options
+  -reduce       Attempt to reduce the size of each optimization
+  -triage       Attempt to avoid reporting optimizations that LLVM can do
+  -weaken       Weaken dataflow facts
   -verbose
-  -verify      Verify each optimization
+  -verify       Verify each optimization
 END
     exit -1;
 }
@@ -87,6 +88,7 @@ GetOptions(
     "powerTwo" => \$POWERTWO,
     "nonZero" => \$NONZERO,
     "signBits" => \$SIGNBITS,
+    "demandedbits" => \$DEMANDEDBITS,
     "sort=s" => \$SORT,
     "raw"  => \$RAW,
     "reduce" => \$REDUCE,
@@ -170,7 +172,6 @@ sub known ($) {
     $fh->flush();
     my $arg = "-infer-known-bits";
     my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
-    # print "<${cmd}>\n";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -187,7 +188,6 @@ sub nonNeg ($) {
     $fh->flush();
     my $arg = "-infer-non-neg";
     my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
-    # print "<${cmd}>\n";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -204,7 +204,6 @@ sub neg ($) {
     $fh->flush();
     my $arg = "-infer-neg";
     my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
-    # print "<${cmd}>\n";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -221,7 +220,6 @@ sub powerTwo ($) {
     $fh->flush();
     my $arg = "-infer-power-two";
     my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
-    # print "<${cmd}>\n";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -238,7 +236,6 @@ sub nonZero ($) {
     $fh->flush();
     my $arg = "-infer-non-zero";
     my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
-    # print "<${cmd}>\n";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -255,7 +252,22 @@ sub signBits ($) {
     $fh->flush();
     my $arg = "-infer-sign-bits";
     my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
-    # print "<${cmd}>\n";
+    open INF, $cmd;
+    while (my $line = <INF>) {
+       print $line;
+    }
+    close INF;
+    close $fh;
+    unlink $tmpfn;
+}
+
+sub demandedbits ($) {
+    (my $opt) = @_;
+    (my $fh, my $tmpfn) = File::Temp::tempfile();
+    print $fh $opt;
+    $fh->flush();
+    my $arg = "-infer-demanded-bits";
+    my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -654,6 +666,7 @@ foreach my $opt (sort $byx keys %toprint) {
     powerTwo($opt) if $POWERTWO;
     nonZero($opt) if $NONZERO;
     signBits($opt) if $SIGNBITS;
+    demandedbits($opt) if $DEMANDEDBITS;
     print "\n";
     print "; total static profile = $sprofiles{$opt}\n";
     my %h = %{$sprofile_locs{$opt}};

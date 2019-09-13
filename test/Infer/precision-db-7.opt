@@ -1,0 +1,11 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-demanded-bits %s | %FileCheck %s
+
+; CHECK: demanded-bits from souper for %0 : 1111111111111111111111111111111111111111111111111111111111111000
+; CHECK-NEXT: demanded-bits from souper for %1 : 1111111111111111111111111111111111111111111111111111111111111000
+
+%0:i64 = var
+%1:i64 = var
+%2:i64 = sub %0, %1
+%3:i64 = ashrexact %2, 3:i64
+infer %3
