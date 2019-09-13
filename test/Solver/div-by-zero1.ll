@@ -57,7 +57,7 @@ entry:
   %b13 = icmp eq i32 %d13, 0, !expected !0
   br i1 %b13, label %cond.true, label %cond.false
 
-  %d14 = srem i32 0, 0, !expected !032 
+  %d14 = srem i32 0, 0, !expected !032
   %b14 = icmp eq i32 %d14, 0, !expected !0
   br i1 %b14, label %cond.true, label %cond.false
 

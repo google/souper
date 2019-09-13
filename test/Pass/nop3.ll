@@ -12,7 +12,7 @@ entry:
   %b = call i1 @branch(i32 %x)
   %call = call i32 @a(i32 %x)
   br i1 %b, label %bb1, label %bb2
-  
+
 bb1:
   %call_bb1 = add i32 0, %call
   br label %jmp

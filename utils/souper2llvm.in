@@ -72,7 +72,7 @@ def parseConst(c):
     return [constant, width]
 
 def parseOps(ops):
-    r = [] 
+    r = []
     for op in ops:
         op = op.strip().strip(",")
         if op[0] == "%":
@@ -117,8 +117,8 @@ def parseInst(i):
         assert len(tmp) == 2, "wrong reg length %d, %s" % (len(tmp), tmp)
         assert i[1] == "=", "expecting '=', got %s" % i[1]
         reg = tmp[0]
-        width = tmp[1] 
-        inst = i[2] 
+        width = tmp[1]
+        inst = i[2]
         if "overflow" in i[2]:
             width = "i" + str(int(width[1:])-1)
         widths[reg] = width
@@ -168,7 +168,7 @@ def translateInstToLLVM(i):
         if inst in boolinsts:
             assert len(ops) >= 1, "must have at least one op %s" % inst
             s += " " + ops[0][1]
-        elif inst in towidthinsts: 
+        elif inst in towidthinsts:
             assert len(ops) == 1, "must have exactly one op %s" % inst
             s += " " + ops[0][1] + " " + ops[0][0] + " to " + width
         elif inst == "extractvalue":

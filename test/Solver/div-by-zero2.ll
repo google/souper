@@ -61,11 +61,11 @@ entry:
   %ss6 = sext i16 %ss2 to i32
   %ss7 = zext i16 %ss2 to i32
 
-  %d9 = urem i32 1, 0 
+  %d9 = urem i32 1, 0
   %b9 = icmp eq i32 %d9, %ss4, !expected !0
   br i1 %b9, label %cond.true, label %cond.false
 
-  %d10 = urem i32 0, 0 
+  %d10 = urem i32 0, 0
   %b10 = icmp eq i32 %d10, %ss5, !expected !0
   br i1 %b10, label %cond.true, label %cond.false
 
@@ -77,11 +77,11 @@ entry:
   %b12 = icmp eq i32 %d12, %ss7, !expected !0
   br i1 %b12, label %cond.true, label %cond.false
 
-  %d13 = srem i32 1, 0 
+  %d13 = srem i32 1, 0
   %b13 = icmp eq i32 %d13, %ss7, !expected !0
   br i1 %b13, label %cond.true, label %cond.false
 
-  %d14 = srem i32 0, 0 
+  %d14 = srem i32 0, 0
   %b14 = icmp eq i32 %d14, %ss6, !expected !0
   br i1 %b14, label %cond.true, label %cond.false
 
