@@ -64,8 +64,7 @@ namespace souper {
       llvm::ConstantRange enumerative(const llvm::ConstantRange &L, const llvm::ConstantRange &R,
                                      Inst::Kind pred, const llvm::ConstantRange &Untrusted);
 
-      void check(const llvm::ConstantRange &L, const llvm::ConstantRange &R, Inst::Kind pred,
-                 double &FastBits, double &PreciseBits, int &Count, int &PreciseCount);
+      void check(const llvm::ConstantRange &L, const llvm::ConstantRange &R, Inst::Kind pred);
 
     public:
 

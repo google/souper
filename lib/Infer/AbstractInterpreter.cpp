@@ -15,10 +15,12 @@
 #include "souper/Extractor/Solver.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Infer/AbstractInterpreter.h"
+#include "souper/Extractor/Candidates.h"
 
 using namespace llvm;
 
 namespace {
+  using souper::getSetSize;
 
   APInt getUMin(const KnownBits &X) { return X.One; }
 
@@ -48,7 +50,7 @@ namespace {
  ConstantRange KBToCR(const KnownBits &KB) {
     ConstantRange CR1(getSMin(KB), getSMax(KB));
     ConstantRange CR2(getSMin(KB), getSMax(KB));
-    return CR1.getSetSize().ult(CR2.getSetSize()) ? CR1 : CR2;
+    return getSetSize(CR1).ult(getSetSize(CR2)) ? CR1 : CR2;
   }
 
   KnownBits CRToKB(const ConstantRange &CR) {
@@ -99,7 +101,7 @@ namespace souper {
   void improveKBCR(KnownBits &KB, ConstantRange &CR) {
     while (1) {
       // measure
-      APInt SS = CR.getSetSize();
+      APInt SS = getSetSize(CR);
       unsigned NK = numKnown(KB);
       // mutual shootdown
       auto KB2 = CRToKB(CR);
@@ -107,9 +109,9 @@ namespace souper {
       CR = CR.intersectWith(CR2);
       KB = intersect(KB, KB2);
       // done when no more improvements
-      assert(CR.getSetSize().ule(SS));
+      assert(getSetSize(CR).ule(SS));
       assert(numKnown(KB) >= NK);
-      if (SS == CR.getSetSize() && NK == numKnown(KB))
+      if (SS == getSetSize(CR) && NK == numKnown(KB))
         break;
     }
   }
@@ -786,7 +788,7 @@ namespace souper {
   llvm::ConstantRange ConstantRangeAnalysis::findConstantRange(Inst *I,
                                                                ConcreteInterpreter &CI,
                                                                bool UsePartialEval) {
-    llvm::ConstantRange Result(I->Width);
+    llvm::ConstantRange Result(I->Width, /*isFullSet=*/true);
 
     if (cacheHasValue(I))
       return CRCache.at(I);
@@ -876,7 +878,7 @@ namespace souper {
       Result = CR0.unionWith(CR1);
       break;
     case Inst::Select:
-      if (CR0.getSetSize() == 1) {
+      if (getSetSize(CR0) == 1) {
         if (CR0.contains(APInt(1, 1)))
           Result = CR1;
         else if (CR0.contains(APInt(1, 0)))
@@ -906,7 +908,7 @@ namespace souper {
   llvm::ConstantRange ConstantRangeAnalysis::findConstantRangeUsingSolver
     (Inst *I, Solver *S, std::vector<InstMapping> &PCs) {
     // FIXME implement this
-    llvm::ConstantRange Result(I->Width);
+    llvm::ConstantRange Result(I->Width, /*isFullSet=*/true);
     return Result;
   }
 #define RB0 findRestrictedBits(I->Ops[0])

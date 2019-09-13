@@ -465,8 +465,7 @@ ConstantRange CRTesting::enumerative(const ConstantRange &L, const ConstantRange
   return bestCR(Table, WIDTH);
 }
 
-void CRTesting::check(const ConstantRange &L, const ConstantRange &R, Inst::Kind pred,
-                      double &FastBits, double &PreciseBits, int &Count, int &PreciseCount) {
+void CRTesting::check(const ConstantRange &L, const ConstantRange &R, Inst::Kind pred) {
   ConstantRange FastRes(WIDTH, true);
   switch (pred) {
   case Inst::Or:
@@ -478,24 +477,8 @@ void CRTesting::check(const ConstantRange &L, const ConstantRange &R, Inst::Kind
   default:
     report_fatal_error("unsupported opcode");
   }
-
   ConstantRange PreciseRes = enumerative(L, R, pred, FastRes);
-
-  long FastSize = FastRes.getSetSize().getLimitedValue();
-  long PreciseSize = PreciseRes.getSetSize().getLimitedValue();
-
-  assert(FastSize >= 0 && FastSize <= (1 << WIDTH));
-  assert(PreciseSize >= 0 && PreciseSize <= (1 << WIDTH));
-  assert(PreciseSize <= FastSize);
-
-  if (FastSize > 0) {
-    FastBits += log2((double)FastSize);
-    Count++;
-  }
-  if (PreciseSize > 0) {
-    PreciseBits += log2((double)PreciseSize);
-    PreciseCount++;
-  }
+  assert(getSetSize(PreciseRes).ule(getSetSize(FastRes)));
 }
 
 ConstantRange CRTesting::nextCR(const ConstantRange &CR) {
@@ -512,11 +495,9 @@ ConstantRange CRTesting::nextCR(const ConstantRange &CR) {
 bool CRTesting::testFn(Inst::Kind pred) {
   ConstantRange L(WIDTH, /*isFullSet=*/false);
   ConstantRange R(WIDTH, /*isFullSet=*/false);
-  double FastBits = 0.0, PreciseBits = 0.0;
-  int Count = 0, PreciseCount = 0;
   do {
     do {
-      check(L, R, pred, FastBits, PreciseBits, Count, PreciseCount);
+      check(L, R, pred);
       R = nextCR(R);
     } while (!R.isEmptySet());
     L = nextCR(L);

@@ -93,6 +93,17 @@ extern bool UseAlive;
 using namespace llvm;
 using namespace souper;
 
+llvm::APInt souper::getSetSize(const llvm::ConstantRange &R) {
+  if (R.isFullSet()) {
+    APInt Size(R.getBitWidth()+1, 0);
+    Size.setBit(R.getBitWidth());
+    return Size;
+  }
+
+  // This is also correct for wrapped sets.
+  return (R.getUpper() - R.getLower()).zext(R.getBitWidth()+1);
+}
+
 void CandidateReplacement::printFunction(llvm::raw_ostream &Out) const {
   assert(Mapping.LHS->hasOrigin(Origin));
   const Function *F = Origin->getParent()->getParent();
@@ -231,7 +242,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
         auto SC = SE->getSCEV(V);
         auto R1 = LVIRange.intersectWith(SE->getSignedRange(SC));
         auto R2 = LVIRange.intersectWith(SE->getUnsignedRange(SC));
-        Range = R1.getSetSize().ult(R2.getSetSize()) ? R1 : R2;
+        Range = getSetSize(R1).ult(getSetSize(R2)) ? R1 : R2;
       }
     }
 
@@ -871,6 +882,9 @@ std::string convertBoolToStr(bool b) {
 
 void PrintDataflowInfo(Function &F, Instruction &I, LazyValueInfo *LVI,
                        ScalarEvolution *SE) {
+  if (I.getNumOperands() == 0) {
+    return;
+  }
   auto V = I.getOperand(0);
   auto DL = F.getParent()->getDataLayout();
   if (PrintNegAtReturn) {
@@ -914,7 +928,7 @@ void PrintDataflowInfo(Function &F, Instruction &I, LazyValueInfo *LVI,
         auto SC = SE->getSCEV(V);
         auto R1 = LVIRange.intersectWith(SE->getSignedRange(SC));
         auto R2 = LVIRange.intersectWith(SE->getUnsignedRange(SC));
-        Range = R1.getSetSize().ult(R2.getSetSize()) ? R1 : R2;
+        Range = getSetSize(R1).ult(getSetSize(R2)) ? R1 : R2;
       }
     }
     llvm::outs() << "range from compiler: [" << Range.getLower() << ","
