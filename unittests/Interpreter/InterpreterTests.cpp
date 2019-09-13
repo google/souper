@@ -56,7 +56,9 @@ TEST(InterpreterTests, KBTransferFunctions) {
   ASSERT_TRUE(kbObj.testFn(Inst::Slt));
   ASSERT_TRUE(kbObj.testFn(Inst::Ule));
   ASSERT_TRUE(kbObj.testFn(Inst::Sle));
-  ASSERT_TRUE(kbObj.testTernaryFn(Inst::Select, 1, 4, 4));
+  ASSERT_TRUE(kbObj.testTernaryFn(Inst::Select, 1, WIDTH, WIDTH));
+  ASSERT_TRUE(kbObj.testTernaryFn(Inst::FShl, WIDTH, WIDTH, WIDTH));
+  ASSERT_TRUE(kbObj.testTernaryFn(Inst::FShr, WIDTH, WIDTH, WIDTH));
 }
 
 TEST(InterpreterTests, CRTransferFunctions) {

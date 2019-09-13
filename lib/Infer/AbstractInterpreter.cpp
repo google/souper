@@ -144,6 +144,14 @@ namespace souper {
     return S;
   }
 
+  llvm::KnownBits concatKnownBits(llvm::KnownBits A, llvm::KnownBits B) {
+    auto W = A.Zero.getBitWidth() + B.Zero.getBitWidth();
+    llvm::KnownBits Result(W);
+    Result.Zero = (A.Zero.zext(W) << B.getBitWidth()) | B.Zero.zext(W);
+    Result.One = (A.One.zext(W) << B.getBitWidth()) | B.One.zext(W);
+    return Result;
+  }
+
   namespace BinaryTransferFunctionsKB {
     llvm::KnownBits add(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS) {
       return llvm::KnownBits::computeForAddSub(/*Add=*/true, /*NSW=*/false,
@@ -715,10 +723,38 @@ namespace souper {
       Result.Zero.setHighBits(KB0.getBitWidth() - val.getActiveBits());
       break;
     }
-//   case FShl:
-//     return "fshl";
-//   case FShr:
-//     return "fshr";
+    case Inst::FShl: {
+      auto NewKB0 = concatKnownBits(KB0, KB1);
+      if (KB2.isConstant()) {
+        auto Shift = KB2.getConstant().urem(I->Width);
+        NewKB0.Zero = NewKB0.Zero.shl(Shift);
+        NewKB0.One = NewKB0.One.shl(Shift);
+        Result = NewKB0.trunc(I->Width);
+      } else {
+        llvm::KnownBits KBW(I->Width);
+        KBW.One = I->Width;
+        KBW.Zero = ~I->Width;
+        auto NewKB1 = BinaryTransferFunctionsKB::urem(KB2.zext(NewKB0.getBitWidth()), KBW);
+        Result = BinaryTransferFunctionsKB::shl(NewKB0, NewKB1).trunc(I->Width);
+      }
+      break;
+    }
+    case Inst::FShr: {
+      auto NewKB0 = concatKnownBits(KB0, KB1);
+      if (KB2.isConstant()) {
+        auto Shift = KB2.getConstant().urem(I->Width);
+        NewKB0.Zero = NewKB0.Zero.lshr(Shift);
+        NewKB0.One = NewKB0.One.lshr(Shift);
+        Result = NewKB0.trunc(I->Width);
+      } else {
+        llvm::KnownBits KBW(I->Width);
+        KBW.One = I->Width;
+        KBW.Zero = ~I->Width;
+        auto NewKB1 = BinaryTransferFunctionsKB::urem(KB2.zext(NewKB0.getBitWidth()), KBW);
+        Result = BinaryTransferFunctionsKB::lshr(NewKB0, NewKB1).trunc(I->Width);
+      }
+      break;
+    }
 //   case ExtractValue:
 //     return "extractvalue";
 //   case SAddWithOverflow:
