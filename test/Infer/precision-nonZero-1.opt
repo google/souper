@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 ; RUN: %souper-check %solver -infer-non-zero %s | %FileCheck %s
 
-; CHECK: known nonZero from souper:   true
+; CHECK: nonZero from souper:   true
 
 %0:i64 = var (range=[0,-1))
 %1:i64 = addnuw 1:i64, %0

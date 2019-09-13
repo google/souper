@@ -762,7 +762,9 @@ namespace souper {
                                                               std::vector<InstMapping> &PCs) {
     BlockPCs BPCs;
     InstContext IC;
-    return S->findKnownBitsUsingSolver(BPCs, PCs, I, IC);
+    KnownBits k(I->Width);
+    S->knownBits(BPCs, PCs, I, k, IC);
+    return k;
   }
 
 #define CR0 findConstantRange(I->Ops[0], CI, UsePartialEval)

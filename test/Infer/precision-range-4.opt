@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 ; RUN: %souper-check %solver -infer-range %s | %FileCheck %s
 
-; CHECK: known range from souper: [0,53)
+; CHECK: range from souper: [0,53)
 
 %0:i32 = var
 %1:i1 = ult %0, 53:i32

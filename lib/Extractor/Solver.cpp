@@ -567,26 +567,6 @@ public:
     }
   }
 
-  llvm::KnownBits findKnownBitsUsingSolver(const BlockPCs &BPCs,
-                                           const std::vector<InstMapping> &PCs,
-                                           Inst *LHS, InstContext &IC) override {
-    unsigned W = LHS->Width;
-    auto R = llvm::KnownBits(W);
-    for (unsigned Pos = 0; Pos < W; Pos++) {
-      APInt ZeroGuess = R.Zero | APInt::getOneBitSet(W, Pos);
-      if (testKnown(BPCs, PCs, ZeroGuess, R.One, LHS, IC)) {
-        R.Zero = ZeroGuess;
-        continue;
-      }
-      APInt OneGuess = R.One | APInt::getOneBitSet(W, Pos);
-      if (testKnown(BPCs, PCs, R.Zero, OneGuess, LHS, IC)) {
-        R.One = OneGuess;
-        continue;
-      }
-    }
-    return R;
-  }
-
   std::string getName() override {
     return SMTSolver->getName();
   }
@@ -670,12 +650,6 @@ public:
       IsValid = ent->second.second;
       return ent->second.first;
     }
-  }
-
-  llvm::KnownBits findKnownBitsUsingSolver(const BlockPCs &BPCs,
-                                           const std::vector<InstMapping> &PCs,
-                                           Inst *LHS, InstContext &IC) override {
-    return UnderlyingSolver->findKnownBitsUsingSolver(BPCs, PCs, LHS, IC);
   }
 
   std::string getName() override {
@@ -797,12 +771,6 @@ public:
     // N.B. we decided that since the important clients have moved to infer(),
     // we'll no longer support external caching for isValid()
     return UnderlyingSolver->isValid(IC, BPCs, PCs, Mapping, IsValid, Model);
-  }
-
-  llvm::KnownBits findKnownBitsUsingSolver(const BlockPCs &BPCs,
-                                           const std::vector<InstMapping> &PCs,
-                                           Inst *LHS, InstContext &IC) override {
-    return UnderlyingSolver->findKnownBitsUsingSolver(BPCs, PCs, LHS, IC);
   }
 
   std::string getName() override {

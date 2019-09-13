@@ -2,7 +2,7 @@
 ; RUN: %souper-check %solver -infer-range %s | %FileCheck %s
 
 ; isOven(add(and(x, 1), x)) = true
-; CHECK: known range from souper: [{{0,-1|2,1}})
+; CHECK: range from souper: [{{0,-1|2,1}})
 
 %0:i8 = var
 %1:i8 = and 1:i8, %0
