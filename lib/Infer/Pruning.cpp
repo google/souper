@@ -14,7 +14,7 @@
 
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Pruning.h"
-
+#include "souper/Extractor/Candidates.h"
 #include <cstdlib>
 
 namespace souper {
@@ -67,7 +67,7 @@ std::vector<llvm::ConstantRange> constantRangeNarrowing
       // C could be in CR, subdivide
       auto L = CR.getLower();
       auto H = CR.getUpper();
-      auto Size = CR.getSetSize();
+      auto Size = getSetSize(CR);
 
       if (L.ugt(H)) {
         // TODO(manasij): Bisect wrapped ranges instead of giving up.
@@ -349,7 +349,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
 
       size_t ResidualSize = 0;
       for (auto &&R : Rs) {
-        ResidualSize += R.getSetSize().getLimitedValue();
+        ResidualSize += getSetSize(R).getLimitedValue();
       }
 
       if (ResidualSize < 8192 && Rs.size() < 3) {

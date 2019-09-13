@@ -1226,6 +1226,7 @@ void souper::separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                               bool CloneVars) {
   for (const auto &BPC : BPCs) {
     auto BPCCopy = BPC;
+    assert(BlockCache[BPC.B]);
     BPCCopy.B = BlockCache[BPC.B];
     BPCCopy.PC = InstMapping(getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache, ConstMap, CloneVars),
                              getInstCopy(BPC.PC.RHS, IC, InstCache, BlockCache, ConstMap, CloneVars));

@@ -22,4 +22,3 @@ jmp:
 declare i32 @a(i32) local_unnamed_addr #1
 
 ; CHECK: 1 souper - Number of instructions replaced by another instruction
-; XFAIL: *

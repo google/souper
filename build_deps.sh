@@ -21,7 +21,7 @@ fi
 
 # hiredis version 0.14.0
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
-llvm_branch=tags/RELEASE_800/final
+llvm_branch=tags/RELEASE_900/final
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=9823174bb34fcb9c8e33c37e7e04d46bfe3a29a5

@@ -178,7 +178,7 @@ struct Inst : llvm::FoldingSetNode {
   unsigned SynthesisConstID;
   HarvestType HarvestKind;
   llvm::BasicBlock* HarvestFrom;
-  llvm::ConstantRange Range=llvm::ConstantRange(1);
+  llvm::ConstantRange Range=llvm::ConstantRange(1, true);
   std::vector<llvm::ConstantRange> RangeRefinement;
 };
 
