@@ -127,7 +127,6 @@ namespace {
 void addGuess(Inst *RHS, int MaxCost, std::vector<Inst *> &Guesses,
               int &TooExpensive) {
   int cost = souper::cost(RHS);
-
   if (cost < MaxCost)
     Guesses.push_back(RHS);
   else
@@ -228,7 +227,8 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
     for (auto I = Comps.begin(); I != Comps.end(); ++I) {
       // Prune: only one of (mul x, C), (mul C, x) is allowed
-      if (Inst::isCommutative(K) && (*I)->K == Inst::ReservedConst)
+      if ((Inst::isCommutative(K) || Inst::isOverflowIntrinsicMain(K) || Inst::isOverflowIntrinsicSub(K)) &&
+          (*I)->K == Inst::ReservedConst)
         continue;
 
       // Prune: I1 should only be the first argument
@@ -236,7 +236,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
         continue;
 
       // PRUNE: don't try commutative operators both ways
-      auto Start = Inst::isCommutative(K) ? I : Comps.begin();
+      auto Start = (Inst::isCommutative(K) || Inst::isOverflowIntrinsicMain(K) || Inst::isOverflowIntrinsicSub(K)) ? I : Comps.begin();
       for (auto J = Start; J != Comps.end(); ++J) {
         // Prune: I2 should only be the second argument
         if ((*J)->K == Inst::ReservedInst && (*J) != I2)
@@ -333,7 +333,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
         else if (Inst::isOverflowIntrinsicSub(K)) {
           auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)), Width, {V1, V2});
           auto Comp1 = IC.getInst(K, 1, {V1, V2});
-          auto Orig = IC.getInst(Inst::getOverflowComplement(K), Width + 1, {V1, V2});
+          auto Orig = IC.getInst(Inst::getOverflowComplement(K), Width + 1, {Comp0, Comp1});
           N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getUntypedConst(llvm::APInt(1, 1))});
         }
         else {

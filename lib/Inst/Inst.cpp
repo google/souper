@@ -766,10 +766,6 @@ bool Inst::isCommutative(Inst::Kind K) {
   case Xor:
   case Eq:
   case Ne:
-  case SAddWithOverflow:
-  case UAddWithOverflow:
-  case SMulWithOverflow:
-  case UMulWithOverflow:
     return true;
   default:
     return false;
@@ -850,7 +846,14 @@ int Inst::getCost(Inst::Kind K) {
   switch (K) {
     case Var:
     case Const:
+    case UntypedConst:
     case Phi:
+    case SAddO:
+    case UAddO:
+    case SSubO:
+    case USubO:
+    case SMulO:
+    case UMulO:
       return 0;
     case BitReverse:
     case BSwap:
