@@ -190,8 +190,8 @@ set(SOUPER_INFER_FILES
   include/souper/Infer/InstSynthesis.h
   lib/Infer/ConstantSynthesis.cpp
   include/souper/Infer/ConstantSynthesis.h
-  lib/Infer/ExhaustiveSynthesis.cpp
-  include/souper/Infer/ExhaustiveSynthesis.h
+  lib/Infer/EnumerativeSynthesis.cpp
+  include/souper/Infer/EnumerativeSynthesis.h
   lib/Infer/AliveDriver.cpp
   include/souper/Infer/AliveDriver.h
   lib/Infer/Pruning.cpp

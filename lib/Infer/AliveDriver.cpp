@@ -517,7 +517,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
   } else if (I->Name != "") {
     if (I->SynthesisConstID != 0) {
       // No way to avoid string matching without
-      // changes in Inst and ExhaustiveSynthesis
+      // changes in Inst and EnumerativeSynthesis
       Name = "%" + souper::ReservedConstPrefix + std::to_string(I->SynthesisConstID);
     } else {
       Name = "%var_" + I->Name;

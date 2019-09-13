@@ -1,6 +1,6 @@
 ; REQUIRES: solver, solver-model
 
-; Exhaustive search does not support this test, since we're not supporting urem
+; Enumerative search does not support this test, since we're not supporting urem
 
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=eq,const,const,urem %s > %t1
 ; RUN: %FileCheck %s < %t1

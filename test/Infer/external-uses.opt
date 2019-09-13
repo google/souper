@@ -1,6 +1,6 @@
 ; REQUIRES: solver
 
-; RUN: %souper-check %solver -reinfer-rhs -souper-exhaustive-synthesis %s > %t 2>&1
+; RUN: %souper-check %solver -reinfer-rhs -souper-enumerative-synthesis %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
 ;CHECK-NOT: ; RHS inferred successfully, no cost regression (Old= 2, New= 2, LHS= 3)

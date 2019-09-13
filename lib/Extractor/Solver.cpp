@@ -24,7 +24,7 @@
 #include "souper/Extractor/Solver.h"
 #include "souper/Infer/AliveDriver.h"
 #include "souper/Infer/ConstantSynthesis.h"
-#include "souper/Infer/ExhaustiveSynthesis.h"
+#include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/InstSynthesis.h"
 #include "souper/Infer/Pruning.h"
 #include "souper/KVStore/KVStore.h"
@@ -62,7 +62,7 @@ static cl::opt<bool> InferInts("souper-infer-iN",
 static cl::opt<bool> InferInsts("souper-infer-inst",
     cl::desc("Infer instructions (default=false)"),
     cl::init(false));
-static cl::opt<bool> EnableExhaustiveSynthesis("souper-exhaustive-synthesis",
+static cl::opt<bool> EnableEnumerativeSynthesis("souper-enumerative-synthesis",
     cl::desc("Use exaustive search for instruction synthesis (default=false)"),
     cl::init(false));
 static cl::opt<int> MaxLHSSize("souper-max-lhs-size",
@@ -383,8 +383,8 @@ public:
     }
 
     if(SMTSolver->supportsModels()) {
-      if (EnableExhaustiveSynthesis) {
-        ExhaustiveSynthesis ES;
+      if (EnableEnumerativeSynthesis) {
+        EnumerativeSynthesis ES;
         EC = ES.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
         if (EC || RHS)
           return EC;

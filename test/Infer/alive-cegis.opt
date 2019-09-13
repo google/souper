@@ -1,5 +1,5 @@
 ; REQUIRES: solver, synthesis, unsupported
-; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-use-alive -souper-synthesis-const-with-cegis %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-use-alive -souper-synthesis-const-with-cegis %solver %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK: mul 6:i32, %0

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #Example invocation:
-#./test_infer.sh './build/souper-check -solver-timeout=60 --z3-path="/usr/bin/z3" -reinfer-rhs -souper-infer-inst -souper-exhaustive-synthesis' test/Solver/alive /tmp/results
+#./test_infer.sh './build/souper-check -solver-timeout=60 --z3-path="/usr/bin/z3" -reinfer-rhs -souper-infer-inst -souper-enumerative-synthesis' test/Solver/alive /tmp/results
 
 mkdir -p $3
 rm -r $3/*
