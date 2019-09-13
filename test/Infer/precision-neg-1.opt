@@ -1,7 +1,7 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -infer-neg %s
+; RUN: %souper-check %solver -infer-neg %s | %FileCheck %s
 
-; CHECK: known negative from Souper:   true
+; CHECK: known negative from souper:   true
 
 %0:i32 = var
 %1:i32 = mulnsw 10:i32, %0

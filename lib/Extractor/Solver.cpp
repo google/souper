@@ -162,8 +162,8 @@ public:
     unsigned W = LHS->Width;
     Inst *PowerMask = IC.getInst(Inst::And, W,
                                  {IC.getInst(Inst::Sub, W,
-                                             {IC.getConst(APInt(W, 1, false)),
-                                              LHS}), LHS});
+                                             {LHS, IC.getConst(APInt(W, 1, false))}),
+                                             LHS});
     Inst *Zero = IC.getConst(APInt(W, 0, false));
     Inst *True = IC.getConst(APInt(1, 1, false));
     Inst *PowerTwoInst = IC.getInst(Inst::And, 1, {IC.getInst(Inst::Ne, 1, {LHS, Zero}),

@@ -1,5 +1,5 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-range -infer-rhs %s | %FileCheck %s
+; RUN: %souper-check %solver -infer-range %s | %FileCheck %s
 
 ; isOven(add(and(x, 1), x)) = true
 ; CHECK: known range from souper: [{{0,-1|2,1}})

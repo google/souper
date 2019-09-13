@@ -1,7 +1,7 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -infer-sign-bits %s
+; RUN: %souper-check %solver -infer-sign-bits %s | %FileCheck %s
 
-; CHECK: known signBits from Souper:   56
+; CHECK: known signBits from souper:   56
 
 %0:i16 = var
 %1:i64 = zext %0

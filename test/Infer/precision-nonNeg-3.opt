@@ -1,7 +1,7 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -infer-non-neg %s
+; RUN: %souper-check %solver -infer-non-neg %s | %FileCheck %s
 
-; CHECK: known nonNegative from Souper:   true
+; CHECK: known nonNegative from souper:   true
 
 %0:i64 = var (range=[1,-9223372036854775808))
 %1:i64 = var (range=[1,0))

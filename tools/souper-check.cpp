@@ -105,7 +105,9 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 
   std::vector<ParsedReplacement> Reps;
   std::vector<ReplacementContext> Contexts;
-  if (InferRHS || ParseLHSOnly) {
+  if (InferRHS || ParseLHSOnly || InferNeg || InferNonNeg ||
+      InferKnownBits || InferPowerTwo || InferNonZero ||
+      InferSignBits || InferRange) {
     Reps = ParseReplacementLHSs(IC, MB.getBufferIdentifier(), MB.getBuffer(),
                                 Contexts, ErrStr);
   } else {
@@ -144,9 +146,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
                      << convertToStr(Negative) << "\n";
         ++Success;
       }
-    }
-
-    if (InferNonNeg) {
+    } else if (InferNonNeg) {
       bool NonNegative;
       if (std::error_code EC = S->nonNegative(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
                                               NonNegative, IC)) {
@@ -158,9 +158,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
                      << convertToStr(NonNegative) << "\n";
         ++Success;
       }
-    }
-
-    if (InferKnownBits) {
+    } else if (InferKnownBits) {
       unsigned W = Rep.Mapping.LHS->Width;
       KnownBits Known(W);
       if (std::error_code EC = S->knownBits(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
@@ -173,9 +171,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
                      << Inst::getKnownBitsString(Known.Zero, Known.One) << "\n";
         ++Success;
       }
-    }
-
-    if (InferPowerTwo) {
+    } else if (InferPowerTwo) {
       bool PowTwo;
       if (std::error_code EC = S->powerTwo(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
                                            PowTwo, IC)) {
@@ -187,9 +183,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
                      << convertToStr(PowTwo) << "\n";
         ++Success;
       }
-    }
-
-    if (InferNonZero) {
+    } else if (InferNonZero) {
       bool NonZero;
       if (std::error_code EC = S->nonZero(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
                                           NonZero, IC)) {
@@ -201,9 +195,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
                      << convertToStr(NonZero) << "\n";
         ++Success;
       }
-    }
-
-    if (InferSignBits) {
+    } else if (InferSignBits) {
       unsigned SignBits;
       if (std::error_code EC = S->signBits(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
                                            SignBits, IC)) {
@@ -215,18 +207,14 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
                      << std::to_string(SignBits) << "\n";
         ++Success;
       }
-    }
-
-    if (InferRange) {
+    } else if (InferRange) {
       unsigned W = Rep.Mapping.LHS->Width;
       llvm::ConstantRange Range = S->constantRange(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS, IC);
 
       llvm::outs() << "known range from souper: " << "[" << Range.getLower()
                    << "," << Range.getUpper() << ")" << "\n";
       ++Success;
-    }
-
-    if (InferRHS || ReInferRHS) {
+    } else if (InferRHS || ReInferRHS) {
       int OldCost;
       if (ReInferRHS) {
         OldCost = cost(Rep.Mapping.RHS);

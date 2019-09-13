@@ -1,5 +1,5 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -infer-known-bits %s
+; RUN: %souper-check %solver -infer-power-two %s | %FileCheck %s
 
 ; CHECK: known powerOfTwo from souper:   true
 

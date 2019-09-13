@@ -1,7 +1,7 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -infer-neg %s
+; RUN: %souper-check %solver -infer-neg %s | %FileCheck %s
 
-; CHECK: known negative from Souper:   true
+; CHECK: known negative from souper:   true
 
 %0 = block 2
 %1:i64 = var
