@@ -105,6 +105,11 @@ KnownBits KBTesting::clearLowest(KnownBits x) {
   report_fatal_error("faulty clearLowest!");
 }
 
+llvm::APInt concat(llvm::APInt A, llvm::APInt B) {
+  auto W = A.getBitWidth() + B.getBitWidth();
+  return (A.zext(W) << B.getBitWidth()) | B.zext(W);
+}
+
 EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y,
                                   llvm::KnownBits z, Inst::Kind Pred) {
   if (!x.isConstant())
@@ -124,6 +129,12 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y,
   switch (Pred) {
     case Inst::Select:
       Result = (xc != 0) ? yc : zc;
+      break;
+    case Inst::FShl:
+      Result = (concat(xc, yc) << (zc.urem(WIDTH))).trunc(WIDTH);
+      break;
+    case Inst::FShr:
+      Result  = (concat(xc, yc).lshr(zc.urem(WIDTH))).trunc(WIDTH);
       break;
     default:
       report_fatal_error("Unhandled ternary operator.");
