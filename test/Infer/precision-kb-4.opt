@@ -1,5 +1,5 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -infer-known-bits %s
+; RUN: %souper-check %solver -infer-known-bits %s | %FileCheck %s
 
 ; CHECK: knownBits from souper: 0000xxxx
 

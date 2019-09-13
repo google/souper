@@ -91,17 +91,17 @@ sub souper_known ($) {
     $fh->flush();
     my $arg = "";
     if ($NEG) {
-        $arg = "-infer-neg -infer-rhs -solver-timeout=30";
+        $arg = "-infer-neg -solver-timeout=30";
     } elsif ($NONNEG) {
-        $arg = "-infer-non-neg -infer-rhs -solver-timeout=30";
+        $arg = "-infer-non-neg -solver-timeout=30";
     } elsif ($NONZERO) {
-        $arg = "-infer-non-zero -infer-rhs -solver-timeout=30";
+        $arg = "-infer-non-zero -solver-timeout=30";
     } elsif ($POWERTWO) {
-        $arg = "-infer-power-two -infer-rhs -solver-timeout=30";
+        $arg = "-infer-power-two -solver-timeout=30";
     } elsif ($KNOWNBITS) {
-        $arg = "-infer-known-bits -infer-rhs -solver-timeout=30";
+        $arg = "-infer-known-bits -solver-timeout=30";
     } elsif ($SIGNBITS) {
-        $arg = "-infer-sign-bits -infer-rhs -solver-timeout=30";
+        $arg = "-infer-sign-bits -solver-timeout=30";
     }
     my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
@@ -137,6 +137,7 @@ sub souper_known ($) {
     close INF;
     close $fh;
     unlink $tmpfn;
+    print $opt if not defined $k;
     return $k;
 }
 
@@ -307,6 +308,7 @@ sub llvm_known($) {
         }
     }
     close INF;
+    print $opt if not defined $k;
     return $known if defined $known;
     return "oops";
 }
@@ -321,14 +323,15 @@ sub compare_facts($$) {
     my $res = "";
     my $llvm_stronger = 0;
     my $souper_stronger = 0;
+    my $souper_timeout = 0;
     my ($sk, $lk) = (@_);
+    if ($sk eq "") {
+        $souper_timeout = 1;
+    }
+    if ($lk eq "") {
+        die "Compiler didn't compute the fact";
+    }
     if ($NEG || $NONNEG ||$POWERTWO || $NONZERO) {
-        if ($sk eq "") {
-            die "Souper didn't compute the fact";
-        }
-        if ($lk eq "") {
-            die "Compiler didn't compute the fact";
-        }
         if ($sk eq "true") {
             $souper_stronger = 1;
         }
@@ -336,14 +339,19 @@ sub compare_facts($$) {
             $llvm_stronger = 1;
         }
     } elsif ($KNOWNBITS) {
-        die unless length($lk) == length($sk);
-        for (my $i=0; $i<length($lk); $i++) {
-            if ((substr($sk,$i,1) eq "x") && (substr($lk,$i,1) ne "x")) {
-        	      $llvm_stronger = 1;
+        if (length($lk) == length($sk)) {
+            for (my $i=0; $i<length($lk); $i++) {
+                if ((substr($sk,$i,1) eq "x") && (substr($lk,$i,1) ne "x")) {
+                     $llvm_stronger = 1;
+                }
+                if ((substr($lk,$i,1) eq "x") && (substr($sk,$i,1) ne "x")) {
+                     $souper_stronger = 1;
+                }
             }
-            if ((substr($lk,$i,1) eq "x") && (substr($sk,$i,1) ne "x")) {
-        	      $souper_stronger = 1;
-            }
+        } else {
+          if ($souper_timeout == 0) {
+              die "length of knownBits computed by Souper and LLVM mismatch";
+          }
         }
     } elsif ($SIGNBITS) {
         if ($sk > $lk) {
@@ -358,12 +366,14 @@ sub compare_facts($$) {
         }
     }
 
-    if ($llvm_stronger && $souper_stronger) {
-        $res .= "neither is stronger";
+    if ($souper_timeout) {
+        $res .= "; timeout: Souper didn't compute the dataflow fact";
+    } elsif ($llvm_stronger && $souper_stronger) {
+        $res .= "; neither is stronger";
     } elsif ($llvm_stronger) {
-        $res .= "llvm is stronger";
+        $res .= "; llvm is stronger";
     } elsif ($souper_stronger) {
-        $res .= "souper is stronger";
+        $res .= "; souper is stronger";
     } else {
         die;
     }
@@ -371,14 +381,15 @@ sub compare_facts($$) {
     return $res;
 }
 
-sub go {
+sub go($$) {
     (my $opt, my $counter) = @_;
+    print "LHS Counter = $counter\n";
     my $ret = "";
     $ret .= "$opt";
     $ret .= "\n";
 
     my $sk = souper_known($opt);
-    $ret .= "known from Souper:   $sk\n";
+    $ret .= "; known from Souper:   $sk\n";
 
     my $lk;
     if (0) {
@@ -398,7 +409,7 @@ sub go {
     } else {
         $lk = llvm_known($opt);
     }
-    $ret .= "known from compiler: $lk\n";
+    $ret .= "; known from compiler: $lk\n";
 
     my $print = 0;
     if ($sk ne $lk) {
@@ -409,7 +420,27 @@ sub go {
     $ret .= "; total static profile = $sprofiles{$opt}\n";
     $ret .= "; total dynamic profile = $dprofiles{$opt}\n";
     $ret .= "------------------------------------------------------\n\n";
-    print $ret if $print;
+    if ($print) {
+        my $fname ='';
+        if ($NEG) {
+            $fname = 'neg_' . sprintf("%08d", $counter);
+        } elsif ($NONNEG) {
+            $fname = 'nonneg_' . sprintf("%08d", $counter);
+        } elsif ($NONZERO) {
+            $fname = 'nonzero_' . sprintf("%08d", $counter);
+        } elsif ($KNOWNBITS) {
+            $fname = 'knownbits_' . sprintf("%08d", $counter);
+        } elsif ($POWERTWO) {
+            $fname = 'power_' . sprintf("%08d", $counter);
+        } elsif ($SIGNBITS) {
+            $fname = 'signbits_' . sprintf("%08d", $counter);
+        } else {
+            die "dataflow option not specified";
+        }
+        open(my $fh, '>', $fname);
+        print $fh $ret;
+        close $fh;
+    }
     exit();
 }
 

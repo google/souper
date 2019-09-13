@@ -1,7 +1,7 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -infer-non-zero %s
+; RUN: %souper-check %solver -infer-non-zero %s | %FileCheck %s
 
-; CHECK: known nonZero from Souper:   true
+; CHECK: known nonZero from souper:   true
 
 %0:i16 = var
 %1:i64 = zext %0
