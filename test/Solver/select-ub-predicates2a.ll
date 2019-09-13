@@ -11,7 +11,7 @@ foo1:
   %1 = add nsw i32 %a, 1
   br label %label1
 label1:
-  %2 = phi i32 [ %0, %entry ], [ %1, %foo1 ] 
+  %2 = phi i32 [ %0, %entry ], [ %1, %foo1 ]
   %3 = add i32 %a, 1
   %4 = select i1 %b, i32 %2, i32 %3
   %res = icmp sgt i32 %4, %a

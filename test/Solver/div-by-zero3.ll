@@ -16,7 +16,7 @@ entry:
   br i1 %b2, label %cond.true, label %cond.false
 
   %s3 = sub i32 10, 10
-  %d3 = sdiv i32 1, %s3 
+  %d3 = sdiv i32 1, %s3
   %b3 = icmp eq i32 %d3, 0, !expected !0
   br i1 %b3, label %cond.true, label %cond.false
 

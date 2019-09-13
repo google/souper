@@ -4,7 +4,7 @@
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: %0:i64 = var
-; CHECK-NEXT: %1:i64 = lshr %0, 2:i64 
+; CHECK-NEXT: %1:i64 = lshr %0, 2:i64
 ; CHECK-NEXT: cand %1 0:i64 (demandedBits=1100000000000000000000000000000000000000000000000000000000000000)
 
 %0:i64 = var

@@ -31,7 +31,7 @@ foo5:
 foo6:
   br label %label2
 label2:
-  %phi2 = phi i32 [ 6, %foo5 ], [ %phi1, %label1 ], [ 2, %foo6 ] 
+  %phi2 = phi i32 [ 6, %foo5 ], [ %phi1, %label1 ], [ 2, %foo6 ]
   %cmp = icmp slt i32 %phi2, 32, !expected !1
   ret i1 %cmp
 }

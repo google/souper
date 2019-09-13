@@ -418,11 +418,11 @@ Inst *ExprBuilder::getDataflowConditions(Inst *I) {
   return Result;
 }
 
-// Similar to the way we collect UB constraints. We could combine it with 
-// getUBInstCondition, because the workflow is quite similar. 
+// Similar to the way we collect UB constraints. We could combine it with
+// getUBInstCondition, because the workflow is quite similar.
 // However, mixing two parts (one for UB constraints, one for BlockPCs)
 // may make the code less structured. If we see big performance overhead,
-// we may consider to combine these two parts together. 
+// we may consider to combine these two parts together.
 Inst *ExprBuilder::getBlockPCs(Inst *Root) {
 
   UBPathInstMap CachedPhis;

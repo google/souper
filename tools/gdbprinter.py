@@ -39,7 +39,7 @@ class InstPrinter(object):
             while start != end:
                 res += '%%%d, ' % (self.get_nr(start))
                 start += 1
-            
+
             res = res.strip(', ')
             print (res)
 
