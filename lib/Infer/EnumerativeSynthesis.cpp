@@ -599,16 +599,9 @@ std::error_code synthesizeWithAlive(SynthesisContext &SC, Inst *&RHS,
 
 std::error_code isConcreteCandidateSat(SynthesisContext &SC, Inst *RHSGuess, bool &IsSat) {
   std::error_code EC;
-  BlockPCs BPCsCopy;
-  std::vector<InstMapping> PCsCopy;
-  std::map<Inst *, Inst *> InstCache;
-  std::map<Block *, Block *> BlockCache;
-  separateBlockPCs(SC.BPCs, BPCsCopy, InstCache, BlockCache, SC.IC, {}, false);
-  separatePCs(SC.PCs, PCsCopy, InstCache, BlockCache, SC.IC, {}, false);
-
   InstMapping Mapping(SC.LHS, RHSGuess);
 
-  std::string Query2 = BuildQuery(SC.IC, BPCsCopy, PCsCopy, Mapping, 0, 0);
+  std::string Query2 = BuildQuery(SC.IC, SC.BPCs, SC.PCs, Mapping, 0, 0);
 
   EC = SC.SMTSolver->isSatisfiable(Query2, IsSat, 0, 0, SC.Timeout);
   if (EC && DebugLevel > 1) {

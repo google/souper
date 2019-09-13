@@ -109,6 +109,8 @@ FunctionCandidateSet ExtractCandidates(
     llvm::Function *F, InstContext &IC, ExprBuilderContext &EBC,
     const ExprBuilderOptions &Opts = ExprBuilderOptions());
 
+llvm::APInt getSetSize(const llvm::ConstantRange &R);
+
 }
 
 #endif  // SOUPER_EXTRACTOR_CANDIDATES_H

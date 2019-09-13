@@ -215,7 +215,6 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                                        getInstCopy(Mapping.RHS, IC, InstCache,
                                                                    BlockCache, &SubstConstMap, true)}),
                               SubstAnte});
-      assert(BlockCache.empty());
     }
   }
 
