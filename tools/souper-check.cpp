@@ -60,6 +60,10 @@ static cl::opt<bool> InferRange("infer-range",
     cl::desc("Compute range for the candidate (default=false)"),
     cl::init(false));
 
+static cl::opt<bool> InferDemandedBits("infer-demanded-bits",
+    cl::desc("Compute demanded bits for the candidate (default=false)"),
+    cl::init(false));
+
 static cl::opt<bool> PrintRepl("print-replacement",
     cl::desc("Print the replacement, if valid (default=false)"),
     cl::init(false));
@@ -101,7 +105,7 @@ std::string convertToStr(bool Fact) {
 
 static bool isInferDFA() {
   return InferNeg || InferNonNeg || InferKnownBits || InferPowerTwo ||
-         InferNonZero || InferSignBits || InferRange;
+         InferNonZero || InferSignBits || InferRange || InferDemandedBits;
 }
 
 int SolveInst(const MemoryBufferRef &MB, Solver *S) {
@@ -224,6 +228,21 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
         llvm::outs() << "range from souper: " << "[" << Range.getLower()
                      << "," << Range.getUpper() << ")" << "\n";
         ++Success;
+      }
+      if (InferDemandedBits) {
+        std::map<std::string, APInt> DBitsVect;
+        if (std::error_code EC = S->testDemandedBits(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
+                                                     DBitsVect, IC)) {
+          llvm::errs() << EC.message() << '\n';
+        }
+        for (std::map<std::string,APInt>::iterator I = DBitsVect.begin();
+             I != DBitsVect.end(); ++I) {
+          std::string VarName = I->first;
+          llvm::APInt DBitsVar = DBitsVect[VarName];
+          std::string s = Inst::getDemandedBitsString(DBitsVar);
+          llvm::outs() << "demanded-bits from souper for %" << VarName << " : "<< s << "\n";
+        }
+        return 0;
       }
     } else if (InferRHS || ReInferRHS) {
       int OldCost;
