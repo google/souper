@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 ; RUN: %souper-check %solver -infer-power-two %s | %FileCheck %s
 
-; CHECK: known powerOfTwo from souper:   true
+; CHECK: powerOfTwo from souper:   true
 
 %0:i64 = var (range=[1,0))
 %1:i64 = sub 0:i64, %0
