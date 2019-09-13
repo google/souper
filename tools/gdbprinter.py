@@ -57,7 +57,7 @@ class InstPrinter(object):
             self.print_node(it)
 
         root = stack[-1]
-        nr = self.get_nr(root)
+        nr = self.get_nr(root.address)
         ikind = str(root['K']).split('::')[-1].lower()
         res = '%%%d = %s ' % (nr, ikind)
 
@@ -72,7 +72,7 @@ class InstPrinter(object):
         return '---'
 
 def lookup_type(val):
-    if str(val.type) == 'souper::Inst *':
+    if str(val.type) == 'souper::Inst':
         return InstPrinter(val)
     return None
 
