@@ -1,6 +1,6 @@
 ; REQUIRES: solver
 ; RUN: %souper-check -infer-rhs -souper-infer-nop -souper-stress-nop %solver %s > %t1
-; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis %solver %s > %t2
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis %solver %s > %t2
 ; RUN: %FileCheck %s < %t1
 ; RUN: %FileCheck %s < %t2
 ; CHECK: result %1

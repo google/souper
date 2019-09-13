@@ -1,7 +1,7 @@
 ; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-exhaustive-synthesis-num-instructions=1 %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-num-instructions=1 %solver %s > %t1
 ; RUN: %FileCheck %s -check-prefix=TEST1 < %t1
-; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis -souper-exhaustive-synthesis-num-instructions=2 %solver %s > %t2
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-num-instructions=2 %solver %s > %t2
 ; RUN: %FileCheck %s -check-prefix=TEST2 < %t2
 
 ; test trunk insertion.

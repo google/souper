@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SOUPER_EXHAUSTIVE_SYNTHESIS_H
-#define SOUPER_EXHAUSTIVE_SYNTHESIS_H
+#ifndef SOUPER_ENUMERATIVE_SYNTHESIS_H
+#define SOUPER_ENUMERATIVE_SYNTHESIS_H
 
 #include "llvm/ADT/APInt.h"
 #include "souper/Extractor/Solver.h"
@@ -27,7 +27,7 @@ extern unsigned DebugLevel;
 
 namespace souper {
 
-class ExhaustiveSynthesis {
+class EnumerativeSynthesis {
 public:
   // Synthesize an instruction from the specification in LHS
   std::error_code synthesize(SMTLIBSolver *SMTSolver,
@@ -39,4 +39,4 @@ public:
 };
 }
 
-#endif  // SOUPER_EXHAUSTIVE_SYNTHESIS_H
+#endif  // SOUPER_ENUMERATIVE_SYNTHESIS_H

@@ -1,8 +1,8 @@
 ; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-exhaustive-synthesis %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis %solver %s > %t1
 ; RUN: %FileCheck %s < %t1
 
-; %20 is (ctpop %0), but due to the MaxCands bound in exhaustive synthesis,
+; %20 is (ctpop %0), but due to the MaxCands bound in enumerative synthesis,
 ; %0 is not conllected as a synthesis component. This test case is to show
 ; even ctpop synthesis is failed, Souper can still synthesis good
 ; optimizations from collected components.

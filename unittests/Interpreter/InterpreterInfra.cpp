@@ -22,7 +22,7 @@ using namespace souper;
 using namespace llvm;
 
 // CR KB reduction
-void TestingUtil::exhaustiveKBCRReduction(KnownBits &KB, ConstantRange &CR) {
+void TestingUtil::enumerativeKBCRReduction(KnownBits &KB, ConstantRange &CR) {
   constexpr unsigned SetSize = 1 << WIDTH;
   if (CR.isEmptySet()) {
     KB.One = 0;
@@ -413,7 +413,7 @@ ConstantRange CRTesting::bestCR(const bool Table[], const int Width) {
   return R;
 }
 
-ConstantRange CRTesting::exhaustive(const ConstantRange &L, const ConstantRange &R,
+ConstantRange CRTesting::enumerative(const ConstantRange &L, const ConstantRange &R,
                                     Inst::Kind pred, const ConstantRange &Untrusted) {
   if (L.isEmptySet() || R.isEmptySet())
     return ConstantRange(WIDTH, /*isFullSet=*/false);
@@ -479,7 +479,7 @@ void CRTesting::check(const ConstantRange &L, const ConstantRange &R, Inst::Kind
     report_fatal_error("unsupported opcode");
   }
 
-  ConstantRange PreciseRes = exhaustive(L, R, pred, FastRes);
+  ConstantRange PreciseRes = enumerative(L, R, pred, FastRes);
 
   long FastSize = FastRes.getSetSize().getLimitedValue();
   long PreciseSize = PreciseRes.getSetSize().getLimitedValue();
@@ -564,7 +564,7 @@ std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X) {
   return Result;
 }
 
-llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY) {
+llvm::APInt enumerativeRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY) {
   llvm::APInt RB(WIDTH, 0);
 
   auto XPartial = explodeRestrictedBits(RBX);
@@ -620,17 +620,17 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       auto Expr = IC.getInst(K, EffectiveWidth, {X, Y});
       RestrictedBitsAnalysis RBA{{{X, RB0}, {Y, RB1}}};
       auto RBComputed = RBA.findRestrictedBits(Expr);
-      auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1);
+      auto RBEnumerative = enumerativeRB(Expr, X, Y, RB0, RB1);
       bool fail = false;
       bool FoundMorePrecise = false;
       for (int i = 0; i < Expr->Width ; ++i) {
         if ((RBComputed & (1 << i)) == 0) {
-          if ((RBExhaustive & (1 << i)) != 0) {
+          if ((RBEnumerative & (1 << i)) != 0) {
             fail = true;
           }
         }
 
-        if ((RBExhaustive & (1 << i)) == 0) {
+        if ((RBEnumerative & (1 << i)) == 0) {
           if ((RBComputed & (1 << i)) != 0) {
             FoundMorePrecise = true;
           }
@@ -640,14 +640,14 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       if (fail) {
         llvm::outs() << "Inputs: " << RB0.toString(2, false) << ", " << RB1.toString(2, false) << "\n";
         llvm::outs() << "Computed << " << RBComputed.toString(2, false) << "\n";
-        llvm::outs() << "Exhaustive << " << RBExhaustive.toString(2, false) << "\n";
+        llvm::outs() << "Enumerative << " << RBEnumerative.toString(2, false) << "\n";
         return false;
       }
       if (CheckPrecision && FoundMorePrecise) {
         llvm::outs() << "Found more precise result for : " << Inst::getKindName(K) << "\n";
         llvm::outs() << "Inputs: " << RB0.toString(2, false) << ", " << RB1.toString(2, false) << "\n";
         llvm::outs() << "Computed << " << RBComputed.toString(2, false) << "\n";
-        llvm::outs() << "Exhaustive << " << RBExhaustive.toString(2, false) << "\n";
+        llvm::outs() << "Enumerative << " << RBEnumerative.toString(2, false) << "\n";
       }
     } while (nextRB(RB1));
   } while (nextRB(RB0));

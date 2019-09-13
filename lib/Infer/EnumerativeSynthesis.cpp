@@ -17,7 +17,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "souper/Infer/AliveDriver.h"
 #include "souper/Infer/ConstantSynthesis.h"
-#include "souper/Infer/ExhaustiveSynthesis.h"
+#include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/Pruning.h"
 
 #include <queue>
@@ -55,16 +55,16 @@ static const std::vector<Inst::Kind> TernaryOperators = {
 
 namespace {
   static cl::opt<unsigned, /*ExternalStorage=*/true>
-    DebugFlagParser("souper-exhaustive-synthesis-debug-level",
+    DebugFlagParser("souper-enumerative-synthesis-debug-level",
     cl::desc("Synthesis debug level (default=0). "
     "The larger the number is, the more fine-grained debug "
     "information will be printed"),
     cl::Hidden, cl::location(DebugLevel), cl::init(0));
-  static cl::opt<unsigned> MaxNumInstructions("souper-exhaustive-synthesis-num-instructions",
+  static cl::opt<unsigned> MaxNumInstructions("souper-enumerative-synthesis-num-instructions",
     cl::desc("Maximum number of instructions to synthesize (default=1)."),
     cl::init(1));
-  static cl::opt<bool> EnableBigQuery("souper-exhaustive-synthesis-enable-big-query",
-    cl::desc("Enable big query in exhaustive synthesis (default=false)"),
+  static cl::opt<bool> EnableBigQuery("souper-enumerative-synthesis-enable-big-query",
+    cl::desc("Enable big query in enumerative synthesis (default=false)"),
     cl::init(false));
   static cl::opt<bool, /*ExternalStorage=*/true>
     AliveFlagParser("souper-use-alive", cl::desc("Use Alive2 as the backend"),
@@ -728,7 +728,7 @@ void generateAndSortGuesses(SynthesisContext &SC,
 }
 
 std::error_code
-ExhaustiveSynthesis::synthesize(SMTLIBSolver *SMTSolver,
+EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const BlockPCs &BPCs,
                                 const std::vector<InstMapping> &PCs,
                                 Inst *LHS, Inst *&RHS,

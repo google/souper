@@ -1,13 +1,13 @@
 ; REQUIRES: solver, synthesis
-; mark this case UNSUPPORTED until blockpc is supported by ExhaustiveSynthesis. InstSynthesis passes the case correctly.
+; mark this case UNSUPPORTED until blockpc is supported by EnumerativeSynthesis. InstSynthesis passes the case correctly.
 
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,sub %s > %t1 2>&1
 ; RUN: %FileCheck %s -check-prefix=InstSynthesis < %t1
 
-; RUN: %souper-check %solver -infer-rhs -souper-exhaustive-synthesis %s > %t2 2>&1
-; RUN: %FileCheck %s -check-prefix=ExhaustiveSynthesis < %t2
+; RUN: %souper-check %solver -infer-rhs -souper-enumerative-synthesis %s > %t2 2>&1
+; RUN: %FileCheck %s -check-prefix=EnumerativeSynthesis < %t2
 
-; ExhaustiveSynthesis: sub 210:i32, %1
+; EnumerativeSynthesis: sub 210:i32, %1
 ; InstSynthesis: sub 210:i32, %1
 
 %0 = block 2
