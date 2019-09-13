@@ -1,5 +1,5 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -infer-sign-bits %s
+; RUN: %souper-check %solver -infer-sign-bits %s
 
 ; CHECK: known signBits from Souper:   16
 

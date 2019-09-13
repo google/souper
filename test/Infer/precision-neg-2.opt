@@ -1,5 +1,5 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -infer-neg %s
+; RUN: %souper-check %solver -infer-neg %s
 
 ; CHECK: known negative from Souper:   true
 
