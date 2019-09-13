@@ -316,7 +316,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
         if (V1->Width != V2->Width)
           continue;
 
-        if (!Inst::isCmp(K) && V1->Width != Width)
+        if (!(Inst::isCmp(K) || Inst::isOverflowIntrinsicSub(K)) && V1->Width != Width)
           continue;
 
         // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
@@ -325,15 +325,15 @@ void getGuesses(std::vector<Inst *> &Guesses,
 
         Inst *N = nullptr;
         if (Inst::isOverflowIntrinsicMain(K)) {
-          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(K), Width, {V1, V2});
+          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(K), V1->Width, {V1, V2});
           auto Comp1 = IC.getInst(Inst::getOverflowComplement(K), 1, {V1, V2});
-          auto Orig = IC.getInst(K, Width + 1, {Comp0, Comp1});
-          N = IC.getInst(Inst::ExtractValue, Width, {Orig, IC.getUntypedConst(llvm::APInt(1, 0))});
+          auto Orig = IC.getInst(K, V1->Width + 1, {Comp0, Comp1});
+          N = IC.getInst(Inst::ExtractValue, V1->Width, {Orig, IC.getUntypedConst(llvm::APInt(1, 0))});
         }
         else if (Inst::isOverflowIntrinsicSub(K)) {
-          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)), Width, {V1, V2});
+          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)), V1->Width, {V1, V2});
           auto Comp1 = IC.getInst(K, 1, {V1, V2});
-          auto Orig = IC.getInst(Inst::getOverflowComplement(K), Width + 1, {Comp0, Comp1});
+          auto Orig = IC.getInst(Inst::getOverflowComplement(K), V1->Width + 1, {Comp0, Comp1});
           N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getUntypedConst(llvm::APInt(1, 1))});
         }
         else {
