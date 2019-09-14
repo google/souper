@@ -1,0 +1,18 @@
+; REQUIRES: solver, synthesis, long-duration-synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-dataflow-pruning=true -souper-enumerative-synthesis-num-instructions=2 %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; synthesis overflow
+; CHECK: [[RETVAL:%[0-9]+]]{{[:i0-9]+}} = sadd.with.overflow %0, %1
+; CHECK: [[RETVAL1:%[0-9]+]]{{[:i0-9]+}} = extractvalue [[RETVAL]], 1
+; CHECK: result [[RETVAL1]]
+%0:i8 = var
+%1:i8 = var
+%2:i16 = sext %0
+%3:i16 = sext %1
+%4:i16 = add %2, %3
+%5 = sle %4, 127:i16
+%6 = xor %5, 1:i1
+%7 = slt %4, -128:i16
+%8 = or %7, %6
+infer %8
