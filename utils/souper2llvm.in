@@ -15,17 +15,26 @@
 # limitations under the License.
 
 import fileinput, sys, copy
+import collections
 
-widths = dict()
-pcmap, argmap = dict(), dict()
+widths, knownzeros, knownones, Negative, nonNegative, powerTwo, nonZero, signBits, lower, upper = dict(), dict(), dict(), dict(), dict(), dict(), dict(), dict(), dict(), dict()
+pcmap = collections.OrderedDict()
+argmap = dict()
 cand = None
 needsResult = False
 intrdecl = dict()
 printedblocks = []
-labels = ["foo0"]
+labels = ["entry"]
 cnt = 0
 cnt2 = 0
 cnt3 = 0
+independent = []
+flagPC = 0
+MDRangePtr = 0
+metadataStr = ""
+functionDeclStr = ""
+functionDeclCount = 0
+truncCount = 0
 
 # souper IR -> LLVM inst map
 instmap = {
@@ -77,6 +86,8 @@ def parseOps(ops):
         op = op.strip().strip(",")
         if op[0] == "%":
             r.append([op, widths[op]])
+        elif op == "(hasExternalUses)": #for (hasExternalUses)
+            continue
         else:
             r.append(parseConst(op))
     return r
@@ -85,11 +96,18 @@ def parseInst(i):
     reg, width, inst, ops = None, None, None, []
     assert len(i) >= 2, "wrong inst format %s" % i
     if i[0] == "infer":
-        assert len(i) == 2, "wrong infer inst length %d, %s" % (len(i), i)
+        #demandedbits
+        assert (len(i) >= 2 & len(i) <= 3), "wrong infer inst length %d, %s" % (len(i), i)
         inst = i[0]
         reg = i[1]
         width = widths[reg]
-        ops = []
+        #ops = []
+        #ops = []
+        #demandedbits
+        if len(i) == 3:
+            ops = i[2:]
+        else:
+            ops = []
     elif i[0] == "result":
         assert len(i) == 2, "wrong result inst length %d, %s" % (len(i), i)
         inst = i[0]
@@ -122,10 +140,16 @@ def parseInst(i):
         if "overflow" in i[2]:
             width = "i" + str(int(width[1:])-1)
         widths[reg] = width
-        ops = parseOps(i[3:])
+        if inst == "var":
+            ops = i[3:]
+        else:
+            ops = parseOps(i[3:])
     else:
         assert 0, "unknown LHS: %s" % i[0]
     return [reg, width, inst, ops]
+
+
+newlabelcounter = 0
 
 def translateInstToLLVM(i):
     reg, width, inst, ops = i
@@ -134,17 +158,27 @@ def translateInstToLLVM(i):
         block = ops[0][0]
         philabel = "philabel" + str(block[1:])
         if not block in printedblocks:
-            printedblocks.append(block)
             global cnt3
-            if cnt3 == 0:
+            t = cnt3
+            blockcount = len(ops[1:])
+            if blockcount == 1:
                 s += "  br label %" + philabel + "\n"
-            else:
-                s += "  br label %foo" + str(cnt3) + "\n"
+            if blockcount >= 2:
+                global newlabelcounter
+                for i in range(blockcount):
+                    if i == blockcount - 1:
+                        s += "  br label %foo" + str(t) + "\n"
+                    else:
+                        s += "  %sw" +str(newlabelcounter) + " = icmp eq i64 %_phiinput, " + str(newlabelcounter) + "\n"
+                        s += "  br i1 %sw" +str(newlabelcounter) +" , label %nl"+ str(newlabelcounter) +", label %foo" + str(t) + "\n"
+                        s += "nl"+ str(newlabelcounter) +":\n"
+                        newlabelcounter += 1
+                        t += 1
+
+            printedblocks.append(block)
+
             for k in range(len(ops[1:])):
                 # don't print the first label of the func
-                if cnt3 == 0:
-                    cnt3 += 1
-                    continue
                 label = "foo" + str(cnt3)
                 cnt3 += 1
                 labels.append(label)
@@ -221,6 +255,24 @@ def propagateArgNames(insts):
             newreg = "%x" + str(counter)
             argmap[reg] = newreg
             widths[newreg] = width
+            widthValue = width.strip("i")
+            if len(ops):
+                assert len(ops) <= 7, "atmost six dataflow facts expected, got %d" % len(ops)
+                for j in ops:
+                    if "knownBits" in j:
+                        parseKnownBits(j, newreg)
+                    elif "negative" in j:
+                        parseNegative(j, newreg, int(widthValue))
+                    elif "nonNegative" in j:
+                        parseNonNegative(j, newreg, int(widthValue))
+                    elif "powerOfTwo" in j:
+                        parsePowerTwo(j, newreg, int(widthValue))
+                    elif "nonZero" in j:
+                        parsenonZero(j, newreg, int(widthValue))
+                    elif "signBits" in j:
+                        parsesignBits(j, newreg, int(widthValue))
+                    elif "range" in j:
+                        parseRange(j, newreg, int(widthValue))
             counter += 1
             continue
         for k, op in enumerate(ops):
@@ -229,7 +281,58 @@ def propagateArgNames(insts):
         res.append(i)
     return res
 
-def groupPhis(insts):
+# topology sort
+def sort_direct_acyclic_graph(edge_list) :
+    # edge_set is consummed, need a copy
+    edge_set = set([tuple(i) for i in edge_list])
+
+    # node_list will contain the ordered nodes
+    node_list = list()
+
+    # source_set is the set of nodes with no incomming edges
+    node_from_list, node_to_list = zip(* edge_set)
+    source_set = set(node_from_list) - set(node_to_list)
+
+    while len(source_set) != 0 :
+	# pop node_from off source_set and insert it in node_list
+	node_from = source_set.pop()
+	node_list.append(node_from)
+
+	# find nodes which have a common edge with node_from
+	from_selection = [e for e in edge_set if e[0] == node_from]
+	for edge in from_selection :
+	    # remove the edge from the graph
+	    node_to = edge[1]
+	    edge_set.discard(edge)
+
+	    # if node_to don't have any remaining incomming edge :
+	    to_selection = [e for e in edge_set if e[1] == node_to]
+	    if len(to_selection) == 0 :
+		# add node_to to source_set
+		source_set.add(node_to)
+
+    if len(edge_set) != 0 :
+	raise IndexError # not a direct acyclic graph
+    else :
+	return node_list
+
+
+def reorder(insts):
+    early = []
+    pc = []
+    late = []
+    origin_insts = []
+    origin_insts += insts
+
+    for i in insts:
+        if i[2] == 'block':
+            early.append(i)
+        if i[2] == 'pc':
+            pc.append(i)
+        if i[2] == 'cand' or i[2] == 'infer' or i[2] == 'result':
+            late.append(i)
+
+
     blocks = dict()
     regmap = getRegMap(insts)
     # scan for blocks and phis
@@ -248,30 +351,81 @@ def groupPhis(insts):
             block = ops[0][0]
             assert block in blocks, "unknown block %s" % block
             blocks[block].append(i)
-    # group phis (incl. deps) of the same block together
-    res = []
-    for i in insts:
+
+    queue = insts
+    edges = set()
+    visited = []
+
+    #get dependency edges
+    while len(queue):
+        i = queue.pop()
         reg, width, inst, ops = i
-        if i in res:
+        new_ops = []
+        if i in visited:
             continue
+        visited.append(i)
+
+        # put args in new_ops,
         if inst == "phi":
             block = ops[0][0]
             for phi in blocks[block]:
-                if phi == i:
-                    continue
-                deps = getInstDeps(regmap, phi)
-                deps.reverse()
-                # first, print dependent insts
-                for dep in deps:
-                    if not dep in res:
-                        res.append(dep)
-            # second, print phis
+                for k, op in enumerate(phi[3]):
+                    if k == 0:
+                        continue
+                    if op[0] in regmap:
+                        new_ops.append(regmap[op[0]])
+        else:
+            for k, op in enumerate(ops):
+                if op[0] in regmap:
+                    new_ops.append(regmap[op[0]])
+
+        for k, op in enumerate(new_ops):
+            dep = op[0]
+            # process on each operands
+            if dep[0] == "%" and dep in regmap:
+                op_inst = regmap[dep]
+                if op_inst[2] == "phi":
+                    dep_inst_block = op_inst[3][0][0]
+                    for dep_phi in blocks[dep_inst_block]:
+                        edges.add((reg, dep_phi[0]))
+                        queue.append(regmap[dep_phi[0]])
+                else:
+                    edges.add((reg, regmap[dep][0]))
+                    queue.append(regmap[dep])
+
+    unsorted_dag = []
+    for edge in edges:
+        unsorted_dag.append(edge)
+
+    dag = []
+    if len(edges) != 0:
+        dag = sort_direct_acyclic_graph(unsorted_dag)
+    res = []
+
+    for inst in origin_insts:
+        if inst[2] in specialinsts:
+            continue
+        if inst[0] in dag:
+            continue
+        res.append(inst)
+
+    for v in dag:
+        if regmap[v] in res:
+            continue
+        reg, width, inst, ops = regmap[v]
+        if inst == "phi":
+            block = ops[0][0]
             for phi in blocks[block]:
                 res.append(phi)
         else:
-            # all other insts
-            res.append(i)
+            res.append(regmap[v])
+
+    res.reverse()
+
+    res = early + res + pc + late
+
     return res
+
 
 def getRegMap(insts):
     res = dict()
@@ -283,19 +437,43 @@ def getRegMap(insts):
             res[reg] = i
     return res
 
-def getInstDeps(regmap, i):
+def getInstDeps(regmap, i, blocks):
     res = []
-    queue = [i]
+    reg, width, inst, ops = i
+    queue = []
+    if inst == "phi":
+        block = ops[0][0]
+        for phi in blocks[block]:
+            queue.append(phi)
+    else:
+        queue.append(i)
+    visited = set()
     while len(queue):
         reg, width, inst, ops = queue.pop()
+        if reg in visited:
+            continue
+        visited.add(reg)
+
         assert not inst in specialinsts
+
         for k, op in enumerate(ops):
-            if inst == "phi" and k == 0:
-                continue
             dep = op[0]
             if dep[0] == "%" and dep in regmap:
-                res.append(regmap[dep])
-                queue.append(regmap[dep])
+                newop = regmap[dep]
+                nreg, nwidth, ninst, nops = newop
+                if ninst == "phi":
+                    nblock = nops[0][0]
+                    for nphi in blocks[nblock]:
+                        if nphi[0] in visited:
+                            continue
+                        res.append(nphi)
+                        queue.append(nphi)
+                else:
+                    if newop[0] in visited:
+                        continue
+                    res.append(newop)
+                    queue.append(newop)
+
     return res
 
 def rewriteRegs(insts):
@@ -311,7 +489,7 @@ def rewriteRegs(insts):
         elif inst == "cand":
             assert not cand, "cand must be empty"
             assert reg in newregs, "unknown reg %s for %s" % (reg, i)
-            rewriteOps(inst, newregs, ops)
+            rewriteOps(inst, newregs, ops, i)
             cand = [newregs[reg], width, inst, ops]
             continue
         elif inst == "infer":
@@ -322,7 +500,7 @@ def rewriteRegs(insts):
         elif inst == "result":
             assert needsResult, "infer inst not found"
             assert cand, "cand must not be empty"
-            rewriteOps(inst, newregs, ops)
+            rewriteOps(inst, newregs, ops, i)
             cand[3] = ops
             needsResult = False
             continue
@@ -334,13 +512,15 @@ def rewriteRegs(insts):
                 pcmap[newreg].append(pc)
             else:
                 pcmap[newreg] = [pc]
+            global flagPC
+            flagPC = 1
             continue
         # give regs new names
         newreg = "%" + str(counter)
         counter += 1
         newregs[reg] = newreg
         widths[newreg] = width
-        rewriteOps(inst, newregs, ops)
+        rewriteOps(inst, newregs, ops, i)
         # special case: unroll nested insts
         if inst in nestedinsts and len(ops) > 2:
             res.append([newreg, width, inst, [ops[0], ops[1]]])
@@ -365,10 +545,17 @@ def rewriteRegs(insts):
                                           + width + "(" + width + ") #" \
                                           + str(len(intrdecl))
                     intrdecl[inst+width] = decl
-            res.append(newinst)
+            # Separate the instructions not dependent on branch condition
+            if flagPC==1 and len(pcmap)>0:
+                independent.append([newinst])
+                flagPC = 0
+            elif flagPC==0 and len(pcmap)>0:
+                independent[-1].append(newinst)
+            else:
+                res.append(newinst)
     return res
 
-def rewriteOps(inst, newregs, ops):
+def rewriteOps(inst, newregs, ops, i):
    for j, op in enumerate(ops):
        # don't change phi's first op, namely the block ref
        if inst == "phi" and j == 0:
@@ -377,41 +564,261 @@ def rewriteOps(inst, newregs, ops):
            assert op[0] in newregs, "unknown reg %s, reordering bug in %s" % (op[0], i)
            ops[j][0] = newregs[op[0]]
 
+def parseKnownBits(s,reg):
+    assert "(" in s and ")" in s and "knownBits=" in s
+    s = s.strip("(").strip(")").strip("knownBits=")
+    zeromask = 0
+    onemask = 0
+    all = 0
+    bit = 0
+    for c in s[::-1]:
+        all += 1<<bit
+        if c == '0':
+            zeromask += 1<<bit
+        if c == '1':
+            onemask += 1<<bit
+        bit += 1
+    print "; for " + str(bit) + " bit value " + s
+    if zeromask != 0:
+        knownzeros[reg] = zeromask ^ all
+        print ";   val = val & " + str(zeromask ^ all)
+    else:
+        print ";   no zero mask needed"
+    if onemask != 0:
+        knownones[reg] = onemask
+        print ";   val = val | " + str(onemask)
+    else:
+        print ";   no one mask needed"
+    print
+
+def parseNegative(s,reg, width):
+    assert "(" in s and ")" in s
+    s = s.strip("(").strip(")")
+    NegativeMask = 0
+    if s == "negative":
+        NegativeMask = 1<<(width-1)
+        print "; for " + str(width) + " bit value " + s
+        if NegativeMask != 0:
+            Negative[reg] = NegativeMask
+            print ";   val = val | " + str(NegativeMask)
+        else:
+            print ";   no negative mask needed"
+        print
+
+def parseNonNegative(s,reg, width):
+    assert "(" in s and ")" in s
+    s = s.strip("(").strip(")")
+    NonNegativeMask = 0
+    bit = 0
+    if s == "nonNegative":
+        while (bit < width-1):
+            NonNegativeMask += 1<<bit
+            bit += 1
+        print "; for " + str(width) + " bit value " + s
+        if NonNegativeMask != 0:
+            nonNegative[reg] = NonNegativeMask
+            print ";   val = val & " + str(NonNegativeMask)
+        else:
+            print ";   no nonNegative mask needed"
+        print
+
+def parsePowerTwo(s,reg, width):
+    assert "(" in s and ")" in s
+    s = s.strip("(").strip(")")
+    if s == "powerOfTwo":
+        print "; for " + str(width) + " bit value " + s
+        powerTwo[reg] = 1
+        print "; " + str(reg) + " = 1 << %x"
+        print
+
+def parsenonZero(s,reg, width):
+    assert "(" in s and ")" in s
+    s = s.strip("(").strip(")")
+    if s == "nonZero":
+        print "; for " + str(width) + " bit value " + s
+        nonZero[reg] = 1
+        print "; " + str(reg) + " != 0"
+        print
+
+def parsesignBits(s,reg, width):
+    assert "(" in s and ")" in s and "signBits=" in s
+    s = s.strip("(").strip(")").strip("signBits=")
+    print "; for signbits = " + s
+    signBits[reg] = s
+    print "; " + str(reg) + " signbits"
+    print
+
+def parseRange(s,reg, width):
+    assert "(" in s and ")" in s and "range=[" in s
+    s = s.strip("(").strip(")").strip("range=[")
+    print "; for range = [" + s + ")"
+    s = s.split(',')
+    lower[reg] = s[0]
+    upper[reg] = s[1]
+    print "; " + str(reg) + " range"
+    print
+
 def printFuncHeader():
+    regtmps = {}
+    for i, reg in enumerate(argmap.values()):
+        regtmps[reg] = reg
+    masks = ""
+    global MDRangePtr
+    global metadataStr
+    global functionDeclStr
+    global functionDeclCount
+    for i, reg in enumerate(argmap.values()):
+        if reg in knownzeros:
+            regnum = reg[1:]
+            w = widths[reg]
+            old = regtmps[reg]
+            name = "%t1_" + regnum
+            regtmps[reg] = name
+            masks = "  " + old + " = and " + w + " " + name + ", " + str(knownzeros[reg]) + "\n" +\
+            "  store " + w + " " + old + ", " + w + "* @glob_" + regnum + "_and\n" + masks
+            regtmps[reg] = name
+        if reg in knownones:
+            regnum = reg[1:]
+            w = widths[reg]
+            old = regtmps[reg]
+            name = "%t2_" + regnum
+            regtmps[reg] = name
+            masks = "  " + old + " = or " + w + " " + name + ", " + str(knownones[reg]) + "\n" +\
+            "  store " + w + " " + old + ", " + w + "* @glob_" + regnum + "_or\n" + masks
+        if reg in Negative:
+            regnum = reg[1:]
+            w = widths[reg]
+            old = regtmps[reg]
+            name = "%t3_" + regnum
+            regtmps[reg] = name
+            masks = "  " + old + " = or " + w + " " + name + ", " + str(Negative[reg]) + "\n" +\
+            "  store " + w + " " + old + ", " + w + "* @glob_" + regnum + "_negative\n" + masks
+        if reg in nonNegative:
+            regnum = reg[1:]
+            w = widths[reg]
+            old = regtmps[reg]
+            name = "%t4_" + regnum
+            regtmps[reg] = name
+            masks = "  " + old + " = and " + w + " " + name + ", " + str(nonNegative[reg]) + "\n" +\
+            "  store " + w + " " + old + ", " + w + "* @glob_" + regnum + "_nonNegative\n" + masks
+        if reg in powerTwo:
+            regnum = reg[1:]
+            w = widths[reg]
+            old = regtmps[reg]
+            name = "%t5_" + regnum
+            regtmps[reg] = name
+            masks = "  " + old + " = shl " + w + " " + "1" + ", " + name + "\n" +\
+            "  store " + w + " " + old + ", " + w + "* @glob_" + regnum + "_powerOfTwo\n" + masks
+        if reg in signBits:
+            regnum = reg[1:]
+            w = widths[reg]
+            old = regtmps[reg]
+            name = "%t6_" + regnum
+            regtmps[reg] = name
+            global truncCount
+            global truncStr
+            sign = "%s_" + str(truncCount)
+            org_width = int(w.strip("i"))
+            red_width = org_width + 1 - int(signBits[reg])
+            masks = "  " + sign + " = trunc " + w + " " + name + " to " + "i" + str(red_width) + "\n" +\
+            "  " + old + " = sext " + "i" + str(red_width) + " " + sign + " to " + w + "\n" +\
+            "  store " + w + " " + old + ", " + w + "* @glob_" + regnum + "_signBits\n" + masks
+            truncCount += 1
+        if reg in lower or reg in upper:
+            regnum = reg[1:]
+            w = widths[reg]
+            old = regtmps[reg]
+            name = "%t8_" + regnum
+            regtmps[reg] = name
+            ptr = "%ptr_" + str(MDRangePtr)
+            masks = "  " + ptr + " = alloca " + w + "\n" +\
+            "  store " + w + " " + name + ", " + w + "* " + ptr + "\n" +\
+            "  call void @fun_" + str(functionDeclCount) + "(" + w + "* " + ptr + ")\n" +\
+            "  " + old + " = load " + w + ", " + w + "* " + ptr + ", !range !" + str(MDRangePtr) + "\n" +\
+            "  store " + w + " " + old + ", " + w + "* @glob_" + regnum + "_range\n" + masks
+            metadataStr = metadataStr + "!" + str(MDRangePtr) + " = " + "!{ " + w + " " + str(lower[reg]) + ", " + w + " " + str(upper[reg]) + " }\n"
+            MDRangePtr += 1
+            functionDeclStr += "declare void @fun_" + str(functionDeclCount) + "(" + w + "* " + ptr + ")\n"
+            functionDeclCount += 1
+        if reg in nonZero:
+            regnum = reg[1:]
+            w = widths[reg]
+            old = regtmps[reg]
+            name = "%t7_" + regnum
+            regtmps[reg] = name
+            ptr = "%ptr_" + str(MDRangePtr)
+            masks = "  " + ptr + " = alloca " + w + "\n" +\
+            "  store " + w + " " + name + ", " + w + "* " + ptr + "\n" +\
+            "  call void @fun_" + str(functionDeclCount) + "(" + w + "* " + ptr + ")\n" +\
+            "  " + old + " = load " + w + ", " + w + "* " + ptr + ", !range !" + str(MDRangePtr) + "\n" +\
+            "  store " + w + " " + old + ", " + w + "* @glob_" + regnum + "_nonZero\n" + masks
+            metadataStr = metadataStr + "!" + str(MDRangePtr) + " = " + "!{ " + w + " 1" + ", " + w + " 0"+ " }\n"
+            MDRangePtr += 1
+            functionDeclStr += "declare void @fun_" + str(functionDeclCount) + "(" + w + "* " + ptr + ")\n"
+            functionDeclCount += 1
+
     # global declarations: dummy store, intrinsics
     print "target datalayout = \"e-m:e-i64:64-f80:128-n8:16:32:64-S128\"\n"
+    for i, reg in enumerate(argmap.values()):
+        print "@glob_" + reg[1:] + "_and = external global " + widths[reg]
+        print "@glob_" + reg[1:] + "_or = external global " + widths[reg]
+        print "@glob_" + reg[1:] + "_negative = external global " + widths[reg]
+        print "@glob_" + reg[1:] + "_nonNegative = external global " + widths[reg]
+        print "@glob_" + reg[1:] + "_powerOfTwo = external global " + widths[reg]
+        print "@glob_" + reg[1:] + "_nonZero = external global " + widths[reg]
+        print "@glob_" + reg[1:] + "_signBits = external global " + widths[reg]
+        print "@glob_" + reg[1:] + "_range = external global " + widths[reg]
     for decl in intrdecl.values():
         print decl
     print "\ndefine " + cand[1] + " @foo(",
     # print args
     for i, reg in enumerate(argmap.values()):
-        sys.stdout.write(widths[reg] + " " + reg)
-        if i < len(argmap)-1:
-            sys.stdout.write(", ")
-    print ") {"
+        sys.stdout.write(widths[reg] + " " + regtmps[reg])
+        sys.stdout.write(", ")
+    print "i64 %_phiinput) {"
     # first label
     print labels[0] + ":"
+    print masks
 
 def printFuncBody(insts):
     for i in insts:
         print translateInstToLLVM(i)
 
 def printPCs():
+    combinedList = dict()
+    for reg, pcs in zip(pcmap.keys(), independent):
+        combinedList[reg] = pcs
     for reg, pcs in pcmap.items():
         global cnt
         global cnt2
-        s = ""
+        global cnt3
+        #s = ""
         for k, pc in enumerate(pcs):
+            s = ""
+#            if pc[3][0][0] == "0":
             s += "  %tmp" + str(cnt) + " = icmp eq " + widths[pc[0]] + " " \
-                         + pc[3][0][0] + ", " + pc[0] + "\n"
+                 + pc[3][0][0] + ", " + pc[0] + "\n"
             s += "  br i1 %tmp" + str(cnt) + ", label %cont" + str(cnt2) \
-                                + ", label %out\n"
+                 + ", label %out" + str(cnt3) +"\n"
+#                s += "  br i1 " + pc[0] + ", label %out" + str(cnt3) \
+#                                    + ", label %cont" + str(cnt2) +"\n"
+#            elif pc[3][0][0] == "1":
+#                s += "  br i1 " + pc[0] + ", label %cont" + str(cnt2) \
+#                                    + ", label %out" + str(cnt3) +"\n"
+            s += "out" + str(cnt3) + ":" + "\n"
+            #s += "  ret " + cand[1] + " 0\n"
+            s += "  unreachable\n"
             s += "cont" + str(cnt2) + ":"
             if k < len(pcs)-1:
                 s += "\n"
             cnt += 1
             cnt2 += 1
-        print s
+            cnt3 += 1
+            print s
+            #if reg in combinedList:
+            if reg in combinedList and ((len(pcs)-k) == 1):
+                for i in combinedList[reg]:
+                    print translateInstToLLVM(i)
 
 def printFuncFooter():
     assert cand, "there must be a candidate"
@@ -432,13 +839,17 @@ def printFuncFooter():
     print "}"
 
 def printLHSFuncFooter():
-    print "  ret " + cand[1] + " " + cand[0]
+    if len(cand[3]) > 0:
+        for k in cand[3]:
+            print "  ret " + cand[1] + " " + cand[0]
+    else:
+        print "  ret " + cand[1] + " " + cand[0]
     print "}"
 
 lines = readOpt()
 insts = parseInsts(lines)
 insts = propagateArgNames(insts)
-insts = groupPhis(insts)
+insts = reorder(insts)
 insts = rewriteRegs(insts)
 
 assert cand, "cand inst not found"
@@ -447,3 +858,5 @@ printFuncHeader()
 printFuncBody(insts)
 printPCs()
 printLHSFuncFooter()
+print metadataStr
+print functionDeclStr
