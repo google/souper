@@ -79,11 +79,11 @@ expression can be optimized to a nop: x = bswap(bswap(x))
 SOUPER_INFER_INST -- Try to synthesis instructions with InstSynthesis
 synthesizer.
 
-SOUPER_EXHAUSTIVE_SYNTHESIS -- Try to synthesize instructions with
-ExhaustiveSynthesis synthesizer.
+SOUPER_ENUMERATIVE_SYNTHESIS -- Try to synthesize instructions with
+EnumerativeSynthesis synthesizer.
 
 SOUPER_DATAFLOW_PRUNING -- Enable dataflow pruning. This only makes sense
-when ExhaustiveSynthesis is enabled.
+when EnumerativeSynthesis is enabled.
 
 SOUPER_REDIS_PORT -- Mention the port to use the redis-server on.
 
@@ -240,8 +240,8 @@ if ($souper) {
       push @ARGV, ("-mllvm", "-souper-infer-inst");
     }
 
-    if (exists $ENV{"SOUPER_EXHAUSTIVE_SYNTHESIS"}) {
-      push @ARGV, ("-mllvm", "-souper-exhaustive-synthesis");
+    if (exists $ENV{"SOUPER_ENUMERATIVE_SYNTHESIS"}) {
+      push @ARGV, ("-mllvm", "-souper-enumerative-synthesis");
     }
 
     if (exists $ENV{"SOUPER_DATAFLOW_PRUNING"}) {
