@@ -80,6 +80,22 @@ static const bool DynamicProfileAll = false;
 struct SouperPass : public ModulePass {
   static char ID;
 
+  Value* getOperand(Inst* I, unsigned index, Instruction *ReplacedInst,
+                    ExprBuilderContext &EBC, DominatorTree &DT,
+                    std::map<Inst *, Value *> &ReplacedValues,
+                    IRBuilder<> &Builder, Module *M) {
+    Value *Result = nullptr;
+    if (Inst::isOverflowIntrinsicMain(I->K)) {
+      assert(I->Ops.size() == 2 && I->Ops[0]->Ops.size() == 2);
+      Result = getValue(I->Ops[0]->Ops[index], ReplacedInst, EBC, DT, ReplacedValues, Builder, M);
+    }
+    else {
+      Result = getValue(I->Ops[index], ReplacedInst, EBC, DT, ReplacedValues, Builder, M);
+    }
+
+    return Result;
+  }
+
 public:
   SouperPass() : ModulePass(ID) {
     if (!S) {
@@ -195,11 +211,11 @@ public:
       return 0;
     }
 
-    // otherwise, recursively generate code
-    Value *V0 = getValue(I->Ops[0], ReplacedInst, EBC, DT, ReplacedValues,
-                         Builder, M);
+    Value *V0 = getOperand(I, 0, ReplacedInst, EBC, DT, ReplacedValues,
+               Builder, M);
     if (!V0)
       return 0;
+
     switch (I->Ops.size()) {
     case 1:
       switch (I->K) {
@@ -239,8 +255,8 @@ public:
         break;
       }
     case 2:{
-      Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT,
-                           ReplacedValues, Builder, M);
+      Value *V1 = getOperand(I, 1, ReplacedInst, EBC, DT, ReplacedValues,
+                             Builder, M);
       if (!V1)
         return 0;
       switch (I->K) {
@@ -308,6 +324,12 @@ public:
         } else {
           return Builder.CreateICmpSLE(V0, V1);
         }
+      case Inst::ExtractValue:
+        if (auto C1 = dyn_cast<ConstantInt>(V1)) {
+          auto idx = C1->getUniqueInteger().getLimitedValue();
+          return Builder.CreateExtractValue(V0, idx);
+        }
+        llvm::report_fatal_error("Unexpected extractvalue semantics!");
       case Inst::SAddSat:
         return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::sadd_sat, T), {V0, V1});
       case Inst::UAddSat:
@@ -316,14 +338,32 @@ public:
         return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::ssub_sat, T), {V0, V1});
       case Inst::USubSat:
         return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::usub_sat, T), {V0, V1});
+      case Inst::SAddWithOverflow:
+        return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::sadd_with_overflow, V0->getType()),
+                {V0, V1});
+      case Inst::UAddWithOverflow:
+        return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::uadd_with_overflow, V0->getType()),
+                {V0, V1});
+      case Inst::SSubWithOverflow:
+        return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::ssub_with_overflow, V0->getType()),
+                {V0, V1});
+      case Inst::USubWithOverflow:
+        return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::usub_with_overflow, V0->getType()),
+                {V0, V1});
+      case Inst::SMulWithOverflow:
+          return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::smul_with_overflow, V0->getType()),
+                  {V0, V1});
+      case Inst::UMulWithOverflow:
+          return Builder.CreateCall(Intrinsic::getDeclaration(M, Intrinsic::umul_with_overflow, V0->getType()),
+                  {V0, V1});
       default:
         break;
       }
     }
     case 3:{
-      Value *V1 = getValue(I->Ops[1], ReplacedInst, EBC, DT,
+      Value *V1 = getOperand(I, 1, ReplacedInst, EBC, DT,
                            ReplacedValues, Builder, M);
-      Value *V2 = getValue(I->Ops[2], ReplacedInst, EBC, DT,
+      Value *V2 = getOperand(I, 2, ReplacedInst, EBC, DT,
                            ReplacedValues, Builder, M);
       if (!V1 || !V2)
         return 0;
