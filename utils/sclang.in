@@ -82,6 +82,12 @@ synthesizer.
 SOUPER_ENUMERATIVE_SYNTHESIS -- Try to synthesize instructions with
 EnumerativeSynthesis synthesizer.
 
+SOUPER_ENUMERATIVE_SYNTHESIS_NUM_INSTS -- Number of instructions for
+EnumerativeSynthesis synthesizer.
+
+SOUPER_ENUMERATIVE_SYNTHESIS_DEBUG -- Debug level for
+EnumerativeSynthesis synthesizer.
+
 SOUPER_DATAFLOW_PRUNING -- Enable dataflow pruning. This only makes sense
 when EnumerativeSynthesis is enabled.
 
@@ -242,6 +248,14 @@ if ($souper) {
 
     if (exists $ENV{"SOUPER_ENUMERATIVE_SYNTHESIS"}) {
       push @ARGV, ("-mllvm", "-souper-enumerative-synthesis");
+    }
+
+    if (exists $ENV{"SOUPER_ENUMERATIVE_SYNTHESIS_NUM_INSTS"}) {
+      push @ARGV, ("-mllvm", "-souper-enumerative-synthesis-num-instructions=".$ENV{"SOUPER_ENUMERATIVE_SYNTHESIS_NUM_INSTS"});
+    }
+
+    if (exists $ENV{"SOUPER_ENUMERATIVE_SYNTHESIS_DEBUG"}) {
+      push @ARGV, ("-mllvm", "-souper-enumerative-synthesis-debug-level=".$ENV{"SOUPER_ENUMERATIVE_SYNTHESIS_DEBUG"});
     }
 
     if (exists $ENV{"SOUPER_DATAFLOW_PRUNING"}) {
