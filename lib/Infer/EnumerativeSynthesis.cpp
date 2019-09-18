@@ -124,13 +124,25 @@ namespace {
 // experiment with synthesizing at reduced bitwidth, then expanding the result
 // aggressively avoid calling into the solver
 
-void addGuess(Inst *RHS, int MaxCost, std::vector<Inst *> &Guesses,
+void addGuess(Inst *RHS, unsigned TargetWidth, InstContext &IC, int MaxCost, std::vector<Inst *> &Guesses,
               int &TooExpensive) {
-  int cost = souper::cost(RHS);
-  if (cost < MaxCost)
-    Guesses.push_back(RHS);
-  else
-    TooExpensive++;
+  if (TargetWidth > RHS->Width) {
+    auto NSExt = IC.getInst(Inst::SExt, TargetWidth, { RHS });
+    auto NZExt = IC.getInst(Inst::ZExt, TargetWidth, { RHS });
+    addGuess(NSExt, TargetWidth, IC, MaxCost, Guesses, TooExpensive);
+    addGuess(NZExt, TargetWidth, IC, MaxCost, Guesses, TooExpensive);
+  }
+  else if (TargetWidth < RHS->Width) {
+    auto NTrunc = IC.getInst(Inst::Trunc, TargetWidth, { RHS });
+    addGuess(NTrunc, TargetWidth, IC, MaxCost, Guesses, TooExpensive);
+  }
+  else {
+    int cost = souper::cost(RHS);
+    if (cost < MaxCost)
+      Guesses.push_back(RHS);
+    else
+      TooExpensive++;
+  }
 }
 
 typedef std::function<bool(Inst *, std::vector<Inst *> &)> PruneFunc;
@@ -170,15 +182,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
     if (Comp->Width == Width)
       continue;
 
-    if (Width > Comp->Width) {
-      auto NSExt = IC.getInst(Inst::SExt, Width, { Comp });
-      auto NZExt = IC.getInst(Inst::ZExt, Width, { Comp });
-      addGuess(NSExt, LHSCost, PartialGuesses, TooExpensive);
-      addGuess(NZExt, LHSCost, PartialGuesses, TooExpensive);
-    } else {
-      auto NTrunc = IC.getInst(Inst::Trunc, Width, { Comp });
-      addGuess(NTrunc, LHSCost, PartialGuesses, TooExpensive);
-    }
+    addGuess(Comp, Width, IC, LHSCost, PartialGuesses, TooExpensive);
   }
 
   Inst *I1 = IC.getReservedInst();
@@ -194,7 +198,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
         if (Comp->K == Inst::ReservedInst) {
           auto V = IC.createHole(Width);
           auto N = IC.getInst(K, Width, { V });
-          addGuess(N, LHSCost, PartialGuesses, TooExpensive);
+          addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
           continue;
         }
 
@@ -206,7 +210,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
           continue;
 
         auto N = IC.getInst(K, Width, { Comp });
-        addGuess(N, LHSCost, PartialGuesses, TooExpensive);
+        addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
       }
     }
   }
@@ -218,9 +222,6 @@ void getGuesses(std::vector<Inst *> &Guesses,
   Comps.push_back(I2);
 
   for (auto K : BinaryOperators) {
-    if ((Inst::isCmp(K) || Inst::isOverflowIntrinsicSub(K)) && Width != 1)
-      continue;
-
     // PRUNE: one-bit shifts don't make sense
     if (Inst::isShift(K) && Width == 1)
       continue;
@@ -340,7 +341,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
           N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, {V1, V2});
         }
 
-        addGuess(N, LHSCost, PartialGuesses, TooExpensive);
+        addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
       }
     }
   }
@@ -425,7 +426,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
             continue;
 
           auto N = IC.getInst(Op, Width, {V1, V2, V3});
-          addGuess(N, LHSCost, PartialGuesses, TooExpensive);
+          addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
         }
       }
     }
@@ -451,7 +452,7 @@ void getGuesses(std::vector<Inst *> &Guesses,
     if (CurrSlots.empty()) {
       std::vector<Inst *> empty;
       if (prune(JoinedGuess, empty)) {
-        addGuess(JoinedGuess, LHSCost, Guesses, TooExpensive);
+        addGuess(JoinedGuess, JoinedGuess->Width, IC, LHSCost, Guesses, TooExpensive);
       }
       continue;
     }
@@ -741,8 +742,7 @@ void generateAndSortGuesses(SynthesisContext &SC,
 
   // add nops guesses separately
   for (auto I : Inputs) {
-    if (I->Width == SC.LHS->Width)
-      addGuess(I, LHSCost, Guesses, TooExpensive);
+    addGuess(I, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
   }
 
   // one of the real advantages of this approach to synthesis vs
