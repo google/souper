@@ -237,7 +237,9 @@ void getGuesses(std::vector<Inst *> &Guesses,
         continue;
 
       // PRUNE: don't try commutative operators both ways
-      auto Start = (Inst::isCommutative(K) || Inst::isOverflowIntrinsicMain(K) || Inst::isOverflowIntrinsicSub(K)) ? I : Comps.begin();
+      auto Start = (Inst::isCommutative(K) ||
+		      Inst::isOverflowIntrinsicMain(K) ||
+		      Inst::isOverflowIntrinsicSub(K)) ? I : Comps.begin();
       for (auto J = Start; J != Comps.end(); ++J) {
         // Prune: I2 should only be the second argument
         if ((*J)->K == Inst::ReservedInst && (*J) != I2)
