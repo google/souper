@@ -32,10 +32,9 @@ class InstPrinter(object):
         end = node['Ops']['_M_impl']['_M_finish']
 
         if not int(node) in self.printed:
-            is_printed = int(node) in self.printed
             nr = self.get_nr(node)
             ikind = str(node['K']).split('::')[-1].lower()
-            res = '%%%d = %s ' % (nr, ikind)
+            res = '%%%d:i%d = %s ' % (nr, int(node['Width']), ikind)
             while start != end:
                 res += '%%%d, ' % (self.get_nr(start))
                 start += 1
@@ -49,26 +48,11 @@ class InstPrinter(object):
         self.counter = 0
         visited = dict()
         stack = list()
-        self.topsort_dfs(self.val, visited, stack)
+        self.topsort_dfs(self.val.address, visited, stack)
 
-        # print all except root
-        st = stack[:-1]
-        for it in st:
+        for it in stack:
             self.print_node(it)
 
-        root = stack[-1]
-        nr = self.get_nr(root.address)
-        ikind = str(root['K']).split('::')[-1].lower()
-        res = '%%%d = %s ' % (nr, ikind)
-
-        start = root['Ops']['_M_impl']['_M_start']
-        end = root['Ops']['_M_impl']['_M_finish']
-        while start != end:
-            res += '%%%d, ' % (self.get_nr(start))
-            start += 1
-
-        res = res.strip(', ')
-        print (res)
         return '---'
 
 def lookup_type(val):
