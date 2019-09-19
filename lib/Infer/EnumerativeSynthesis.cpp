@@ -156,8 +156,8 @@ PruneFunc MkPruneFunc(std::vector<PruneFunc> Funcs) {
   };
 }
 
-bool CountPrune(Inst *I, std::vector<Inst *> &ReservedInsts) {
-  if (!ReservedInsts.empty() && instCount(I) >= MaxNumInstructions)
+bool CountPrune(Inst *I, std::vector<Inst *> &ReservedInsts, std::set<Inst*> Visited) {
+  if (souper::countHelper(I, Visited) > MaxNumInstructions)
     return false;
 
   return true;
@@ -721,8 +721,13 @@ void generateAndSortGuesses(SynthesisContext &SC,
   std::vector<Inst *> Inputs;
   findVars(SC.LHS, Inputs);
   PruningManager DataflowPruning(SC, Inputs, DebugLevel);
+
+  std::set<Inst*> Visited(Cands.begin(), Cands.end());
+
   // Cheaper tests go first
-  std::vector<PruneFunc> PruneFuncs = {CountPrune};
+  std::vector<PruneFunc> PruneFuncs = { [&Visited](Inst *I, std::vector<Inst*> &ReservedInsts)  {
+    return CountPrune(I, ReservedInsts, Visited);
+  }};
   if (EnableDataflowPruning) {
     DataflowPruning.init();
     PruneFuncs.push_back(DataflowPruning.getPruneFunc());

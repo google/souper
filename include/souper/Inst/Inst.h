@@ -270,6 +270,7 @@ struct SynthesisContext {
 };
 
 int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
+int countHelper(Inst *I, std::set<Inst *> &Visited);
 int instCount(Inst *I);
 int benefit(Inst *LHS, Inst *RHS);
 
