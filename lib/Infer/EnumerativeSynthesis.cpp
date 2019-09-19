@@ -131,14 +131,11 @@ void addGuess(Inst *RHS, unsigned TargetWidth, InstContext &IC, int MaxCost, std
     auto NZExt = IC.getInst(Inst::ZExt, TargetWidth, { RHS });
     addGuess(NSExt, TargetWidth, IC, MaxCost, Guesses, TooExpensive);
     addGuess(NZExt, TargetWidth, IC, MaxCost, Guesses, TooExpensive);
-  }
-  else if (TargetWidth < RHS->Width) {
+  } else if (TargetWidth < RHS->Width) {
     auto NTrunc = IC.getInst(Inst::Trunc, TargetWidth, { RHS });
     addGuess(NTrunc, TargetWidth, IC, MaxCost, Guesses, TooExpensive);
-  }
-  else {
-    int cost = souper::cost(RHS);
-    if (cost < MaxCost)
+  } else {
+    if (souper::cost(RHS) < MaxCost)
       Guesses.push_back(RHS);
     else
       TooExpensive++;

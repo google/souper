@@ -88,8 +88,7 @@ struct SouperPass : public ModulePass {
     if (Inst::isOverflowIntrinsicMain(I->K)) {
       assert(I->Ops.size() == 2 && I->Ops[0]->Ops.size() == 2);
       Result = getValue(I->Ops[0]->Ops[index], ReplacedInst, EBC, DT, ReplacedValues, Builder, M);
-    }
-    else {
+    } else {
       Result = getValue(I->Ops[index], ReplacedInst, EBC, DT, ReplacedValues, Builder, M);
     }
 
