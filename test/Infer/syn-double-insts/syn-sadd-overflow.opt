@@ -4,7 +4,7 @@
 
 ; synthesis overflow
 ; CHECK: [[RETVAL:%[0-9]+]]{{[:i0-9]+}} = sadd.with.overflow %0, %1
-; CHECK: [[RETVAL1:%[0-9]+]]{{[:i0-9]+}} = extractvalue [[RETVAL]], 1:i1
+; CHECK: [[RETVAL1:%[0-9]+]]{{[:i0-9]+}} = extractvalue [[RETVAL]], 1
 ; CHECK: result [[RETVAL1]]
 %0:i8 = var
 %1:i8 = var
