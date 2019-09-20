@@ -1,9 +1,9 @@
-; REQUIRES: solver
+; REQUIRES: solver, long-duration-synthesis
 ; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-dataflow-pruning=true -souper-enumerative-synthesis-num-instructions=2 %solver %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK: [[RETVAL:%[0-9]+]]{{[:i0-9]+}} = sadd.with.overflow %0, %1
-; CHECK: [[RETVAL1:%[0-9]+]]{{[:i0-9]+}} = extractvalue [[RETVAL]], 1:i1
+; CHECK: [[RETVAL1:%[0-9]+]]{{[:i0-9]+}} = extractvalue [[RETVAL]], 1
 ; CHECK: result [[RETVAL1]]
 
 %0:i8 = var

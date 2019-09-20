@@ -328,13 +328,13 @@ void getGuesses(std::vector<Inst *> &Guesses,
           auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(K), V1->Width, {V1, V2});
           auto Comp1 = IC.getInst(Inst::getOverflowComplement(K), 1, {V1, V2});
           auto Orig = IC.getInst(K, V1->Width + 1, {Comp0, Comp1});
-          N = IC.getInst(Inst::ExtractValue, V1->Width, {Orig, IC.getConst(llvm::APInt(1, 0))});
+          N = IC.getInst(Inst::ExtractValue, V1->Width, {Orig, IC.getConst(llvm::APInt(32, 0))});
         }
         else if (Inst::isOverflowIntrinsicSub(K)) {
           auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)), V1->Width, {V1, V2});
           auto Comp1 = IC.getInst(K, 1, {V1, V2});
           auto Orig = IC.getInst(Inst::getOverflowComplement(K), V1->Width + 1, {Comp0, Comp1});
-          N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getConst(llvm::APInt(1, 1))});
+          N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getConst(llvm::APInt(32, 1))});
         }
         else {
           N = IC.getInst(K, Inst::isCmp(K) ? 1 : Width, {V1, V2});
