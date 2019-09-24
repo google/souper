@@ -105,6 +105,31 @@ KnownBits KBTesting::clearLowest(KnownBits x) {
   report_fatal_error("faulty clearLowest!");
 }
 
+EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y,
+                                  llvm::KnownBits z, Inst::Kind Pred) {
+  if (!x.isConstant())
+    return merge(bruteForce(setLowest(x), y, z, Pred),
+                 bruteForce(clearLowest(x), y, z, Pred));
+  if (!y.isConstant())
+    return merge(bruteForce(x, setLowest(y), z,  Pred),
+                 bruteForce(x, clearLowest(y), z, Pred));
+
+  if (!z.isConstant())
+    return merge(bruteForce(x, y, setLowest(z), Pred),
+                 bruteForce(x, y, clearLowest(z), Pred));
+  auto xc = x.getConstant();
+  auto yc = y.getConstant();
+  auto zc = z.getConstant();
+  EvalValue Result;
+  switch (Pred) {
+    case Inst::Select:
+      Result = (xc != 0) ? yc : zc;
+      break;
+    default:
+      report_fatal_error("Unhandled ternary operator.");
+  }
+  return Result;
+}
 EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
   if (!x.isConstant())
     return merge(bruteForce(setLowest(x), y, Pred),
@@ -116,7 +141,6 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
   auto yc = y.getConstant();
 
   EvalValue res;
-  bool rcInit = true;
   APInt rc(x.getBitWidth(), 0);
   switch (Pred) {
   case Inst::AddNUW:
@@ -223,6 +247,62 @@ bool KBTesting::nextKB(llvm::KnownBits &x) {
   return false;
 }
 
+bool testKB(llvm::KnownBits Calculated, EvalValueKB Expected,
+            Inst::Kind K, std::vector<llvm::KnownBits> KBS) {
+  // expected value is poison/ub; so let binary transfer functions do
+  // whatever they want without complaining
+  if (!Expected.hasValue())
+    return true;
+
+  if (Calculated.getBitWidth() != Expected.ValueKB.getBitWidth()) {
+    llvm::errs() << "Expected and Given have unequal bitwidths - Expected: "
+                  << Expected.ValueKB.getBitWidth() << ", Given: " << Calculated.getBitWidth() << '\n';
+    return false;
+  }
+  if (Calculated.hasConflict() || Expected.ValueKB.hasConflict()) {
+    llvm::errs() << "Expected or Given result has a conflict\n";
+    return false;
+  }
+
+  if (KnownBitsAnalysis::isConflictingKB(Calculated, Expected.ValueKB)) {
+    outs() << "Unsound!! " << Inst::getKindName(K) << "\nInputs: ";
+    for (auto KB : KBS) {
+      outs() << KnownBitsAnalysis::knownBitsString(KB) << " ";
+    }
+    outs() << "\nCalculated: " << KnownBitsAnalysis::knownBitsString(Calculated) << '\n';
+    outs() << "Expected: " << KnownBitsAnalysis::knownBitsString(Expected.ValueKB) << '\n';
+    return false;
+  }
+  return true;
+}
+
+bool KBTesting::testTernaryFn(Inst::Kind K, size_t Op0W,
+                              size_t Op1W, size_t Op2W) {
+  llvm::KnownBits x(Op0W);
+  do {
+    llvm::KnownBits y(Op1W);
+    do {
+      llvm::KnownBits z(Op2W);
+      do {
+        InstContext IC;
+        auto Op0 = IC.getInst(Inst::Var, Op0W, {});
+        auto Op1 = IC.getInst(Inst::Var, Op1W, {});
+        auto Op2 = IC.getInst(Inst::Var, Op2W, {});
+        auto I = IC.getInst(K, WIDTH, {Op0, Op1, Op2});
+        std::unordered_map<Inst *, llvm::KnownBits> C{{Op0, x}, {Op1, y}, {Op2, z}};
+        KnownBitsAnalysis KB(C);
+        ConcreteInterpreter BlankCI;
+        auto Calculated = KB.findKnownBits(I, BlankCI, false);
+        auto Expected = bruteForce(x, y, z, K);
+        if (!testKB(Calculated, Expected, K, {x, y, z})) {
+          return false;
+        }
+      } while (nextKB(z));
+    } while (nextKB(y));
+  } while (nextKB(x));
+
+  return true;
+}
 bool KBTesting::testFn(Inst::Kind pred) {
   llvm::KnownBits x(WIDTH);
   do {
@@ -296,30 +376,9 @@ bool KBTesting::testFn(Inst::Kind pred) {
       }
 
       EvalValueKB Expected = bruteForce(x, y, pred);
-      // expected value is poison/ub; so let binary transfer functions do
-      // whatever they want without complaining
-      if (!Expected.hasValue())
-        continue;
-
-      if (Calculated.getBitWidth() != Expected.ValueKB.getBitWidth()) {
-        llvm::errs() << "Expected and Given have unequal bitwidths - Expected: "
-                     << Expected.ValueKB.getBitWidth() << ", Given: " << Calculated.getBitWidth() << '\n';
+      if (!testKB(Calculated, Expected, pred, {x, y})) {
         return false;
       }
-      if (Calculated.hasConflict() || Expected.ValueKB.hasConflict()) {
-        llvm::errs() << "Expected or Given result has a conflict\n";
-        return false;
-      }
-
-      if (KnownBitsAnalysis::isConflictingKB(Calculated, Expected.ValueKB)) {
-        outs() << "Unsound!! " << Inst::getKindName(pred) << '\n';
-        outs() << KnownBitsAnalysis::knownBitsString(x) << ' ' << Inst::getKindName(pred)
-               << ' ' << KnownBitsAnalysis::knownBitsString(y) << '\n';
-        outs() << "Calculated: " << KnownBitsAnalysis::knownBitsString(Calculated) << '\n';
-        outs() << "Expected: " << KnownBitsAnalysis::knownBitsString(Expected.ValueKB) << '\n';
-        return false;
-      }
-
     } while(nextKB(y));
   } while(nextKB(x));
 
