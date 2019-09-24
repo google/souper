@@ -48,7 +48,7 @@ namespace souper {
                              llvm::KnownBits z, Inst::Kind Pred);
     public:
       static bool nextKB(llvm::KnownBits &x);
-      bool testFn(Inst::Kind pred);
+      bool testFn(Inst::Kind K, size_t Op0W = WIDTH, size_t Op1W = WIDTH);
       bool testTernaryFn(Inst::Kind K, size_t Op0W, size_t Op1W, size_t Op2W);
     };
 

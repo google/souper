@@ -303,80 +303,21 @@ bool KBTesting::testTernaryFn(Inst::Kind K, size_t Op0W,
 
   return true;
 }
-bool KBTesting::testFn(Inst::Kind pred) {
-  llvm::KnownBits x(WIDTH);
+bool KBTesting::testFn(Inst::Kind K, size_t Op0W, size_t Op1W) {
+  llvm::KnownBits x(Op0W);
   do {
-    llvm::KnownBits y(WIDTH);
+    llvm::KnownBits y(Op1W);
     do {
-      KnownBits Calculated;
-      switch(pred) {
-      case Inst::AddNUW:
-      case Inst::AddNW:
-      case Inst::Add:
-        Calculated = BinaryTransferFunctionsKB::add(x, y);
-        break;
-      case Inst::AddNSW:
-        Calculated = BinaryTransferFunctionsKB::addnsw(x, y);
-        break;
-      case Inst::SubNUW:
-      case Inst::SubNW:
-      case Inst::Sub:
-        Calculated = BinaryTransferFunctionsKB::sub(x, y);
-        break;
-      case Inst::SubNSW:
-        Calculated = BinaryTransferFunctionsKB::subnsw(x, y);
-        break;
-      case Inst::Mul:
-        Calculated = BinaryTransferFunctionsKB::mul(x, y);
-        break;
-      case Inst::UDiv:
-        Calculated = BinaryTransferFunctionsKB::udiv(x, y);
-        break;
-      case Inst::URem:
-        Calculated = BinaryTransferFunctionsKB::urem(x, y);
-        break;
-      case Inst::And:
-        Calculated = BinaryTransferFunctionsKB::and_(x, y);
-        break;
-      case Inst::Or:
-        Calculated = BinaryTransferFunctionsKB::or_(x, y);
-        break;
-      case Inst::Xor:
-        Calculated = BinaryTransferFunctionsKB::xor_(x, y);
-        break;
-      case Inst::Shl:
-        Calculated = BinaryTransferFunctionsKB::shl(x, y);
-        break;
-      case Inst::LShr:
-        Calculated = BinaryTransferFunctionsKB::lshr(x, y);
-        break;
-      case Inst::AShr:
-        Calculated = BinaryTransferFunctionsKB::ashr(x, y);
-        break;
-      case Inst::Eq:
-        Calculated = BinaryTransferFunctionsKB::eq(x, y);
-        break;
-      case Inst::Ne:
-        Calculated = BinaryTransferFunctionsKB::ne(x, y);
-        break;
-      case Inst::Ult:
-        Calculated = BinaryTransferFunctionsKB::ult(x, y);
-        break;
-      case Inst::Slt:
-        Calculated = BinaryTransferFunctionsKB::slt(x, y);
-        break;
-      case Inst::Ule:
-        Calculated = BinaryTransferFunctionsKB::ule(x, y);
-        break;
-      case Inst::Sle:
-        Calculated = BinaryTransferFunctionsKB::sle(x, y);
-        break;
-      default:
-        report_fatal_error("unhandled case in testFn!");
-      }
-
-      EvalValueKB Expected = bruteForce(x, y, pred);
-      if (!testKB(Calculated, Expected, pred, {x, y})) {
+      InstContext IC;
+      auto Op0 = IC.getInst(Inst::Var, Op0W, {});
+      auto Op1 = IC.getInst(Inst::Var, Op1W, {});
+      auto I = IC.getInst(K, WIDTH, {Op0, Op1});
+      std::unordered_map<Inst *, llvm::KnownBits> C{{Op0, x}, {Op1, y}};
+      KnownBitsAnalysis KB(C);
+      ConcreteInterpreter BlankCI;
+      auto Calculated = KB.findKnownBits(I, BlankCI, false);
+      EvalValueKB Expected = bruteForce(x, y, K);
+      if (!testKB(Calculated, Expected, K, {x, y})) {
         return false;
       }
     } while(nextKB(y));
