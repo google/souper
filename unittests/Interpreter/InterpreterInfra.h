@@ -44,9 +44,12 @@ namespace souper {
       llvm::KnownBits clearLowest(llvm::KnownBits x);
 
       EvalValueKB bruteForce(llvm::KnownBits x, llvm::KnownBits y, Inst::Kind Pred);
+      EvalValueKB bruteForce(llvm::KnownBits x, llvm::KnownBits y,
+                             llvm::KnownBits z, Inst::Kind Pred);
     public:
       static bool nextKB(llvm::KnownBits &x);
       bool testFn(Inst::Kind pred);
+      bool testTernaryFn(Inst::Kind K, size_t Op0W, size_t Op1W, size_t Op2W);
     };
 
     class RBTesting {
