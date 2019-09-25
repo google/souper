@@ -55,6 +55,15 @@ public:
       (t, std::move(name), *toValue(t, a), *toValue(t, b), others...));
   }
 
+  template <typename A, typename B, typename C, typename ...Others>
+  IR::Value *ternaryOp(IR::Type &t, std::string name, A a, B b, C c,
+                       Others... others) {
+    return append
+      (std::make_unique<IR::TernaryOp>
+      (t, std::move(name), *toValue(t, a), *toValue(t, b), *toValue(t, c),
+       others...));
+  }
+
   template <typename A>
   IR::Value *conversionOp(IR::Type &t, std::string name, A a,
                           IR::ConversionOp::Op Op) {
@@ -143,7 +152,7 @@ private:
     if (auto It = identifiers.find(x); It != identifiers.end()) {
       return It->second;
     } else {
-      if (x.find("dummy") != std::string::npos) {
+      if (x.find(souper::ReservedConstPrefix) != std::string::npos) {
         auto i = std::make_unique<IR::ConstantInput>(t, std::move(x));
         auto ptr = i.get();
 //         F.addInput(std::move(i));
@@ -214,9 +223,7 @@ performCegisFirstQuery(tools::Transform &t,
   for (auto &[Var, Val] : TgtState.getValues()) {
     auto &Name = Var->getName();
     if (startsWith("%reservedconst", Name)) {
-      auto App = Val.first.value.isApp();
-      assert(App);
-      SMTConsts[Name] = (Z3_get_app_arg(smt::ctx(), App, 1));
+      SMTConsts[Name] = Val.first.value;
     }
   }
 
@@ -251,6 +258,7 @@ performCegisFirstQuery(tools::Transform &t,
 std::map<souper::Inst *, llvm::APInt>
 synthesizeConstantUsingSolver(tools::Transform &t,
   std::map<std::string, souper::Inst *> &SouperConsts) {
+  return {};
 
   IR::Value::reset_gbl_id();
   IR::State SrcState(t.src, true), tgt_state(t.tgt, false);
@@ -616,6 +624,15 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     BINOP(UAddSat, UAdd_Sat)
     BINOP(SSubSat, SSub_Sat)
     BINOP(USubSat, USub_Sat)
+
+    #define TERNOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {   \
+      ExprCache[I] = Builder.ternaryOp(t, Name, ExprCache        \
+      [I->Ops[0]], ExprCache[I->Ops[1]], ExprCache[I->Ops[2]],   \
+      IR::TernaryOp::ALIVE); return true;                        \
+    }
+
+    TERNOP(FShl, FShl);
+    TERNOP(FShr, FShr);
 
     #define ICMP(SOUPER, ALIVE) case souper::Inst::SOUPER: {     \
       ExprCache[I] = Builder.iCmp(t, Name, IR::ICmp::ALIVE,      \
