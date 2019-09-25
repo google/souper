@@ -437,7 +437,7 @@ public:
         }
 
         AliveDriver Synthesizer(LHS, Ante, IC);
-        auto ConstantMap = Synthesizer.synthesizeConstants(C);
+        auto ConstantMap = Synthesizer.synthesizeConstantsWithCegis(C, IC);
         if (ConstantMap.find(C) != ConstantMap.end()) {
           RHS = IC.getConst(ConstantMap[C]);
           return std::error_code();
@@ -493,16 +493,24 @@ public:
       if (StressNop || !BigQueryIsSat) {
         // find the nop
         for (auto I : Guesses) {
-          InstMapping Mapping(LHS, I);
-          std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0, /*Precondition=*/0);
-          if (Query.empty())
-            continue;
-          EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, 0, 0, Timeout);
-          if (EC)
-            return EC;
-          if (!SmallQueryIsSat) {
-            RHS = I;
-            break;
+          if (UseAlive) {
+            if (isTransformationValid(LHS, I, PCs, IC)) {
+              RHS = I;
+              SmallQueryIsSat = false; // hack to cooperate with BuildQuery
+              break;
+            }
+          } else {
+            InstMapping Mapping(LHS, I);
+            std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0, /*Precondition=*/0);
+            if (Query.empty())
+              continue;
+            EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, 0, 0, Timeout);
+            if (EC)
+              return EC;
+            if (!SmallQueryIsSat) {
+              RHS = I;
+              break;
+            }
           }
         }
       }
