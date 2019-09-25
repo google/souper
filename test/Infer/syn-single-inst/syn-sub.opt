@@ -1,5 +1,5 @@
 ; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-double-check %solver %s > %t1
 ; RUN: %FileCheck %s < %t1
 ; CHECK: sub %1, %0
 

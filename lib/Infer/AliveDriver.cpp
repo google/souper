@@ -11,10 +11,12 @@
 #include "alive2/smt/smt.h"
 #include "alive2/smt/solver.h"
 #include "alive2/tools/transform.h"
+#include "alive2/util/config.h"
 #include "alive2/util/errors.h"
 #include "alive2/util/symexec.h"
 
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/CommandLine.h"
 
 #include <iostream>
 #include <memory>
@@ -31,6 +33,11 @@ bool startsWith(const std::string &pre, const std::string &str) {
 }
 
 namespace {
+
+static llvm::cl::opt<bool> DisableUndefInput("alive-disable-undef-input",
+  llvm::cl::desc("Assume inputs can not be undef (default = false)"),
+  llvm::cl::init(false));
+
 class FunctionBuilder {
 public:
   FunctionBuilder(IR::Function &F_) : F(F_) {}
@@ -321,6 +328,9 @@ souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &I
 
   if (!translateRoot(LHS, PreCondition, LHSF, LExprCache)) {
     llvm::report_fatal_error("Failed to translate LHS.\n");
+  }
+  if (DisableUndefInput) {
+    util::config::disable_undef_input = true;
   }
 }
 
