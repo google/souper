@@ -88,6 +88,9 @@ namespace {
   static cl::opt<bool> SynthesisConstWithCegisLoop("souper-synthesis-const-with-cegis",
     cl::desc("Synthesis constants with CEGIS (default=false)"),
     cl::init(true));
+  static cl::opt<bool> DoubleCheckWithAlive("souper-double-check",
+    cl::desc("Double check synthesis result with alive (default=false)"),
+    cl::init(false));
 }
 
 // TODO
@@ -781,7 +784,20 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   if (UseAlive) {
     return synthesizeWithAlive(SC, RHS, Guesses);
   } else {
-    return synthesizeWithKLEE(SC, RHS, Guesses);
+    auto Ret = synthesizeWithKLEE(SC, RHS, Guesses);
+    if (DoubleCheckWithAlive) {
+      if (isTransformationValid(LHS, RHS, PCs, IC)) {
+        return Ret;
+      } else {
+        llvm::errs() << "RHS proved wrong by alive.";
+        ReplacementContext RC;
+        RC.printInst(RHS, llvm::errs(), /*printNames=*/true);
+        RHS = nullptr;
+        std::error_code EC;
+        return EC;
+      }
+    }
+    return Ret;
   }
 
   return EC;
