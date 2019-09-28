@@ -173,6 +173,20 @@ void getGuesses(std::vector<Inst *> &Guesses,
                 int &TooExpensive,
                 PruneFunc prune) {
 
+  std::vector<Inst *> unaryHoleUsers;
+  findInsts(PrevInst, unaryHoleUsers, [PrevSlot](Inst *I) {
+    return I->Ops.size() == 1 && I->Ops[0] == PrevSlot;
+  });
+
+  std::vector<Inst::Kind> unaryExclList;
+  if (unaryHoleUsers.size() == 1 &&
+      (unaryHoleUsers[0]->K == Inst::Ctlz ||
+       unaryHoleUsers[0]->K == Inst::Cttz ||
+       unaryHoleUsers[0]->K == Inst::BitReverse ||
+       unaryHoleUsers[0]->K == Inst::CtPop)) {
+    unaryExclList.push_back(Inst::BitReverse);
+  }
+
   std::vector<Inst *> PartialGuesses;
 
   std::vector<Inst *> Comps(Inputs.begin(), Inputs.end());
@@ -192,6 +206,9 @@ void getGuesses(std::vector<Inst *> &Guesses,
   if (Width > 1) {
     for (auto K : UnaryOperators) {
       for (auto Comp : Comps) {
+        if (std::find(unaryExclList.begin(), unaryExclList.end(), K) != unaryExclList.end())
+          continue;
+
         if (K == Inst::BSwap && Width % 16 != 0)
           continue;
 

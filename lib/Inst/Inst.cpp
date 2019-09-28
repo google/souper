@@ -1048,7 +1048,16 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
 
 /* TODO call findCands instead */
 void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
+  findInsts(Root, Vars, [](Inst *I) {
+    return I->K == Inst::Var && I->SynthesisConstID == 0;
+  });
+}
+
+void souper::findInsts(Inst *Root, std::vector<Inst *> &Insts, std::function<bool(Inst*)> Condition) {
   // breadth-first search
+  if (Root == nullptr)
+    return;
+
   std::set<Inst *> Visited;
   std::queue<Inst *> Q;
   Q.push(Root);
@@ -1057,8 +1066,8 @@ void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
     Q.pop();
     if (!Visited.insert(I).second)
       continue;
-    if (I->K == Inst::Var && I->SynthesisConstID == 0)
-      Vars.push_back(I);
+    if (Condition(I))
+      Insts.push_back(I);
     for (auto Op : I->Ops)
       Q.push(Op);
   }
@@ -1104,21 +1113,9 @@ void souper::getHoles(Inst *Root, std::vector<Inst *> &Holes) {
 }
 
 bool souper::hasGivenInst(Inst *Root, std::function<bool(Inst*)> InstTester) {
-  // breadth-first search
-  std::set<Inst *> Visited;
-  std::queue<Inst *> Q;
-  Q.push(Root);
-  while (!Q.empty()) {
-    Inst *I = Q.front();
-    Q.pop();
-    if (InstTester(I))
-      return true;
-    if (!Visited.insert(I).second)
-      continue;
-    for (auto Op : I->Ops)
-      Q.push(Op);
-  }
-  return false;
+  std::vector<Inst*> Insts;
+  findInsts(Root, Insts, InstTester);
+  return Insts.size() > 0;
 }
 
 Inst *souper::getInstCopy(Inst *I, InstContext &IC,
