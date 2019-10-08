@@ -71,6 +71,7 @@ my $KNOWN = 0;
 my $POWERTWO = 0;
 my $NONZERO = 0;
 my $SIGNBITS = 0;
+my $DEMANDEDBITS = 0;
 my $MERGE = 0;
 my $PARSE = 0;
 my $TRIAGE = 0;
