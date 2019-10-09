@@ -1,0 +1,15 @@
+; REQUIRES: solver, synthesis
+
+; RUN: %souper-check %solver -infer-const  %s > %t
+; RUN: %FileCheck %s < %t
+
+; CHECK: 233:i234
+
+%0:i234 = var ; 1
+%1:i234 = uadd.sat %0, %0
+%2:i234 = sub %1, %0
+infer %2
+%3:i234 = reservedconst
+%4:i234 = ashr %0, %3
+%5:i234 = xor %0, %4
+result %5
