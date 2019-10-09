@@ -951,21 +951,22 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
   if (RHSUB == LIC->getConst(llvm::APInt(1, false)))
     return nullptr;
 
-  if (Negate) // (LHS != RHS)
-    Result = LIC->getInst(Inst::Ne, 1, {LHS, RHS});
-  else        // (LHS == RHS)
-    Result = LIC->getInst(Inst::Eq, 1, {LHS, RHS});
-
+  Result = LIC->getInst(Inst::Eq, 1, {LHS, RHS});
   if (Precondition)
-    Ante = LIC->getInst(Inst::And, 1, {Ante, Precondition});
+    Result = LIC->getInst(Inst::And, 1, {Result, Precondition});
+
   // Result && RHS UB
   if (Mapping.RHS->K != Inst::Const)
     Result = LIC->getInst(Inst::And, 1, {Result, RHSUB});
 
+  if (Negate)
+    Result = LIC->getInst(Inst::Eq, 1,
+                          {Result, LIC->getConst(llvm::APInt(1, false))});
+
   // (B)PCs && && LHS UB && (B)PCs UB
   Ante = LIC->getInst(Inst::And, 1, {Ante, LHSUB});
 
-  // ((B)PCs && LHS UB && (B)PCs UB) => Result && RHS UB
+  // ((B)PCs && LHS UB && (B)PCs UB) => (Precondition && LHS == RHS && RHS UB)
   Result = getImpliesInst(Ante, Result);
 
   return Result;
