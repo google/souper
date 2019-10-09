@@ -262,13 +262,13 @@ void getGuesses(std::vector<Inst *> &Guesses,
         if ((*J)->K == Inst::ReservedInst && (*J) != I2)
           continue;
 
-        // PRUNE: never useful to div, rem, sub, and, or, xor,
-        // icmp, select, usub.sat, ssub.sat, ashr, lshr a value against itself
+        // PRUNE: never useful to cmp, sub, and, or, xor, div, rem,
+        // usub.sat, ssub.sat, ashr, lshr a value against itself
         // Also do it for sub.overflow -- no sense to check for overflow when results = 0
         if ((*I == *J) && (Inst::isCmp(K) || K == Inst::And || K == Inst::Or ||
                            K == Inst::Xor || K == Inst::Sub || K == Inst::UDiv ||
                            K == Inst::SDiv || K == Inst::SRem || K == Inst::URem ||
-                           K == Inst::Select || K == Inst::USubSat || K == Inst::SSubSat ||
+                           K == Inst::USubSat || K == Inst::SSubSat ||
                            K == Inst::AShr || K == Inst::LShr || K == Inst::SSubWithOverflow ||
                            K == Inst::USubWithOverflow || K == Inst::SSubO || K == Inst::USubO))
           continue;
