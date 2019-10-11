@@ -47,14 +47,6 @@ static llvm::cl::opt<bool> HarvestDataFlowFacts(
     "souper-harvest-dataflow-facts",
     llvm::cl::desc("Perform data flow analysis (default=true)"),
     llvm::cl::init(true));
-static llvm::cl::opt<bool> HarvestDemandedBits(
-    "souper-harvest-demanded-bits",
-    llvm::cl::desc("Perform demanded bits analysis (default=true)"),
-    llvm::cl::init(true));
-static llvm::cl::opt<bool> HarvestConstantRange(
-    "souper-harvest-const-range",
-    llvm::cl::desc("Perform range analysis (default=true)"),
-    llvm::cl::init(true));
 static llvm::cl::opt<bool> HarvestUses(
     "souper-harvest-uses",
     llvm::cl::desc("Harvest operands (default=false)"),
@@ -212,7 +204,8 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
   KnownBits Known(Width);
   bool NonZero = false, NonNegative = false, PowOfTwo = false, Negative = false;
   unsigned NumSignBits = 1;
-  if (HarvestDataFlowFacts)
+  ConstantRange Range = llvm::ConstantRange(Width, /*isFullSet=*/true);
+  if (HarvestDataFlowFacts) {
     if (V->getType()->isIntOrIntVectorTy(Width) ||
         V->getType()->isPtrOrPtrVectorTy()) {
       computeKnownBits(V, Known, DL);
@@ -223,8 +216,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
       NumSignBits = ComputeNumSignBits(V, DL);
     }
 
-    ConstantRange Range = llvm::ConstantRange(Width, /*isFullSet=*/true);
-    if (HarvestConstantRange && V->getType()->isIntegerTy()) {
+    if (V->getType()->isIntegerTy()) {
       if (Instruction *I = dyn_cast<Instruction>(V)) {
         // TODO: Find out a better way to get the current basic block
         // with this approach, we might be restricting the constant
@@ -238,6 +230,7 @@ Inst *ExprBuilder::makeArrayRead(Value *V) {
         Range = R1.getSetSize().ult(R2.getSetSize()) ? R1 : R2;
       }
     }
+  }
 
   return IC.createVar(Width, Name, Range, Known.Zero, Known.One, NonZero, NonNegative,
                       PowOfTwo, Negative, NumSignBits, 0);
@@ -993,7 +986,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       if (I.hasNUses(0))
         continue;
       Inst *In;
-      if (HarvestDemandedBits) {
+      if (HarvestDataFlowFacts) {
         APInt DemandedBits = DB->getDemandedBits(&I);
         In = EB.get(&I, DemandedBits);
       } else {

@@ -2,7 +2,7 @@
 ; REQUIRES: solver
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-harvest-demanded-bits=false %t
+; RUN: %souper %solver -check -souper-harvest-dataflow-facts=false %t
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
