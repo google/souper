@@ -44,6 +44,8 @@ private:
   Inst *LHS, *PreCondition;
 
   Cache LExprCache, RExprCache;
+  std::map<const Inst *, std::string> NameMap;
+  void copyInputs(Cache &From, Cache &To, IR::Function &RHS);
 
   std::unordered_map<int, IR::Type*> TypeCache;
 

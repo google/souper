@@ -433,10 +433,23 @@ souper::AliveDriver::synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext
   return ConstMap;
 }
 
+void souper::AliveDriver::copyInputs(souper::AliveDriver::Cache &From,
+                                     souper::AliveDriver::Cache &To,
+                                     IR::Function &RHS) {
+  for (auto &[I, Val] : From) {
+    if (I->K == Inst::Kind::Var) {
+      auto Input = std::make_unique<IR::Input>(Val->getType(),
+                                               std::string(NameMap[I]));
+      To[I] = Input.get();
+      RHS.addInput(std::move(Input));
+    }
+  }
+}
 
 bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
   RExprCache.clear();
   IR::Function RHSF;
+  copyInputs(LExprCache, RExprCache, RHSF);
   if (!translateRoot(RHS, RHSAssumptions, RHSF, RExprCache)) {
     llvm::errs() << "Failed to translate RHS.\n";
     // TODO: Eventually turn this into an assertion
@@ -544,6 +557,9 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     Name = "%" + std::to_string(InstNumbers++);
     // FIXME: Somewhere the non-input variable names are discarded,
     // forcing AliveDriver to name variables on its own.
+  }
+  if (I->K == Inst::Var) {
+    NameMap[I] = Name;
   }
 
   auto &t = getType(I->Width);
