@@ -87,6 +87,12 @@ public:
       (t, std::move(name), cond, *toValue(t, a), *toValue(t, b)));
   }
 
+  IR::Value *extractvalue(IR::Type &t, std::string name, IR::Value *a, unsigned idx) {
+    auto p = std::make_unique<IR::ExtractValue>(t, std::move(name), *toValue(t, a));
+    p->addIdx(idx);
+    return append(p);
+  }
+
   IR::Value *var(IR::Type &t, std::string name) {
     return toValue(t, name);
   }
@@ -530,12 +536,21 @@ std::string getUniqueName() {
 bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
                                             IR::Function &F,
                                             Cache &ExprCache) {
+  if (souper::Inst::isOverflowIntrinsicSub(I->K)) {
+    return true; // Unused translation
+  }
+
   if (ExprCache.find(I) != ExprCache.end()) {
     return true; // Already translated
   }
 
+  auto Ops = I->Ops;
+  if (souper::Inst::isOverflowIntrinsicMain(I->K)) {
+    Ops = Ops[0]->Ops;
+  }
+
   FunctionBuilder Builder(F);
-  for (auto &&Op : I->Ops) {
+  for (auto &&Op : Ops) {
     if (!translateAndCache(Op, F, ExprCache)) {
       return false;
     }
@@ -587,9 +602,22 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
       return true;
     }
 
+    case souper::Inst::ExtractValue: {
+      unsigned idx = I->Ops[1]->Val.getLimitedValue();
+      assert(idx <= 1 && "Only extractvalue with overflow instructions are supported.");
+      ExprCache[I] = Builder.extractvalue(t, Name, ExprCache[I->Ops[0]], idx);
+      return true;
+    }
+
     #define BINOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {    \
       ExprCache[I] = Builder.binOp(t, Name, ExprCache[I->Ops[0]],\
       ExprCache[I->Ops[1]], IR::BinOp::ALIVE);                   \
+      return true;                                               \
+    }
+
+    #define BINOPOV(SOUPER, ALIVE) case souper::Inst::SOUPER: {  \
+      ExprCache[I] = Builder.binOp(t, Name, ExprCache[Ops[0]],   \
+      ExprCache[Ops[1]], IR::BinOp::ALIVE);                      \
       return true;                                               \
     }
 
@@ -640,6 +668,12 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     BINOP(UAddSat, UAdd_Sat)
     BINOP(SSubSat, SSub_Sat)
     BINOP(USubSat, USub_Sat)
+    BINOPOV(SAddWithOverflow, SAdd_Overflow)
+    BINOPOV(UAddWithOverflow, UAdd_Overflow)
+    BINOPOV(SSubWithOverflow, SSub_Overflow)
+    BINOPOV(USubWithOverflow, USub_Overflow)
+    BINOPOV(SMulWithOverflow, SMul_Overflow)
+    BINOPOV(UMulWithOverflow, UMul_Overflow)
 
     #define TERNOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {   \
       ExprCache[I] = Builder.ternaryOp(t, Name, ExprCache        \
