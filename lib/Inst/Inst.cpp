@@ -1175,7 +1175,7 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
 }
 
 bool isTerminalInst(Inst *I) {
-  bool terminal = false;
+  bool terminal;
   switch (I->K) {
     case Inst::Const:
     case Inst::UntypedConst:
@@ -1183,6 +1183,9 @@ bool isTerminalInst(Inst *I) {
     case Inst::Phi:
     case Inst::Hole:
       terminal = true;
+      break;
+    default:
+      terminal = false;
   }
 
   return terminal;
