@@ -463,6 +463,10 @@ void getGuesses(std::vector<Inst *> &Guesses,
       JoinedGuess = instJoin(PrevInst, PrevSlot, I, InstCache, IC);
     }
 
+    if (JoinedGuess == nullptr) {
+      continue;
+    }
+
     // get all empty slots from the newly plugged inst
     std::vector<Inst *> CurrSlots;
     getHoles(JoinedGuess, CurrSlots);
@@ -796,7 +800,6 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   if (Guesses.empty()) {
     return EC;
   }
-
 
   if (UseAlive) {
     return synthesizeWithAlive(SC, RHS, Guesses);

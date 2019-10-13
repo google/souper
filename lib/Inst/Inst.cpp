@@ -1174,9 +1174,56 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
   return Copy;
 }
 
+bool isTerminalInst(Inst *I) {
+  bool terminal = false;
+  switch (I->K) {
+    case Inst::Const:
+    case Inst::UntypedConst:
+    case Inst::Var:
+    case Inst::Phi:
+    case Inst::Hole:
+      terminal = true;
+  }
+
+  return terminal;
+}
+
+// Return true if NewInst is equivalent to I
+bool isEquivalent(Inst *NewInst, Inst *I) {
+  // bfs on smaller instruction (NewInst)
+  if (I->K != NewInst->K || I->Ops.size() != NewInst->Ops.size())
+    return false;
+
+  if (isTerminalInst(I) && NewInst != I) {
+    return false;
+  }
+
+  for (int i = 0; i < I->Ops.size(); i++) {
+    if (!isEquivalent(I->Ops[i], NewInst->Ops[i]))
+      return false;
+  }
+
+  return true;
+}
+
+// Return true if NewInst is present in Cand.
+bool DAGMatch(Inst *NewInst, Inst *Cand) {
+  std::vector<Inst*> Results;
+  souper::findInsts(Cand, Results, [NewInst](Inst *I) {
+    if (isEquivalent(NewInst, I))
+      return true;
+    return false;
+  });
+  return Results.size();
+}
+
 Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
                        std::map<Inst *, Inst *> &InstCache,
                        InstContext &IC) {
+  if (DAGMatch(NewInst, I)) {
+    return nullptr;
+  }
+
   if (InstCache.count(I))
     return InstCache.at(I);
 
@@ -1184,6 +1231,8 @@ Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
 
   for (auto const &Op : I->Ops) {
     auto NewOp = instJoin(Op, EmptyInst, NewInst, InstCache, IC);
+    if (NewOp == nullptr)
+      return nullptr;
     Ops.push_back(NewOp);
   }
 
