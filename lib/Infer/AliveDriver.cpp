@@ -536,8 +536,9 @@ std::string getUniqueName() {
 bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
                                             IR::Function &F,
                                             Cache &ExprCache) {
+  // unused translation; this is souper's internal instruction to represent overflow instructions
   if (souper::Inst::isOverflowIntrinsicSub(I->K)) {
-    return true; // Unused translation
+    return true; 
   }
 
   if (ExprCache.find(I) != ExprCache.end()) {
