@@ -91,11 +91,16 @@ namespace {
   static cl::opt<bool> DoubleCheckWithAlive("souper-double-check",
     cl::desc("Double check synthesis result with alive (default=false)"),
     cl::init(false));
+  static cl::opt<bool> SkipSolver("souper-enumerative-synthesis-skip-solver",
+    cl::desc("Skip refinement check after generating guesses.(default=false)"),
+    cl::init(false));
+  static cl::opt<bool> IgnoreCost("souper-enumerative-synthesis-ignore-cost",
+    cl::desc("Ignore cost of RHSes -- just generate them. (default=false)"),
+    cl::init(false));
 }
 
 // TODO
 // tune the constants at the top of the file
-// see and obey the ignore-cost command line flag
 // constant synthesis
 //   try to first make small constants? -128-255?
 // multiple instructions
@@ -104,7 +109,6 @@ namespace {
 //   tune batch size -- can be a lot bigger for simple RHSs
 //   or look for feedback from solver, timeouts etc.
 // make sure path conditions work as expected
-// synthesize x.with.overflow
 // remove nop synthesis
 // once an optimization works we can try adding UB qualifiers on the RHS
 //   probably almost as good as synthesizing these directly
@@ -138,7 +142,7 @@ void addGuess(Inst *RHS, unsigned TargetWidth, InstContext &IC, int MaxCost, std
     auto NTrunc = IC.getInst(Inst::Trunc, TargetWidth, { RHS });
     addGuess(NTrunc, TargetWidth, IC, MaxCost, Guesses, TooExpensive);
   } else {
-    if (souper::cost(RHS) < MaxCost)
+    if (IgnoreCost || souper::cost(RHS) < MaxCost)
       Guesses.push_back(RHS);
     else
       TooExpensive++;
@@ -793,10 +797,8 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::error_code EC;
   generateAndSortGuesses(SC, Guesses);
 
-  if (Guesses.empty()) {
+  if (SkipSolver || Guesses.empty())
     return EC;
-  }
-
 
   if (UseAlive) {
     return synthesizeWithAlive(SC, RHS, Guesses);
