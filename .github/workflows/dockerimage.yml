@@ -10,13 +10,18 @@ jobs:
  
     steps:
     - uses: actions/checkout@v1
+    - name: Test
+      run: |
+        cmake .
+        make
+    
     - name: Setup
       run: |
-        printenv | grep '^TRAVIS_' > my_env
         docker pull regehr/souperweb:latest
-        docker run --env-file my_env -it -d --name souperweb regehr/souperweb bash
+        docker run -it -d --name souperweb regehr/souperweb bash
         
-    - name: Run
+    - name: Build
       run: |
-        docker exec souperweb /usr/src/souper/clone_and_test.sh
+        docker exec souperweb /
+        docker exec souperweb /usr/src/souper/build_deps.sh
       
