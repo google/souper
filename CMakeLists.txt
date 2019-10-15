@@ -387,6 +387,10 @@ configure_file(
   ${CMAKE_BINARY_DIR}/souper-check-gdb.py
 )
 
+configure_file(${CMAKE_SOURCE_DIR}/scripts/check_enumerative_guesses.py ${CMAKE_BINARY_DIR}/check_enumerative_guesses.py COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/enum0.opt ${CMAKE_BINARY_DIR}/enum0.opt COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/enum1.opt ${CMAKE_BINARY_DIR}/enum1.opt COPYONLY)
+
 add_custom_target(check
   COMMAND ${CMAKE_BINARY_DIR}/run_lit
   DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souper-interpret souperPass souperPassProfileAll count-insts interpreter_tests

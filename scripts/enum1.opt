@@ -1,0 +1,5 @@
+%0:i8 = var
+%1:i16 = var
+%2:i16 = sext %0
+%3 = slt %2, %1
+infer %3
