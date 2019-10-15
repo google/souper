@@ -4,7 +4,7 @@ on: [push]
 jobs:
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-la
  
     steps:
     - uses: actions/checkout@v1
@@ -19,4 +19,6 @@ jobs:
     - name: Build
       run: |
         docker exec souperweb mkdir build
-        docker exec souperweb cmake -Bbuild -DCMAKE_BUILD_TYPE=Release .      
+        docker exec -it --user root souperweb /bin/bash -c "cd /data/build && cmake -DCMAKE_BUILD_TYPE=Release .."
+        docker exec -it --user root souperweb /bin/bash -c "cd /data/build && make"
+      
