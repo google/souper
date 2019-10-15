@@ -1,27 +1,22 @@
 name: Docker Image CI
 
 on: [push]
-
 jobs:
 
   build:
- 
     runs-on: ubuntu-latest
  
     steps:
     - uses: actions/checkout@v1
-    - name: Test
-      run: |
-        cmake .
-        make
     
     - name: Setup
       run: |
         docker pull regehr/souperweb:latest
         docker run -it -d --name souperweb regehr/souperweb bash
-        
+        docker cp . souperweb:/data/
+        docker exec souperweb ln -s /usr/src/souper/third_party/
+
     - name: Build
       run: |
-        docker exec souperweb /
-        docker exec souperweb /usr/src/souper/build_deps.sh
-      
+        docker exec souperweb mkdir build
+        docker exec souperweb cmake -Bbuild -DCMAKE_BUILD_TYPE=Release .      
