@@ -1,6 +1,6 @@
 name: Docker Image CI
 
-on: [push]
+on: [pull_request]
 jobs:
 
   build:
@@ -9,17 +9,12 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     
-    - name: Setup
+    - name: Verify
+      env: 
+        API_VERSION: v3
+        API_HEADER: "Accept: application/vnd.github.${API_VERSION}+json; application/vnd.github.antiope-preview+json"
+        AUTH_HEADER: "Authorization: token ${GITHUB_TOKEN}"
       run: |
-        docker pull regehr/souperweb:latest
-        docker run -it -d --name souperweb regehr/souperweb bash
-        docker cp . souperweb:/data/
-        docker exec souperweb ln -s /usr/src/souper/third_party/
-
-    - name: Build
-      run: |
-        docker exec souperweb mkdir build
-        docker exec --user root souperweb /bin/bash -c "cd /data/build && cmake -DCMAKE_CXX_FLAGS='-Werror' -DTEST_SOLVER=-z3-path=/usr/src/souper/third_party/z3/build/z3 -DTEST_SYNTHESIS=ON -DTEST_LONG_DURATION_SYNTHESIS=OFF -DCMAKE_BUILD_TYPE=Release .."
-        docker exec --user root souperweb /bin/bash -c "cd /data/build && export GOPATH=/usr/src/go && make"
-        docker exec --user root souperweb /bin/bash -c "cd /data/build && LIT_ARGS='-v -vv' ./run_lit"
+        curl -sSL -H "${AUTH_HEADER}" -H "${API_HEADER}" -d '{"body":"Test comment"}' -H "Content-Type: application/json" -X POST "${URI}/repos/${GITHUB_REPOSITORY}/issues/${NUMBER}/comments"
+        
       
