@@ -19,6 +19,6 @@ jobs:
     - name: Build
       run: |
         docker exec souperweb mkdir build
-        docker exec -it --user root souperweb /bin/bash -c "cd /data/build && cmake -DCMAKE_BUILD_TYPE=Release .."
-        docker exec -it --user root souperweb /bin/bash -c "cd /data/build && make"
+        docker exec --user root souperweb /bin/bash -c "cd /data/build && cmake -DCMAKE_BUILD_TYPE=Release .."
+        docker exec --user root souperweb /bin/bash -c "cd /data/build && make"
       
