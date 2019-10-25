@@ -144,6 +144,10 @@ struct Inst : llvm::FoldingSetNode {
   bool hasOrigin(llvm::Value *V) const;
 
   void Profile(llvm::FoldingSetNodeID &ID) const;
+#ifndef NDEBUG
+  // Helpful for debugging. Prints instruction using llvm::err with a newly created replacement context.
+  void Print();
+#endif
 
   static const char *getKindName(Kind K);
   static std::string getKnownBitsString(llvm::APInt Zero, llvm::APInt One);

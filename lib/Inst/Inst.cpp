@@ -552,6 +552,13 @@ void Inst::Profile(llvm::FoldingSetNodeID &ID) const {
     ID.AddPointer(Op);
 }
 
+#ifndef NDEBUG
+void Inst::Print() {
+  ReplacementContext RC;
+  RC.printInst(this, llvm::errs(), true);
+}
+#endif
+
 Inst *InstContext::getConst(const llvm::APInt &Val) {
   llvm::FoldingSetNodeID ID;
   ID.AddInteger(Inst::Const);
