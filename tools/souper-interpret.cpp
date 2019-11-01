@@ -123,9 +123,38 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
     findVars(Reps[i].Mapping.LHS, Vars);
 
     if (InputValueStrings.size() < Vars.size()) {
-      llvm::errs() << "Error: One or more variables in LHS are not given any value. "
-	"Use -input-values= param to give each variable a value before interpreting.\n";
-      return 1;
+      llvm::outs() << "Warning: not enough inputs.\n";
+      llvm::outs() << "(Feature, not bug) Running abstract interpreters (without input specialization).\n";
+
+      ConcreteInterpreter BlankCI;
+
+      auto KB = KnownBitsAnalysis().findKnownBits(Reps[i].Mapping.LHS, BlankCI, false);
+      llvm::outs() << "KnownBits result: \n"
+                   << KnownBitsAnalysis::knownBitsString(KB) << '\n';
+
+      auto CR = ConstantRangeAnalysis().findConstantRange(Reps[i].Mapping.LHS, BlankCI, false);
+
+      llvm::outs() << "Constant Range result: " << CR << "\n";
+
+      auto RB = RestrictedBitsAnalysis().findRestrictedBits(Reps[i].Mapping.LHS);
+      llvm::outs() << "Restricted Bits result: " << RB.toString(2, false) << "\n";
+
+
+      auto PrintDB = [](std::string Preamble, auto DB) {
+        llvm::outs() << Preamble << "\n";
+        for (auto P : DB) {
+          llvm::outs() << "var : " << P.first->Name << '\t' << P.second.toString(2, false) << "\n";
+        }
+        llvm::outs() << "=====\n";
+      };
+
+      auto MustDB = MustDemandedBitsAnalysis().findMustDemandedBits(Reps[i].Mapping.LHS);
+      PrintDB("MustDemandedBitsAnalysis result:", MustDB);
+
+      auto MayDB = MayDemandedBitsAnalysis().findMayDemandedBits(Reps[i].Mapping.LHS);
+      PrintDB("MayDemandedBitsAnalysis result:", MayDB);
+
+      return 0;
     }
 
     ValueCache InputValues;

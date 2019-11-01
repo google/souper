@@ -49,6 +49,7 @@ private:
   std::vector<llvm::KnownBits> LHSKnownBits;
   std::vector<llvm::ConstantRange> LHSConstantRange;
   llvm::KnownBits LHSKnownBitsNoSpec;
+  std::unordered_map<Inst *, llvm::APInt> LHSMustDemandedBits;
   bool LHSHasPhi = false;
 
   PruneFunc DataflowPrune;

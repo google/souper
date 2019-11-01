@@ -122,10 +122,73 @@ namespace souper {
                                                             std::vector<InstMapping> &PCs);
   };
 
+  struct UseMap {
+    std::set<Inst *>
+    operator() (Inst *I) {
+      compute(I);
+      return Map[I];
+    }
+
+    void compute(Inst *I) {
+      if (Map.find(I) != Map.end()) return;
+
+      std::set<Inst *> Accumulator;
+      for (auto Op : I->Ops) {
+        compute(Op);
+        for (auto V : Map[Op]) Accumulator.insert(V);
+      }
+      if (I->K == Inst::Var) {
+        assert(Accumulator.empty());
+        Accumulator.insert(I);
+      }
+      Map[I] = Accumulator;
+    }
+
+    std::set<Inst *> independentVars(Inst *A, Inst *B) {
+      // Union - Intersection, vars used in A or B but not both
+      compute(A);
+      compute(B);
+      std::set<Inst *> Result;
+      for (auto V : Map[A]) {
+        if (Map[B].find(V) == Map[B].end()) {
+          Result.insert(V);
+        }
+      }
+      for (auto V : Map[B]) {
+        if (Map[A].find(V) == Map[A].end()) {
+          Result.insert(V);
+        }
+      }
+      return Result;
+    }
+    std::unordered_map<Inst *, std::set<Inst *>> Map;
+  };
+
+
   class RestrictedBitsAnalysis {
   public:
     std::unordered_map<Inst *, llvm::APInt> RBCache;
     llvm::APInt findRestrictedBits(souper::Inst *I);
+  };
+
+  class MustDemandedBitsAnalysis {
+  public:
+    std::unordered_map<Inst *, llvm::APInt>
+    findMustDemandedBits(souper::Inst *I);
+    // One result per input var
+  private:
+    UseMap Uses;
+    RestrictedBitsAnalysis RB;
+    std::unordered_map<Inst *, std::unordered_map<Inst *, llvm::APInt>>
+    Cache;
+  };
+
+  // Simple version considering all used variables as may demanded
+  // TODO Improve
+  class MayDemandedBitsAnalysis {
+  public:
+    std::unordered_map<Inst *, llvm::APInt>
+    findMayDemandedBits(souper::Inst *Root);
   };
 }
 

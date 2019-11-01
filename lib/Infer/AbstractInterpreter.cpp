@@ -907,7 +907,6 @@ namespace souper {
       case Inst::Xor :
         Result = RB0 & RB1;
         break;
-
       // any unrestricted bit in either input makes the output
       // unrestricted
       case Inst::Eq :
@@ -974,7 +973,82 @@ namespace souper {
     }
     return Result;
   }
-}
 #undef RB0
 #undef RB1
 #undef RB2
+
+#define MDB0 findMustDemandedBits(I->Ops[0])
+#define MDB1 findMustDemandedBits(I->Ops[1])
+#define MDB2 findMustDemandedBits(I->Ops[2])
+#define IVARS Uses.independentVars(I->Ops[0], I->Ops[1])
+  std::unordered_map<Inst *, llvm::APInt> MustDemandedBitsAnalysis::findMustDemandedBits
+  (souper::Inst* I) {
+    if (Cache.find(I) != Cache.end()) {
+      return Cache[I];
+    }
+    std::unordered_map<Inst *, llvm::APInt> Result;
+    switch (I->K) {
+      case Inst::Var:
+        Result[I] = llvm::APInt(I->Width, -1);
+        break;
+
+      // Ops(#) where:
+      // not exists C1, C2 forall x such that x # C1 == C2
+      case Inst::Sub:
+      case Inst::SubNSW:
+      case Inst::SubNUW:
+      case Inst::SubNW:
+      case Inst::AddNSW:
+      case Inst::AddNUW:
+      case Inst::AddNW:
+      case Inst::Add:
+      case Inst::Xor: {
+        auto A = MDB0, B = MDB1;
+        auto IV = IVARS;
+
+        for(auto &&P : A) {
+          if (IV.find(P.first) == IV.end()) continue;
+          Result[P.first] = P.second;
+        }
+
+        for(auto &&P : B) {
+          if (IV.find(P.first) == IV.end()) continue;
+          Result[P.first] = P.second;
+        }
+        break;
+      }
+
+      case Inst::And:
+      case Inst::Or: {
+        auto A = MDB0, B = MDB1;
+        auto RB0 = RB.findRestrictedBits(I->Ops[0]);
+        auto RB1 = RB.findRestrictedBits(I->Ops[1]);
+        // Take bivalent bits of opposite operand to independent variables
+        for (auto V : IVARS) {
+          llvm::outs() << IVARS.size() << " Var " << V->Name << "\n";
+          Result[V] = (~RB1 & MDB0[V]) | (~RB0 & MDB1[V]);
+        }
+      }
+      default:
+        break;
+    }
+    return Result;
+  }
+#undef MDB0
+#undef MDB1
+#undef MDB2
+
+  std::unordered_map<Inst *, llvm::APInt>
+  MayDemandedBitsAnalysis::findMayDemandedBits(souper::Inst *Root) {
+    std::unordered_map<Inst *, llvm::APInt> Result;
+    std::vector<Inst *> Inputs;
+    findVars(Root, Inputs);
+
+    for (auto V : Inputs) {
+      Result[V] = llvm::APInt(V->Width, -1);
+      // all bits of used variables are may-demanded
+    }
+    return Result;
+  }
+}
+

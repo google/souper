@@ -144,6 +144,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       return true;
     }
 
+
 //     auto LHSCR = ConstantRangeAnalysis().findConstantRange(SC.LHS, BlankCI, false);
 //     if (StatsLevel > 2) {
 //         llvm::errs() << "  LHSCR : " << LHSCR << "\n";
@@ -158,6 +159,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
 //       return true;
 //     }
 
+
     for (auto C : Constants) {
       auto CutOff = 0xFFFFFF;
       ConstantLimits[C].push_back(mkCR(C, 1, CutOff));
@@ -166,6 +168,27 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
 
       ConstantKnownNotOne[C] = llvm::APInt(C->Width, 0);
       ConstantKnownNotZero[C] = llvm::APInt(C->Width, 0);
+    }
+  }
+
+  if (!HasHole) {
+    auto MayDemandedBits = MayDemandedBitsAnalysis().findMayDemandedBits(RHS);
+
+    for (auto Pair : LHSMustDemandedBits) {
+      assert(MayDemandedBits.find(Pair.first)
+        != MayDemandedBits.end() && "RHS Demanded bits info missing.");
+
+      if ((Pair.second & ~MayDemandedBits[Pair.first]) != 0) {
+        // This input is must demanded in lhs and NOT may demanded in rhs
+      llvm::errs() << "Var : " << Pair.first->Name << " : ";
+      llvm::errs() << Pair.second.toString(2, false) << "\t"
+                   << MayDemandedBits[Pair.first].toString(2, false) << "\n";
+        if (StatsLevel > 2) {
+          // TODO print more diagnostics
+          llvm::errs() << "  pruned using demanded bits analysis.\n";
+        }
+        return true;
+      }
     }
   }
 
@@ -504,6 +527,7 @@ void PruningManager::init() {
 
   ConcreteInterpreter BlankCI;
   LHSKnownBitsNoSpec =  KnownBitsAnalysis().findKnownBits(SC.LHS, BlankCI, false);
+  LHSMustDemandedBits = MustDemandedBitsAnalysis().findMustDemandedBits(SC.LHS);
 }
 
 bool PruningManager::isInputValid(ValueCache &Cache) {
