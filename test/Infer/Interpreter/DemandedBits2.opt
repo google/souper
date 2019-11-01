@@ -1,0 +1,15 @@
+; RUN: %souper-interpret %solver %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+; CHECK: MustDemandedBitsAnalysis result:
+; CHECK: var : y 00000000 
+
+; Below line is to ensure we only check results in MustDemanded section
+; CHECK: DontCareBitsAnalysis result:
+
+%x:i8 = var
+%y:i8 = var
+%left = add %x, %y
+%right = sub 7, %y
+%r = and %left, %right 
+infer %r

@@ -169,6 +169,26 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     }
   }
 
+  if (!HasHole) {
+    auto DontCareBits = DontCareBitsAnalysis().findDontCareBits(RHS);
+
+    for (auto Pair : LHSMustDemandedBits) {
+      assert(DontCareBits.find(Pair.first) != DontCareBits.end() && "RHS don't care bits info missing.");
+
+      if ((Pair.second & DontCareBits[Pair.first]) != 0) {
+        // This input is must demanded in LHS and DontCare in RHS.
+        if (StatsLevel > 2) {
+          llvm::errs() << "Var : " << Pair.first->Name << " : ";
+          llvm::errs() << Pair.second.toString(2, false) << "\t"
+                       << DontCareBits[Pair.first].toString(2, false) << "\n";
+          llvm::errs() << "  pruned using demanded bits analysis.\n";
+        }
+
+        return true;
+      }
+    }
+  }
+
   for (int I = 0; I < InputVals.size(); ++I) {
     if (StatsLevel > 2) {
       llvm::errs() << "  Input:\n";
@@ -504,6 +524,7 @@ void PruningManager::init() {
 
   ConcreteInterpreter BlankCI;
   LHSKnownBitsNoSpec =  KnownBitsAnalysis().findKnownBits(SC.LHS, BlankCI, false);
+  LHSMustDemandedBits = MustDemandedBitsAnalysis().findMustDemandedBits(SC.LHS);
 }
 
 bool PruningManager::isInputValid(ValueCache &Cache) {

@@ -17,6 +17,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Infer/AbstractInterpreter.h"
+#include "souper/Util/LLVMUtils.h"
 
 using namespace souper;
 using namespace llvm;
@@ -585,20 +586,6 @@ llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt
   return RB;
 }
 
-std::string marshall(size_t W, llvm::APInt Result) {
-  auto Str = Result.toString(2, false);
-  if (W < Str.length()) {
-    return Str.substr(Str.length() - W);
-  } else if (W > Str.length()) {
-    while (Str.length() < W) {
-      Str = "0" + Str;
-    }
-    return Str;
-  } else {
-    return Str;
-  }
-}
-
 bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
   llvm::APInt RB0(WIDTH, 0);
   InstContext IC;
@@ -636,18 +623,18 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       Stats.first++;
       if (fail) {
         llvm::outs() << Inst::getKindName(K) << ":\t";
-        llvm::outs() << "Inputs: " << marshall(Expr->Ops[0]->Width, RB0) << ", "
-                                   << marshall(Expr->Ops[1]->Width, RB1) << "\n";
-        llvm::outs() << "Computed:   " << marshall(EffectiveWidth, RBComputed) << "\n";
-        llvm::outs() << "Exhaustive: " << marshall(EffectiveWidth, RBExhaustive) << " <-- UNSOUND!!!!\n";
+        llvm::outs() << "Inputs: " << getPaddedBinaryString(RB0) << ", "
+                     << getPaddedBinaryString(RB1) << "\n";
+        llvm::outs() << "Computed:   " << getPaddedBinaryString(RBComputed) << "\n";
+        llvm::outs() << "Exhaustive: " << getPaddedBinaryString(RBExhaustive) << " <-- UNSOUND!!!!\n";
         return false;
       }
       if (CheckPrecision) {
         llvm::outs() << Inst::getKindName(K) << ":\t";
-        llvm::outs() << "Inputs: " << marshall(Expr->Ops[0]->Width, RB0) << ", "
-                     << marshall(Expr->Ops[1]->Width, RB1) << "\t";
-        llvm::outs() << "Computed:\t" << marshall(EffectiveWidth, RBComputed) << "\t";
-        llvm::outs() << "Exhaustive:\t" << marshall(EffectiveWidth, RBExhaustive);
+        llvm::outs() << "Inputs: " << getPaddedBinaryString(RB0) << ", "
+                     << getPaddedBinaryString(RB1) << "\t";
+        llvm::outs() << "Computed:\t" << getPaddedBinaryString(RBComputed) << "\t";
+        llvm::outs() << "Exhaustive:\t" << getPaddedBinaryString(RBExhaustive);
         if (FoundMorePrecise) {
           llvm::outs() << "  <-- imprecise!";
           Stats.second++;

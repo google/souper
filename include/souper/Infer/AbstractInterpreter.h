@@ -24,6 +24,8 @@
 #include <unordered_map>
 
 namespace souper {
+  typedef std::unordered_map<Inst *, llvm::APInt> InputVarInfo;
+
   namespace BinaryTransferFunctionsKB {
     llvm::KnownBits add(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS);
     llvm::KnownBits addnsw(const llvm::KnownBits &LHS, const llvm::KnownBits &RHS);
@@ -122,10 +124,70 @@ namespace souper {
                                                             std::vector<InstMapping> &PCs);
   };
 
-  class RestrictedBitsAnalysis {
+  class UseMap {
+    void compute(Inst *I) {
+      if (Map.find(I) != Map.end())
+        return;
+
+      std::set<Inst *> Accumulator;
+      for (auto Op : I->Ops) {
+        compute(Op);
+        for (auto V : Map[Op])
+          Accumulator.insert(V);
+      }
+
+      if (I->K == Inst::Var) {
+        assert(Accumulator.empty());
+        Accumulator.insert(I);
+      }
+
+      Map[I] = Accumulator;
+    }
+
+    std::unordered_map<Inst *, std::set<Inst *>> Map;
+
   public:
+    std::set<Inst *> independentVars(Inst *A, Inst *B) {
+      // Union - Intersection, vars used in A or B but not both
+      compute(A);
+      compute(B);
+      std::set<Inst *> Result;
+      for (auto V : Map[A]) {
+        if (Map[B].find(V) == Map[B].end()) {
+          Result.insert(V);
+        }
+      }
+      for (auto V : Map[B]) {
+        if (Map[A].find(V) == Map[A].end()) {
+          Result.insert(V);
+        }
+      }
+      return Result;
+    }
+  };
+
+  struct RestrictedBitsAnalysis {
     std::unordered_map<Inst *, llvm::APInt> RBCache;
     llvm::APInt findRestrictedBits(souper::Inst *I);
+  };
+
+  class MustDemandedBitsAnalysis {
+    UseMap Uses;
+    RestrictedBitsAnalysis RB;
+    std::unordered_map<Inst *, std::unordered_map<Inst *, llvm::APInt>> Cache;
+
+    InputVarInfo findMustDemandedBitsImpl(souper::Inst *I);
+
+  public:
+    // One result per input var
+    InputVarInfo findMustDemandedBits(souper::Inst *I);
+  };
+
+  // Simple version considering all used variables as "cared" for.
+  // TODO Improve
+  class DontCareBitsAnalysis {
+  public:
+    InputVarInfo findDontCareBits(souper::Inst *Root);
   };
 }
 
