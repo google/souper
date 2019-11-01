@@ -18,6 +18,7 @@
 #include "llvm/ADT/APInt.h"
 
 #include "souper/Extractor/Solver.h"
+#include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Inst/Inst.h"
 
@@ -49,6 +50,7 @@ private:
   std::vector<llvm::KnownBits> LHSKnownBits;
   std::vector<llvm::ConstantRange> LHSConstantRange;
   llvm::KnownBits LHSKnownBitsNoSpec;
+  InputVarInfo LHSMustDemandedBits;
   bool LHSHasPhi = false;
 
   PruneFunc DataflowPrune;

@@ -16,6 +16,7 @@
 #include "souper/Infer/Interpreter.h"
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Extractor/Candidates.h"
+#include "souper/Util/LLVMUtils.h"
 
 using namespace llvm;
 
@@ -1002,7 +1003,105 @@ namespace souper {
     }
     return Result;
   }
-}
 #undef RB0
 #undef RB1
 #undef RB2
+
+#define MDB0 findMustDemandedBits(I->Ops[0])
+#define MDB1 findMustDemandedBits(I->Ops[1])
+#define MDB2 findMustDemandedBits(I->Ops[2])
+#define IVARS Uses.independentVars(I->Ops[0], I->Ops[1])
+
+  InputVarInfo MustDemandedBitsAnalysis::findMustDemandedBitsImpl(souper::Inst *I) {
+    if (Cache.find(I) != Cache.end()) {
+      return Cache[I];
+    }
+    InputVarInfo Result;
+    switch (I->K) {
+      case Inst::Var:
+        Result[I] = llvm::APInt::getAllOnesValue(I->Width);
+        break;
+
+      // Ops(#) where:
+      // not exists C1, C2 forall x such that x # C1 == C2
+      case Inst::Sub:
+      case Inst::SubNSW:
+      case Inst::SubNUW:
+      case Inst::SubNW:
+      case Inst::AddNSW:
+      case Inst::AddNUW:
+      case Inst::AddNW:
+      case Inst::Add:
+      case Inst::Xor: {
+        auto A = MDB0, B = MDB1;
+        auto IV = IVARS;
+
+        for (auto &&P : A) {
+          if (IV.find(P.first) == IV.end())
+            continue;
+          Result[P.first] = P.second;
+        }
+
+        for (auto &&P : B) {
+          if (IV.find(P.first) == IV.end())
+            continue;
+          Result[P.first] = P.second;
+        }
+        break;
+      }
+
+      case Inst::And:
+      case Inst::Or: {
+        auto A = MDB0, B = MDB1;
+        auto RB0 = RB.findRestrictedBits(I->Ops[0]);
+        auto RB1 = RB.findRestrictedBits(I->Ops[1]);
+        // Take bivalent bits of opposite operand to independent variables
+        for (auto V : IVARS) {
+          if (A.find(V) == A.end())
+            A[V] = APInt::getNullValue(V->Width);
+          if (B.find(V) == B.end())
+            B[V] = APInt::getNullValue(V->Width);
+          Result[V] = (~RB1 & A[V]) | (~RB0 & B[V]);
+        }
+      }
+      default:
+        break;
+    }
+
+    Cache[I] = Result;
+
+    return Result;
+  }
+
+  InputVarInfo MustDemandedBitsAnalysis::findMustDemandedBits(souper::Inst *I) {
+    InputVarInfo Result = findMustDemandedBitsImpl(I);
+
+    // fill missing Result input variables with all zeros
+    std::vector<Inst*> Vars;
+    findVars(I, Vars);
+    for (auto &var : Vars) {
+      if (Result.find(var) == Result.end()) {
+        Result[var] = APInt::getNullValue(var->Width);
+      }
+    }
+
+    return Result;
+  }
+
+#undef MDB0
+#undef MDB1
+#undef MDB2
+
+  InputVarInfo DontCareBitsAnalysis::findDontCareBits(souper::Inst *Root) {
+    InputVarInfo Result;
+    std::vector<Inst *> Inputs;
+    findVars(Root, Inputs);
+
+    for (auto V : Inputs) {
+      Result[V] = llvm::APInt::getNullValue(V->Width);
+    }
+
+    return Result;
+  }
+
+}
