@@ -89,6 +89,7 @@ extern bool UseAlive;
 using namespace llvm;
 using namespace souper;
 
+// LLVM removes this API from version 9, this function is copied from LLVM 8
 llvm::APInt souper::getSetSize(const llvm::ConstantRange &R) {
   if (R.isFullSet()) {
     APInt Size(R.getBitWidth()+1, 0);
