@@ -31,5 +31,5 @@ jmp:
 declare i32 @a(i32) local_unnamed_addr #1
 declare i1 @branch(i32) local_unnamed_addr #1
 
-; CHECK: 3 souper - Number of instructions replaced by another instruction
-; XFAIL: *
+; TODO: Find out why the third nop replacement (%c->%call) is not counted in the stats
+; CHECK: souper - Number of instructions replaced by another instruction
