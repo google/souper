@@ -736,8 +736,7 @@ namespace souper {
         llvm::KnownBits KBW(I->Width);
         KBW.One = I->Width;
         KBW.Zero = ~I->Width;
-        auto NewKB1 = BinaryTransferFunctionsKB::urem(KB2.zext(NewKB0.getBitWidth(),
-                                                               /*ExtendedBitsAreKnownZero=*/true), KBW);
+        auto NewKB1 = BinaryTransferFunctionsKB::urem(KB2, KBW);
         Result = BinaryTransferFunctionsKB::shl(NewKB0, NewKB1).trunc(I->Width);
       }
       break;
@@ -753,8 +752,7 @@ namespace souper {
         llvm::KnownBits KBW(I->Width);
         KBW.One = I->Width;
         KBW.Zero = ~I->Width;
-        auto NewKB1 = BinaryTransferFunctionsKB::urem(KB2.zext(NewKB0.getBitWidth(),
-                                                               /*ExtendedBitsAreKnownZero=*/true), KBW);
+        auto NewKB1 = BinaryTransferFunctionsKB::urem(KB2, KBW);
         Result = BinaryTransferFunctionsKB::lshr(NewKB0, NewKB1).trunc(I->Width);
       }
       break;

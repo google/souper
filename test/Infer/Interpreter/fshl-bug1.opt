@@ -1,0 +1,10 @@
+; RUN: %souper-interpret %solver -input-values=%0=0,%1=0 %s > %t 2>&1
+; RUN: %FileCheck  %s < %t
+; CHECK: Same precision
+
+%0:i8 = var
+%1:i8 = var
+%2:i8 = reservedconst
+%3 = fshl %0, %1, %2
+%4 = bitreverse %3
+infer %4
