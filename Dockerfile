@@ -35,10 +35,11 @@ add CMakeLists.txt /usr/src/souper/CMakeLists.txt
 add docs /usr/src/souper/docs
 add include /usr/src/souper/include
 add lib /usr/src/souper/lib
+add runtime /usr/src/souper/runtime
+add scripts /usr/src/souper/scripts
 add test /usr/src/souper/test
 add tools /usr/src/souper/tools
 add utils /usr/src/souper/utils
-add runtime /usr/src/souper/runtime
 add unittests /usr/src/souper/unittests
 
 run export GOPATH=/usr/src/go \
