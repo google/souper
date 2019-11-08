@@ -688,6 +688,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
       ReplacementContext RC;
       RC.printInst(I, llvm::errs(), /*printNames=*/true);
       llvm::errs() << "\n";
+      llvm::errs() << "Cost = " << souper::cost(I, /*IgnoreDepsWithExternalUses=*/true) << "\n";
     }
 
     std::set<Inst *> ConstSet;
