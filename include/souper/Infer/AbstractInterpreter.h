@@ -55,8 +55,6 @@ namespace souper {
                   bool ConsiderConsts = true,
                   bool ConsiderHoles = true);
 
-  void improveKBCR(llvm::KnownBits &KB, llvm::ConstantRange &CR);
-
   class KnownBitsAnalysis {
     std::unordered_map<Inst*, llvm::KnownBits> KBCache;
 
