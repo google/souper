@@ -47,74 +47,9 @@ namespace {
     return Max;
   }
 
- ConstantRange KBToCR(const KnownBits &KB) {
-    ConstantRange CR1(getSMin(KB), getSMax(KB));
-    ConstantRange CR2(getSMin(KB), getSMax(KB));
-    return getSetSize(CR1).ult(getSetSize(CR2)) ? CR1 : CR2;
-  }
-
-  KnownBits CRToKB(const ConstantRange &CR) {
-    KnownBits Res(CR.getBitWidth());
-    if (CR.isFullSet())
-      return Res;
-    if (CR.isEmptySet()) {
-      Res.setAllZero();
-      return Res;
-    }
-    if (CR.isWrappedSet())
-      return Res; // TODO look for opportunities in wrapped case
-    const APInt &L = CR.getLower();
-    const APInt &U = CR.getUpper();
-    for (unsigned I = 0; I < L.getBitWidth(); ++I) {
-      // initial guess is bit from lower bound
-      bool V = L[I];
-      APInt Boundary = L;
-      // gotta be multiple faster ways to do this...
-      for (unsigned J = 0; J < I; ++J)
-        Boundary.setBit(J);
-      if (U.ugt(Boundary + 1))
-        continue;
-      if (V)
-        Res.One.setBit(I);
-      else
-        Res.Zero.setBit(I);
-    }
-    return Res;
-  }
-
-  unsigned numKnown(const KnownBits &KB) {
-    return KB.Zero.countPopulation() + KB.One.countPopulation();
-  }
-
-  KnownBits intersect(const KnownBits &KB1, const KnownBits &KB2) {
-    // ugh the constructor we want is private
-    KnownBits Res(KB1.getBitWidth());
-    Res.Zero = KB1.Zero & KB2.Zero;
-    Res.One = KB1.One & KB2.One;
-    return Res;
-  }
 } // anonymous
 
 namespace souper {
-
-  // approximate reduced product for known bits + constant range
-  void improveKBCR(KnownBits &KB, ConstantRange &CR) {
-    while (1) {
-      // measure
-      APInt SS = getSetSize(CR);
-      unsigned NK = numKnown(KB);
-      // mutual shootdown
-      auto KB2 = CRToKB(CR);
-      auto CR2 = KBToCR(KB);
-      CR = CR.intersectWith(CR2);
-      KB = intersect(KB, KB2);
-      // done when no more improvements
-      assert(getSetSize(CR).ule(SS));
-      assert(numKnown(KB) >= NK);
-      if (SS == getSetSize(CR) && NK == numKnown(KB))
-        break;
-    }
-  }
 
   bool KnownBitsAnalysis::isConflictingKB(const KnownBits &A, const KnownBits &B) {
     return ((A.One & B.Zero) != 0) || ((A.Zero & B.One) != 0);

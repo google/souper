@@ -91,42 +91,6 @@ TEST(InterpreterTests, RBTransferFunctions) {
   // TODO Ternary instructions
 }
 
-TEST(InterpreterTests, KBCRReduction) {
-  ConstantRange CR(WIDTH, /*isFullSet=*/false);
-  KnownBits KB(WIDTH);
-  do {
-    do {
-      KnownBits CalculatedKB = KB;
-      ConstantRange CalculatedCR = CR;
-      improveKBCR(CalculatedKB, CalculatedCR);
-
-      KnownBits ExhaustiveKB = KB;
-      ConstantRange ExhaustiveCR = CR;
-      TestingUtil::enumerativeKBCRReduction(ExhaustiveKB, ExhaustiveCR);
-
-      if (KnownBitsAnalysis::isConflictingKB(CalculatedKB, ExhaustiveKB)) {
-        outs() << "Unsound!! CR KB reduction for KB\n";
-        outs() << "Original KB: " << KnownBitsAnalysis::knownBitsString(KB) << "\n";
-        outs() << "Original CR: " << CR << "\n";
-        outs() << "CalculatedKB: " << KnownBitsAnalysis::knownBitsString(CalculatedKB) << '\n';
-        outs() << "ExhaustiveKB: " << KnownBitsAnalysis::knownBitsString(ExhaustiveKB) << '\n';
-        ASSERT_TRUE(false);
-      }
-
-      if (!CalculatedCR.contains(ExhaustiveCR)) {
-        outs() << "Unsound!! CR KB reduction for CR\n";
-        outs() << "Original KB: " << KnownBitsAnalysis::knownBitsString(KB) << "\n";
-        outs() << "Original CR: " << CR << "\n";
-        outs() << "CalculatedCR: " << CalculatedCR << '\n';
-        outs() << "ExhaustiveCR: " << ExhaustiveCR << '\n';
-        ASSERT_TRUE(false);
-      }
-
-      CR = CRTesting::nextCR(CR);
-    } while(!CR.isEmptySet());
-  } while(KBTesting::nextKB(KB));
-}
-
 TEST(InterpreterTests, KnownBits) {
   InstContext IC;
 
