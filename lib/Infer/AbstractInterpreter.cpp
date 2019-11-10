@@ -117,10 +117,7 @@ namespace souper {
   }
 
   bool KnownBitsAnalysis::isConflictingKB(const KnownBits &A, const KnownBits &B) {
-    if ((A.One & B.Zero) != 0 || (A.Zero & B.One) != 0) {
-      return true;
-    }
-    return false;
+    return ((A.One & B.Zero) != 0) || ((A.Zero & B.One) != 0);
   }
 
   KnownBits KnownBitsAnalysis::getMostPreciseKnownBits(KnownBits A, KnownBits B) {

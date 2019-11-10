@@ -100,25 +100,25 @@ TEST(InterpreterTests, KBCRReduction) {
       ConstantRange CalculatedCR = CR;
       improveKBCR(CalculatedKB, CalculatedCR);
 
-      KnownBits EnumerativeKB = KB;
-      ConstantRange EnumerativeCR = CR;
-      TestingUtil::enumerativeKBCRReduction(EnumerativeKB, EnumerativeCR);
+      KnownBits ExhaustiveKB = KB;
+      ConstantRange ExhaustiveCR = CR;
+      TestingUtil::enumerativeKBCRReduction(ExhaustiveKB, ExhaustiveCR);
 
-      if (KnownBitsAnalysis::isConflictingKB(CalculatedKB, EnumerativeKB)) {
+      if (KnownBitsAnalysis::isConflictingKB(CalculatedKB, ExhaustiveKB)) {
         outs() << "Unsound!! CR KB reduction for KB\n";
         outs() << "Original KB: " << KnownBitsAnalysis::knownBitsString(KB) << "\n";
         outs() << "Original CR: " << CR << "\n";
         outs() << "CalculatedKB: " << KnownBitsAnalysis::knownBitsString(CalculatedKB) << '\n';
-        outs() << "EnumerativeKB: " << KnownBitsAnalysis::knownBitsString(EnumerativeKB) << '\n';
+        outs() << "ExhaustiveKB: " << KnownBitsAnalysis::knownBitsString(ExhaustiveKB) << '\n';
         ASSERT_TRUE(false);
       }
 
-      if (!CalculatedCR.contains(EnumerativeCR)) {
+      if (!CalculatedCR.contains(ExhaustiveCR)) {
         outs() << "Unsound!! CR KB reduction for CR\n";
         outs() << "Original KB: " << KnownBitsAnalysis::knownBitsString(KB) << "\n";
         outs() << "Original CR: " << CR << "\n";
         outs() << "CalculatedCR: " << CalculatedCR << '\n';
-        outs() << "EnumerativeCR: " << EnumerativeCR << '\n';
+        outs() << "ExhaustiveCR: " << ExhaustiveCR << '\n';
         ASSERT_TRUE(false);
       }
 
