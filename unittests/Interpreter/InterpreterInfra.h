@@ -64,7 +64,7 @@ namespace souper {
 
       // Find the largest hole and build a llvm::ConstantRange around it
       llvm::ConstantRange bestCR(const bool Table[], const int Width);
-      llvm::ConstantRange enumerative(const llvm::ConstantRange &L, const llvm::ConstantRange &R,
+      llvm::ConstantRange exhaustive(const llvm::ConstantRange &L, const llvm::ConstantRange &R,
                                      Inst::Kind pred, const llvm::ConstantRange &Untrusted);
 
       void check(const llvm::ConstantRange &L, const llvm::ConstantRange &R, Inst::Kind pred);
@@ -76,8 +76,6 @@ namespace souper {
     };
 
  namespace TestingUtil {
-
-    void enumerativeKBCRReduction(llvm::KnownBits &KB, llvm::ConstantRange &CR);
 
     template<int SetSize>
     std::bitset<SetSize> concretizeKB(const llvm::KnownBits &KB) {

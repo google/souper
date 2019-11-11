@@ -21,31 +21,6 @@
 using namespace souper;
 using namespace llvm;
 
-// CR KB reduction
-void TestingUtil::enumerativeKBCRReduction(KnownBits &KB, ConstantRange &CR) {
-  constexpr unsigned SetSize = 1 << WIDTH;
-  if (CR.isEmptySet()) {
-    KB.One = 0;
-    KB.Zero = ~0;
-
-    return;
-  }
-  // concretize both
-  std::bitset<SetSize> KBSet = concretizeKB<SetSize>(KB);
-  std::bitset<SetSize> CRSet = concretizeCR<SetSize>(CR);
-
-  // intersect
-  std::bitset<SetSize> IntersectResult = KBSet & CRSet;
-
-  // abstractize both to KB and CR
-  KnownBits FinalKB = abstractizeKB<SetSize>(KBSet);
-  ConstantRange FinalCR = abstractizeCR<SetSize>(CRSet);
-
-  KB = FinalKB;
-  CR = FinalCR;
-}
-
-
 // EvalValueKB implementation
 // -----------------------------
 
@@ -127,20 +102,21 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y,
   auto zc = z.getConstant();
   EvalValue Result;
   switch (Pred) {
-    case Inst::Select:
-      Result = (xc != 0) ? yc : zc;
-      break;
-    case Inst::FShl:
-      Result = (concat(xc, yc) << (zc.urem(WIDTH))).trunc(WIDTH);
-      break;
-    case Inst::FShr:
-      Result  = (concat(xc, yc).lshr(zc.urem(WIDTH))).trunc(WIDTH);
-      break;
-    default:
-      report_fatal_error("Unhandled ternary operator.");
+  case Inst::Select:
+    Result = (xc != 0) ? yc : zc;
+    break;
+  case Inst::FShl:
+    Result = (concat(xc, yc) << (zc.urem(WIDTH))).trunc(WIDTH);
+    break;
+  case Inst::FShr:
+    Result  = (concat(xc, yc).lshr(zc.urem(WIDTH))).trunc(WIDTH);
+    break;
+  default:
+    report_fatal_error("Unhandled ternary operator.");
   }
   return Result;
 }
+
 EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
   if (!x.isConstant())
     return merge(bruteForce(setLowest(x), y, Pred),
@@ -267,7 +243,7 @@ bool testKB(llvm::KnownBits Calculated, EvalValueKB Expected,
 
   if (Calculated.getBitWidth() != Expected.ValueKB.getBitWidth()) {
     llvm::errs() << "Expected and Given have unequal bitwidths - Expected: "
-                  << Expected.ValueKB.getBitWidth() << ", Given: " << Calculated.getBitWidth() << '\n';
+                 << Expected.ValueKB.getBitWidth() << ", Given: " << Calculated.getBitWidth() << '\n';
     return false;
   }
   if (Calculated.hasConflict() || Expected.ValueKB.hasConflict()) {
@@ -314,6 +290,7 @@ bool KBTesting::testTernaryFn(Inst::Kind K, size_t Op0W,
 
   return true;
 }
+
 bool KBTesting::testFn(Inst::Kind K, size_t Op0W, size_t Op1W) {
   llvm::KnownBits x(Op0W);
   do {
@@ -424,7 +401,7 @@ ConstantRange CRTesting::bestCR(const bool Table[], const int Width) {
   return R;
 }
 
-ConstantRange CRTesting::enumerative(const ConstantRange &L, const ConstantRange &R,
+ConstantRange CRTesting::exhaustive(const ConstantRange &L, const ConstantRange &R,
                                     Inst::Kind pred, const ConstantRange &Untrusted) {
   if (L.isEmptySet() || R.isEmptySet())
     return ConstantRange(WIDTH, /*isFullSet=*/false);
@@ -488,7 +465,7 @@ void CRTesting::check(const ConstantRange &L, const ConstantRange &R, Inst::Kind
   default:
     report_fatal_error("unsupported opcode");
   }
-  ConstantRange PreciseRes = enumerative(L, R, pred, FastRes);
+  ConstantRange PreciseRes = exhaustive(L, R, pred, FastRes);
   assert(getSetSize(PreciseRes).ule(getSetSize(FastRes)));
 }
 
@@ -517,7 +494,11 @@ bool CRTesting::testFn(Inst::Kind pred) {
   return true;
 }
 
-bool RBTesting::nextRB(llvm::APInt& Val) {
+
+// RBTesting Implementation
+// -----------------------------
+
+bool RBTesting::nextRB(llvm::APInt &Val) {
   if (Val.isAllOnesValue()) {
     return false;
   } else {
@@ -540,6 +521,7 @@ std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt X) {
   }
   return Result;
 }
+
 // Probably refactor to unify these two
 std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X) {
   std::vector<llvm::APInt> Result;
@@ -556,7 +538,7 @@ std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X) {
   return Result;
 }
 
-llvm::APInt enumerativeRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY) {
+llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY) {
   llvm::APInt RB(WIDTH, 0);
 
   auto XPartial = explodeRestrictedBits(RBX);
@@ -612,17 +594,17 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       auto Expr = IC.getInst(K, EffectiveWidth, {X, Y});
       RestrictedBitsAnalysis RBA{{{X, RB0}, {Y, RB1}}};
       auto RBComputed = RBA.findRestrictedBits(Expr);
-      auto RBEnumerative = enumerativeRB(Expr, X, Y, RB0, RB1);
+      auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1);
       bool fail = false;
       bool FoundMorePrecise = false;
       for (int i = 0; i < Expr->Width ; ++i) {
         if ((RBComputed & (1 << i)) == 0) {
-          if ((RBEnumerative & (1 << i)) != 0) {
+          if ((RBExhaustive & (1 << i)) != 0) {
             fail = true;
           }
         }
 
-        if ((RBEnumerative & (1 << i)) == 0) {
+        if ((RBExhaustive & (1 << i)) == 0) {
           if ((RBComputed & (1 << i)) != 0) {
             FoundMorePrecise = true;
           }
@@ -631,15 +613,15 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       }
       if (fail) {
         llvm::outs() << "Inputs: " << RB0.toString(2, false) << ", " << RB1.toString(2, false) << "\n";
-        llvm::outs() << "Computed << " << RBComputed.toString(2, false) << "\n";
-        llvm::outs() << "Enumerative << " << RBEnumerative.toString(2, false) << "\n";
+        llvm::outs() << "Computed:   " << RBComputed.toString(2, false) << "\n";
+        llvm::outs() << "Exhaustive: " << RBExhaustive.toString(2, false) << "\n";
         return false;
       }
       if (CheckPrecision && FoundMorePrecise) {
         llvm::outs() << "Found more precise result for : " << Inst::getKindName(K) << "\n";
         llvm::outs() << "Inputs: " << RB0.toString(2, false) << ", " << RB1.toString(2, false) << "\n";
-        llvm::outs() << "Computed << " << RBComputed.toString(2, false) << "\n";
-        llvm::outs() << "Enumerative << " << RBEnumerative.toString(2, false) << "\n";
+        llvm::outs() << "Computed:   " << RBComputed.toString(2, false) << "\n";
+        llvm::outs() << "Exhaustive: " << RBExhaustive.toString(2, false) << "\n";
       }
     } while (nextRB(RB1));
   } while (nextRB(RB0));
