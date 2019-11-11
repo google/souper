@@ -27,7 +27,7 @@
 
 namespace {
   static llvm::cl::opt<bool> CheckRBPrecision("check-rb-precision",
-  llvm::cl::desc("Print precision results from restricted bits exhaistive testing"),
+  llvm::cl::desc("Print precision results from restricted bits exhaustive testing"),
   llvm::cl::init(false));
 
 }
