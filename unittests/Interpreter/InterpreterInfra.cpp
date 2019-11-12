@@ -579,16 +579,32 @@ llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt
   return RB;
 }
 
+std::string marshall(size_t W, llvm::APInt Result) {
+  auto Str = Result.toString(2, false);
+  if (W < Str.length()) {
+    return Str.substr(Str.length() - W);
+  } else if (W > Str.length()) {
+    while (Str.length() < W) {
+      Str = "0" + Str;
+    }
+    return Str;
+  } else {
+    return Str;
+  }
+}
+
 bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
   llvm::APInt RB0(WIDTH, 0);
   llvm::APInt RB1(WIDTH, 0);
   InstContext IC;
   Inst *X = IC.createVar(WIDTH, "X");
   Inst *Y = IC.createVar(WIDTH, "Y");
+  std::pair<size_t, size_t> Stats;
   do {
     do {
       auto EffectiveWidth = WIDTH;
-      if (K == Inst::Eq || Inst::Ne || Inst::Sle || Inst::Slt || Inst::Ule || Inst::Ult) {
+      if (K == Inst::Eq || K == Inst::Ne || K == Inst::Sle
+          || K == Inst::Slt || K == Inst::Ule || K == Inst::Ult) {
         EffectiveWidth = 1;
       }
       auto Expr = IC.getInst(K, EffectiveWidth, {X, Y});
@@ -611,20 +627,28 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
         }
 
       }
+      Stats.first++;
       if (fail) {
-        llvm::outs() << "Inputs: " << RB0.toString(2, false) << ", " << RB1.toString(2, false) << "\n";
-        llvm::outs() << "Computed:   " << RBComputed.toString(2, false) << "\n";
-        llvm::outs() << "Exhaustive: " << RBExhaustive.toString(2, false) << "\n";
+        llvm::outs() << "Inputs: " << marshall(Expr->Ops[0]->Width, RB0) << ", "
+                                   << marshall(Expr->Ops[1]->Width, RB1) << "\n";
+        llvm::outs() << "Computed:   " << marshall(EffectiveWidth, RBComputed) << "\n";
+        llvm::outs() << "Exhaustive: " << marshall(EffectiveWidth, RBExhaustive) << "\n";
         return false;
       }
       if (CheckPrecision && FoundMorePrecise) {
-        llvm::outs() << "Found more precise result for : " << Inst::getKindName(K) << "\n";
-        llvm::outs() << "Inputs: " << RB0.toString(2, false) << ", " << RB1.toString(2, false) << "\n";
-        llvm::outs() << "Computed:   " << RBComputed.toString(2, false) << "\n";
-        llvm::outs() << "Exhaustive: " << RBExhaustive.toString(2, false) << "\n";
+        Stats.second++;
+        llvm::outs() << "Imprecise " << Inst::getKindName(K) << ":\t";
+        llvm::outs() << "Inputs: " << marshall(Expr->Ops[0]->Width, RB0) << ", "
+                     << marshall(Expr->Ops[1]->Width, RB1) << "\t";
+        llvm::outs() << "Computed:\t" << marshall(EffectiveWidth, RBComputed) << "\t";
+        llvm::outs() << "Exhaustive:\t" << marshall(EffectiveWidth, RBExhaustive) << "\n";
       }
     } while (nextRB(RB1));
   } while (nextRB(RB0));
+  if (CheckPrecision) {
+      llvm::outs() << "TOTAL imprecise results: " <<  Inst::getKindName(K) << " : "
+                   << Stats.second << "/" << Stats.first << "\n\n";
+  }
   return true;
 }
 
