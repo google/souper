@@ -11,7 +11,7 @@
 %5:i1 = select %2, %4, %3
 infer %5
 ; CHECK: %6:i1 = {{sle %1, %0|ule %0, %1}}
-; CHECK: %7:i1 = {{sub %6, %0|add %0, %6|ne %1, %6}}
+; CHECK: %7:i1 = {{sub %6, %0|add %0, %6|ne %1, %6|ne %0, %6}}
 ;%1:i1 = var
 ;%2:i1 = and %0, %1
 ;%3:i1 = and %2, 1:i1
