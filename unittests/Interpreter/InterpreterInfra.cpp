@@ -636,14 +636,15 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
         return false;
       }
       if (CheckPrecision) {
-        Stats.second++;
         llvm::outs() << Inst::getKindName(K) << ":\t";
         llvm::outs() << "Inputs: " << marshall(Expr->Ops[0]->Width, RB0) << ", "
                      << marshall(Expr->Ops[1]->Width, RB1) << "\t";
         llvm::outs() << "Computed:\t" << marshall(EffectiveWidth, RBComputed) << "\t";
         llvm::outs() << "Exhaustive:\t" << marshall(EffectiveWidth, RBExhaustive);
-        if (FoundMorePrecise)
+        if (FoundMorePrecise) {
           llvm::outs() << "  <-- imprecise!";
+          Stats.second++;
+        }
         llvm::outs() << "\n";
       }
     } while (nextRB(RB1));
