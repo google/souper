@@ -629,11 +629,10 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       }
       Stats.first++;
       if (fail) {
-        llvm::outs() << Inst::getKindName(K) << ":\t";
         llvm::outs() << "Inputs: " << marshall(Expr->Ops[0]->Width, RB0) << ", "
                                    << marshall(Expr->Ops[1]->Width, RB1) << "\n";
         llvm::outs() << "Computed:   " << marshall(EffectiveWidth, RBComputed) << "\n";
-        llvm::outs() << "Exhaustive: " << marshall(EffectiveWidth, RBExhaustive) << " <-- UNSOUND!!!!\n";
+        llvm::outs() << "Exhaustive: " << marshall(EffectiveWidth, RBExhaustive) << "\n";
         return false;
       }
       if (CheckPrecision) {

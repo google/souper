@@ -901,15 +901,9 @@ namespace souper {
       // TODO Pick a better strategy. This one chooses the DFS winner.
     } else switch (I->K) {
       case Inst::And :
-        Result = RB0 | RB1;
-        break;
-      case Inst::Or :
-      case Inst::Xor :
-        Result = RB0 & RB1;
-        break;
+      case Inst::Or : Result = RB0 | RB1; break;
+      case Inst::Xor : Result = RB0 & RB1; break;
 
-      // any unrestricted bit in either input makes the output
-      // unrestricted
       case Inst::Eq :
       case Inst::Ne :
         if (RB0.isAllOnesValue() && RB1.isAllOnesValue())
@@ -920,12 +914,18 @@ namespace souper {
 
       // unrestricted if one of the inputs is unrestricted
       case Inst::Add :
-      case Inst::AddNSW :
-      case Inst::AddNUW :
-      case Inst::AddNW :
-      case Inst::Sub :
-        Result = RB0 & RB1;
+      case Inst::Sub : {
+        if (RB0 == 0) {
+          Result = RB0;
+        } else if (RB1 == 0) {
+          Result = RB1;
+        }
+
+        if (Inst::isCmp(I->K) && Result.getBitWidth() > 1)
+          Result = Result.trunc(1);
+
         break;
+      }
 
       case Inst::BitReverse : Result = RB0.reverseBits(); break;
       case Inst::Trunc : Result = RB0.trunc(I->Width); break;
