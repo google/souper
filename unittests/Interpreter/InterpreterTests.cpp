@@ -155,7 +155,7 @@ TEST(InterpreterTests, ConcreteCache) {
   InstContext IC;
 
   Inst *I1 = IC.getConst(llvm::APInt(8, 0xFF));
-  Inst *I2 = IC.getInst(Inst::Var, 8, {});
+  Inst *I2 = IC.createVar(8, "");
   Inst *I3 = IC.getInst(Inst::Or, 8, {I1, I2});
 
   ValueCache InputValues = {{I2, APInt(8, 0x00)}};
