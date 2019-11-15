@@ -39,8 +39,12 @@ TEST(InterpreterTests, KBTransferFunctions) {
   KBTesting kbObj;
   ASSERT_TRUE(kbObj.testFn(Inst::Add));
   ASSERT_TRUE(kbObj.testFn(Inst::AddNSW));
+  ASSERT_TRUE(kbObj.testFn(Inst::AddNUW));
+  ASSERT_TRUE(kbObj.testFn(Inst::AddNW));
   ASSERT_TRUE(kbObj.testFn(Inst::Sub));
   ASSERT_TRUE(kbObj.testFn(Inst::SubNSW));
+  ASSERT_TRUE(kbObj.testFn(Inst::SubNUW));
+  ASSERT_TRUE(kbObj.testFn(Inst::SubNW));
   ASSERT_TRUE(kbObj.testFn(Inst::Mul));
   ASSERT_TRUE(kbObj.testFn(Inst::UDiv));
   ASSERT_TRUE(kbObj.testFn(Inst::URem));
@@ -71,8 +75,12 @@ TEST(InterpreterTests, RBTransferFunctions) {
   RBTesting rbObj;
   ASSERT_TRUE(rbObj.testFn(Inst::Add, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::AddNSW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::AddNUW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::AddNW, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::Sub, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::SubNSW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::SubNUW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::SubNW, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::Mul, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::UDiv, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::URem, CheckRBPrecision));
