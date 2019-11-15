@@ -904,9 +904,15 @@ namespace souper {
       case Inst::Or : Result = RB0 | RB1; break;
       case Inst::Xor : Result = RB0 & RB1; break;
 
-      // unrestricted if one of the inputs is unrestricted
-      case Inst::Ne :
       case Inst::Eq :
+      case Inst::Ne :
+        if (RB0.isAllOnesValue() && RB1.isAllOnesValue())
+          Result = APInt(1, 1);
+        else
+          Result = APInt(1, 0);
+        break;
+
+      // unrestricted if one of the inputs is unrestricted
       case Inst::Add :
       case Inst::Sub : {
         if (RB0 == 0) {
