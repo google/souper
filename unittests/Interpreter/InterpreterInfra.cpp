@@ -157,8 +157,14 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
   case Inst::Mul:
     res = EvalValue(xc * yc);
     break;
-  case Inst::UDiv:
-    res = evaluateUDiv(xc, yc);
+  case Inst::MulNSW:
+    res = evaluateMulNSW(xc, yc);
+    break;
+  case Inst::MulNUW:
+    res = evaluateMulNUW(xc, yc);
+    break;
+  case Inst::MulNW:
+    res = evaluateMulNW(xc, yc);
     break;
   case Inst::URem:
     res = evaluateURem(xc, yc);
@@ -206,7 +212,8 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
     res = EvalValue(rc);
     break;
   default:
-    report_fatal_error("unhandled case in bruteForce!");
+    report_fatal_error("unhandled case " + (std::string)Inst::getKindName(Pred) +
+                       " in bruteForce!");
   }
   return res;
 }
