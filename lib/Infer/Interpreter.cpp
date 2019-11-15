@@ -71,6 +71,34 @@ namespace souper {
       return Res1;
   }
 
+  EvalValue evaluateMulNSW(llvm::APInt a, llvm::APInt b) {
+    bool Ov;
+    auto Res = a.smul_ov(b, Ov);
+    if (Ov)
+      return EvalValue::poison();
+    else
+      return Res;
+  }
+
+  EvalValue evaluateMulNUW(llvm::APInt a, llvm::APInt b) {
+    bool Ov;
+    auto Res = a.umul_ov(b, Ov);
+    if (Ov)
+      return EvalValue::poison();
+    else
+      return Res;
+  }
+
+  EvalValue evaluateMulNW(llvm::APInt a, llvm::APInt b) {
+    bool Ov1, Ov2;
+    auto Res1 = a.smul_ov(b, Ov1);
+    auto Res2 = a.umul_ov(b, Ov2);
+    if (Ov1 || Ov2)
+      return EvalValue::poison();
+    else
+      return Res1;
+  }
+
   EvalValue evaluateUDiv(llvm::APInt a, llvm::APInt b) {
     if (b == 0)
       return EvalValue::ub();
@@ -171,33 +199,14 @@ namespace souper {
     case Inst::Mul:
       return {ARG0 * ARG1};
 
-    case Inst::MulNSW:{
-      bool Ov;
-      auto Res = ARG0.smul_ov(ARG1, Ov);
-      if (Ov)
-        return EvalValue::poison();
-      else
-        return Res;
-    }
+    case Inst::MulNSW:
+      return evaluateMulNSW(ARG0, ARG1);
 
-    case Inst::MulNUW:{
-      bool Ov;
-      auto Res = ARG0.umul_ov(ARG1, Ov);
-      if (Ov)
-        return EvalValue::poison();
-      else
-        return Res;
-    }
+    case Inst::MulNUW:
+      return evaluateMulNUW(ARG0, ARG1);
 
-    case Inst::MulNW:{
-      bool Ov1, Ov2;
-      auto Res1 = ARG0.smul_ov(ARG1, Ov1);
-      auto Res2 = ARG0.umul_ov(ARG1, Ov2);
-      if (Ov1 || Ov2)
-        return EvalValue::poison();
-      else
-        return Res1;
-    }
+    case Inst::MulNW:
+      return evaluateMulNW(ARG0, ARG1);
 
     case Inst::UDivExact:
       if (ARG1 == 0)

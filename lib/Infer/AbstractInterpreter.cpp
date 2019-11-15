@@ -382,13 +382,10 @@ namespace souper {
 
   bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
     return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst *instr) {
-                              if (ConsiderConsts && isReservedConst(instr))
-                                return true;
-                              if (ConsiderHoles && isHole(instr))
-                                return true;
-
-                              return false;
-                            });
+        return
+          (ConsiderConsts && isReservedConst(instr)) ||
+          (ConsiderHoles && isHole(instr));
+      });
   }
 
   // Tries to get the concrete value from @I
@@ -498,14 +495,11 @@ namespace souper {
       Result = BinaryTransferFunctionsKB::subnsw(KB0, KB1);
       break;
     case Inst::Mul:
+    case Inst::MulNSW:
+    case Inst::MulNUW:
+    case Inst::MulNW:
       Result = BinaryTransferFunctionsKB::mul(KB0, KB1);
       break;
-//   case MulNSW:
-//     return "mulnsw";
-//   case MulNUW:
-//     return "mulnuw";
-//   case MulNW:
-//     return "mulnw";
     case Inst::UDiv:
       Result = BinaryTransferFunctionsKB::udiv(KB0, KB1);
       break;
