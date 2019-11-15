@@ -272,9 +272,9 @@ bool KBTesting::testTernaryFn(Inst::Kind K, size_t Op0W,
       llvm::KnownBits z(Op2W);
       do {
         InstContext IC;
-        auto Op0 = IC.getInst(Inst::Var, Op0W, {});
-        auto Op1 = IC.getInst(Inst::Var, Op1W, {});
-        auto Op2 = IC.getInst(Inst::Var, Op2W, {});
+        auto Op0 = IC.createVar(Op0W, "Op0");
+        auto Op1 = IC.createVar(Op1W, "Op1");
+        auto Op2 = IC.createVar(Op2W, "Op2");
         auto I = IC.getInst(K, WIDTH, {Op0, Op1, Op2});
         std::unordered_map<Inst *, llvm::KnownBits> C{{Op0, x}, {Op1, y}, {Op2, z}};
         KnownBitsAnalysis KB(C);
@@ -297,17 +297,16 @@ bool KBTesting::testFn(Inst::Kind K, size_t Op0W, size_t Op1W) {
     llvm::KnownBits y(Op1W);
     do {
       InstContext IC;
-      auto Op0 = IC.getInst(Inst::Var, Op0W, {});
-      auto Op1 = IC.getInst(Inst::Var, Op1W, {});
+      auto Op0 = IC.createVar(Op0W, "Op0");
+      auto Op1 = IC.createVar(Op1W, "Op1");
       auto I = IC.getInst(K, WIDTH, {Op0, Op1});
       std::unordered_map<Inst *, llvm::KnownBits> C{{Op0, x}, {Op1, y}};
       KnownBitsAnalysis KB(C);
       ConcreteInterpreter BlankCI;
       auto Calculated = KB.findKnownBits(I, BlankCI, false);
       EvalValueKB Expected = bruteForce(x, y, K);
-      if (!testKB(Calculated, Expected, K, {x, y})) {
+      if (!testKB(Calculated, Expected, K, {x, y}))
         return false;
-      }
     } while(nextKB(y));
   } while(nextKB(x));
 
