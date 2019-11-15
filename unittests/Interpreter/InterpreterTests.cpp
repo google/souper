@@ -39,17 +39,33 @@ TEST(InterpreterTests, KBTransferFunctions) {
   KBTesting kbObj;
   ASSERT_TRUE(kbObj.testFn(Inst::Add));
   ASSERT_TRUE(kbObj.testFn(Inst::AddNSW));
+  ASSERT_TRUE(kbObj.testFn(Inst::AddNUW));
+  ASSERT_TRUE(kbObj.testFn(Inst::AddNW));
   ASSERT_TRUE(kbObj.testFn(Inst::Sub));
   ASSERT_TRUE(kbObj.testFn(Inst::SubNSW));
+  ASSERT_TRUE(kbObj.testFn(Inst::SubNUW));
+  ASSERT_TRUE(kbObj.testFn(Inst::SubNW));
   ASSERT_TRUE(kbObj.testFn(Inst::Mul));
-  ASSERT_TRUE(kbObj.testFn(Inst::UDiv));
-  ASSERT_TRUE(kbObj.testFn(Inst::URem));
+  ASSERT_TRUE(kbObj.testFn(Inst::MulNSW));
+  ASSERT_TRUE(kbObj.testFn(Inst::MulNUW));
+  ASSERT_TRUE(kbObj.testFn(Inst::MulNW));
+  //ASSERT_TRUE(kbObj.testFn(Inst::UDiv));           //// FIXME -- support all of these!
+  //ASSERT_TRUE(kbObj.testFn(Inst::SDiv));
+  //ASSERT_TRUE(kbObj.testFn(Inst::UDivExact));
+  //ASSERT_TRUE(kbObj.testFn(Inst::SDivExact));
+  //ASSERT_TRUE(kbObj.testFn(Inst::URem));
+  //ASSERT_TRUE(kbObj.testFn(Inst::SRem));
   ASSERT_TRUE(kbObj.testFn(Inst::And));
   ASSERT_TRUE(kbObj.testFn(Inst::Or));
   ASSERT_TRUE(kbObj.testFn(Inst::Xor));
   ASSERT_TRUE(kbObj.testFn(Inst::Shl));
+  //ASSERT_TRUE(kbObj.testFn(Inst::ShlNSW));
+  //ASSERT_TRUE(kbObj.testFn(Inst::ShlNUW));
+  //ASSERT_TRUE(kbObj.testFn(Inst::ShlNW));
   ASSERT_TRUE(kbObj.testFn(Inst::LShr));
+  //ASSERT_TRUE(kbObj.testFn(Inst::LShrExact));
   ASSERT_TRUE(kbObj.testFn(Inst::AShr));
+  //ASSERT_TRUE(kbObj.testFn(Inst::AShrExact));
   ASSERT_TRUE(kbObj.testFn(Inst::Eq));
   ASSERT_TRUE(kbObj.testFn(Inst::Ne));
   ASSERT_TRUE(kbObj.testFn(Inst::Ult));
@@ -71,8 +87,12 @@ TEST(InterpreterTests, RBTransferFunctions) {
   RBTesting rbObj;
   ASSERT_TRUE(rbObj.testFn(Inst::Add, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::AddNSW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::AddNUW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::AddNW, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::Sub, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::SubNSW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::SubNUW, CheckRBPrecision));
+  ASSERT_TRUE(rbObj.testFn(Inst::SubNW, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::Mul, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::UDiv, CheckRBPrecision));
   ASSERT_TRUE(rbObj.testFn(Inst::URem, CheckRBPrecision));
@@ -147,7 +167,7 @@ TEST(InterpreterTests, ConcreteCache) {
   InstContext IC;
 
   Inst *I1 = IC.getConst(llvm::APInt(8, 0xFF));
-  Inst *I2 = IC.getInst(Inst::Var, 8, {});
+  Inst *I2 = IC.createVar(8, "");
   Inst *I3 = IC.getInst(Inst::Or, 8, {I1, I2});
 
   ValueCache InputValues = {{I2, APInt(8, 0x00)}};

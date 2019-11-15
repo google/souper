@@ -382,13 +382,10 @@ namespace souper {
 
   bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
     return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst *instr) {
-                              if (ConsiderConsts && isReservedConst(instr))
-                                return true;
-                              if (ConsiderHoles && isHole(instr))
-                                return true;
-
-                              return false;
-                            });
+        return
+          (ConsiderConsts && isReservedConst(instr)) ||
+          (ConsiderHoles && isHole(instr));
+      });
   }
 
   // Tries to get the concrete value from @I
@@ -498,14 +495,11 @@ namespace souper {
       Result = BinaryTransferFunctionsKB::subnsw(KB0, KB1);
       break;
     case Inst::Mul:
+    case Inst::MulNSW:
+    case Inst::MulNUW:
+    case Inst::MulNW:
       Result = BinaryTransferFunctionsKB::mul(KB0, KB1);
       break;
-//   case MulNSW:
-//     return "mulnsw";
-//   case MulNUW:
-//     return "mulnuw";
-//   case MulNW:
-//     return "mulnw";
     case Inst::UDiv:
       Result = BinaryTransferFunctionsKB::udiv(KB0, KB1);
       break;
@@ -901,9 +895,15 @@ namespace souper {
       // TODO Pick a better strategy. This one chooses the DFS winner.
     } else switch (I->K) {
       case Inst::And :
-      case Inst::Or : Result = RB0 | RB1; break;
-      case Inst::Xor : Result = RB0 & RB1; break;
+        Result = RB0 | RB1;
+        break;
+      case Inst::Or :
+      case Inst::Xor :
+        Result = RB0 & RB1;
+        break;
 
+      // any unrestricted bit in either input makes the output
+      // unrestricted
       case Inst::Eq :
       case Inst::Ne :
         if (RB0.isAllOnesValue() && RB1.isAllOnesValue())
@@ -914,18 +914,12 @@ namespace souper {
 
       // unrestricted if one of the inputs is unrestricted
       case Inst::Add :
-      case Inst::Sub : {
-        if (RB0 == 0) {
-          Result = RB0;
-        } else if (RB1 == 0) {
-          Result = RB1;
-        }
-
-        if (Inst::isCmp(I->K) && Result.getBitWidth() > 1)
-          Result = Result.trunc(1);
-
+      case Inst::AddNSW :
+      case Inst::AddNUW :
+      case Inst::AddNW :
+      case Inst::Sub :
+        Result = RB0 & RB1;
         break;
-      }
 
       case Inst::BitReverse : Result = RB0.reverseBits(); break;
       case Inst::Trunc : Result = RB0.trunc(I->Width); break;

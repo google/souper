@@ -157,8 +157,14 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
   case Inst::Mul:
     res = EvalValue(xc * yc);
     break;
-  case Inst::UDiv:
-    res = evaluateUDiv(xc, yc);
+  case Inst::MulNSW:
+    res = evaluateMulNSW(xc, yc);
+    break;
+  case Inst::MulNUW:
+    res = evaluateMulNUW(xc, yc);
+    break;
+  case Inst::MulNW:
+    res = evaluateMulNW(xc, yc);
     break;
   case Inst::URem:
     res = evaluateURem(xc, yc);
@@ -206,7 +212,8 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
     res = EvalValue(rc);
     break;
   default:
-    report_fatal_error("unhandled case in bruteForce!");
+    report_fatal_error("unhandled case " + (std::string)Inst::getKindName(Pred) +
+                       " in bruteForce!");
   }
   return res;
 }
@@ -272,9 +279,9 @@ bool KBTesting::testTernaryFn(Inst::Kind K, size_t Op0W,
       llvm::KnownBits z(Op2W);
       do {
         InstContext IC;
-        auto Op0 = IC.getInst(Inst::Var, Op0W, {});
-        auto Op1 = IC.getInst(Inst::Var, Op1W, {});
-        auto Op2 = IC.getInst(Inst::Var, Op2W, {});
+        auto Op0 = IC.createVar(Op0W, "Op0");
+        auto Op1 = IC.createVar(Op1W, "Op1");
+        auto Op2 = IC.createVar(Op2W, "Op2");
         auto I = IC.getInst(K, WIDTH, {Op0, Op1, Op2});
         std::unordered_map<Inst *, llvm::KnownBits> C{{Op0, x}, {Op1, y}, {Op2, z}};
         KnownBitsAnalysis KB(C);
@@ -297,17 +304,16 @@ bool KBTesting::testFn(Inst::Kind K, size_t Op0W, size_t Op1W) {
     llvm::KnownBits y(Op1W);
     do {
       InstContext IC;
-      auto Op0 = IC.getInst(Inst::Var, Op0W, {});
-      auto Op1 = IC.getInst(Inst::Var, Op1W, {});
+      auto Op0 = IC.createVar(Op0W, "Op0");
+      auto Op1 = IC.createVar(Op1W, "Op1");
       auto I = IC.getInst(K, WIDTH, {Op0, Op1});
       std::unordered_map<Inst *, llvm::KnownBits> C{{Op0, x}, {Op1, y}};
       KnownBitsAnalysis KB(C);
       ConcreteInterpreter BlankCI;
       auto Calculated = KB.findKnownBits(I, BlankCI, false);
       EvalValueKB Expected = bruteForce(x, y, K);
-      if (!testKB(Calculated, Expected, K, {x, y})) {
+      if (!testKB(Calculated, Expected, K, {x, y}))
         return false;
-      }
     } while(nextKB(y));
   } while(nextKB(x));
 
@@ -629,10 +635,11 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       }
       Stats.first++;
       if (fail) {
+        llvm::outs() << Inst::getKindName(K) << ":\t";
         llvm::outs() << "Inputs: " << marshall(Expr->Ops[0]->Width, RB0) << ", "
                                    << marshall(Expr->Ops[1]->Width, RB1) << "\n";
         llvm::outs() << "Computed:   " << marshall(EffectiveWidth, RBComputed) << "\n";
-        llvm::outs() << "Exhaustive: " << marshall(EffectiveWidth, RBExhaustive) << "\n";
+        llvm::outs() << "Exhaustive: " << marshall(EffectiveWidth, RBExhaustive) << " <-- UNSOUND!!!!\n";
         return false;
       }
       if (CheckPrecision) {
