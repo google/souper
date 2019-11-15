@@ -907,8 +907,6 @@ namespace souper {
       // unrestricted if one of the inputs is unrestricted
       case Inst::Ne :
       case Inst::Eq :
-      case Inst::Ule :
-      case Inst::Sle :
       case Inst::Add :
       case Inst::Sub : {
         if (RB0 == 0) {
@@ -943,8 +941,8 @@ namespace souper {
       // TODO Verify if N(S/U)?W variants fit in this category
       case Inst::Mul :
       case Inst::SDiv : case Inst::UDiv : case Inst::SRem : case Inst::URem :
-      case Inst::Slt : case Inst::Ult : case Inst::LShr : case Inst::AShr :
-      case Inst::Shl : {
+      case Inst::Slt : case Inst::Ult : case Inst::Sle : case Inst::Ule :
+      case Inst::LShr : case Inst::AShr : case Inst::Shl : {
         if (RB0 == 0 && RB1 == 0) {
           Result = AllZeroes;
         }

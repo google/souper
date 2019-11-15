@@ -595,12 +595,12 @@ std::string marshall(size_t W, llvm::APInt Result) {
 
 bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
   llvm::APInt RB0(WIDTH, 0);
-  llvm::APInt RB1(WIDTH, 0);
   InstContext IC;
   Inst *X = IC.createVar(WIDTH, "X");
   Inst *Y = IC.createVar(WIDTH, "Y");
   std::pair<size_t, size_t> Stats;
   do {
+    llvm::APInt RB1(WIDTH, 0);
     do {
       auto EffectiveWidth = WIDTH;
       if (K == Inst::Eq || K == Inst::Ne || K == Inst::Sle
