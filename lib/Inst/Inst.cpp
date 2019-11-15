@@ -713,6 +713,9 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
 Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
                            const std::vector<Inst *> &Ops,
                            llvm::APInt DemandedBits, bool Available) {
+  if (K == Inst::Var)
+    llvm::report_fatal_error("Use createVar() to make a var, not getInst()");
+
   std::vector<Inst *> OrderedOps;
 
   const std::vector<Inst *> *InstOps;
