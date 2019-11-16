@@ -945,11 +945,19 @@ namespace souper {
         Result = RB0;
         break;
 
+      case Inst::Ule:
+        Result = RB0.isAllOnesValue();
+        break;
+
+      case Inst::Ult :
+        Result = RB1.isAllOnesValue();
+        break;
+
       // Only unrestricted if both inputs are unrestricted
       // TODO Verify if N(S/U)?W variants fit in this category
       case Inst::Mul :
       case Inst::SDiv : case Inst::UDiv : case Inst::SRem : case Inst::URem :
-      case Inst::Slt : case Inst::Ult : case Inst::Sle : case Inst::Ule : {
+      case Inst::Slt : case Inst::Sle : {
         if (RB0 == 0 && RB1 == 0) {
           Result = AllZeroes;
         }
