@@ -937,12 +937,19 @@ namespace souper {
         break;
       }
 
+      case Inst::Shl:
+      case Inst::ShlNSW:
+      case Inst::ShlNUW:
+      case Inst::LShr:
+      case Inst::AShr:
+        Result = RB0;
+        break;
+
       // Only unrestricted if both inputs are unrestricted
       // TODO Verify if N(S/U)?W variants fit in this category
       case Inst::Mul :
       case Inst::SDiv : case Inst::UDiv : case Inst::SRem : case Inst::URem :
-      case Inst::Slt : case Inst::Ult : case Inst::Sle : case Inst::Ule :
-      case Inst::LShr : case Inst::AShr : case Inst::Shl : {
+      case Inst::Slt : case Inst::Ult : case Inst::Sle : case Inst::Ule : {
         if (RB0 == 0 && RB1 == 0) {
           Result = AllZeroes;
         }
