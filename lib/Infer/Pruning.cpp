@@ -119,9 +119,35 @@ std::pair<llvm::APInt, llvm::APInt> knownBitsNarrowing
   return {KnownNotZero, KnownNotOne};
 }
 
+std::unordered_map<Inst *, llvm::APInt>
+PruningManager::computeInputRestrictions() {
+  std::unordered_map<Inst *, std::pair<llvm::APInt, llvm::APInt>> Seen;
+  // ^ SeenZero, SeenOne
+
+  for (auto &&V : InputVars) {
+    Seen[V].first = llvm::APInt(V->Width, 0);
+    Seen[V].second = llvm::APInt(V->Width, 0);
+  }
+
+  for (auto &&VC : InputVals) {
+    for (auto &&V : InputVars) {
+      if (VC[V].hasValue()) {
+        auto Val = VC[V].getValue();
+        Seen[V].first |= ~Val;
+        Seen[V].second |= Val;
+      }
+    }
+  }
+  std::unordered_map<Inst *, llvm::APInt> Result;
+  for (auto &&V : InputVars) {
+    Result[V] = ~(Seen[V].first & Seen[V].second);
+  }
+  return Result;
+}
+
 // TODO : Comment out debug stmts and conditions before benchmarking
 bool PruningManager::isInfeasible(souper::Inst *RHS,
-                                 unsigned StatsLevel) {
+                                  unsigned StatsLevel) {
   bool HasHole = !isConcrete(RHS, false, true);
   bool RHSIsConcrete = isConcrete(RHS);
 
@@ -133,15 +159,25 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
   getConstants(RHS, Constants);
 
   if (!Constants.empty()) {
-    auto RestrictedBits = RestrictedBitsAnalysis().findRestrictedBits(RHS);
-    if ((~RestrictedBits & (LHSKnownBitsNoSpec.Zero | LHSKnownBitsNoSpec.One)) != 0) {
-//     if (RestrictedBits == 0 && (LHSKB.Zero != 0 || LHSKB.One != 0)) {
-      if (StatsLevel > 2) {
-        llvm::errs() << "  pruned using restricted bits analysis.\n";
-        llvm::errs() << "  LHSKB : " << KnownBitsAnalysis::knownBitsString(LHSKnownBitsNoSpec) << "\n";
-        llvm::errs() << "  RB    : " << RestrictedBits.toString(2, false) << "\n";
+    auto RBA = RestrictedBitsAnalysis();
+    if (!SC.PCs.empty()) {
+      // `Unrestricts` bits for which PC validated inputs
+      // have both zero and one values. Default is all `restricted`
+      // Instead of treating inputs as completely unrestricted,
+      // this imposes restrictions on inputs if there are no valid
+      // inputs to demonstrate otherwise.
+      RBA.RBCache = computeInputRestrictions();
+    }
+    if (SC.PCs.empty() || !InputVals.empty()) {
+      auto RestrictedBits = RBA.findRestrictedBits(RHS);
+      if ((~RestrictedBits & (LHSKnownBitsNoSpec.Zero | LHSKnownBitsNoSpec.One)) != 0) {
+        if (StatsLevel > 2) {
+          llvm::errs() << "  pruned using restricted bits analysis.\n";
+          llvm::errs() << "  LHSKB : " << KnownBitsAnalysis::knownBitsString(LHSKnownBitsNoSpec) << "\n";
+          llvm::errs() << "  RB    : " << RestrictedBits.toString(2, false) << "\n";
+        }
+        return true;
       }
-      return true;
     }
 
 //     auto LHSCR = ConstantRangeAnalysis().findConstantRange(SC.LHS, BlankCI, false);
