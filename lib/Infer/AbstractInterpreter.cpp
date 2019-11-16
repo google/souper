@@ -949,36 +949,48 @@ namespace souper {
         Result = RB0.isAllOnesValue();
         break;
 
-      case Inst::Ult :
+      case Inst::Ult:
         Result = RB1.isAllOnesValue();
+        break;
+
+      case Inst::Slt:
+        Result =
+          RB0.isNegative() &&
+          (RB1.isAllOnesValue() || RB1.isMaxSignedValue());
+        break;
+
+      case Inst::Sle:
+        Result =
+          RB1.isNegative() &&
+          (RB0.isAllOnesValue() || RB0.isMaxSignedValue());
         break;
 
       // Only unrestricted if both inputs are unrestricted
       // TODO Verify if N(S/U)?W variants fit in this category
-      case Inst::Mul :
-      case Inst::SDiv : case Inst::UDiv : case Inst::SRem : case Inst::URem :
-      case Inst::Slt : case Inst::Sle : {
+      case Inst::Mul:
+      case Inst::SDiv:
+      case Inst::UDiv:
+      case Inst::SRem:
+      case Inst::URem:
         if (RB0 == 0 && RB1 == 0) {
           Result = AllZeroes;
         }
         break;
-      }
 
       // Only log2(Width) low bits can be unrestricted
-      case Inst::Ctlz :
-      case Inst::Cttz :
-      case Inst::CtPop : {
+      case Inst::Ctlz:
+      case Inst::Cttz:
+      case Inst::CtPop:
         if (RB0 == 0) {
           Result = AllZeroes;
           Result.setHighBits(I->Width - Log2_64(I->Width));
           // TODO Check for off by one issues
         }
         break;
-      }
-
+ 
       default : break; // TODO more precise transfer functions
     }
-    if (I->K != Inst::Kind::Var) {
+    if (I->K != Inst::Var) {
       RBCache[I] = Result;
     }
     return Result;
