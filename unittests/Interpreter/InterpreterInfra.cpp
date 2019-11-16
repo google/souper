@@ -298,14 +298,14 @@ bool KBTesting::testTernaryFn(Inst::Kind K, size_t Op0W,
   return true;
 }
 
-bool KBTesting::testFn(Inst::Kind K, size_t Op0W, size_t Op1W) {
-  llvm::KnownBits x(Op0W);
+bool KBTesting::testFn(Inst::Kind K) {
+  llvm::KnownBits x(WIDTH);
   do {
-    llvm::KnownBits y(Op1W);
+    llvm::KnownBits y(WIDTH);
     do {
       InstContext IC;
-      auto Op0 = IC.createVar(Op0W, "Op0");
-      auto Op1 = IC.createVar(Op1W, "Op1");
+      auto Op0 = IC.createVar(WIDTH, "Op0");
+      auto Op1 = IC.createVar(WIDTH, "Op1");
       auto I = IC.getInst(K, WIDTH, {Op0, Op1});
       std::unordered_map<Inst *, llvm::KnownBits> C{{Op0, x}, {Op1, y}};
       KnownBitsAnalysis KB(C);
@@ -513,7 +513,7 @@ bool RBTesting::nextRB(llvm::APInt &Val) {
   }
 }
 
-std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt X) {
+std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt X, int WIDTH) {
   std::vector<llvm::APInt> Result;
   Result.push_back(llvm::APInt(WIDTH, 0));
 
@@ -529,7 +529,7 @@ std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt X) {
 }
 
 // Probably refactor to unify these two
-std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X) {
+std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X, int WIDTH) {
   std::vector<llvm::APInt> Result;
   Result.push_back(llvm::APInt(WIDTH, 0));
 
@@ -544,17 +544,18 @@ std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X) {
   return Result;
 }
 
-llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY) {
+llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY,
+                         int WIDTH) {
   llvm::APInt RB(WIDTH, 0);
 
-  auto XPartial = explodeRestrictedBits(RBX);
-  auto YPartial = explodeRestrictedBits(RBY);
+  auto XPartial = explodeRestrictedBits(RBX, WIDTH);
+  auto YPartial = explodeRestrictedBits(RBY, WIDTH);
 
   for (auto P0 : XPartial) {
     for (auto P1 : YPartial) {
 
-      auto I0 = explodeUnrestrictedBits(P0);
-      auto I1 = explodeUnrestrictedBits(P1);
+      auto I0 = explodeUnrestrictedBits(P0, WIDTH);
+      auto I1 = explodeUnrestrictedBits(P1, WIDTH);
 
       std::map<int, std::pair<bool, bool>> Seen;
 
@@ -616,7 +617,7 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       auto Expr = IC.getInst(K, EffectiveWidth, {X, Y});
       RestrictedBitsAnalysis RBA{{{X, RB0}, {Y, RB1}}};
       auto RBComputed = RBA.findRestrictedBits(Expr);
-      auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1);
+      auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1, WIDTH);
       bool fail = false;
       bool FoundMorePrecise = false;
       for (int i = 0; i < Expr->Width ; ++i) {

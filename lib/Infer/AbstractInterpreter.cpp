@@ -965,16 +965,23 @@ namespace souper {
           (RB0.isAllOnesValue() || RB0.isMaxSignedValue());
         break;
 
+      case Inst::URem:
+      case Inst::SRem:
+        if (I->Width == 1) {
+          Result = APInt(1, 1);
+        } else {
+          if (RB0 == 0 && RB1 == 0)
+            Result = AllZeroes;
+        }
+        break;
+
       // Only unrestricted if both inputs are unrestricted
       // TODO Verify if N(S/U)?W variants fit in this category
       case Inst::Mul:
       case Inst::SDiv:
       case Inst::UDiv:
-      case Inst::SRem:
-      case Inst::URem:
-        if (RB0 == 0 && RB1 == 0) {
+        if (RB0 == 0 && RB1 == 0)
           Result = AllZeroes;
-        }
         break;
 
       // Only log2(Width) low bits can be unrestricted
