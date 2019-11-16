@@ -24,7 +24,7 @@
 #include <bitset>
 
 // width used for transfer function tests
-constexpr int WIDTH = 4;
+constexpr int WIDTH = 3;
 
 namespace souper {
 
