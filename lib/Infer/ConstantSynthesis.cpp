@@ -24,6 +24,9 @@ extern unsigned DebugLevel;
 
 namespace {
   using namespace llvm;
+  static cl::opt<bool> EnableConcreteInterpreter("souper-constant-synthesis-use-concrete-interpreter",
+    cl::desc("Use concrete interpreter in constant synthesis (default=false)"),
+    cl::init(false));
   static cl::opt<unsigned> MaxSpecializations("souper-constant-synthesis-max-num-specializations",
     cl::desc("Maximum number of input specializations in constant synthesis (default=15)."),
     cl::init(15));
@@ -201,17 +204,24 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
         }
       }
 
-      ConcreteInterpreter CI(LHSCopy, VC);
-      auto LHSV = CI.evaluateInst(LHSCopy);
-
-      if (!LHSV.hasValue()) {
-        llvm::report_fatal_error("the model returned from second query evaluates to poison for LHS");
-      }
-
+      Inst *ConcreteLHS = nullptr;
       std::map<Inst *, Inst *> InstCache;
       std::map<Block *, Block *> BlockCache;
+      if (EnableConcreteInterpreter) {
+        ConcreteInterpreter CI(LHSCopy, VC);
+        auto LHSV = CI.evaluateInst(LHSCopy);
+
+        if (!LHSV.hasValue()) {
+          llvm::report_fatal_error("the model returned from second query evaluates to poison for LHS");
+        }
+        ConcreteLHS = IC.getConst(LHSV.getValue());
+      } else {
+        ConcreteLHS = getInstCopy(Mapping.LHS, IC, InstCache,
+                                  BlockCache, &SubstConstMap, true);
+      }
+
       SubstAnte = IC.getInst(Inst::And, 1,
-                             {IC.getInst(Inst::Eq, 1, {IC.getConst(LHSV.getValue()),
+                             {IC.getInst(Inst::Eq, 1, {ConcreteLHS,
                                                        getInstCopy(Mapping.RHS, IC, InstCache,
                                                                    BlockCache, &SubstConstMap, true)}),
                               SubstAnte});
