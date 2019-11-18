@@ -903,28 +903,17 @@ namespace souper {
         Result = RB0 & RB1;
         break;
 
-      // any unrestricted bit in either input makes the output
-      // unrestricted
       case Inst::Eq :
-      case Inst::Ne :
-        if (RB0.isAllOnesValue() && RB1.isAllOnesValue())
-          Result = APInt(1, 1);
-        else
-          Result = APInt(1, 0);
+      case Inst::Ne : {
+        Result = (RB0 & RB1) != 0;
         break;
+      }
 
       // unrestricted if one of the inputs is unrestricted
       case Inst::Add :
       case Inst::Sub :
         Result = RB0 & RB1;
         break;
-      case Inst::AddNSW :
-//       case Inst::AddNUW :
-//       case Inst::AddNW :
-        Result = RB0 & RB1;
-        Result.setBit(0);
-        Result.setBit(I->Width - 1);
-      break;
 
       case Inst::BitReverse : Result = RB0.reverseBits(); break;
       case Inst::Trunc : Result = RB0.trunc(I->Width); break;
@@ -967,6 +956,12 @@ namespace souper {
       case Inst::LShr:
       case Inst::ShlNSW:
       case Inst::ShlNUW:
+      case Inst::AddNSW:
+      case Inst::AddNUW:
+      case Inst::AddNW:
+      case Inst::SubNSW:
+      case Inst::SubNUW:
+      case Inst::SubNW:
         if (RB0 == 0 && RB1 == 0)
           Result = AllZeroes;
         break;
