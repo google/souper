@@ -787,6 +787,10 @@ bool Inst::isCmp(Inst::Kind K) {
     K == Inst::Slt || K == Inst::Ule || K == Inst::Sle;
 }
 
+bool Inst::isTernary(Inst::Kind K) {
+  return K == Inst::Select || K == Inst::FShl || K == Inst::FShr;
+}
+
 bool Inst::isOverflowIntrinsicMain(Kind K) {
   return K == Inst::SAddWithOverflow || K == Inst::UAddWithOverflow ||
          K == Inst::SSubWithOverflow || K == Inst::USubWithOverflow ||

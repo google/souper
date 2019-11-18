@@ -127,7 +127,9 @@ TEST(InterpreterTests, RBTransferFunctions) {
     ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Slt, CheckRBPrecision));
     ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Ule, CheckRBPrecision));
     ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Sle, CheckRBPrecision));
-    // TODO Ternary instructions
+    ASSERT_TRUE_FAKE(rbObj.testFnTernary(Inst::Select, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFnTernary(Inst::FShl, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFnTernary(Inst::FShr, CheckRBPrecision));
 #undef ASSERT_TRUE_FAKE
   }
   for (auto B : Results) {

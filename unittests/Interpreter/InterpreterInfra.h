@@ -62,6 +62,7 @@ namespace souper {
     public:
       RBTesting(int _WIDTH) : WIDTH(_WIDTH) {}
       bool testFn(Inst::Kind K, bool CheckPrecision);
+      bool testFnTernary(Inst::Kind K, bool CheckPrecision);
       static bool nextRB(llvm::APInt &Val);
     };
 
