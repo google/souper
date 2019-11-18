@@ -158,6 +158,7 @@ struct Inst : llvm::FoldingSetNode {
 
   static bool isAssociative(Kind K);
   static bool isCmp(Kind K);
+  static bool isTernary(Kind K);
 
   static bool isOverflowIntrinsicMain(Kind K);
   static bool isOverflowIntrinsicSub(Kind K);

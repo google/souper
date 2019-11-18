@@ -552,50 +552,58 @@ std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X, int WIDTH) {
   return Result;
 }
 
-llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY,
+llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, Inst *Z, llvm::APInt RBX, llvm::APInt RBY, llvm::APInt RBZ,
                          int WIDTH) {
   llvm::APInt RB(WIDTH, 0);
   auto XPartial = explodeRestrictedBits(RBX, X->Width);
   auto YPartial = explodeRestrictedBits(RBY, Y->Width);
+  std::vector<llvm::APInt> ZPartial(1, {1, 0});
+  if (Inst::isTernary(I->K))
+    ZPartial = explodeRestrictedBits(RBZ, Z->Width);
   int cases = 0;
   for (auto P0 : XPartial) {
     for (auto P1 : YPartial) {
-
-      if (DebugMode) {
-        llvm::outs() << "Restricted EXP: " << getPaddedBinaryString(P0) << "\t"
-                    << getPaddedBinaryString(P1) << "\n";
-      }
-
-      auto I0 = explodeUnrestrictedBits(P0 | RBX, X->Width);
-      auto I1 = explodeUnrestrictedBits(P1 | RBY, Y->Width);
-
-      std::map<int, std::pair<bool, bool>> Seen;
-
-      for (auto i0 : I0) {
-        for (auto i1 : I1) {
-          if (DebugMode) {
-            llvm::outs() << "Unrestricted EXP: " << getPaddedBinaryString(i0) << "\t"
-                         << getPaddedBinaryString(i1) << "\n";
-          }
-          ++cases;
-          ValueCache C = {{{X, i0}, {Y, i1}}};
-          ConcreteInterpreter Interp(C);
-          auto Val_ = Interp.evaluateInst(I);
-          if (!Val_.hasValue()) {
-            continue;
-          }
-          auto Val = Val_.getValue();
-
-          for (int i = 0; i < WIDTH; ++i) {
-            if ((Val & (1 << i)) == 0) Seen[i].first = true;
-            if ((Val & (1 << i)) != 0) Seen[i].second = true;
-          }
-
+      for (auto P2 : ZPartial) {
+        if (DebugMode) {
+          llvm::outs() << "Restricted EXP: " << getPaddedBinaryString(P0) << "\t"
+                       << getPaddedBinaryString(P1) << "\n";
         }
-      }
-      for (int i = 0 ; i < WIDTH; ++i) {
-        if (!Seen[i].first || !Seen[i].second) {
-          RB = RB | (1 << i);
+
+        auto I0 = explodeUnrestrictedBits(P0 | RBX, X->Width);
+        auto I1 = explodeUnrestrictedBits(P1 | RBY, Y->Width);
+        std::vector<llvm::APInt> I2(1, {1, 0});
+        if (Inst::isTernary(I->K))
+          I2 = explodeUnrestrictedBits(P2 | RBZ, Z->Width);
+        std::map<int, std::pair<bool, bool>> Seen;
+
+        for (auto i0 : I0) {
+          for (auto i1 : I1) {
+            for (auto i2 : I2) {
+              if (DebugMode) {
+                llvm::outs() << "Unrestricted EXP: " << getPaddedBinaryString(i0) << "\t"
+                             << getPaddedBinaryString(i1) << "\n";
+              }
+              ++cases;
+              ValueCache C = {{{X, i0}, {Y, i1}}};
+              if (Inst::isTernary(I->K))
+                C[Z] = i2;
+              ConcreteInterpreter Interp(C);
+              auto Val_ = Interp.evaluateInst(I);
+              if (!Val_.hasValue()) {
+                continue;
+              }
+              auto Val = Val_.getValue();
+              for (int i = 0; i < WIDTH; ++i) {
+                if ((Val & (1 << i)) == 0) Seen[i].first = true;
+                if ((Val & (1 << i)) != 0) Seen[i].second = true;
+              }
+            }
+          }
+        }
+        for (int i = 0; i < WIDTH; ++i) {
+          if (!Seen[i].first || !Seen[i].second) {
+            RB = RB | (1 << i);
+          }
         }
       }
     }
@@ -610,70 +618,86 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
   llvm::APInt RB0(WIDTH, 0);
   InstContext IC;
   Inst *X = IC.createVar(WIDTH, "X");
+  if (K == Inst::Select) {
+    X = IC.createVar(1, "X");
+    RB0 = llvm::APInt(1, 0);
+  }
   Inst *Y = IC.createVar(WIDTH, "Y");
+  Inst *Z = IC.createVar(WIDTH, "Z");
   std::pair<size_t, size_t> Stats;
   do {
     llvm::APInt RB1(WIDTH, 0);
     do {
-      auto EffectiveWidth = WIDTH;
-      if (K == Inst::Eq || K == Inst::Ne || K == Inst::Sle
-          || K == Inst::Slt || K == Inst::Ule || K == Inst::Ult) {
-        EffectiveWidth = 1;
-      }
-      auto Expr = IC.getInst(K, EffectiveWidth, {X, Y});
-      RestrictedBitsAnalysis RBA{{{X, RB0}, {Y, RB1}}};
+      llvm::APInt RB2(WIDTH, 0);
+      do {
+        if (!Inst::isTernary(K) && !RB2.isNullValue())
+          continue;
+        auto EffectiveWidth = WIDTH;
+        if (K == Inst::Eq || K == Inst::Ne || K == Inst::Sle
+            || K == Inst::Slt || K == Inst::Ule || K == Inst::Ult) {
+          EffectiveWidth = 1;
+        }
+        std::vector<Inst *> Ops = {X, Y};
+        std::unordered_map<Inst *, llvm::APInt> RBCache = {{X, RB0},
+                                                           {Y, RB1}};
+        if (Inst::isTernary(K)) {
+          Ops.push_back(Z);
+          RBCache[Z] = RB2;
+        }
+        auto Expr = IC.getInst(K, EffectiveWidth, Ops);
+        RestrictedBitsAnalysis RBA{RBCache};
 
-      if (DebugMode) {
-        llvm::outs() << "RBInputs : " << getPaddedBinaryString(RB0) << "\t"
-                     << getPaddedBinaryString(RB1) << "\n";
-      }
-      auto RBComputed = RBA.findRestrictedBits(Expr);
-      auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1, EffectiveWidth);
-      bool fail = false;
-      bool FoundMorePrecise = false;
-      for (int i = 0; i < Expr->Width ; ++i) {
-        if ((RBComputed & (1 << i)) == 0) {
-          if ((RBExhaustive & (1 << i)) != 0) {
-            fail = true;
+        if (DebugMode) {
+          llvm::outs() << "RBInputs : " << getPaddedBinaryString(RB0) << "\t"
+                       << getPaddedBinaryString(RB1);
+          if (Inst::isTernary(K))
+            llvm::outs() << '\t' << getPaddedBinaryString(RB2);
+          llvm::outs() << '\n';
+        }
+
+        auto RBComputed = RBA.findRestrictedBits(Expr);
+        auto RBExhaustive = exhaustiveRB(Expr, X, Y, Z, RB0, RB1, RB2, EffectiveWidth);
+        bool fail = false;
+        bool FoundMorePrecise = false;
+        for (int i = 0; i < Expr->Width; ++i) {
+          if ((RBComputed & (1 << i)) == 0) {
+            if ((RBExhaustive & (1 << i)) != 0) {
+              fail = true;
+            }
+          }
+
+          if ((RBExhaustive & (1 << i)) == 0) {
+            if ((RBComputed & (1 << i)) != 0) {
+              FoundMorePrecise = true;
+            }
           }
         }
 
-        if ((RBExhaustive & (1 << i)) == 0) {
-          if ((RBComputed & (1 << i)) != 0) {
-            FoundMorePrecise = true;
+        Stats.first++;
+        if (CheckPrecision || fail) {
+          llvm::outs() << Inst::getKindName(K) << ":\t";
+          llvm::outs() << "Inputs: " << getPaddedBinaryString(RB0) << ", "
+                       << getPaddedBinaryString(RB1);
+          if (Inst::isTernary(K))
+            llvm::outs() << ", " << getPaddedBinaryString(RB2);
+          llvm::outs() << "\t";
+          llvm::outs() << "Computed:   " << getPaddedBinaryString(RBComputed) << "\t";
+          llvm::outs() << "Exhaustive: " << getPaddedBinaryString(RBExhaustive);
+          if (fail) {
+            llvm::outs() << " <-- UNSOUND!!!!\n";
+            return false;
+          } else if (FoundMorePrecise) {
+            llvm::outs() << "  <-- imprecise!";
+            Stats.second++;
           }
+          llvm::outs() << "\n";
         }
-
-      }
-      Stats.first++;
-      if (fail) {
-        llvm::outs() << Inst::getKindName(K) << ":\t";
-        llvm::outs() << "Inputs: " << getPaddedBinaryString(RB0) << ", "
-                     << getPaddedBinaryString(RB1) << "\n";
-        llvm::outs() << "Computed:   " << getPaddedBinaryString(RBComputed) << "\n";
-        llvm::outs() << "Exhaustive: " << getPaddedBinaryString(RBExhaustive) << " <-- UNSOUND!!!!\n";
-        return false;
-      }
-      if (CheckPrecision) {
-        llvm::outs() << Inst::getKindName(K) << ":\t";
-        llvm::outs() << "Inputs: " << getPaddedBinaryString(RB0) << ", "
-                     << getPaddedBinaryString(RB1) << "\t";
-        llvm::outs() << "Computed:\t" << getPaddedBinaryString(RBComputed) << "\t";
-        llvm::outs() << "Exhaustive:\t" << getPaddedBinaryString(RBExhaustive);
-        if (FoundMorePrecise) {
-          llvm::outs() << "  <-- imprecise!";
-          Stats.second++;
-        }
-        llvm::outs() << "\n";
-      }
+      } while (nextRB(RB2));
     } while (nextRB(RB1));
   } while (nextRB(RB0));
   if (CheckPrecision) {
-      llvm::outs() << "TOTAL imprecise results: " <<  Inst::getKindName(K) << " : "
-                   << Stats.second << "/" << Stats.first << "\n\n";
-  }
+    llvm::outs() << "TOTAL imprecise results: " << Inst::getKindName(K) << " : "
+                 << Stats.second << "/" << Stats.first << "\n\n";
+    }
   return true;
 }
-
-
-
