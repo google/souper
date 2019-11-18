@@ -910,10 +910,12 @@ namespace souper {
         Result = (RB0 & RB1) != 0;
         break;
 
-      // unrestricted if one of the inputs is unrestricted
+      // bivalent if one of the input bits is bivalent
+      // or the carry bit is bivalent
       case Inst::Add:
       case Inst::Sub:
         Result = RB0 & RB1;
+        Result &= ~(~RB0 + ~RB1);
         break;
 
       case Inst::BitReverse:
@@ -953,12 +955,16 @@ namespace souper {
       // Only unrestricted if both inputs are unrestricted
       // TODO Verify if N(S/U)?W variants fit in this category
       case Inst::Mul:
+      case Inst::MulNSW:
+      case Inst::MulNUW:
+      case Inst::MulNW:
       case Inst::SDiv:
       case Inst::UDiv:
       case Inst::Shl:
       case Inst::LShr:
       case Inst::ShlNSW:
       case Inst::ShlNUW:
+      case Inst::ShlNW:
       case Inst::AddNSW:
       case Inst::AddNUW:
       case Inst::AddNW:
