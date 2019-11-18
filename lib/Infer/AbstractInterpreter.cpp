@@ -895,47 +895,50 @@ namespace souper {
       // One variable can be considered unrestricted only once
       // TODO Pick a better strategy. This one chooses the DFS winner.
     } else switch (I->K) {
-      case Inst::And :
-      case Inst::Or :
+
+      case Inst::And:
+      case Inst::Or:
         Result = RB0 | RB1;
         break;
-      case Inst::Xor :
+
+      case Inst::Xor:
         Result = RB0 & RB1;
         break;
 
-      case Inst::Eq :
-      case Inst::Ne : {
+      case Inst::Eq:
+      case Inst::Ne:
         Result = (RB0 & RB1) != 0;
         break;
-      }
 
       // unrestricted if one of the inputs is unrestricted
-      case Inst::Add :
-      case Inst::Sub :
+      case Inst::Add:
+      case Inst::Sub:
         Result = RB0 & RB1;
         break;
 
-      case Inst::BitReverse : Result = RB0.reverseBits(); break;
-      case Inst::Trunc : Result = RB0.trunc(I->Width); break;
-      case Inst::BSwap : Result = RB0.byteSwap(); break;
-
-      case Inst::Select : {
-        auto Choice = std::pair{RB1, RB2};
-        if (Choice.first == 0 && Choice.second == 0) {
-          Result = AllZeroes;
-        } else if (RB0 == 0 && (Choice.first == 0 || Choice.second == 0)) {
-          Result = AllZeroes;
-        } else {
-          // nop, could be restricted
-        }
+      case Inst::BitReverse:
+        Result = RB0.reverseBits();
         break;
-      }
+
+      case Inst::Trunc:
+        Result = RB0.trunc(I->Width);
+        break;
+
+      case Inst::BSwap:
+        Result = RB0.byteSwap();
+        break;
+
+      case Inst::Select:
+        Result = (RB0 == 0) ? (RB1 & RB2) : (RB1 | RB2);
+        break;
 
       case Inst::Ule:
-      case Inst::Ult:
       case Inst::Sle:
+      case Inst::Ult:
       case Inst::Slt:
-        Result = !RB0.isAllOnesValue() || !RB1.isAllOnesValue();
+        if (RB0 == 0 && RB1 == 0)
+          Result = AllZeroes;
+        break;
 
       case Inst::URem:
       case Inst::SRem:
@@ -976,8 +979,10 @@ namespace souper {
           // TODO Check for off by one issues
         }
         break;
- 
-      default : break; // TODO more precise transfer functions
+
+      default:
+        break; // TODO more precise transfer functions
+
     }
     if (I->K != Inst::Var) {
       RBCache[I] = Result;
