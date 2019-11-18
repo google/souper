@@ -14,10 +14,17 @@
 
 #include "InterpreterInfra.h"
 
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Util/LLVMUtils.h"
+
+namespace {
+  static llvm::cl::opt<bool> DebugMode("debug-mode",
+  llvm::cl::desc("Print debugging information."),
+  llvm::cl::init(false));
+}
 
 using namespace souper;
 using namespace llvm;
@@ -516,7 +523,7 @@ bool RBTesting::nextRB(llvm::APInt &Val) {
 
 std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt X, int WIDTH) {
   std::vector<llvm::APInt> Result;
-  Result.push_back(llvm::APInt(WIDTH, 0));
+  Result.push_back(X);
 
   for (int i = 0; i < WIDTH; ++i) {
     if ( (X & (1 << i)) == 0 ) {
@@ -548,20 +555,29 @@ std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X, int WIDTH) {
 llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY,
                          int WIDTH) {
   llvm::APInt RB(WIDTH, 0);
-
-  auto XPartial = explodeRestrictedBits(RBX, WIDTH);
-  auto YPartial = explodeRestrictedBits(RBY, WIDTH);
-
+  auto XPartial = explodeRestrictedBits(RBX, X->Width);
+  auto YPartial = explodeRestrictedBits(RBY, Y->Width);
+  int cases = 0;
   for (auto P0 : XPartial) {
     for (auto P1 : YPartial) {
 
-      auto I0 = explodeUnrestrictedBits(P0, WIDTH);
-      auto I1 = explodeUnrestrictedBits(P1, WIDTH);
+      if (DebugMode) {
+        llvm::outs() << "Restricted EXP: " << getPaddedBinaryString(P0) << "\t"
+                    << getPaddedBinaryString(P1) << "\n";
+      }
+
+      auto I0 = explodeUnrestrictedBits(P0 | RBX, X->Width);
+      auto I1 = explodeUnrestrictedBits(P1 | RBY, Y->Width);
 
       std::map<int, std::pair<bool, bool>> Seen;
 
       for (auto i0 : I0) {
         for (auto i1 : I1) {
+          if (DebugMode) {
+            llvm::outs() << "Unrestricted EXP: " << getPaddedBinaryString(i0) << "\t"
+                         << getPaddedBinaryString(i1) << "\n";
+          }
+          ++cases;
           ValueCache C = {{{X, i0}, {Y, i1}}};
           ConcreteInterpreter Interp(C);
           auto Val_ = Interp.evaluateInst(I);
@@ -584,6 +600,9 @@ llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt
       }
     }
   }
+  if (DebugMode) {
+    llvm::outs() << "Cases : " << cases << "\n";
+  }
   return RB;
 }
 
@@ -603,8 +622,13 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       }
       auto Expr = IC.getInst(K, EffectiveWidth, {X, Y});
       RestrictedBitsAnalysis RBA{{{X, RB0}, {Y, RB1}}};
+
+      if (DebugMode) {
+        llvm::outs() << "RBInputs : " << getPaddedBinaryString(RB0) << "\t"
+                     << getPaddedBinaryString(RB1) << "\n";
+      }
       auto RBComputed = RBA.findRestrictedBits(Expr);
-      auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1, WIDTH);
+      auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1, EffectiveWidth);
       bool fail = false;
       bool FoundMorePrecise = false;
       for (int i = 0; i < Expr->Width ; ++i) {

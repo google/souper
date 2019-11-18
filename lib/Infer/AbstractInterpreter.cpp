@@ -896,9 +896,9 @@ namespace souper {
       // TODO Pick a better strategy. This one chooses the DFS winner.
     } else switch (I->K) {
       case Inst::And :
+      case Inst::Or :
         Result = RB0 | RB1;
         break;
-      case Inst::Or :
       case Inst::Xor :
         Result = RB0 & RB1;
         break;
@@ -915,12 +915,16 @@ namespace souper {
 
       // unrestricted if one of the inputs is unrestricted
       case Inst::Add :
-      case Inst::AddNSW :
-      case Inst::AddNUW :
-      case Inst::AddNW :
       case Inst::Sub :
         Result = RB0 & RB1;
         break;
+      case Inst::AddNSW :
+//       case Inst::AddNUW :
+//       case Inst::AddNW :
+        Result = RB0 & RB1;
+        Result.setBit(0);
+        Result.setBit(I->Width - 1);
+      break;
 
       case Inst::BitReverse : Result = RB0.reverseBits(); break;
       case Inst::Trunc : Result = RB0.trunc(I->Width); break;
@@ -938,33 +942,11 @@ namespace souper {
         break;
       }
 
-      case Inst::Shl:
-      case Inst::ShlNSW:
-      case Inst::ShlNUW:
-      case Inst::LShr:
-      case Inst::AShr:
-        Result = RB0;
-        break;
-
       case Inst::Ule:
-        Result = RB0.isAllOnesValue();
-        break;
-
       case Inst::Ult:
-        Result = RB1.isAllOnesValue();
-        break;
-
-      case Inst::Slt:
-        Result =
-          RB0.isNegative() &&
-          (RB1.isAllOnesValue() || RB1.isMaxSignedValue());
-        break;
-
       case Inst::Sle:
-        Result =
-          RB1.isNegative() &&
-          (RB0.isAllOnesValue() || RB0.isMaxSignedValue());
-        break;
+      case Inst::Slt:
+        Result = !RB0.isAllOnesValue() || !RB1.isAllOnesValue();
 
       case Inst::URem:
       case Inst::SRem:
@@ -981,6 +963,10 @@ namespace souper {
       case Inst::Mul:
       case Inst::SDiv:
       case Inst::UDiv:
+      case Inst::Shl:
+      case Inst::LShr:
+      case Inst::ShlNSW:
+      case Inst::ShlNUW:
         if (RB0 == 0 && RB1 == 0)
           Result = AllZeroes;
         break;

@@ -88,44 +88,50 @@ TEST(InterpreterTests, CRTransferFunctions) {
 }
 
 TEST(InterpreterTests, RBTransferFunctions) {
+  std::vector<bool> Results;
   for (int WIDTH = 1; WIDTH <= MAX_WIDTH; ++WIDTH) {
     RBTesting rbObj(WIDTH);
-    ASSERT_TRUE(rbObj.testFn(Inst::Add, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::AddNSW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::AddNUW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::AddNW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Sub, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::SubNSW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::SubNUW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::SubNW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Mul, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::MulNSW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::MulNUW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::MulNW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::UDiv, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::SDiv, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::UDivExact, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::SDivExact, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::URem, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::SRem, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::And, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Or, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Xor, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Shl, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::ShlNSW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::ShlNUW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::ShlNW, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::LShr, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::LShrExact, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::AShr, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::AShrExact, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Eq, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Ne, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Ult, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Slt, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Ule, CheckRBPrecision));
-    ASSERT_TRUE(rbObj.testFn(Inst::Sle, CheckRBPrecision));
+#define ASSERT_TRUE_FAKE(x) Results.push_back(x)
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Add, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::AddNSW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::AddNUW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::AddNW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Sub, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::SubNSW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::SubNUW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::SubNW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Mul, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::MulNSW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::MulNUW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::MulNW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::UDiv, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::SDiv, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::UDivExact, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::SDivExact, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::URem, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::SRem, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::And, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Or, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Xor, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Shl, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::ShlNSW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::ShlNUW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::ShlNW, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::LShr, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::LShrExact, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::AShr, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::AShrExact, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Eq, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Ne, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Ult, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Slt, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Ule, CheckRBPrecision));
+    ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Sle, CheckRBPrecision));
     // TODO Ternary instructions
+#undef ASSERT_TRUE_FAKE
+  }
+  for (auto B : Results) {
+    ASSERT_TRUE(B);
   }
 }
 
