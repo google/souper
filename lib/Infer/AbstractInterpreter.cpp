@@ -936,10 +936,15 @@ namespace souper {
       case Inst::Sle:
       case Inst::Ult:
       case Inst::Slt:
-        if (RB0 == 0 && RB1 == 0)
-          Result = AllZeroes;
+      {
+        Result = AllZeroes;
+        bool Overflow = false;
+        auto Tmp = RB0.uadd_ov(RB1, Overflow);
+        if (Tmp.isAllOnesValue() || Overflow) {
+          Result.setAllBits();
+        }
         break;
-
+      }
       case Inst::URem:
       case Inst::SRem:
         if (I->Width == 1) {
