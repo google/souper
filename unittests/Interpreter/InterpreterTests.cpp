@@ -127,6 +127,10 @@ TEST(InterpreterTests, RBTransferFunctions) {
     ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Slt, CheckRBPrecision));
     ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Ule, CheckRBPrecision));
     ASSERT_TRUE_FAKE(rbObj.testFn(Inst::Sle, CheckRBPrecision));
+
+  }
+  for (int WIDTH = 1; WIDTH <= MAX_WIDTH - 1; ++WIDTH) {
+    RBTesting rbObj(WIDTH);
     ASSERT_TRUE_FAKE(rbObj.testFnTernary(Inst::Select, CheckRBPrecision));
     ASSERT_TRUE_FAKE(rbObj.testFnTernary(Inst::FShl, CheckRBPrecision));
     ASSERT_TRUE_FAKE(rbObj.testFnTernary(Inst::FShr, CheckRBPrecision));

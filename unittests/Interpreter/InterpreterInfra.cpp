@@ -521,12 +521,12 @@ bool RBTesting::nextRB(llvm::APInt &Val) {
   }
 }
 
-std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt X, int WIDTH) {
+std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt Value, llvm::APInt Mask, int WIDTH) {
   std::vector<llvm::APInt> Result;
-  Result.push_back(X);
+  Result.push_back(Value);
 
   for (int i = 0; i < WIDTH; ++i) {
-    if ( (X & (1 << i)) == 0 ) {
+    if ( (Mask & (1 << i)) == 0 ) {
       auto Copy = Result;
       for (auto &Y : Copy) {
         Result.push_back(Y | (1 << i));
@@ -566,8 +566,8 @@ llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt
                     << getPaddedBinaryString(P1) << "\n";
       }
 
-      auto I0 = explodeUnrestrictedBits(P0 | RBX, X->Width);
-      auto I1 = explodeUnrestrictedBits(P1 | RBY, Y->Width);
+      auto I0 = explodeUnrestrictedBits(P0, P0 | RBX, X->Width);
+      auto I1 = explodeUnrestrictedBits(P1, P1 | RBY, Y->Width);
 
       std::map<int, std::pair<bool, bool>> Seen;
 
@@ -675,7 +675,6 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
   return true;
 }
 
-
 llvm::APInt exhaustiveRBTernary(Inst *I, Inst *X, Inst *Y, Inst *Z, llvm::APInt RBX, llvm::APInt RBY, llvm::APInt RBZ,
                          int WIDTH) {
   llvm::APInt RB(WIDTH, 0);
@@ -688,12 +687,13 @@ llvm::APInt exhaustiveRBTernary(Inst *I, Inst *X, Inst *Y, Inst *Z, llvm::APInt 
       for (auto P2 : ZPartial) {
         if (DebugMode) {
           llvm::outs() << "Restricted EXP: " << getPaddedBinaryString(P0) << "\t"
-                       << getPaddedBinaryString(P1) << "\n";
+                       << getPaddedBinaryString(P1) << "\t"
+                       << getPaddedBinaryString(P2) << "\n";
         }
 
-        auto I0 = explodeUnrestrictedBits(P0 | RBX, X->Width);
-        auto I1 = explodeUnrestrictedBits(P1 | RBY, Y->Width);
-        auto I2 = explodeUnrestrictedBits(P2 | RBZ, Z->Width);
+        auto I0 = explodeUnrestrictedBits(P0, P0 | RBX, X->Width);
+        auto I1 = explodeUnrestrictedBits(P1, P1 | RBY, Y->Width);
+        auto I2 = explodeUnrestrictedBits(P2, P2 | RBZ, Z->Width);
         std::map<int, std::pair<bool, bool>> Seen;
 
         for (auto i0 : I0) {
@@ -701,7 +701,8 @@ llvm::APInt exhaustiveRBTernary(Inst *I, Inst *X, Inst *Y, Inst *Z, llvm::APInt 
             for (auto i2 : I2) {
               if (DebugMode) {
                 llvm::outs() << "Unrestricted EXP: " << getPaddedBinaryString(i0) << "\t"
-                             << getPaddedBinaryString(i1) << "\n";
+                             << getPaddedBinaryString(i1) << "\t"
+                             << getPaddedBinaryString(i2) << "\n";
               }
               ++cases;
               ValueCache C = {{{X, i0}, {Y, i1}, {Z, i2}}};
