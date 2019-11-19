@@ -173,9 +173,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     auto DontCareBits = DontCareBitsAnalysis().findDontCareBits(RHS);
 
     for (auto Pair : LHSMustDemandedBits) {
-      assert(DontCareBits.find(Pair.first) != DontCareBits.end() && "RHS don't care bits info missing.");
-
-      if ((Pair.second & DontCareBits[Pair.first]) != 0) {
+      if (DontCareBits.find(Pair.first) != DontCareBits.end() && (Pair.second & DontCareBits[Pair.first]) != 0) {
         // This input is must demanded in LHS and DontCare in RHS.
         if (StatsLevel > 2) {
           llvm::errs() << "Var : " << Pair.first->Name << " : ";
