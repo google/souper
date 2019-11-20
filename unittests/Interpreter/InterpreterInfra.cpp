@@ -250,7 +250,7 @@ bool KBTesting::nextKB(llvm::KnownBits &x) {
 }
 
 bool testKB(llvm::KnownBits Calculated, EvalValueKB Expected,
-            Inst::Kind K, std::vector<llvm::KnownBits> KBS) {
+            Inst::Kind K, const std::vector<llvm::KnownBits> &KBS) {
   // expected value is poison/ub; so let binary transfer functions do
   // whatever they want without complaining
   if (!Expected.hasValue())
@@ -521,9 +521,10 @@ bool RBTesting::nextRB(llvm::APInt &Val) {
   }
 }
 
-std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt Value, llvm::APInt Mask, int WIDTH) {
-  std::vector<llvm::APInt> Result;
-  Result.push_back(Value);
+std::vector<llvm::APInt> explodeUnrestrictedBits(const llvm::APInt &Value,
+                                                 const llvm::APInt &Mask,
+                                                 const int WIDTH) {
+  std::vector<llvm::APInt> Result { Value };
 
   for (int i = 0; i < WIDTH; ++i) {
     if ( (Mask & (1 << i)) == 0 ) {
@@ -537,9 +538,9 @@ std::vector<llvm::APInt> explodeUnrestrictedBits(llvm::APInt Value, llvm::APInt 
 }
 
 // Probably refactor to unify these two
-std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X, int WIDTH) {
-  std::vector<llvm::APInt> Result;
-  Result.push_back(llvm::APInt(WIDTH, 0));
+std::vector<llvm::APInt> explodeRestrictedBits(const llvm::APInt &X,
+                                               const int WIDTH) {
+  std::vector<llvm::APInt> Result { llvm::APInt(WIDTH, 0) };
 
   for (int i = 0; i < WIDTH; ++i) {
     if ( (X & (1 << i)) != 0 ) {
@@ -552,8 +553,9 @@ std::vector<llvm::APInt> explodeRestrictedBits(llvm::APInt X, int WIDTH) {
   return Result;
 }
 
-llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt RBY,
-                         int WIDTH) {
+llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y,
+                         const llvm::APInt &RBX, const llvm::APInt &RBY,
+                         const int WIDTH) {
   llvm::APInt RB(WIDTH, 0);
   auto XPartial = explodeRestrictedBits(RBX, X->Width);
   auto YPartial = explodeRestrictedBits(RBY, Y->Width);
@@ -606,12 +608,28 @@ llvm::APInt exhaustiveRB(Inst *I, Inst *X, Inst *Y, llvm::APInt RBX, llvm::APInt
   return RB;
 }
 
-bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
+void compareRB(const llvm::APInt &RBComputed,
+               const llvm::APInt &RBExhaustive,
+               bool &fail, bool &FoundMorePrecise,
+               double &ImpreciseCount) {
+  for (int i = 0; i < RBComputed.getBitWidth(); ++i) {
+    if (((RBComputed & (1 << i)) == 0) && ((RBExhaustive & (1 << i)) != 0))
+      fail = true;
+    if (((RBExhaustive & (1 << i)) == 0) && ((RBComputed & (1 << i)) != 0)) {
+      FoundMorePrecise = true;
+      ++ImpreciseCount;
+    }
+  }
+}
+
+bool RBTesting::testFn(const Inst::Kind K, const bool CheckPrecision) {
   llvm::APInt RB0(WIDTH, 0);
   InstContext IC;
   Inst *X = IC.createVar(WIDTH, "X");
   Inst *Y = IC.createVar(WIDTH, "Y");
   std::pair<size_t, size_t> Stats;
+  double ImpreciseCount = 0;
+
   do {
     llvm::APInt RB1(WIDTH, 0);
     do {
@@ -631,20 +649,7 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
       auto RBExhaustive = exhaustiveRB(Expr, X, Y, RB0, RB1, EffectiveWidth);
       bool fail = false;
       bool FoundMorePrecise = false;
-      for (int i = 0; i < Expr->Width ; ++i) {
-        if ((RBComputed & (1 << i)) == 0) {
-          if ((RBExhaustive & (1 << i)) != 0) {
-            fail = true;
-          }
-        }
-
-        if ((RBExhaustive & (1 << i)) == 0) {
-          if ((RBComputed & (1 << i)) != 0) {
-            FoundMorePrecise = true;
-          }
-        }
-
-      }
+      compareRB(RBComputed, RBExhaustive, fail, FoundMorePrecise, ImpreciseCount);
       Stats.first++;
       if (fail) {
         llvm::outs() << Inst::getKindName(K) << ":\t";
@@ -670,18 +675,23 @@ bool RBTesting::testFn(Inst::Kind K, bool CheckPrecision) {
   } while (nextRB(RB0));
   if (CheckPrecision) {
       llvm::outs() << "TOTAL imprecise results: " <<  Inst::getKindName(K) << " : "
-                   << Stats.second << "/" << Stats.first << "\n\n";
+                   << Stats.second << "/" << Stats.first << "\n";
+      llvm::outs() << "TOTAL imprecise bits: " << ImpreciseCount << "\n\n";
   }
   return true;
 }
 
-llvm::APInt exhaustiveRBTernary(Inst *I, Inst *X, Inst *Y, Inst *Z, llvm::APInt RBX, llvm::APInt RBY, llvm::APInt RBZ,
-                         int WIDTH) {
+llvm::APInt exhaustiveRBTernary(Inst *I, Inst *X, Inst *Y, Inst *Z,
+                                const llvm::APInt &RBX, const llvm::APInt &RBY,
+                                const llvm::APInt &RBZ,
+                                const int WIDTH) {
   llvm::APInt RB(WIDTH, 0);
   auto XPartial = explodeRestrictedBits(RBX, X->Width);
   auto YPartial = explodeRestrictedBits(RBY, Y->Width);
   auto ZPartial = explodeRestrictedBits(RBZ, Z->Width);
   int cases = 0;
+  double ImpreciseCount = 0;
+
   for (auto P0 : XPartial) {
     for (auto P1 : YPartial) {
       for (auto P2 : ZPartial) {
@@ -733,7 +743,7 @@ llvm::APInt exhaustiveRBTernary(Inst *I, Inst *X, Inst *Y, Inst *Z, llvm::APInt 
   return RB;
 }
 
-bool RBTesting::testFnTernary(Inst::Kind K, bool CheckPrecision) {
+bool RBTesting::testFnTernary(const Inst::Kind K, const bool CheckPrecision) {
   llvm::APInt RB0(WIDTH, 0);
   InstContext IC;
   Inst *X = IC.createVar(WIDTH, "X");
@@ -744,6 +754,8 @@ bool RBTesting::testFnTernary(Inst::Kind K, bool CheckPrecision) {
   Inst *Y = IC.createVar(WIDTH, "Y");
   Inst *Z = IC.createVar(WIDTH, "Z");
   std::pair<size_t, size_t> Stats;
+  double ImpreciseCount = 0;
+
   do {
     llvm::APInt RB1(WIDTH, 0);
     do {
@@ -772,20 +784,7 @@ bool RBTesting::testFnTernary(Inst::Kind K, bool CheckPrecision) {
         auto RBExhaustive = exhaustiveRBTernary(Expr, X, Y, Z, RB0, RB1, RB2, EffectiveWidth);
         bool fail = false;
         bool FoundMorePrecise = false;
-        for (int i = 0; i < Expr->Width; ++i) {
-          if ((RBComputed & (1 << i)) == 0) {
-            if ((RBExhaustive & (1 << i)) != 0) {
-              fail = true;
-            }
-          }
-
-          if ((RBExhaustive & (1 << i)) == 0) {
-            if ((RBComputed & (1 << i)) != 0) {
-              FoundMorePrecise = true;
-            }
-          }
-        }
-
+        compareRB(RBComputed, RBExhaustive, fail, FoundMorePrecise, ImpreciseCount);
         Stats.first++;
         if (CheckPrecision || fail) {
           llvm::outs() << Inst::getKindName(K) << ":\t";
@@ -809,7 +808,8 @@ bool RBTesting::testFnTernary(Inst::Kind K, bool CheckPrecision) {
   } while (nextRB(RB0));
   if (CheckPrecision) {
     llvm::outs() << "TOTAL imprecise results: " << Inst::getKindName(K) << " : "
-                 << Stats.second << "/" << Stats.first << "\n\n";
+                 << Stats.second << "/" << Stats.first << "\n";
+    llvm::outs() << "TOTAL imprecise bits: " << ImpreciseCount << "\n\n";
   }
   return true;
 }
