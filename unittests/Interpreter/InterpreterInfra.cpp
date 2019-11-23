@@ -179,12 +179,15 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
     break;
   case Inst::And:
     rc = xc & yc;
+    res = EvalValue(rc);
     break;
   case Inst::Or:
     rc = xc | yc;
+    res = EvalValue(rc);
     break;
   case Inst::Xor:
     rc = xc ^ yc;
+    res = EvalValue(rc);
     break;
   case Inst::Shl:
     res = evaluateShl(xc, yc);
@@ -617,6 +620,7 @@ void compareRB(const llvm::APInt &RBComputed,
       fail = true;
     if (((RBExhaustive & (1 << i)) == 0) && ((RBComputed & (1 << i)) != 0)) {
       FoundMorePrecise = true;
+      // FIXME add the number of bits, not the number of incorrect cases
       ++ImpreciseCount;
     }
   }
