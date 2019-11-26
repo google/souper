@@ -33,6 +33,9 @@ struct EvalValue {
 
   llvm::APInt Value;
   ValueKind K;
+  // When ValueKind is not Val, we still need to know the bit width for poison,
+  // undef, etc for freeze to work
+  unsigned BitWidth = 0;
 
   bool hasValue() {
     return K == ValueKind::Val;
@@ -48,14 +51,20 @@ struct EvalValue {
     return Value;
   }
 
-  static EvalValue poison() {
+  static EvalValue poison(unsigned Width) {
+    if (Width == 0)
+      llvm::report_fatal_error("poison of zero width!");
     EvalValue Result;
     Result.K = ValueKind::Poison;
+    Result.BitWidth = Width;
     return Result;
   }
-  static EvalValue undef() {
+  static EvalValue undef(unsigned Width) {
+    if (Width == 0)
+      llvm::report_fatal_error("poison of zero width!");
     EvalValue Result;
     Result.K = ValueKind::Undef;
+    Result.BitWidth = Width;
     return Result;
   }
   static EvalValue unimplemented() {

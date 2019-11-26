@@ -120,6 +120,7 @@ struct Inst : llvm::FoldingSetNode {
     UAddSat,
     SSubSat,
     USubSat,
+    Freeze,
 
     ReservedConst,
     ReservedInst,

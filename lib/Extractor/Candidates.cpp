@@ -521,8 +521,7 @@ Inst *ExprBuilder::buildHelper(Value *V) {
     }
   } else if (auto FI = dyn_cast<FreezeInst>(V)) {
     Inst *Op0 = get(FI->getOperand(0));
-    auto WidthExtracted = Op0->Width;
-    return IC.getInst(Inst::Freeze, WidthExtracted, {Op0});
+    return IC.getInst(Inst::Freeze, Op0->Width, {Op0});
   } else if (auto EV = dyn_cast<ExtractValueInst>(V)) {
     Inst *L = get(EV->getOperand(0));
     ArrayRef<unsigned> Idx = EV->getIndices();

@@ -142,6 +142,8 @@ private:
       }
       return E;
     }
+    case Inst::Freeze:
+      return get(Ops[0]);
     case Inst::Add:
       return buildAssoc(AddExpr::create, Ops);
     case Inst::AddNSW: {

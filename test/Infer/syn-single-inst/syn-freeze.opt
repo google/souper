@@ -1,0 +1,10 @@
+; REQUIRES: solver, synthesis
+
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-num-instructions=1 -souper-use-alive %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: result %1
+%0:i32 = var
+%1 = freeze %0
+%2 = freeze %1
+infer %2

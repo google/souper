@@ -34,7 +34,7 @@ using namespace souper;
 using namespace llvm;
 
 static const std::vector<Inst::Kind> UnaryOperators = {
-  Inst::CtPop, Inst::BSwap, Inst::BitReverse, Inst::Cttz, Inst::Ctlz
+  Inst::CtPop, Inst::BSwap, Inst::BitReverse, Inst::Cttz, Inst::Ctlz, Inst::Freeze
 };
 
 static const std::vector<Inst::Kind> BinaryOperators = {
