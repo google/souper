@@ -43,7 +43,7 @@ namespace souper {
       llvm::KnownBits setLowest(llvm::KnownBits x);
       llvm::KnownBits clearLowest(llvm::KnownBits x);
 
-      EvalValueKB bruteForce(llvm::KnownBits x, llvm::KnownBits y, Inst::Kind Pred);
+      EvalValueKB bruteForce(llvm::KnownBits x, llvm::KnownBits y, Inst *I);
       EvalValueKB bruteForce(llvm::KnownBits x, llvm::KnownBits y,
                              llvm::KnownBits z, Inst::Kind Pred);
 

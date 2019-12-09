@@ -125,108 +125,20 @@ EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y,
   return Result;
 }
 
-EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst::Kind Pred) {
+EvalValueKB KBTesting::bruteForce(KnownBits x, KnownBits y, Inst* I) {
   if (!x.isConstant())
-    return merge(bruteForce(setLowest(x), y, Pred),
-                 bruteForce(clearLowest(x), y, Pred));
+    return merge(bruteForce(setLowest(x), y, I),
+                 bruteForce(clearLowest(x), y, I));
   if (!y.isConstant())
-    return merge(bruteForce(x, setLowest(y), Pred),
-                 bruteForce(x, clearLowest(y), Pred));
+    return merge(bruteForce(x, setLowest(y), I),
+                 bruteForce(x, clearLowest(y), I));
   auto xc = x.getConstant();
   auto yc = y.getConstant();
 
-  EvalValue res;
-  APInt rc(x.getBitWidth(), 0);
-  switch (Pred) {
-  case Inst::AddNUW:
-    res = evaluateAddNUW(xc, yc);
-    break;
-  case Inst::AddNW:
-    res = evaluateAddNW(xc, yc);
-    break;
-  case Inst::AddNSW:
-    res = evaluateAddNSW(xc, yc);
-    break;
-  case Inst::Add:
-    res = EvalValue(xc + yc);
-    break;
-  case Inst::SubNUW:
-    res = evaluateSubNUW(xc, yc);
-    break;
-  case Inst::SubNSW:
-    res = evaluateSubNSW(xc, yc);
-    break;
-  case Inst::SubNW:
-    res = evaluateSubNW(xc, yc);
-    break;
-  case Inst::Sub:
-    res = EvalValue(xc - yc);
-    break;
-  case Inst::Mul:
-    res = EvalValue(xc * yc);
-    break;
-  case Inst::MulNSW:
-    res = evaluateMulNSW(xc, yc);
-    break;
-  case Inst::MulNUW:
-    res = evaluateMulNUW(xc, yc);
-    break;
-  case Inst::MulNW:
-    res = evaluateMulNW(xc, yc);
-    break;
-  case Inst::URem:
-    res = evaluateURem(xc, yc);
-    break;
-  case Inst::And:
-    rc = xc & yc;
-    res = EvalValue(rc);
-    break;
-  case Inst::Or:
-    rc = xc | yc;
-    res = EvalValue(rc);
-    break;
-  case Inst::Xor:
-    rc = xc ^ yc;
-    res = EvalValue(rc);
-    break;
-  case Inst::Shl:
-    res = evaluateShl(xc, yc);
-    break;
-  case Inst::LShr:
-    res = evaluateLShr(xc, yc);
-    break;
-  case Inst::AShr:
-    res = evaluateAShr(xc, yc);
-    break;
-  case Inst::Eq:
-    rc = xc.eq(yc) ? APInt(1, 1) : APInt(1, 0);
-    res = EvalValue(rc);
-    break;
-  case Inst::Ne:
-    rc = xc.ne(yc) ? APInt(1, 1) : APInt(1, 0);
-    res = EvalValue(rc);
-    break;
-  case Inst::Ult:
-    rc = xc.ult(yc) ? APInt(1, 1) : APInt(1, 0);
-    res = EvalValue(rc);
-    break;
-  case Inst::Slt:
-    rc = xc.slt(yc) ? APInt(1, 1) : APInt(1, 0);
-    res = EvalValue(rc);
-    break;
-  case Inst::Ule:
-    rc = xc.ule(yc) ? APInt(1, 1) : APInt(1, 0);
-    res = EvalValue(rc);
-    break;
-  case Inst::Sle:
-    rc = xc.sle(yc) ? APInt(1, 1) : APInt(1, 0);
-    res = EvalValue(rc);
-    break;
-  default:
-    report_fatal_error("unhandled case " + (std::string)Inst::getKindName(Pred) +
-                       " in bruteForce!");
-  }
-  return res;
+  ValueCache Vals{{I->Ops[0], xc}, {I->Ops[1], yc}};
+  ConcreteInterpreter C(Vals);
+  EvalValue Result = C.evaluateInst(I);
+  return Result;
 }
 
 bool KBTesting::nextKB(llvm::KnownBits &x) {
@@ -322,7 +234,7 @@ bool KBTesting::testFn(Inst::Kind K) {
       KnownBitsAnalysis KB(C);
       ConcreteInterpreter BlankCI;
       auto Calculated = KB.findKnownBits(I, BlankCI, false);
-      EvalValueKB Expected = bruteForce(x, y, K);
+      EvalValueKB Expected = bruteForce(x, y, I);
       if (!testKB(Calculated, Expected, K, {x, y}))
         return false;
     } while(nextKB(y));
