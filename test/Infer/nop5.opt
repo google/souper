@@ -1,8 +1,6 @@
 ; REQUIRES: solver
-; RUN: %souper-check -infer-rhs -souper-infer-nop %solver %s > %t1
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis %solver %s > %t2
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis %solver %s > %t1
 ; RUN: %FileCheck %s < %t1
-; RUN: %FileCheck %s < %t2
 ; CHECK: Failed to infer RHS
 
 %0:i64 = var

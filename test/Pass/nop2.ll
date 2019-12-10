@@ -1,7 +1,6 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper %solver -souper-infer-nop -souper-stress-nop -S -stats -o - %s 2>&1 | %FileCheck %s
+; RUN: %opt -load %pass -souper %solver -souper-enumerative-synthesis -S -stats -o - %s 2>&1 | %FileCheck %s
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
@@ -18,7 +17,7 @@ bb1:
   br label %jmp
 
 bb2:
-  %call_bb2 = add i32 0, %call
+  %call_bb2 = mul i32 1, %call
   br label %jmp
 
 jmp:

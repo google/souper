@@ -1,6 +1,6 @@
 ; REQUIRES: solver
-; RUN: %llvm-as %s -o - | %souper %solver -souper-infer-nop > %t2
-; RUN: %FileCheck %s < %t2
+; RUN: %llvm-as %s -o - | %souper %solver -souper-enumerative-synthesis > %t1
+; RUN: %FileCheck %s < %t1
 ; CHECK: cand %5 %0
 
 ; ModuleID = 'foo.ll'

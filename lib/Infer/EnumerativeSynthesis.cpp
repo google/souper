@@ -112,7 +112,6 @@ namespace {
 //   tune batch size -- can be a lot bigger for simple RHSs
 //   or look for feedback from solver, timeouts etc.
 // make sure path conditions work as expected
-// remove nop synthesis
 // once an optimization works we can try adding UB qualifiers on the RHS
 //   probably almost as good as synthesizing these directly
 // prune a subtree once it becomes clear it isn't a cost win
@@ -834,7 +833,7 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   };
 
   // add nops guesses separately
-  for (auto I : Inputs) {
+  for (auto I : Cands) {
     addGuess(I, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
   }
 
