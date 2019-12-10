@@ -23,6 +23,10 @@
 
 using namespace souper;
 
+const std::string souper::ReservedConstPrefix = "reservedconst_";
+const std::string souper::ReservedInstPrefix = "reservedinst";
+const std::string souper::BlockPred = "blockpred";
+
 bool Inst::hasOrigin(llvm::Value *V) const {
   return std::find(Origins.begin(), Origins.end(), V) != Origins.end();
 }
@@ -758,6 +762,23 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   llvm::APInt DemandedBits = llvm::APInt::getAllOnesValue(Width);
   return getInst(K, Width, Ops, DemandedBits, Available);
 }
+
+std::vector<Inst *> InstContext::getVariables() const {
+  std::vector<Inst *> AllVariables;
+  for (const auto &OuterIter : VarInstsByWidth) {
+    for (const auto &InnerIter : OuterIter.getSecond()) {
+      assert(InnerIter->K == Inst::Kind::Var);
+      AllVariables.emplace_back(InnerIter.get());
+    }
+  }
+
+  std::sort(AllVariables.begin(), AllVariables.end(),
+            [](const Inst *LHS, const Inst *RHS) {
+              return LHS->Number < RHS->Number;
+            });
+
+  return AllVariables;
+};
 
 bool Inst::isCommutative(Inst::Kind K) {
   switch (K) {

@@ -26,7 +26,7 @@ my $llvmopt = "@LLVM_BINDIR@/opt";
 my $llvmdis = "@LLVM_BINDIR@/llvm-dis";
 my $check = "@CMAKE_BINARY_DIR@/souper-check";
 my $reducer = "@CMAKE_BINARY_DIR@/reduce";
-my $triager = "@CMAKE_BINARY_DIR@/souper2llvm";
+my $triager = "@CMAKE_BINARY_DIR@/py_souper2llvm";
 
 sub runit ($) {
     my $cmd = shift;

@@ -1,0 +1,12 @@
+; RUN: %souper2llvm %s | %FileCheck %s
+
+%0:i8 = var
+result %0
+
+; CHECK: ; ModuleID = 'souper.ll'
+; CHECK-NEXT: source_filename = "souper.ll"
+
+; CHECK: define i8 @fun(i8) {
+; CHECK-NEXT: entry:
+; CHECK-NEXT:   ret i8 %0
+; CHECK-NEXT: }
