@@ -72,10 +72,6 @@ those that fall within the range [SOUPER_FIRST_OPT
 
 SOUPER_INFER_INT -- Try to synthesize constants.
 
-SOUPER_INFER_NOP -- Try to synthesize nops: Optimizations where the
-output is equivalent to one of its inputs. For example, this
-expression can be optimized to a nop: x = bswap(bswap(x))
-
 SOUPER_INFER_INST -- Try to synthesis instructions with InstSynthesis
 synthesizer.
 
@@ -233,10 +229,6 @@ if ($souper) {
 
     if (exists $ENV{"SOUPER_INFER_INT"}) {
       push @ARGV, ("-mllvm", "-souper-infer-iN");
-    }
-
-    if (exists $ENV{"SOUPER_INFER_NOP"}) {
-      push @ARGV, ("-mllvm", "-souper-infer-nop");
     }
 
     if (exists $ENV{"SOUPER_INFER_INST"}) {

@@ -47,12 +47,6 @@ namespace {
 static cl::opt<bool> NoInfer("souper-no-infer",
     cl::desc("Populate the external cache, but don't infer replacements (default=false)"),
     cl::init(false));
-static cl::opt<bool> InferNop("souper-infer-nop",
-    cl::desc("Infer that the output is the same as an input value (default=false)"),
-    cl::init(false));
-static cl::opt<bool> StressNop("souper-stress-nop",
-    cl::desc("stress-test big queries in nop synthesis by always performing all of the small queries (slow!) (default=false)"),
-    cl::init(false));
 static cl::opt<int>MaxNops("souper-max-nops",
     cl::desc("maximum number of values from the LHS to try to use as the RHS (default=20)"),
     cl::init(20));
@@ -459,78 +453,6 @@ public:
     // Do not do further synthesis if LHS is harvested from uses.
     if (LHS->HarvestKind == HarvestType::HarvestedFromUse)
       return EC;
-
-    if (InferNop) {
-      std::vector<Inst *> Guesses;
-      findCands(LHS, Guesses, /*WidthMustMatch=*/true, /*FilterVars=*/false, MaxNops);
-
-      Inst *Ante = IC.getConst(APInt(1, true));
-      BlockPCs BPCsCopy;
-      std::vector<InstMapping> PCsCopy;
-      for (auto I : Guesses) {
-        // separate sub-expressions by copying vars
-        std::map<Inst *, Inst *> InstCache;
-        std::map<Block *, Block *> BlockCache;
-        Inst *Ne = IC.getInst(Inst::Ne, 1, {getInstCopy(LHS, IC, InstCache, BlockCache, 0, true),
-              getInstCopy(I, IC, InstCache, BlockCache, 0, true)});
-        Ante = IC.getInst(Inst::And, 1, {Ante, Ne});
-        separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, 0, true);
-        separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, 0, true);
-      }
-
-      // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
-      InstMapping Mapping(Ante, IC.getConst(APInt(1, true)));
-      std::string Query = BuildQuery(IC, BPCsCopy, PCsCopy, Mapping, 0,
-                                     /*Precondition=*/0, /*Negate=*/true);
-      if (Query.empty())
-        return std::make_error_code(std::errc::value_too_large);
-      bool BigQueryIsSat;
-      EC = SMTSolver->isSatisfiable(Query, BigQueryIsSat, 0, 0, Timeout);
-      if (EC)
-        return EC;
-
-      bool SmallQueryIsSat = true;
-      if (StressNop || !BigQueryIsSat) {
-        // find the nop
-        for (auto I : Guesses) {
-          if (UseAlive) {
-            if (isTransformationValid(LHS, I, PCs, IC)) {
-              RHS = I;
-              SmallQueryIsSat = false; // hack to cooperate with BuildQuery
-              break;
-            }
-          } else {
-            InstMapping Mapping(LHS, I);
-            std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0, /*Precondition=*/0);
-            if (Query.empty())
-              continue;
-            EC = SMTSolver->isSatisfiable(Query, SmallQueryIsSat, 0, 0, Timeout);
-            if (EC)
-              return EC;
-            if (!SmallQueryIsSat) {
-              RHS = I;
-              break;
-            }
-          }
-        }
-      }
-
-      if (!BigQueryIsSat && SmallQueryIsSat) {
-        llvm::errs() << "*** oops ***\n";
-        ReplacementContext C;
-        llvm::errs() << GetReplacementLHSString(BPCs, PCs, LHS, C) << "\n";
-        report_fatal_error("big query indicated a nop, but none was found");
-      }
-      if (BigQueryIsSat && !SmallQueryIsSat) {
-        llvm::errs() << "*** oops ***\n";
-        ReplacementContext C;
-        llvm::errs() << GetReplacementLHSString(BPCs, PCs, LHS, C) << "\n";
-        report_fatal_error("big query did not indicate a nop, but one was found");
-      }
-
-      if (!SmallQueryIsSat)
-        return EC;
-    }
 
     if(SMTSolver->supportsModels()) {
       if (EnableEnumerativeSynthesis) {
