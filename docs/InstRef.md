@@ -88,36 +88,36 @@ The available instructions are listed below. Most have straightforward
 semantics, but some deserve a more detailed explanation which is linked
 to from the table.
 
-  Name       Meaning
-  ---------- -----------------------------------------------------------------------
-  `var`      Unconstrained value
-  `block`    [Basic block \<phinode\>]{role="ref"}
-  `phi`      [Phi node \<phinode\>]{role="ref"}
-  `add`      Integer addition
-  `addnsw`   Integer addition, signed wrap is [undefined \<undef\>]{role="ref"}
-  `sub`      Integer subtraction
-  `subnsw`   Integer subtraction, signed wrap is [undefined \<undef\>]{role="ref"}
-  `mul`      Integer multiplication
-  `udiv`     Unsigned integer division
-  `sdiv`     Signed integer division
-  `urem`     Unsigned integer remainder
-  `srem`     Signed integer remainder
-  `and`      Binary and
-  `or`       Binary or
-  `xor`      Binary xor
-  `shl`      Shift left
-  `lshr`     Logical shift right (zero fill)
-  `ashr`     Arithmetic shift right (sign bit fill)
-  `select`   Selection between second and third operands based on first operand
-  `zext`     Zero extend
-  `sext`     Sign extend
-  `trunc`    Truncation
-  `eq`       Integer equality
-  `ne`       Integer non-equality
-  `ult`      Unsigned integer less than
-  `slt`      Signed integer less than
-  `ule`      Unsigned integer less than or equal to
-  `sle`      Signed integer less than or equal to
+| Name     | Meaning                                                               |
+|----------|-----------------------------------------------------------------------|
+| `var`    | Unconstrained value                                                   |
+| `block`  | Basic block                                                           |
+| `phi`    | Phi node                                                              |
+| `add`    | Integer addition                                                      |
+| `addnsw` | Integer addition, signed wrap is undefined                            |
+| `sub`    | Integer subtraction                                                   |
+| `subnsw` | Integer subtraction, signed wrap is undefined                         |
+| `mul`    | Integer multiplication                                                |
+| `udiv`   | Unsigned integer division                                             |
+| `sdiv`   | Signed integer division                                               |
+| `urem`   | Unsigned integer remainder                                            |
+| `srem`   | Signed integer remainder                                              |
+| `and`    | Binary and                                                            |
+| `or`     | Binary or                                                             |
+| `xor`    | Binary xor                                                            |
+| `shl`    | Shift left                                                            |
+| `lshr`   | Logical shift right (zero fill)                                       |
+| `ashr`   | Arithmetic shift right (sign bit fill)                                |
+| `select` | Selection between second and third operands based on first operand    |
+| `zext`   | Zero extend                                                           |
+| `sext`   | Sign extend                                                           |
+| `trunc`  | Truncation                                                            |
+| `eq`     | Integer equality                                                      |
+| `ne`     | Integer non-equality                                                  |
+| `ult`    | Unsigned integer less than                                            |
+| `slt`    | Signed integer less than                                              |
+| `ule`    | Unsigned integer less than or equal to                                |
+| `sle`    | Signed integer less than or equal to                                  |
 
 It is not necessary to specify a type for most instructions, as it can
 be inferred from the operands. However, the types of the instructions
