@@ -1,0 +1,8 @@
+; REQUIRES: solver
+; RUN: %souper-check %solver -infer-known-bits %s | %FileCheck %s
+
+; CHECK: knownBits from souper: 1
+
+%0:i32 = var (range=[1, 0))
+%1 = ne 0, %0
+infer %1

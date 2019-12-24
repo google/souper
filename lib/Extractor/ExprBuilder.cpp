@@ -382,7 +382,7 @@ Inst *ExprBuilder::getDataflowConditions(Inst *I) {
     if (!CR.isEmptySet() && !CR.isFullSet()) {
       Inst *Lower = LIC->getConst(CR.getLower());
       Inst *Upper = LIC->getConst(CR.getUpper());
-      if (!CR.isWrappedSet()) {
+      if (!CR.isWrappedSet() && !CR.isUpperWrapped()) {
         return LIC->getInst(Inst::And, 1,
                            {LIC->getInst(Inst::Ule, 1, {Lower, I}),
                             LIC->getInst(Inst::Ult, 1, {I, Upper})});
