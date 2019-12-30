@@ -10,6 +10,6 @@ entry:
   %a = or i32 %x, 3 ; 0b011
   ;CHECK-NOT: %b = or i32 %a, 6
   %b = or i32 %a, 6 ;0b110
-  ;CHECK: or i32 %x, 7
+  ;CHECK: or i32 7, %x
   ret i32 %b
 }

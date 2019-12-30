@@ -10,6 +10,6 @@ entry:
   %a = xor i32 %x, 3 ; 0b011
   ;CHECK-NOT: %b = xor i32 %a, 6
   %b = xor i32 %a, 6 ;0b110
-  ;CHECK: xor i32 %x, 5
+  ;CHECK: xor i32 5, %x
   ret i32 %b
 }

@@ -49,6 +49,7 @@ llvm::Type *Codegen::GetInstReturnType(llvm::LLVMContext &Context, Inst *I) {
 }
 
 llvm::Value *Codegen::getValue(Inst *I) {
+  const std::vector<Inst *> &Ops = I->orderedOps();
   if (I->K == Inst::UntypedConst) {
     // FIXME: We only get here because it is the second argument of
     // extractvalue instrs. This is not otherwise reachable.
@@ -88,11 +89,11 @@ llvm::Value *Codegen::getValue(Inst *I) {
   }
 
   // otherwise, recursively generate code
-  Value *V0 = Codegen::getValue(I->Ops[0]);
+  Value *V0 = Codegen::getValue(Ops[0]);
   if (!V0)
     return nullptr;
 
-  switch (I->Ops.size()) {
+  switch (Ops.size()) {
   case 1: {
     switch (I->K) {
     case Inst::SExt:
@@ -134,7 +135,7 @@ llvm::Value *Codegen::getValue(Inst *I) {
     break;
   }
   case 2: {
-    Value *V1 = Codegen::getValue(I->Ops[1]);
+    Value *V1 = Codegen::getValue(Ops[1]);
     if (!V1)
       return nullptr;
     switch (I->K) {
@@ -226,12 +227,12 @@ llvm::Value *Codegen::getValue(Inst *I) {
     case Inst::USubWithOverflow:
     case Inst::SMulWithOverflow:
     case Inst::UMulWithOverflow: {
-      if (I->Ops[0]->Ops != I->Ops[1]->Ops) {
+      if (Ops[0]->Ops != Ops[1]->Ops) {
         report_fatal_error(
             "Inst::*WithOverflow with non-identical args unsupported.");
       }
-      V0 = Codegen::getValue(I->Ops[0]->Ops[0]);
-      V1 = Codegen::getValue(I->Ops[0]->Ops[1]);
+      V0 = Codegen::getValue(Ops[0]->orderedOps()[0]);
+      V1 = Codegen::getValue(Ops[0]->orderedOps()[1]);
       Intrinsic::ID ID = [K = I->K]() {
         switch (K) {
         case Inst::SAddWithOverflow:
@@ -251,7 +252,7 @@ llvm::Value *Codegen::getValue(Inst *I) {
         };
         report_fatal_error("Unexpected overflow inst");
       }();
-      T = Type::getIntNTy(Context, I->Ops[0]->Ops[0]->Width);
+      T = Type::getIntNTy(Context, Ops[0]->orderedOps()[0]->Width);
       Function *F = Intrinsic::getDeclaration(M, ID, T);
       return Builder.CreateCall(F, {V0, V1});
     }
@@ -269,8 +270,8 @@ llvm::Value *Codegen::getValue(Inst *I) {
     break;
   }
   case 3: {
-    Value *V1 = Codegen::getValue(I->Ops[1]);
-    Value *V2 = Codegen::getValue(I->Ops[2]);
+    Value *V1 = Codegen::getValue(Ops[1]);
+    Value *V2 = Codegen::getValue(Ops[2]);
     if (!V1 || !V2)
       return nullptr;
     switch (I->K) {
