@@ -321,7 +321,8 @@ namespace souper {
 
       APInt umax = APIntOps::umax(LHS.getUnsignedMin(), RHS.getUnsignedMin());
       APInt res = APInt::getNullValue(LHS.getBitWidth());
-      if (!LHS.isWrappedSet() && !RHS.isWrappedSet()) {
+      if (!LHS.isWrappedSet() && !LHS.isUpperWrapped() &&
+          !RHS.isWrappedSet() && !RHS.isUpperWrapped()) {
         APInt umaxupper = APIntOps::umax(LHS.getUnsignedMax(), RHS.getUnsignedMax());
         APInt uminupper = APIntOps::umin(LHS.getUnsignedMax(), RHS.getUnsignedMax());
         res = APInt::getLowBitsSet(LHS.getBitWidth(),
@@ -355,7 +356,8 @@ namespace souper {
       // if there are no zeros from bitPos upto both barriers, lower bound have bit
       // set at bitPos. Barrier is the point beyond which you cannot set the bit
       // because it will be greater than the upper bound then
-      if (!LHS.isWrappedSet() && !RHS.isWrappedSet() &&
+      if (!LHS.isWrappedSet() && !LHS.isUpperWrapped() &&
+          !RHS.isWrappedSet() && !RHS.isUpperWrapped() &&
           (lower1.countLeadingZeros() == upper1.countLeadingZeros()) &&
           (lower2.countLeadingZeros() == upper2.countLeadingZeros()) &&
           bitPos > 0) {
