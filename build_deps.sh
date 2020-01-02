@@ -65,8 +65,6 @@ llvm_builddir=$(pwd)/${llvm_srcdir}/${llvm_build_type}-build
 svn co https://llvm.org/svn/llvm-project/llvm/${llvm_branch} ${llvm_srcdir}
 svn co https://llvm.org/svn/llvm-project/cfe/${llvm_branch} ${llvm_srcdir}/tools/clang
 svn co https://llvm.org/svn/llvm-project/compiler-rt/${llvm_branch} ${llvm_srcdir}/projects/compiler-rt
-svn co https://llvm.org/svn/llvm-project/libcxx/${llvm_branch} ${llvm_srcdir}/projects/libcxx
-svn co https://llvm.org/svn/llvm-project/libcxxabi/${llvm_branch} ${llvm_srcdir}/projects/libcxxabi
 # Disable the broken select -> logic optimizations
 patch ${llvm_srcdir}/lib/Transforms/InstCombine/InstCombineSelect.cpp < patches/disable-instcombine-select-to-logic.patch
 # Apply instcombine switch patch
