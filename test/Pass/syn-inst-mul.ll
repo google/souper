@@ -14,6 +14,6 @@ entry:
   %c = mul i32 %b, 3
   ;CHECK-NOT: %d = mul i32 %c, 4
   %d = mul i32 %c, 4
-  ;CHECK: mul i32 %x, 24
+  ;CHECK: mul i32 24, %x
   ret i32 %d
 }

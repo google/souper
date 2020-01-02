@@ -12,7 +12,7 @@ entry:
   %b = add i32 %a, 1
   ;CHECK-NOT: %c = add i32 %b, 1
   %c = add i32 %b, 1
-  ;CHECK: add i32 %x, 4
+  ;CHECK: add i32 4, %x
   %d = add i32 %c, 1
   ret i32 %d
 }
