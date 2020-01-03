@@ -148,6 +148,7 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
           if (std::error_code EC = S->nonNegative(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
                                                   NonNegative, IC)) {
             llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
           } else {
             OS << "; nonNegative from souper: "
                << convertToStr(NonNegative) << "\n";
@@ -159,6 +160,7 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
           if (std::error_code EC = S->knownBits(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
                                                 Known, IC)) {
             llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
           } else {
             OS << "; knownBits from souper: "
                << Inst::getKnownBitsString(Known.Zero, Known.One) << "\n";
@@ -169,6 +171,7 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
           if (std::error_code EC = S->powerTwo(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
                                                PowTwo, IC)) {
             llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
           } else {
             OS << "; powerOfTwo from souper: "
                << convertToStr(PowTwo) << "\n";
@@ -179,6 +182,7 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
           if (std::error_code EC = S->nonZero(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
                                               NonZero, IC)) {
             llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
           } else {
             OS << "; nonZero from souper: "
                << convertToStr(NonZero) << "\n";
@@ -189,6 +193,7 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
           if (std::error_code EC = S->signBits(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
                                                SignBits, IC)) {
             llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
           } else {
             OS << "; signBits from souper: "
                << std::to_string(SignBits) << "\n";
