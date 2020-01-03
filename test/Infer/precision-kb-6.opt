@@ -3,6 +3,6 @@
 
 ; CHECK: knownBits from souper: 1
 
-%0:i32 = var (range=[1, 0))
-%1 = ne 0, %0
+%0:i32 = var (range=[1,0))
+%1:i1 = ne 0:i32, %0
 infer %1

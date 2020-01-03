@@ -96,7 +96,7 @@ static cl::opt<bool> EmitLHSDot("emit-lhs-dot",
     cl::desc("Emit DOT format DAG for LHS of given souper IR (default=false)"),
     cl::init(false));
 
-std::string convertToStr(bool Fact) {
+static std::string convertToStr(bool Fact) {
     if (Fact)
       return "true";
     else
