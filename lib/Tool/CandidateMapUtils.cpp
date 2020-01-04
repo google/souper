@@ -13,47 +13,18 @@
 // limitations under the License.
 
 #include "souper/Tool/CandidateMapUtils.h"
+#include "souper/Util/DfaUtils.h"
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
 #include "souper/KVStore/KVStore.h"
 #include "souper/SMTLIB2/Solver.h"
 
-using namespace llvm;
-
-static cl::opt<bool> InferNeg("infer-neg",
-    cl::desc("Compute Negative for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferKnownBits("infer-known-bits",
-    cl::desc("Compute known bits for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferNonNeg("infer-non-neg",
-    cl::desc("Compute non-negative for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferPowerTwo("infer-power-two",
-    cl::desc("Compute power of two for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferNonZero("infer-non-zero",
-    cl::desc("Compute non zero for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferSignBits("infer-sign-bits",
-    cl::desc("Compute sign bits for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferRange("infer-range",
-    cl::desc("Compute range for the candidate (default=false)"),
-    cl::init(false));
 
 void souper::AddToCandidateMap(CandidateMap &M,
                                const CandidateReplacement &CR) {
@@ -70,18 +41,6 @@ void souper::AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
       }
     }
   }
-}
-
-static bool isInferDFA() {
-  return InferNeg || InferNonNeg || InferKnownBits || InferPowerTwo ||
-         InferNonZero || InferSignBits || InferRange;
-}
-
-static std::string convertToStr(bool Fact) {
-    if (Fact)
-      return "true";
-    else
-      return "false";
 }
 
 namespace souper {
@@ -205,6 +164,10 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
 
           OS << "; range from souper: " << "[" << Range.getLower()
              << "," << Range.getUpper() << ")" << "\n";
+        }
+        if (InferDemandedBits) {
+          llvm::errs() << "Error: Not Implemented\n";
+          return false;
         }
       } else {
         if (std::error_code EC =

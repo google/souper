@@ -20,6 +20,7 @@
 #include "souper/Inst/InstGraph.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/GetSolverFromArgs.h"
+#include "souper/Util/DfaUtils.h"
 
 using namespace llvm;
 using namespace souper;
@@ -31,38 +32,6 @@ InputFilename(cl::Positional, cl::desc("<input souper optimization>"),
 static cl::opt<bool> PrintCounterExample("print-counterexample",
     cl::desc("Print counterexample (default=true)"),
     cl::init(true));
-
-static cl::opt<bool> InferNeg("infer-neg",
-    cl::desc("Compute Negative for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferKnownBits("infer-known-bits",
-    cl::desc("Compute known bits for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferNonNeg("infer-non-neg",
-    cl::desc("Compute non-negative for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferPowerTwo("infer-power-two",
-    cl::desc("Compute power of two for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferNonZero("infer-non-zero",
-    cl::desc("Compute non zero for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferSignBits("infer-sign-bits",
-    cl::desc("Compute sign bits for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferRange("infer-range",
-    cl::desc("Compute range for the candidate (default=false)"),
-    cl::init(false));
-
-static cl::opt<bool> InferDemandedBits("infer-demanded-bits",
-    cl::desc("Compute demanded bits for the candidate (default=false)"),
-    cl::init(false));
 
 static cl::opt<bool> PrintRepl("print-replacement",
     cl::desc("Print the replacement, if valid (default=false)"),
@@ -95,18 +64,6 @@ static cl::opt<bool> ParseLHSOnly("parse-lhs-only",
 static cl::opt<bool> EmitLHSDot("emit-lhs-dot",
     cl::desc("Emit DOT format DAG for LHS of given souper IR (default=false)"),
     cl::init(false));
-
-static std::string convertToStr(bool Fact) {
-    if (Fact)
-      return "true";
-    else
-      return "false";
-}
-
-static bool isInferDFA() {
-  return InferNeg || InferNonNeg || InferKnownBits || InferPowerTwo ||
-         InferNonZero || InferSignBits || InferRange || InferDemandedBits;
-}
 
 int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
