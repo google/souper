@@ -13,18 +13,18 @@
 // limitations under the License.
 
 #include "souper/Tool/CandidateMapUtils.h"
+#include "souper/Util/DfaUtils.h"
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
 #include "souper/KVStore/KVStore.h"
 #include "souper/SMTLIB2/Solver.h"
 
-using namespace llvm;
 
 void souper::AddToCandidateMap(CandidateMap &M,
                                const CandidateReplacement &CR) {
@@ -84,17 +84,105 @@ bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
       }
 
       Inst *RHS = 0;
-      if (std::error_code EC =
-              S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
-        llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
-        return false;
-      }
-      if (RHS) {
+
+      if (isInferDFA()) {
         OS << '\n';
-        OS << "; Static profile " << Profile[I] << '\n';
-        Cand.Mapping.RHS = RHS;
         Cand.printFunction(OS);
-        Cand.print(OS);
+        ReplacementContext Context;
+        Cand.printLHS(OS, Context);
+
+        if (InferNeg) {
+          bool Negative;
+          if (std::error_code EC = S->negative(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
+                                               Negative, IC)) {
+            llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
+          } else {
+            OS << "; negative from souper: "
+               << convertToStr(Negative) << "\n";
+          }
+        }
+        if (InferNonNeg) {
+          bool NonNegative;
+          if (std::error_code EC = S->nonNegative(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
+                                                  NonNegative, IC)) {
+            llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
+          } else {
+            OS << "; nonNegative from souper: "
+               << convertToStr(NonNegative) << "\n";
+          }
+        }
+        if (InferKnownBits) {
+          unsigned W = Cand.Mapping.LHS->Width;
+          KnownBits Known(W);
+          if (std::error_code EC = S->knownBits(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
+                                                Known, IC)) {
+            llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
+          } else {
+            OS << "; knownBits from souper: "
+               << Inst::getKnownBitsString(Known.Zero, Known.One) << "\n";
+          }
+        }
+        if (InferPowerTwo) {
+          bool PowTwo;
+          if (std::error_code EC = S->powerTwo(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
+                                               PowTwo, IC)) {
+            llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
+          } else {
+            OS << "; powerOfTwo from souper: "
+               << convertToStr(PowTwo) << "\n";
+          }
+        }
+        if (InferNonZero) {
+          bool NonZero;
+          if (std::error_code EC = S->nonZero(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
+                                              NonZero, IC)) {
+            llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
+          } else {
+            OS << "; nonZero from souper: "
+               << convertToStr(NonZero) << "\n";
+          }
+        }
+        if (InferSignBits) {
+          unsigned SignBits;
+          if (std::error_code EC = S->signBits(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
+                                               SignBits, IC)) {
+            llvm::errs() << "Error: " << EC.message() << '\n';
+            return false;
+          } else {
+            OS << "; signBits from souper: "
+               << std::to_string(SignBits) << "\n";
+          }
+        }
+        if (InferRange) {
+          unsigned W = Cand.Mapping.LHS->Width;
+          llvm::ConstantRange Range = S->constantRange(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, IC);
+
+          OS << "; range from souper: " << "[" << Range.getLower()
+             << "," << Range.getUpper() << ")" << "\n";
+        }
+        if (InferDemandedBits) {
+          llvm::errs() << "Error: Not Implemented\n";
+          return false;
+        }
+      } else {
+        if (std::error_code EC =
+            S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, RHS, IC)) {
+          llvm::errs() << "Unable to query solver: " << EC.message() << '\n';
+          return false;
+        }
+
+        if (RHS) {
+          OS << '\n';
+          OS << "; Static profile " << Profile[I] << '\n';
+          Cand.Mapping.RHS = RHS;
+          Cand.printFunction(OS);
+          Cand.print(OS);
+        }
       }
     }
   } else {
