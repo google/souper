@@ -1,0 +1,34 @@
+From 84baeaf6b13d5198100df499d1b56c3a9d02d1bd Mon Sep 17 00:00:00 2001
+From: Pranav Kant <pranavk@cs.utah.edu>
+Date: Tue, 7 Jan 2020 15:59:05 -0700
+Subject: [PATCH 2/2] disable-instcombine-select-to-logic
+
+---
+ llvm/lib/Transforms/InstCombine/InstCombineSelect.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/llvm/lib/Transforms/InstCombine/InstCombineSelect.cpp b/llvm/lib/Transforms/InstCombine/InstCombineSelect.cpp
+index 05a624fde86..5f81cbf861f 100644
+--- a/llvm/lib/Transforms/InstCombine/InstCombineSelect.cpp
++++ b/llvm/lib/Transforms/InstCombine/InstCombineSelect.cpp
+@@ -2365,7 +2365,7 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
+     Worklist.Add(Cond);
+     return &SI;
+   }
+-
++#if 0
+   if (SelType->isIntOrIntVectorTy(1) &&
+       TrueVal->getType() == CondVal->getType()) {
+     if (match(TrueVal, m_One())) {
+@@ -2430,7 +2430,7 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
+       return new SExtInst(NotCond, SelType);
+     }
+   }
+-
++#endif
+   // See if we are selecting two values based on a comparison of the two values.
+   if (FCmpInst *FCI = dyn_cast<FCmpInst>(CondVal)) {
+     Value *Cmp0 = FCI->getOperand(0), *Cmp1 = FCI->getOperand(1);
+-- 
+2.21.0
+

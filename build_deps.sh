@@ -21,7 +21,9 @@ fi
 
 # hiredis version 0.14.0
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
-llvm_branch=tags/RELEASE_900/final
+llvm_repo=https://github.com/llvm/llvm-project.git
+# llvm_checkout specifies the git branch or hash to checkout to
+llvm_checkout=83ec9b51ed21b39063f0e0e7b272e66ae57bbcba
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=9823174bb34fcb9c8e33c37e7e04d46bfe3a29a5
@@ -62,17 +64,17 @@ llvm_srcdir=third_party/llvm
 llvm_installdir=$(pwd)/${llvm_srcdir}/$llvm_build_type
 llvm_builddir=$(pwd)/${llvm_srcdir}/${llvm_build_type}-build
 
-svn co https://llvm.org/svn/llvm-project/llvm/${llvm_branch} ${llvm_srcdir}
-svn co https://llvm.org/svn/llvm-project/cfe/${llvm_branch} ${llvm_srcdir}/tools/clang
-svn co https://llvm.org/svn/llvm-project/compiler-rt/${llvm_branch} ${llvm_srcdir}/projects/compiler-rt
-# Disable the broken select -> logic optimizations
-patch ${llvm_srcdir}/lib/Transforms/InstCombine/InstCombineSelect.cpp < patches/disable-instcombine-select-to-logic.patch
+git clone $llvm_repo $llvm_srcdir
+git -C $llvm_srcdir checkout $llvm_checkout
+
 # Apply instcombine switch patch
-patch -d ${llvm_srcdir} -p0 -i $(pwd)/patches/enable-instcombine-switch.patch
+git -C ${llvm_srcdir} am $(pwd)/patches/0001-enable-instcombine-switch.patch
+# Disable the broken select -> logic optimizations
+git -C ${llvm_srcdir} am $(pwd)/patches/0002-disable-instcombine-select-to-logic.patch
 
 mkdir -p $llvm_builddir
 
-cmake_flags=".. -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_FORCE_ENABLE_STATS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DZ3_INCLUDE_DIR=$z3_installdir/include -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a"
+cmake_flags="../llvm -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_FORCE_ENABLE_STATS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DZ3_INCLUDE_DIR=$z3_installdir/include -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a -DLLVM_ENABLE_PROJECTS='llvm;clang;compiler-rt'"
 
 if [ -n "`which ninja`" ] ; then
   (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")
