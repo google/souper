@@ -789,7 +789,7 @@ namespace souper {
     case Inst::AddNSW: {
       auto V1 = VAL(I->Ops[1]);
       if (V1.hasValue()) {
-        Result = CR0.addWithNoSignedWrap(V1.getValue());
+        Result = CR0.addWithNoWrap(V1.getValue(), OverflowingBinaryOperator::NoSignedWrap);
       }
       break;
     }

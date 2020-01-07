@@ -20,6 +20,7 @@
 // The other option is to print the difference between LHS and RHS.
 
 #include "souper/Parser/Parser.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <iostream>

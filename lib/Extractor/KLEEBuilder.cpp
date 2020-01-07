@@ -18,6 +18,7 @@
 #include "souper/Extractor/ExprBuilder.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Support/CommandLine.h"
 
 using namespace klee;
 using namespace souper;

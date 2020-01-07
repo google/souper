@@ -71,7 +71,7 @@ execute_process(
 )
 
 set(CLANG_CXXFLAGS "")
-set(CLANG_INCLUDEDIR "${LLVM_SRC}/tools/clang/include" "${LLVM_BUILD}/tools/clang/include")
+set(CLANG_INCLUDEDIR "${LLVM_SRC}/../clang/include" "${LLVM_BUILD}/tools/clang/include")
 
 set(ALIVE_DIR "${CMAKE_SOURCE_DIR}/third_party/alive2")
 set(ALIVE_LDFLAGS "-L ${ALIVE_DIR}/build -lalive2")
