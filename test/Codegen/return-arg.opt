@@ -6,7 +6,7 @@ result %0
 ; CHECK: ; ModuleID = 'souper.ll'
 ; CHECK-NEXT: source_filename = "souper.ll"
 
-; CHECK: define i8 @fun(i8) {
+; CHECK: define i8 @fun(i8 %0) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   ret i8 %0
 ; CHECK-NEXT: }

@@ -4,7 +4,7 @@
 %1:i8 = sext %0
 result %1
 
-; CHECK: define i8 @fun(i4) {
+; CHECK: define i8 @fun(i4 %0) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   %1 = sext i4 %0 to i8
 ; CHECK-NEXT:   ret i8 %1

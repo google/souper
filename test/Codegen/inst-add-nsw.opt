@@ -5,7 +5,7 @@
 %2:i8 = addnsw %0, %1
 result %2
 
-; CHECK: define i8 @fun(i8, i8) {
+; CHECK: define i8 @fun(i8 %0, i8 %1) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   %2 = add nsw i8 %0, %1
 ; CHECK-NEXT:   ret i8 %2

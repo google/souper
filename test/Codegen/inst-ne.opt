@@ -5,7 +5,7 @@
 %2:i1 = ne %0, %1
 result %2
 
-; CHECK: define i1 @fun(i8, i8) {
+; CHECK: define i1 @fun(i8 %0, i8 %1) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   %2 = icmp ne i8 %0, %1
 ; CHECK-NEXT:   ret i1 %2

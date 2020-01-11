@@ -4,7 +4,7 @@
 %1:i16 = bswap %0
 result %1
 
-; CHECK: define i16 @fun(i16) {
+; CHECK: define i16 @fun(i16 %0) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   %1 = call i16 @llvm.bswap.i16(i16 %0)
 ; CHECK-NEXT:   ret i16 %1
@@ -13,4 +13,4 @@ result %1
 ; CHECK: ; Function Attrs: nounwind readnone speculatable
 ; CHECK-NEXT: declare i16 @llvm.bswap.i16(i16) #0
 
-; CHECK: attributes #0 = { nounwind readnone speculatable }
+; CHECK: attributes #0 = { nounwind readnone speculatable willreturn }
