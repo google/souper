@@ -187,7 +187,20 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     }
   }
 
+  bool FoundNonTopAnalysisResult = false;
+
   for (int I = 0; I < InputVals.size(); ++I) {
+    if (I > 9 && !FoundNonTopAnalysisResult) {
+      break;
+      // Give up if first 10 known bits and constant range results
+      // are all TOP.
+      // TODO: Maybe figure out a better way to determine if an RHS
+      // is not amenable to dataflow analysis. (example : x + HOLE)
+      // TODO: Maybe tune this threshold, or make it user controllable
+      // N = 10 results in a 2x performance boost for a 5% increase in
+      // the final number of guesses.
+      // Might make sense to make this threshold depend on the RHS
+    }
     if (StatsLevel > 2) {
       llvm::errs() << "  Input:\n";
       for (auto &&p : InputVals[I]) {
@@ -201,6 +214,9 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     if (LHSHasPhi) {
       auto LHSCR = LHSConstantRange[I];
       auto RHSCR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
+      if (!RHSCR.isFullSet()) {
+        FoundNonTopAnalysisResult = true;
+      }
       if (LHSCR.intersectWith(RHSCR).isEmptySet()) {
         if (StatsLevel > 2) {
           llvm::errs() << "  LHS ConstantRange = " << LHSCR << "\n";
@@ -217,6 +233,9 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
 
       auto LHSKB = LHSKnownBits[I];
       auto RHSKB = KnownBitsAnalysis().findKnownBits(RHS, ConcreteInterpreters[I]);
+      if (!RHSKB.isUnknown()) {
+        FoundNonTopAnalysisResult = true;
+      }
       if ((LHSKB.Zero & RHSKB.One) != 0 || (LHSKB.One & RHSKB.Zero) != 0) {
         if (StatsLevel > 2) {
           llvm::errs() << "  LHS KnownBits = " << KnownBitsAnalysis::knownBitsString(LHSKB) << "\n";
