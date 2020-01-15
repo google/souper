@@ -48,7 +48,7 @@ llvm::Type *Codegen::GetInstReturnType(llvm::LLVMContext &Context, Inst *I) {
   }
 }
 
-llvm::Value *Codegen::getValue(Inst *I) {
+llvm::Value *Codegen::getValueHelper(Inst *I, std::map<Inst *, llvm::Value *> &C, std::map<Block *, llvm::Value *> &BM) {
   const std::vector<Inst *> &Ops = I->orderedOps();
   if (I->K == Inst::UntypedConst) {
     // FIXME: We only get here because it is the second argument of
@@ -66,6 +66,44 @@ llvm::Value *Codegen::getValue(Inst *I) {
 
   if (ReplacedValues.find(I) != ReplacedValues.end())
     return ReplacedValues.at(I);
+
+  if (C.find(I) != C.end())
+    return C.at(I);
+  
+  if (GenControlFlow && I->K == Inst::Phi) {
+    std::vector<BasicBlock *> Preds;
+    std::vector<Value *> Incomes;
+    BasicBlock *E = Builder.GetInsertBlock();
+    BasicBlock *NextBB = BasicBlock::Create(Context, "cont", F);
+
+    BasicBlock *DefaultNextBB;
+    for (int i = 0 ; i < I->Ops.size(); i ++) {
+      BasicBlock *BB = BasicBlock::Create(Context, "phi", F);
+      Builder.SetInsertPoint(BB);
+      Value *V0 = Codegen::getValueHelper(Ops[i], C, BM);
+      Builder.CreateBr(NextBB);
+      Preds.emplace_back(BB);
+      Incomes.emplace_back(V0);
+      if (i == 0) DefaultNextBB = BB;
+    }
+    
+
+    Builder.SetInsertPoint(E);
+    Value *D = BM[I->B];
+    SwitchInst *SI = Builder.CreateSwitch(D, DefaultNextBB);
+
+    for (int i = 1 ; i < I->Ops.size(); i ++) {
+      SI->addCase(ConstantInt::get(Type::getIntNTy(Context, 32), i), Preds[i]);
+    }
+    
+    Builder.SetInsertPoint(NextBB);
+    PHINode *Phi = Builder.CreatePHI(GetInstReturnType(Context, I), 1);
+    for (int i = 0 ; i < Preds.size() ; i ++) {
+      Phi->addIncoming(Incomes[i], Preds[i]);
+    }
+    C[I] = Phi;
+    return Phi;
+  }
 
   if (I->Origins.size() > 0) {
     // if there's an Origin, we're connecting to existing code
@@ -89,7 +127,7 @@ llvm::Value *Codegen::getValue(Inst *I) {
   }
 
   // otherwise, recursively generate code
-  Value *V0 = Codegen::getValue(Ops[0]);
+  Value *V0 = Codegen::getValueHelper(Ops[0], C, BM);
   if (!V0)
     return nullptr;
 
@@ -137,7 +175,7 @@ llvm::Value *Codegen::getValue(Inst *I) {
     break;
   }
   case 2: {
-    Value *V1 = Codegen::getValue(Ops[1]);
+    Value *V1 = Codegen::getValueHelper(Ops[1], C, BM);
     if (!V1)
       return nullptr;
     switch (I->K) {
@@ -233,8 +271,8 @@ llvm::Value *Codegen::getValue(Inst *I) {
         report_fatal_error(
             "Inst::*WithOverflow with non-identical args unsupported.");
       }
-      V0 = Codegen::getValue(Ops[0]->orderedOps()[0]);
-      V1 = Codegen::getValue(Ops[0]->orderedOps()[1]);
+      V0 = Codegen::getValueHelper(Ops[0]->orderedOps()[0], C, BM);
+      V1 = Codegen::getValueHelper(Ops[0]->orderedOps()[1], C, BM);
       Intrinsic::ID ID = [K = I->K]() {
         switch (K) {
         case Inst::SAddWithOverflow:
@@ -272,8 +310,8 @@ llvm::Value *Codegen::getValue(Inst *I) {
     break;
   }
   case 3: {
-    Value *V1 = Codegen::getValue(Ops[1]);
-    Value *V2 = Codegen::getValue(Ops[2]);
+    Value *V1 = Codegen::getValueHelper(Ops[1], C, BM);
+    Value *V2 = Codegen::getValueHelper(Ops[2], C, BM);
     if (!V1 || !V2)
       return nullptr;
     switch (I->K) {
@@ -304,4 +342,56 @@ llvm::Value *Codegen::getValue(Inst *I) {
                      Inst::getKindName(I->K) + " in Codegen::getValue()");
 }
 
+llvm::Value *Codegen::getValue(Inst *I) {
+  std::map<Inst *, llvm::Value *> C;
+  std::map<Block *, llvm::Value *> BM;
+  getValueHelper(I, C, BM);
+}
+
+static std::vector<llvm::Type *>
+GetInputArgumentTypes(const InstContext &IC, llvm::LLVMContext &Context) {
+  const std::vector<Inst *> AllVariables = IC.getVariables();
+
+  std::vector<llvm::Type *> ArgTypes;
+  ArgTypes.reserve(AllVariables.size());
+  for (const Inst *const Var : AllVariables)
+    ArgTypes.emplace_back(Type::getIntNTy(Context, Var->Width));
+
+  return ArgTypes;
+}
+
+static std::map<Inst *, Value *> GetArgsMapping(const InstContext &IC,
+                                                Function *F) {
+  std::map<Inst *, Value *> Args;
+
+  const std::vector<Inst *> AllVariables = IC.getVariables();
+  for (auto zz : llvm::zip(AllVariables, F->args()))
+    Args[std::get<0>(zz)] = &(std::get<1>(zz));
+
+  return Args;
+};
+
+  
+llvm::Function *Codegen::getFunction(Inst *I, const InstContext &IC) {
+  F = Builder.GetInsertBlock()->getParent();
+  auto PhiDet = M->getOrInsertFunction("phi_det",
+                                       FunctionType::getInt32Ty(Context));
+
+
+  std::vector<Block *> Blocks = souper::getBlocksFromPhis(I);
+  std::map<Block *, llvm::Value *> BlockMap;
+
+  for (int i = 0 ; i < Blocks.size(); i ++) {
+    Value *V = Builder.CreateCall(PhiDet, {});
+    BlockMap[Blocks[i]] = V;
+  }
+
+  std::map<Inst *, llvm::Value *> C;
+  Value *RetVal = getValueHelper(I, C, BlockMap);
+
+  Builder.CreateRet(RetVal);
+  
+  return F;
+}
+  
 } // namespace souper

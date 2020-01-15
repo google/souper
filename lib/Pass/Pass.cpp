@@ -186,7 +186,7 @@ public:
                   std::map<Inst *, Value *> &ReplacedValues,
                   IRBuilder<> &Builder, Module *M) {
     return Codegen(ReplacedInst->getContext(), M, Builder, &DT, ReplacedInst,
-                   ReplacedValues)
+                   ReplacedValues, false)
         .getValue(I);
   }
 
