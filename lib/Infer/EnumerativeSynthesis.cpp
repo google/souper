@@ -841,6 +841,7 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
              LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, Generate);
 
   if (!Guesses.empty() && !SkipSolver) {
+    sortGuesses(Guesses);
     EC = verify(SC, RHS, Guesses);
   }
 
