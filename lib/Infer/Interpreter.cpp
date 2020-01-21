@@ -139,8 +139,8 @@ namespace souper {
       if (A.K == EvalValue::ValueKind::UB)
         return EvalValue::ub();
 
-    // phi and select only take poison from their chosen input
-    if (Inst->K != Inst::Select && Inst->K != Inst::Phi) {
+    // only phi, select, and freeze take poison from their chosen input
+    if (Inst->K != Inst::Select && Inst->K != Inst::Phi && Inst->K != Inst::Freeze) {
       for (auto &A : Args)
         if (A.K == EvalValue::ValueKind::Poison)
           return EvalValue::poison(A.BitWidth);
