@@ -359,7 +359,7 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
           continue;
 
         // PRUNE: don't synthesize sub x, C since this is covered by add x, -C
-        if (K == Inst::Sub && V2->SynthesisConstID != 0)
+        if (K == Inst::Sub && V2->K == Inst::Var && V2->SynthesisConstID != 0)
           continue;
 
         Inst *N = nullptr;
