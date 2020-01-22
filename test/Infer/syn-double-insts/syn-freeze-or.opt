@@ -1,0 +1,16 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-use-alive -souper-enumerative-synthesis-num-instructions=2 -souper-dataflow-pruning %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; synthesis freeze
+; takes about a minute
+
+%0:i8 = var
+%1:i8 = var
+%c1 = eq %0, 0
+%a1 = eq %1, 0
+%2 = select %c1, 1, %a1
+infer %2
+; CHECK: %5:i1 = freeze %a1
+; CHECK: %6:i1 = or %c1, %5
+; CHECK: result %6
