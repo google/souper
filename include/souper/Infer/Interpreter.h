@@ -52,16 +52,14 @@ struct EvalValue {
   }
 
   static EvalValue poison(unsigned Width) {
-    if (Width == 0)
-      llvm::report_fatal_error("poison of zero width!");
+    assert(Width != 0);
     EvalValue Result;
     Result.K = ValueKind::Poison;
     Result.BitWidth = Width;
     return Result;
   }
   static EvalValue undef(unsigned Width) {
-    if (Width == 0)
-      llvm::report_fatal_error("poison of zero width!");
+    assert(Width != 0);
     EvalValue Result;
     Result.K = ValueKind::Undef;
     Result.BitWidth = Width;
