@@ -1156,7 +1156,9 @@ namespace souper {
     }
     bool op0isHole = false;
     bool op1isHole = false;
+    bool op2isHole = false;
     bool hasHoleInput = false;
+    bool allHoles = true;
     for (auto i = 0 ; i < I->Ops.size(); ++i) {
       bool isHole = findIfHole(I->Ops[i]);
       hasHoleInput |= isHole;
@@ -1166,6 +1168,10 @@ namespace souper {
       if (i == 1 && isHole) {
         op1isHole = true;
       }
+      if (i == 2 && isHole) {
+        op2isHole = true;
+      }
+      allHoles &= isHole;
     }
 
     switch (I->K) {
@@ -1190,7 +1196,33 @@ namespace souper {
         return op1isHole;
       }
 
-      // TODO: Insts like select/phi.
+      case Inst::Select : {
+        auto Cond = op0isHole && (op1isHole || op2isHole);
+        Cache[I] = Cond;
+        return Cond;
+      }
+
+      case Inst::And:
+      case Inst::Or:
+      case Inst::Xor:
+      case Inst::AddNSW:
+      case Inst::AddNUW:
+      case Inst::AddNW:
+      case Inst::SubNSW:
+      case Inst::SubNUW:
+      case Inst::SubNW:
+      case Inst::Mul:
+      case Inst::MulNSW:
+      case Inst::MulNUW:
+      case Inst::MulNW:
+      case Inst::SDiv:
+      case Inst::UDiv:
+      case Inst::SRem:
+      case Inst::URem: {
+        Cache[I] = allHoles;
+        return allHoles;
+      }
+
       // It's sound to always return false, for the purpose we are using this.
       default: {
         Cache[I] = false;
