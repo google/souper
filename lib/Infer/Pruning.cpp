@@ -132,6 +132,12 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
   std::set<souper::Inst *> Constants;
   getConstants(RHS, Constants);
 
+  if (HA.findIfHole(RHS)) {
+    // Do not attempt pruning if the RHS will provably produce top
+    // for all abstract interpreters
+    return false;
+  }
+
   if (!Constants.empty()) {
     auto RestrictedBits = RestrictedBitsAnalysis().findRestrictedBits(RHS);
     if ((~RestrictedBits & (LHSKnownBitsNoSpec.Zero | LHSKnownBitsNoSpec.One)) != 0) {

@@ -1145,4 +1145,57 @@ namespace souper {
     return Result;
   }
 
+  bool HoleAnalysis::findIfHole(souper::Inst *I) {
+    if (Cache.find(I) != Cache.end()) {
+      return Cache[I];
+    }
+
+    if (I->K == Inst::Hole || I->K == Inst::ReservedInst) {
+      Cache[I] = true;
+      return true;
+    }
+    bool op0isHole = false;
+    bool op1isHole = false;
+    bool hasHoleInput = false;
+    for (auto i = 0 ; i < I->Ops.size(); ++i) {
+      bool isHole = findIfHole(I->Ops[i]);
+      hasHoleInput |= isHole;
+      if (i == 0 && isHole) {
+        op0isHole = true;
+      }
+      if (i == 1 && isHole) {
+        op1isHole = true;
+      }
+    }
+
+    switch (I->K) {
+      case Inst::Add:
+      case Inst::Sub:
+      case Inst::BitReverse:
+      case Inst::BSwap:
+      case Inst::Eq:
+      case Inst::Ne:
+      case Inst::Sle:
+      case Inst::Slt:
+      case Inst::Ule:
+      case Inst::Ult:
+      case Inst::Trunc: {
+        Cache[I] = hasHoleInput;
+        return hasHoleInput;
+      }
+      case Inst::Shl:
+      case Inst::LShr:
+      case Inst::AShr: {
+        Cache[I] = op1isHole;
+        return op1isHole;
+      }
+
+      // TODO: Insts like select/phi.
+      // It's sound to always return false, for the purpose we are using this.
+      default: {
+        Cache[I] = false;
+        return false;
+      }
+    }
+  }
 }

@@ -49,6 +49,7 @@ private:
   std::vector<ConcreteInterpreter> ConcreteInterpreters;
   std::vector<llvm::KnownBits> LHSKnownBits;
   std::vector<llvm::ConstantRange> LHSConstantRange;
+  HoleAnalysis HA;
   llvm::KnownBits LHSKnownBitsNoSpec;
   InputVarInfo LHSMustDemandedBits;
   bool LHSHasPhi = false;

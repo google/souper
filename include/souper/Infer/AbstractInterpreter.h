@@ -189,6 +189,13 @@ namespace souper {
   public:
     InputVarInfo findDontCareBits(souper::Inst *Root);
   };
+
+  class HoleAnalysis {
+  public:
+    std::unordered_map<souper::Inst *, bool> Cache;
+    bool findIfHole(souper::Inst *I);
+  };
+
 }
 
 #endif
