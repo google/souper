@@ -1,0 +1,19 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-check-all-guesses %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-use-alive -souper-enumerative-synthesis-check-all-guesses %solver %s > %t2
+; RUN: %FileCheck %s < %t1
+; RUN: %FileCheck %s < %t2
+
+; CHECK: %1:i8 = mul 1:i8, %0
+; CHECK: %1:i8 = and 255:i8, %0
+; CHECK: %1:i8 = or 0:i8, %0
+; CHECK: %1:i8 = xor 0:i8, %0
+; CHECK: %1:i8 = shl %0, 0:i8
+; CHECK: %1:i8 = ashr %0, 0:i8
+; CHECK: %1:i8 = lshr %0, 0:i8
+
+
+%0:i8 = var
+%1:i8 = add 1:i8, %0
+%2:i8 = sub %1, 1:i8
+infer %2

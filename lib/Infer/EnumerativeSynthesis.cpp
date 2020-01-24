@@ -100,6 +100,9 @@ namespace {
   static cl::opt<bool> IgnoreCost("souper-enumerative-synthesis-ignore-cost",
     cl::desc("Ignore cost of RHSes -- just generate them. (default=false)"),
     cl::init(false));
+  static cl::opt<bool> CheckAllGuesses("souper-enumerative-synthesis-check-all-guesses",
+    cl::desc("Continue even after a valid RHS is found. (default=false)"),
+    cl::init(false));
 }
 
 // TODO
@@ -574,7 +577,7 @@ bool canDifferInLSB(SynthesisContext &SC, Inst *RHSGuess) {
   return QueryIsSat;
 }
 
-std::error_code synthesizeWithAlive(SynthesisContext &SC, Inst *&RHS,
+std::error_code synthesizeWithAlive(SynthesisContext &SC, std::vector<Inst *> &RHSs,
                                     const std::vector<souper::Inst *> &Guesses) {
   std::error_code EC;
   std::map<Inst *, Inst *> InstCache;
@@ -590,13 +593,15 @@ std::error_code synthesizeWithAlive(SynthesisContext &SC, Inst *&RHS,
   }
 
   AliveDriver Verifier(SC.LHS, Ante, SC.IC);
+  Inst *RHS;
   for (auto &&G : Guesses) {
     std::set<const Inst *> Visited;
     auto C = findConst(G, Visited);
     if (!C) {
       if (Verifier.verify(G)) {
         RHS = G;
-        return EC;
+      } else {
+        continue;
       }
     } else {
       if (SynthesisConstWithCegisLoop) {
@@ -606,7 +611,6 @@ std::error_code synthesizeWithAlive(SynthesisContext &SC, Inst *&RHS,
         auto GWithC = getInstCopy(G, SC.IC, InstCache, BlockCache, &ConstMap,
                                   /*CloneVars=*/false);
         RHS = GWithC;
-        return EC;
       } else {
         auto ConstMap = Verifier.synthesizeConstants(G);
         // TODO: Counterexample guided loop or UB constraints in query
@@ -615,12 +619,20 @@ std::error_code synthesizeWithAlive(SynthesisContext &SC, Inst *&RHS,
                                   /*CloneVars=*/false);
         if (Verifier.verify(GWithC)) {
           RHS = GWithC;
-          return EC;
         } else {
           continue;
         }
-        return EC;
       }
+    }
+    assert (RHS);
+    RHSs.emplace_back(RHS);
+    if (!CheckAllGuesses) {
+      return EC;
+    } else {
+      llvm::outs() << "; result " << RHSs.size() << ":\n";
+      ReplacementContext RC;
+      RC.printInst(RHS, llvm::outs(), false);
+      llvm::outs() << "\n";
     }
   }
   return EC;
@@ -692,7 +704,7 @@ bool isBigQuerySat(SynthesisContext &SC,
   return BigQueryIsSat;
 }
 
-std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
+std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RHSs,
                                    const std::vector<souper::Inst *> &Guesses) {
   std::error_code EC;
 
@@ -702,6 +714,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
 
   // find the valid one
   int GuessIndex = -1;
+  Inst *RHS;
 
   for (auto I : Guesses) {
     GuessIndex++;
@@ -731,7 +744,6 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
         if (DebugLevel > 3)
           llvm::errs() << "query is UNSAT\n";
         RHS = I;
-        return EC;
       }
     } else {
       // guess has constant
@@ -745,38 +757,50 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, Inst *&RHS,
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
         RHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ResultConstMap, false);
-        return EC;
       } else {
         continue;
       }
+    }
+
+    assert(RHS);
+    RHSs.emplace_back(RHS);
+    if (!CheckAllGuesses) {
+      return EC;
+    } else {
+      llvm::outs() << "; result " << RHSs.size() << ":\n";
+      ReplacementContext RC;
+      RC.printInst(RHS, llvm::outs(), true);
+      llvm::outs() << "\n";
     }
   }
   return EC;
 }
 
-std::error_code verify(SynthesisContext &SC, Inst *&RHS,
+std::error_code verify(SynthesisContext &SC, std::vector<Inst *> &RHSs,
                        const std::vector<souper::Inst *> &Guesses) {
   std::error_code EC;
   if (SkipSolver || Guesses.empty())
     return EC;
 
   if (UseAlive) {
-    return synthesizeWithAlive(SC, RHS, Guesses);
+    return synthesizeWithAlive(SC, RHSs, Guesses);
   } else {
-    auto Ret = synthesizeWithKLEE(SC, RHS, Guesses);
-    if (DoubleCheckWithAlive && !Ret && RHS) {
-      if (isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
-        return Ret;
-      } else {
-        llvm::errs() << "Transformation proved wrong by alive.";
-        ReplacementContext RC;
-        RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
-        llvm::errs() << "=>";
-        ReplacementContext RC2;
-        RC2.printInst(RHS, llvm::errs(), /*printNames=*/true);
-        RHS = nullptr;
-        std::error_code EC;
-        return EC;
+    auto Ret = synthesizeWithKLEE(SC, RHSs, Guesses);
+    if (DoubleCheckWithAlive && !Ret && !RHSs.empty()) {
+      for (auto RHS : RHSs) {
+        if (isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
+          continue;
+        } else {
+          llvm::errs() << "Transformation proved wrong by alive.";
+          ReplacementContext RC;
+          RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
+          llvm::errs() << "=>";
+          ReplacementContext RC2;
+          RC2.printInst(RHS, llvm::errs(), /*printNames=*/true);
+          RHS = nullptr;
+          std::error_code EC;
+          return EC;
+        }
       }
     }
     return Ret;
@@ -820,14 +844,16 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::vector<Inst *> Guesses;
   uint64_t GuessCount = 0;
 
-  auto Generate = [&SC, &Guesses, &RHS, &EC, &GuessCount](Inst *Guess) {
+  std::vector<Inst *> RHSs;
+
+  auto Generate = [&SC, &Guesses, &RHSs, &EC, &GuessCount](Inst *Guess) {
     GuessCount++;
     Guesses.push_back(Guess);
     if (Guesses.size() >= MaxV && !SkipSolver) {
       sortGuesses(Guesses);
-      EC = verify(SC, RHS, Guesses);
+      EC = verify(SC, RHSs, Guesses);
       Guesses.clear();
-      return RHS == nullptr; // Continue if no RHS
+      return CheckAllGuesses || (!CheckAllGuesses && RHSs.empty()); // Continue if no RHS
     }
     return true;
   };
@@ -842,7 +868,7 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   if (!Guesses.empty() && !SkipSolver) {
     sortGuesses(Guesses);
-    EC = verify(SC, RHS, Guesses);
+    EC = verify(SC, RHSs, Guesses);
   }
 
   if (DebugLevel >= 1) {
@@ -851,5 +877,10 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   if (DebugLevel > 1)
     llvm::errs() << "There are " << GuessCount << " Guesses\n";
+
+  if (!RHSs.empty()) {
+    RHS = RHSs[0];
+  }
+
   return EC;
 }
