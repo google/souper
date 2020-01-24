@@ -1052,18 +1052,15 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
                bool WidthMustMatch, bool FilterVars, int Max) {
   // breadth-first search
   std::set<Inst *> Visited;
-  std::queue<std::tuple<Inst *,int>> Q;
-  Q.push(std::make_tuple(Root, 0));
+  std::queue<Inst *> Q;
+  Q.push(Root);
   while (!Q.empty()) {
-    Inst *I;
-    int Benefit;
-    std::tie(I, Benefit) = Q.front();
+    Inst *I = Q.front();
     Q.pop();
-    ++Benefit;
     if (Visited.insert(I).second) {
       for (auto Op : I->Ops)
-        Q.push(std::make_tuple(Op, Benefit));
-      if (Benefit > 1 && I->Available && I->K != Inst::Const
+        Q.push(Op);
+      if (I->Available && I->K != Inst::Const
           && I->K != Inst::UntypedConst) {
         if (WidthMustMatch && I->Width != Root->Width)
           continue;

@@ -1,0 +1,10 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-num-instructions=3 %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis %solver %s > %t2
+; RUN: %FileCheck %s < %t1
+; RUN: %FileCheck %s < %t2
+
+; CHECK: ; Failed to infer RHS
+
+%0:i32 = var
+infer %0

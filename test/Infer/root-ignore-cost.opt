@@ -1,0 +1,8 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-num-instructions=3 -souper-enumerative-synthesis-ignore-cost %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: result %0
+
+%0:i8 = var
+infer %0
