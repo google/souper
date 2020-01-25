@@ -33,13 +33,282 @@ namespace {
 }
 namespace souper {
 
+Inst *getUBConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
+                      InstContext &IC) {
+  switch (K) {
+
+  case Inst::Shl:
+  case Inst::LShr:
+  case Inst::AShr:
+    // right operand has to be < Width
+    return (OpNum == 0) ?
+      IC.getConst(llvm::APInt(1, true)) : 
+      IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt(C->Width, C->Width)) });
+
+  case Inst::UDiv:
+  case Inst::SDiv:
+  case Inst::SRem:
+  case Inst::URem:
+    // right operand can't be 0
+    return (OpNum == 0) ?
+      IC.getConst(llvm::APInt(1, true)) :
+      IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C });
+
+  default:
+    return IC.getConst(llvm::APInt(1, true));
+  }
+}
+
+Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
+                         InstContext &IC) {
+  switch (K) {
+
+  case Inst::Add:
+  case Inst::Xor:
+  case Inst::SAddSat:
+  case Inst::UAddSat:
+    // neither operand can be 0
+    return IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C });
+
+  case Inst::Sub:
+  case Inst::SSubSat:
+    // right operand cannot be 0
+    return (OpNum == 0) ?
+      IC.getConst(llvm::APInt(1, true)) :
+      IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C });
+
+  case Inst::USubSat:
+    // left operand cannot be 0, right operand cannot be 0 or -1
+    return (OpNum == 0) ?
+      IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }) : 
+      IC.getInst(Inst::And, 1, {
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+      });
+
+  case Inst::Mul:
+    // neither operand can be 0 or 1
+    return IC.getInst(Inst::And, 1, {
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 1)), C })
+      });
+
+  case Inst::And:
+  case Inst::Or:
+    // neither operand can be 0 or -1
+    return IC.getInst(Inst::And, 1, {
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+      });
+
+  case Inst::Shl:
+  case Inst::LShr:
+    // left operand cannot be zero, right operand has to be > 0 and < Width
+    return (OpNum == 0) ?
+      IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }) :
+      IC.getInst(Inst::And, 1, {
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
+        IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt(C->Width, C->Width))})
+      });
+
+  case Inst::AShr:
+    // left operand cannot be zero or -1, right operand has to be > 0 and < Width
+    return (OpNum == 0) ?
+      IC.getInst(Inst::And, 1, {
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+      }) :
+      IC.getInst(Inst::And, 1, {
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
+        IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt(C->Width, C->Width))})
+      });
+
+  case Inst::FShl:
+  case Inst::FShr:
+    // handled elsewhere: first and second arguments can't both be zero
+    // third argument has to be > 0 and < Width
+    return (OpNum == 0 || OpNum == 1) ?
+      IC.getConst(llvm::APInt(1, true)) :
+      IC.getInst(Inst::And, 1, {
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
+        IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt(C->Width, C->Width)) })
+      });
+
+  case Inst::UDiv:
+    // right operand can't be:
+    // 0 (UB)
+    // 1 (identity)
+    // x /u 2  (prefer x >>u 1)
+    // x /u -1 (prefer zext(x == -1))
+    return (OpNum == 0) ?
+      IC.getConst(llvm::APInt(1, true)) :
+      IC.getInst(Inst::And, 1, {
+        IC.getInst(Inst::Ult, 1, { IC.getConst(llvm::APInt(C->Width, 2)), C }),
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+      });
+    
+  case Inst::SDiv:
+  case Inst::SRem:
+  case Inst::URem:
+    // right operand can't be 0 or 1
+    return (OpNum == 0) ?
+      IC.getConst(llvm::APInt(1, true)) :
+      IC.getInst(Inst::And, 1, {
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 1)), C })
+      });
+
+  case Inst::Ult:
+    // we don't want:
+    //  0 <u  x (prefer x != 0)
+    // -2 <u  x (prefer x == -1)
+    // -1 <u  x (false)
+    //  x <u -1 (prefer x != -1)
+    //  x <u  0 (false)
+    //  x <u  1 (prefer x == 1)
+    return (OpNum == 0) ?
+      IC.getInst(Inst::And, 1, {
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
+            IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt::getAllOnesValue(C->Width) - 1) })
+      }) :
+      IC.getInst(Inst::And, 1, {
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C }),
+          IC.getInst(Inst::Ult, 1, { IC.getConst(llvm::APInt(C->Width, 1)), C })
+      });
+
+  case Inst::Ule:
+    // we don't want:
+    //  0 <=u  x (true)
+    //  1 <=u  x (prefer x != 0)
+    // -1 <=u  x (prefer x == -1)
+    //  x <=u -1 (true)
+    //  x <=u -2 (prefer x != -1)
+    //  x <=u  0 (prefer x == 0)
+    return (OpNum == 0) ?
+      IC.getInst(Inst::And, 1, {
+          IC.getInst(Inst::Ult, 1, { IC.getConst(llvm::APInt(C->Width, 2)), C }),
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+      }) :
+      IC.getInst(Inst::And, 1, {
+          IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt::getAllOnesValue(C->Width) - 1) }),
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C })
+      });    
+
+  case Inst::Slt:
+    // we don't want:
+    // INT_MIN     <s x           (prefer x != INT_MIN)
+    // INT_MAX - 1 <s x           (prefer x == INT_MAX)
+    // INT_MAX     <s x           (false)
+    // x           <s INT_MIN     (false)
+    // x           <s INT_MIN + 1 (prefer x == INT_MIN)
+    // x           <s INT_MAX     (prefer x != INT_MAX)
+    return (OpNum == 0) ?
+      IC.getInst(Inst::And, 1, {
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getSignedMinValue(C->Width)), C }),
+          IC.getInst(Inst::Slt, 1, { C, IC.getConst(llvm::APInt::getSignedMaxValue(C->Width) - 1), C })
+      }) :
+      IC.getInst(Inst::And, 1, {
+          IC.getInst(Inst::Slt, 1, { IC.getConst(llvm::APInt::getSignedMinValue(C->Width) + 1), C }),
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getSignedMaxValue(C->Width)), C })
+      });
+
+  case Inst::Sle: // FIXME
+    // we don't want:
+    // INT_MIN     <=s x           (true)
+    // INT_MIN + 1 <=s x           (prefer x != INT_MIN)
+    // INT_MAX     <=s x           (prefer x == INT_MAX)
+    // x           <=s INT_MIN     (prefer x ==  INT_MIN)
+    // x           <=s INT_MAX - 1 (prefer x != INT_MAX)
+    // x           <=s INT_MAX     (true)
+    return (OpNum == 0) ?
+      IC.getInst(Inst::And, 1, {
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getSignedMaxValue(C->Width)), C }),
+          IC.getInst(Inst::Slt, 1, { IC.getConst(llvm::APInt::getSignedMinValue(C->Width) + 1), C })
+      }) :
+      IC.getInst(Inst::And, 1, {
+          IC.getInst(Inst::Slt, 1, { C, IC.getConst(llvm::APInt::getSignedMaxValue(C->Width) - 1) }),
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getSignedMinValue(C->Width)), C })
+      });
+
+  case Inst::Eq:
+  case Inst::Ne:
+  case Inst::SAddO:
+  case Inst::UAddO:
+  case Inst::SSubO:
+  case Inst::USubO:
+  case Inst::SMulO:
+  case Inst::UMulO:
+  case Inst::Select: // handled elsewhere: 2nd and 3rd arguments can't be same constant
+    // no constraint
+    return IC.getConst(llvm::APInt(1, true));
+
+  default:
+    llvm::report_fatal_error("unmatched: " + (std::string)Inst::getKindName(K));
+  }
+}
+
+void addComplexConstraints(Inst *I,
+                           Inst *&Constraints, const std::set<Inst *> &ConstSet,
+                           InstContext &IC) {
+
+  // TODO: consider pattern-matching and preventing:
+  // --x
+  // ~~x
+  // 2 * x / 2
+  
+  // first and second arguments to funnel shift can't both be zero
+  if (I->K == Inst::FShl || I->K == Inst::FShr) {
+    if (ConstSet.find(I->Ops[0]) != ConstSet.end() &&
+        ConstSet.find(I->Ops[1]) != ConstSet.end()) {
+      auto Tmp0 = IC.getInst(Inst::Ne, 1,
+          { IC.getConst(llvm::APInt(I->Ops[0]->Width, 0)), I->Ops[0] });
+      auto Tmp1 = IC.getInst(Inst::Ne, 1,
+          { IC.getConst(llvm::APInt(I->Ops[1]->Width, 0)), I->Ops[1] });
+      auto Tmp2 = IC.getInst(Inst::Or, 1, { Tmp0, Tmp1 });
+      Constraints = IC.getInst(Inst::And, 1, { Constraints, Tmp2 });
+    }
+  }
+
+  // 2nd and 3rd arguments to select can't be the same constant
+  if (I->K == Inst::Select) {
+    if (ConstSet.find(I->Ops[1]) != ConstSet.end() &&
+        ConstSet.find(I->Ops[2]) != ConstSet.end()) {
+      auto Tmp = IC.getInst(Inst::Ne, 1, { I->Ops[1], I->Ops[2] });
+      Constraints = IC.getInst(Inst::And, 1, { Constraints, Tmp });
+    }
+  }
+}
+
+static void visitConstants(Inst *I, std::set<Inst *> &Visited,
+                           Inst *&Constraints, const std::set<Inst *> &ConstSet,
+                           InstContext &IC, bool AvoidNops) {
+  if (Visited.insert(I).second) {
+    if (AvoidNops)
+      addComplexConstraints(I, Constraints, ConstSet, IC);
+    unsigned OpNum = 0;
+    for (auto Op : I->Ops) {
+      if (ConstSet.find(Op) != ConstSet.end()) {
+        Constraints = IC.getInst(Inst::And, 1, { Constraints,
+              AvoidNops ?
+              getConstConstraint(I->K, OpNum, Op, IC) :
+              getUBConstraint(I->K, OpNum, Op, IC)
+        });
+      } else {
+        visitConstants(Op, Visited, Constraints, ConstSet, IC, AvoidNops);
+      }
+      ++OpNum;
+    }
+  }
+}
+
 std::error_code
 ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                               const BlockPCs &BPCs,
                               const std::vector<InstMapping> &PCs,
                               InstMapping Mapping, std::set<Inst *> &ConstSet,
                               std::map <Inst *, llvm::APInt> &ResultMap,
-                              InstContext &IC, unsigned MaxTries, unsigned Timeout) {
+                              InstContext &IC, unsigned MaxTries, unsigned Timeout,
+                              bool AvoidNops) {
 
   Inst *TrueConst = IC.getConst(llvm::APInt(1, true));
   Inst *FalseConst = IC.getConst(llvm::APInt(1, false));
@@ -73,13 +342,19 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     }
   }
 
-  for (int I = 0 ; I < MaxTries; I ++)  {
+  auto ConstConstraints = TrueConst;
+  std::set<Inst *> Visited;
+  visitConstants(Mapping.RHS, Visited, ConstConstraints, ConstSet, IC, AvoidNops);
+
+  for (int I = 0 ; I < MaxTries; ++I)  {
     bool IsSat;
     std::vector<Inst *> ModelInstsFirstQuery;
     std::vector<llvm::APInt> ModelValsFirstQuery;
 
     // TriedAnte /\ SubstAnte
-    Inst *FirstQueryAnte = IC.getInst(Inst::And, 1, {SubstAnte, TriedAnte});
+    Inst *FirstQueryAnte = IC.getInst(Inst::And, 1,
+                                      { ConstConstraints,
+                                        IC.getInst(Inst::And, 1, {SubstAnte, TriedAnte})});
 
     std::string Query = BuildQuery(IC, BPCs, PCs, InstMapping(Mapping.LHS, Mapping.RHS),
                                    &ModelInstsFirstQuery, FirstQueryAnte, true);
@@ -133,7 +408,6 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     }
     TriedAnte = IC.getInst(Inst::And, 1, {TriedAnte, TriedAnteLocal});
 
-
     std::map<Inst *, Inst *> InstCache;
     std::map<Block *, Block *> BlockCache;
     Inst *LHSCopy = getInstCopy(Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, false);
@@ -142,7 +416,6 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     for (auto Block : Blocks) {
       Block->ConcretePred = 0;
     }
-
 
     if (DebugLevel > 2) {
       if (Pruner) {

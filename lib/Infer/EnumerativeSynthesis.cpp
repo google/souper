@@ -103,6 +103,9 @@ namespace {
   static cl::opt<bool> CheckAllGuesses("souper-enumerative-synthesis-check-all-guesses",
     cl::desc("Continue even after a valid RHS is found. (default=false)"),
     cl::init(false));
+  static cl::opt<bool> SuppressFoldables("souper-suppress-foldable-operations",
+    cl::desc("Avoid synthesizing operations such as mul x, 1 that can be folded away (default=true)"),
+    cl::init(true));
 }
 
 // TODO
@@ -752,7 +755,8 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       std::map <Inst *, llvm::APInt> ResultConstMap;
 
       EC = CS.synthesize(SC.SMTSolver, SC.BPCs, SC.PCs, InstMapping (SC.LHS, I), ConstSet,
-                         ResultConstMap, SC.IC, /*MaxTries=*/MaxTries, SC.Timeout);
+                         ResultConstMap, SC.IC, /*MaxTries=*/MaxTries, SC.Timeout,
+                         SuppressFoldables);
       if (!ResultConstMap.empty()) {
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;

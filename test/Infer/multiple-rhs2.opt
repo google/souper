@@ -1,0 +1,10 @@
+; REQUIRES: solver, synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-check-all-guesses %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: result %0
+
+%0:i8 = var
+%1:i8 = add 1:i8, %0
+%2:i8 = sub %1, 1:i8
+infer %2
