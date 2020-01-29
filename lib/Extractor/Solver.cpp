@@ -392,7 +392,7 @@ public:
       std::vector<Inst *>Guesses { IC.getConst(APInt(LHS->Width, 0)),
                                    IC.getConst(APInt(LHS->Width, 1)) };
       if (LHS->Width > 1)
-        Guesses.emplace_back(IC.getConst(APInt(LHS->Width, -1)));
+        Guesses.emplace_back(IC.getConst(APInt::getAllOnesValue(LHS->Width)));
       for (auto I : Guesses) {
         InstMapping Mapping(LHS, I);
 
@@ -442,7 +442,7 @@ public:
         std::set<Inst*> ConstSet{C};
         ConstantSynthesis CS;
         EC = CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, C), ConstSet,
-                           ResultMap, IC, /*MaxTries=*/1, Timeout);
+                           ResultMap, IC, /*MaxTries=*/1, Timeout, /*AvoidNops=*/false);
         if (ResultMap.find(C) != ResultMap.end()) {
           RHS = IC.getConst(ResultMap[C]);
           return std::error_code();
@@ -526,7 +526,8 @@ public:
     Pruner.init();
     ConstantSynthesis CS{&Pruner};
     std::error_code EC = CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, RHS),
-                                       ConstSet, ResultMap, IC, MaxConstantSynthesisTries, Timeout);
+                                       ConstSet, ResultMap, IC, MaxConstantSynthesisTries,
+                                       Timeout, /*AvoidNops=*/false);
 
     if (EC || ResultMap.empty())
       return EC;
@@ -536,8 +537,6 @@ public:
     RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ResultMap, false);
     return EC;
   }
-
-
 
   bool testKnown(const BlockPCs &BPCs,
                  const std::vector<InstMapping> &PCs,
@@ -594,7 +593,8 @@ public:
     // the query to take care of UB, therefore, the new query is or(trunc(LHS), 1) = Guess(ReservedX, LHS)
     LHS = IC.getInst(Inst::Or, 1, {IC.getInst(Inst::Trunc, 1, {LHS}), IC.getConst(llvm::APInt(1, true))}),
     CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, Guess),
-                  ConstSet, ResultMap, IC, MaxConstantSynthesisTries, Timeout);
+                  ConstSet, ResultMap, IC, MaxConstantSynthesisTries, Timeout,
+                  /*AvoidNops=*/false);
     if (ResultMap.empty()) {
       IsFound = false;
     } else {
