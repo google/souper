@@ -168,6 +168,7 @@ struct Inst : llvm::FoldingSetNode {
 
   static bool isCommutative(Kind K);
   static bool isShift(Kind K);
+  static bool isDivRem(Kind K);
   static int getCost(Kind K);
   llvm::APInt KnownZeros;
   llvm::APInt KnownOnes;

@@ -269,14 +269,28 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
   Comps.push_back(I2);
 
   for (auto K : BinaryOperators) {
-    // PRUNE: one-bit shifts don't make sense
-    if (Inst::isShift(K) && Width == 1)
+
+    // PRUNE: i1 is a special case for a number of operators
+    if (Width == 1 &&
+        (// these become trivial
+         Inst::isDivRem(K) || Inst::isShift(K) ||
+         // these canonicalize to "xor"
+         K == Inst::Add || K == Inst::Sub || K == Inst::Ne ||
+         // canonicalizes to "and"
+         K == Inst::Mul ||
+         // i1 versions of these do not tend to codegen well
+         K == Inst::SAddSat || K == Inst::UAddSat ||
+         K == Inst::SSubSat || K == Inst::USubSat ||
+         K == Inst::SAddWithOverflow || K == Inst::UAddWithOverflow ||
+         K == Inst::SSubWithOverflow || K == Inst::USubWithOverflow ||
+         K == Inst::SMulWithOverflow || K == Inst::UMulWithOverflow)) {
       continue;
+    }
 
     for (auto I = Comps.begin(); I != Comps.end(); ++I) {
       // Prune: only one of (mul x, C), (mul C, x) is allowed
-      if ((Inst::isCommutative(K) || Inst::isOverflowIntrinsicMain(K) || Inst::isOverflowIntrinsicSub(K)) &&
-          (*I)->K == Inst::ReservedConst)
+      if ((Inst::isCommutative(K) || Inst::isOverflowIntrinsicMain(K) ||
+           Inst::isOverflowIntrinsicSub(K)) && (*I)->K == Inst::ReservedConst)
         continue;
 
       // Prune: I1 should only be the first argument
@@ -381,7 +395,8 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
           N = IC.getInst(Inst::ExtractValue, V1->Width, {Orig, IC.getConst(llvm::APInt(32, 0))});
         }
         else if (Inst::isOverflowIntrinsicSub(K)) {
-          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)), V1->Width, {V1, V2});
+          auto Comp0 = IC.getInst(Inst::getBasicInstrForOverflow(Inst::getOverflowComplement(K)),
+                                  V1->Width, {V1, V2});
           auto Comp1 = IC.getInst(K, 1, {V1, V2});
           auto Orig = IC.getInst(Inst::getOverflowComplement(K), V1->Width + 1, {Comp0, Comp1});
           N = IC.getInst(Inst::ExtractValue, 1, {Orig, IC.getConst(llvm::APInt(32, 1))});
@@ -416,6 +431,10 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
       if (Op == Inst::Select && I->K == Inst::ReservedConst)
         continue;
 
+      // PRUNE: don't generate an i1 using funnel shift
+      if (Width == 1 && (Op == Inst::FShr || Op == Inst::FShl))
+        continue;
+      
       Inst *V1;
       if (I->K == Inst::ReservedConst) {
         V1 = IC.createSynthesisConstant(Width, I->SynthesisConstID);
@@ -455,7 +474,8 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
             continue;
 
           // PRUNE: ter-op c, c, c
-          if (I->K == Inst::ReservedConst && J->K == Inst::ReservedConst && K->K == Inst::ReservedConst)
+          if (I->K == Inst::ReservedConst && J->K == Inst::ReservedConst &&
+              K->K == Inst::ReservedConst)
             continue;
 
           // PRUNE: (select cond, x, x)

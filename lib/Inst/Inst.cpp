@@ -877,7 +877,25 @@ Inst::Kind Inst::getBasicInstrForOverflow(Inst::Kind K) {
 }
 
 bool Inst::isShift(Inst::Kind K) {
-  return K == Inst::Shl || K == Inst::AShr || K == Inst::LShr;
+  return
+    K == Shl ||
+    K == ShlNSW ||
+    K == ShlNUW ||
+    K == ShlNW ||
+    K == LShr ||
+    K == LShrExact ||
+    K == AShr ||
+    K == AShrExact;
+}
+
+bool Inst::isDivRem(Inst::Kind K) {
+  return
+    K == UDiv ||
+    K == SDiv ||
+    K == UDivExact ||
+    K == SDivExact ||
+    K == URem ||
+    K == SRem;
 }
 
 int Inst::getCost(Inst::Kind K) {
