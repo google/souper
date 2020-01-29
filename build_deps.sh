@@ -43,6 +43,7 @@ mkdir -p $z3_installdir
 (cd $z3_srcdir && git checkout $z3_commit && python scripts/mk_make.py --staticlib --prefix=$z3_installdir && cd build && make -j8 install)
 
 export PATH=$z3_installdir/bin:$PATH
+export LD_LIBRARY_PATH=$z3_installdir/lib:$LD_LIBRARY_PATH
 
 alivedir=third_party/alive2
 alive_builddir=$alivedir/build
