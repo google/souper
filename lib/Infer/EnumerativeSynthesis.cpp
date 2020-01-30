@@ -513,12 +513,11 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
     // if there exist empty slots, then call getGuesses() recursively
     // and fill the empty slots
     if (prune(JoinedGuess, CurrSlots)) {
-      for (auto S : CurrSlots) {
-        if (!getGuesses(Inputs, S->Width,
-                        LHSCost, IC, JoinedGuess,
-                        S, TooExpensive, prune, Generate)) {
-          return false;
-        }
+      // TODO: replace this naive hole selection with some better algorithms
+      if (!getGuesses(Inputs, CurrSlots.front()->Width,
+                      LHSCost, IC, JoinedGuess,
+                      CurrSlots.front(), TooExpensive, prune, Generate)) {
+        return false;
       }
     }
   }
