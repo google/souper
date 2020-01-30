@@ -23,7 +23,7 @@ fi
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
 llvm_repo=https://github.com/llvm/llvm-project.git
 # llvm_checkout specifies the git branch or hash to checkout to
-llvm_checkout=83ec9b51ed21b39063f0e0e7b272e66ae57bbcba
+llvm_checkout=origin/release/10.x
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=9823174bb34fcb9c8e33c37e7e04d46bfe3a29a5
