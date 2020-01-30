@@ -409,7 +409,7 @@ configure_file(
 
 add_custom_target(check
   COMMAND ${CMAKE_BINARY_DIR}/run_lit
-  DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souper-interpret souperPass souperPassProfileAll count-insts interpreter_tests
+  DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souper-interpret souper2llvm souperPass souperPassProfileAll count-insts interpreter_tests
   USES_TERMINAL)
 
 find_program(GO_EXECUTABLE NAMES go DOC "go executable")

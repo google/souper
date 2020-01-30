@@ -36,7 +36,6 @@ add docs /usr/src/souper/docs
 add include /usr/src/souper/include
 add lib /usr/src/souper/lib
 add runtime /usr/src/souper/runtime
-add scripts /usr/src/souper/scripts
 add test /usr/src/souper/test
 add tools /usr/src/souper/tools
 add utils /usr/src/souper/utils
