@@ -5,7 +5,7 @@
 %2:i9 = ssub.with.overflow %0, %1
 result %2
 
-; CHECK: define { i8, i1 } @fun(i8, i8) {
+; CHECK: define { i8, i1 } @fun(i8 %0, i8 %1) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   %2 = sub i8 %0, %1
 ; CHECK-NEXT:   %3 = call { i8, i1 } @llvm.ssub.with.overflow.i8(i8 %0, i8 %1)
@@ -15,4 +15,4 @@ result %2
 ; CHECK: ; Function Attrs: nounwind readnone speculatable
 ; CHECK-NEXT: declare { i8, i1 } @llvm.ssub.with.overflow.i8(i8, i8) #0
 
-; CHECK: attributes #0 = { nounwind readnone speculatable }
+; CHECK: attributes #0 = { nounwind readnone speculatable willreturn }

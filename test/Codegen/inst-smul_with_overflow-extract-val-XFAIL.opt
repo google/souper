@@ -6,7 +6,7 @@
 %3:i8 = extractvalue %2, 0
 result %3
 
-; CHECK: define i8 @fun(i8, i8) {
+; CHECK: define i8 @fun(i8 %0, i8 %1) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   %2 = mul i8 %0, %1
 ; CHECK-NEXT:   %3 = call { i8, i1 } @llvm.smul.with.overflow.i8(i8 %0, i8 %1)
@@ -17,4 +17,4 @@ result %3
 ; CHECK: ; Function Attrs: nounwind readnone speculatable
 ; CHECK-NEXT: declare { i8, i1 } @llvm.smul.with.overflow.i8(i8, i8) #0
 
-; CHECK: attributes #0 = { nounwind readnone speculatable }
+; CHECK: attributes #0 = { nounwind readnone speculatable willreturn }

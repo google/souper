@@ -6,7 +6,7 @@
 %3:i8 = select %0, %1, %2
 result %3
 
-; CHECK: define i8 @fun(i1, i8, i8) {
+; CHECK: define i8 @fun(i1 %0, i8 %1, i8 %2) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   %3 = select i1 %0, i8 %1, i8 %2
 ; CHECK-NEXT:   ret i8 %3

@@ -71,8 +71,8 @@ class ExtractorActionFactory : public tooling::FrontendActionFactory {
                          CandidateMap &CandMap)
       : VMC(VMC), IC(IC), EBC(EBC), Mods(Mods), CandMap(CandMap) {}
 
-  FrontendAction *create() {
-    return new ExtractorAction(VMC, IC, EBC, Mods, CandMap);
+  std::unique_ptr<FrontendAction> create() {
+    return std::make_unique<ExtractorAction>(VMC, IC, EBC, Mods, CandMap);
   }
 };
 

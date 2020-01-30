@@ -457,6 +457,8 @@ const char *Inst::getKindName(Kind K) {
   case SMulO:
   case UMulO:
     return "o";
+  case Freeze:
+    return "freeze";
   default:
     llvm_unreachable("all cases covered");
   }
@@ -526,6 +528,7 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("reservedinst", Inst::ReservedInst)
                    .Case("hole", Inst::Hole)
                    .Case("reservedconst", Inst::ReservedConst)
+                   .Case("freeze", Inst::Freeze)
                    .Default(Inst::None);
 }
 

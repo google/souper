@@ -19,7 +19,7 @@ namespace souper {
     bool Ov;
     auto Res = a.sadd_ov(b, Ov);
     if (Ov)
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     else
       return Res;
   }
@@ -28,7 +28,7 @@ namespace souper {
     bool Ov;
     auto Res = a.uadd_ov(b, Ov);
     if (Ov)
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     else
       return Res;
   }
@@ -38,7 +38,7 @@ namespace souper {
     auto Res1 = a.sadd_ov(b, Ov1);
     auto Res2 = a.uadd_ov(b, Ov2);
     if (Ov1 || Ov2)
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     else
       return Res1;
   }
@@ -47,7 +47,7 @@ namespace souper {
     bool Ov;
     auto Res = a.ssub_ov(b, Ov);
     if (Ov)
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     else
       return Res;
   }
@@ -56,7 +56,7 @@ namespace souper {
     bool Ov;
     auto Res = a.usub_ov(b, Ov);
     if (Ov)
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     else
       return Res;
   }
@@ -66,7 +66,7 @@ namespace souper {
     auto Res1 = a.ssub_ov(b, Ov1);
     auto Res2 = a.usub_ov(b, Ov2);
     if (Ov1 || Ov2)
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     else
       return Res1;
   }
@@ -75,7 +75,7 @@ namespace souper {
     bool Ov;
     auto Res = a.smul_ov(b, Ov);
     if (Ov)
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     else
       return Res;
   }
@@ -84,7 +84,7 @@ namespace souper {
     bool Ov;
     auto Res = a.umul_ov(b, Ov);
     if (Ov)
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     else
       return Res;
   }
@@ -94,7 +94,7 @@ namespace souper {
     auto Res1 = a.smul_ov(b, Ov1);
     auto Res2 = a.umul_ov(b, Ov2);
     if (Ov1 || Ov2)
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     else
       return Res1;
   }
@@ -113,19 +113,19 @@ namespace souper {
 
   EvalValue evaluateShl(llvm::APInt a, llvm::APInt b) {
     if (b.uge(a.getBitWidth()))
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     return {a << b};
   }
 
   EvalValue evaluateLShr(llvm::APInt a, llvm::APInt b) {
     if (b.uge(a.getBitWidth()))
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     return {a.lshr(b)};
   }
 
   EvalValue evaluateAShr(llvm::APInt a, llvm::APInt b) {
     if (b.uge(a.getBitWidth()))
-      return EvalValue::poison();
+      return EvalValue::poison(a.getBitWidth());
     return {a.ashr(b)};
   }
 
@@ -139,11 +139,11 @@ namespace souper {
       if (A.K == EvalValue::ValueKind::UB)
         return EvalValue::ub();
 
-    // phi and select only take poison from their chosen input
-    if (Inst->K != Inst::Select && Inst->K != Inst::Phi) {
+    // only phi, select, and freeze take poison from their chosen input
+    if (Inst->K != Inst::Select && Inst->K != Inst::Phi && Inst->K != Inst::Freeze) {
       for (auto &A : Args)
         if (A.K == EvalValue::ValueKind::Poison)
-          return EvalValue::poison();
+          return EvalValue::poison(A.BitWidth);
     }
 
     for (auto &A : Args)
@@ -212,7 +212,7 @@ namespace souper {
       if (ARG1 == 0)
         return EvalValue::ub();
       if ((ARG0.udiv(ARG1) * ARG1) != ARG0)
-        return EvalValue::poison();
+        return EvalValue::poison(ARG0.getBitWidth());
       return {ARG0.udiv(ARG1)};
 
     case Inst::UDiv:
@@ -223,7 +223,7 @@ namespace souper {
           (ARG0.isMinSignedValue() && ARG1.isAllOnesValue()))
         return EvalValue::ub();
       if ((ARG0.sdiv(ARG1) * ARG1) != ARG0)
-        return EvalValue::poison();
+        return EvalValue::poison(ARG0.getBitWidth());
       return {ARG0.sdiv(ARG1)};
 
     case Inst::SDiv:
@@ -257,7 +257,7 @@ namespace souper {
       bool Ov;
       auto Res = ARG0.sshl_ov(ARG1, Ov);
       if (Ov)
-        return EvalValue::poison();
+        return EvalValue::poison(ARG0.getBitWidth());
       return Res;
     }
 
@@ -265,7 +265,7 @@ namespace souper {
       bool Ov;
       auto Res = ARG0.ushl_ov(ARG1, Ov);
       if (Ov)
-        return EvalValue::poison();
+        return EvalValue::poison(ARG0.getBitWidth());
       return Res;
     }
 
@@ -274,7 +274,7 @@ namespace souper {
       auto Res1 = ARG0.ushl_ov(ARG1, Ov1);
       auto Res2 = ARG0.sshl_ov(ARG1, Ov2);
       if (Ov1 || Ov2)
-        return EvalValue::poison();
+        return EvalValue::poison(ARG0.getBitWidth());
       return Res1;
     }
 
@@ -283,10 +283,10 @@ namespace souper {
 
     case Inst::LShrExact:{
       if (ARG1.uge(ARG0.getBitWidth()))
-        return EvalValue::poison();
+        return EvalValue::poison(ARG0.getBitWidth());
       auto Res = ARG0.lshr(ARG1);
       if (ARG0 != Res.shl(ARG1))
-        return EvalValue::poison();
+        return EvalValue::poison(ARG0.getBitWidth());
       return Res;
     }
 
@@ -295,10 +295,10 @@ namespace souper {
 
     case Inst::AShrExact:{
       if (ARG1.uge(ARG0.getBitWidth()))
-        return EvalValue::poison();
+        return EvalValue::poison(ARG0.getBitWidth());
       auto Res = ARG0.ashr(ARG1);
       if (ARG0 != Res.shl(ARG1))
-        return EvalValue::poison();
+        return EvalValue::poison(ARG0.getBitWidth());
       return Res;
     }
 
@@ -425,6 +425,13 @@ namespace souper {
         return {ARG0.trunc(ARG0.getBitWidth() - 1)};
       else
         return {ARG0.getHiBits(1).trunc(1)};
+    }
+    case Inst::Freeze: {
+      if (Args[0].K == EvalValue::ValueKind::Undef || Args[0].K == EvalValue::ValueKind::Poison) {
+        return {llvm::APInt(Args[0].BitWidth,
+                std::rand() % llvm::APInt::getAllOnesValue(Args[0].BitWidth).getLimitedValue())};
+      }
+      return Args[0];
     }
 
     default:

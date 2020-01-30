@@ -129,6 +129,8 @@ llvm::Value *Codegen::getValue(Inst *I) {
       return Builder.CreateCall(
           F, {V0, ConstantInt::get(V0->getContext(), APInt(1, 0))});
     }
+    case Inst::Freeze:
+      return Builder.CreateFreeze(V0);
     default:
       break;
     }

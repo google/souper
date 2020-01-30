@@ -4,7 +4,7 @@
 %1:i8 = ctpop %0
 result %1
 
-; CHECK: define i8 @fun(i8) {
+; CHECK: define i8 @fun(i8 %0) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   %1 = call i8 @llvm.ctpop.i8(i8 %0)
 ; CHECK-NEXT:   ret i8 %1
@@ -13,4 +13,4 @@ result %1
 ; CHECK: ; Function Attrs: nounwind readnone speculatable
 ; CHECK-NEXT: declare i8 @llvm.ctpop.i8(i8) #0
 
-; CHECK: attributes #0 = { nounwind readnone speculatable }
+; CHECK: attributes #0 = { nounwind readnone speculatable willreturn }

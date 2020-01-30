@@ -1,5 +1,5 @@
 ; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-num-instructions=2 %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-num-instructions=2 -souper-enumerative-synthesis-max-verification-load=100000 %solver %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; synthesize a nand

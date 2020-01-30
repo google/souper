@@ -18,6 +18,7 @@
 #include "souper/Extractor/ExprBuilder.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Support/CommandLine.h"
 
 using namespace klee;
 using namespace souper;
@@ -141,6 +142,8 @@ private:
       }
       return E;
     }
+    case Inst::Freeze:
+      return get(Ops[0]);
     case Inst::Add:
       return buildAssoc(AddExpr::create, Ops);
     case Inst::AddNSW: {

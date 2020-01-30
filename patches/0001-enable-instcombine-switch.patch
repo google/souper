@@ -1,0 +1,36 @@
+From eab9b53927583f7e742b67f6a6d668c12c301ebc Mon Sep 17 00:00:00 2001
+From: Pranav Kant <pranavk@cs.utah.edu>
+Date: Tue, 7 Jan 2020 15:58:11 -0700
+Subject: [PATCH 1/2] enable-instcombine-switch
+
+---
+ llvm/lib/Transforms/InstCombine/InstructionCombining.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp b/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp
+index e31023607e8..3d38b5af651 100644
+--- a/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp
++++ b/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp
+@@ -148,6 +148,10 @@ static cl::opt<unsigned>
+ MaxArraySize("instcombine-maxarray-size", cl::init(1024),
+              cl::desc("Maximum array size considered when doing a combine"));
+ 
++static cl::opt<bool>
++DisableInstructionCombiner("disable-instruction-combiner", cl::init(false),
++                           cl::desc("Disable InstCombine Pass (default = off)"));
++
+ // FIXME: Remove this flag when it is no longer necessary to convert
+ // llvm.dbg.declare to avoid inaccurate debug info. Setting this to false
+ // increases variable availability at the cost of accuracy. Variables that
+@@ -3567,6 +3571,8 @@ static bool combineInstructionsOverFunction(
+     OptimizationRemarkEmitter &ORE, BlockFrequencyInfo *BFI,
+     ProfileSummaryInfo *PSI, bool ExpensiveCombines, unsigned MaxIterations,
+     LoopInfo *LI) {
++  if (DisableInstructionCombiner)
++    return false;
+   auto &DL = F.getParent()->getDataLayout();
+   ExpensiveCombines |= EnableExpensiveCombines;
+   MaxIterations = std::min(MaxIterations, LimitMaxIterations.getValue());
+-- 
+2.21.0
+

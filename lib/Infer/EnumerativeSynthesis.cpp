@@ -34,7 +34,7 @@ using namespace souper;
 using namespace llvm;
 
 static const std::vector<Inst::Kind> UnaryOperators = {
-  Inst::CtPop, Inst::BSwap, Inst::BitReverse, Inst::Cttz, Inst::Ctlz
+  Inst::CtPop, Inst::BSwap, Inst::BitReverse, Inst::Cttz, Inst::Ctlz, Inst::Freeze
 };
 
 static const std::vector<Inst::Kind> BinaryOperators = {
@@ -212,6 +212,10 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
     unaryExclList.push_back(Inst::BitReverse);
   }
 
+  // disable generating freeze of freeze
+  if (unaryHoleUsers.size() == 1 && unaryHoleUsers[0]->K == Inst::Freeze)
+    unaryExclList.push_back(Inst::Freeze);
+
   std::vector<Inst *> PartialGuesses;
 
   std::vector<Inst *> Comps(Inputs.begin(), Inputs.end());
@@ -228,32 +232,33 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
   Comps.push_back(I1);
 
   // Unary Operators
-  if (Width > 1) {
-    for (auto K : UnaryOperators) {
-      for (auto Comp : Comps) {
-        if (std::find(unaryExclList.begin(), unaryExclList.end(), K) != unaryExclList.end())
-          continue;
+  for (auto K : UnaryOperators) {
+    if (std::find(unaryExclList.begin(), unaryExclList.end(), K) != unaryExclList.end())
+      continue;
 
-        if (K == Inst::BSwap && Width % 16 != 0)
-          continue;
+    if (K != Inst::Freeze && Width <= 1)
+      continue;
 
-        if (Comp->K == Inst::ReservedInst) {
-          auto V = IC.createHole(Width);
-          auto N = IC.getInst(K, Width, { V });
-          addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
-          continue;
-        }
+    for (auto Comp : Comps) {
+      if (K == Inst::BSwap && Width % 16 != 0)
+        continue;
 
-        if (Comp->Width != Width)
-          continue;
-
-        // Prune: unary operation on constant
-        if (Comp->K == Inst::ReservedConst)
-          continue;
-
-        auto N = IC.getInst(K, Width, { Comp });
+      if (Comp->K == Inst::ReservedInst) {
+        auto V = IC.createHole(Width);
+        auto N = IC.getInst(K, Width, { V });
         addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
+        continue;
       }
+
+      if (Comp->Width != Width)
+        continue;
+
+      // Prune: unary operation on constant
+      if (Comp->K == Inst::ReservedConst)
+        continue;
+
+      auto N = IC.getInst(K, Width, { Comp });
+      addGuess(N, Width, IC, LHSCost, PartialGuesses, TooExpensive);
     }
   }
 

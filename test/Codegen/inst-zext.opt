@@ -4,7 +4,7 @@
 %1:i8 = zext %0
 result %1
 
-; CHECK: define i8 @fun(i4) {
+; CHECK: define i8 @fun(i4 %0) {
 ; CHECK-NEXT: entry:
 ; CHECK-NEXT:   %1 = zext i4 %0 to i8
 ; CHECK-NEXT:   ret i8 %1

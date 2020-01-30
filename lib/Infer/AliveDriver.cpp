@@ -610,6 +610,11 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
       return true;
     }
 
+    case souper::Inst::Freeze: {
+      ExprCache[I] = Builder.freeze(t, Name, ExprCache[I->Ops[0]]);
+      return true;
+    }
+
     #define BINOP(SOUPER, ALIVE) case souper::Inst::SOUPER: {    \
       ExprCache[I] = Builder.binOp(t, Name, ExprCache[I->Ops[0]],\
       ExprCache[I->Ops[1]], IR::BinOp::ALIVE);                   \

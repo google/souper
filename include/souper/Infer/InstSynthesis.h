@@ -122,6 +122,7 @@ static const std::vector<Component> CompLibrary = {
   //
   Component{Inst::CtPop, 0, {0}},
   Component{Inst::BSwap, 0, {0}},
+  Component{Inst::Freeze, 0, {0}},
   Component{Inst::BitReverse, 0, {0}},
   Component{Inst::Cttz, 0, {0}},
   Component{Inst::Ctlz, 0, {0}},
