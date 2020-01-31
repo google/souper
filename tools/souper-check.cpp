@@ -65,6 +65,10 @@ static cl::opt<bool> EmitLHSDot("emit-lhs-dot",
     cl::desc("Emit DOT format DAG for LHS of given souper IR (default=false)"),
     cl::init(false));
 
+static cl::opt<bool> CheckAllGuesses("souper-check-all-guesses",
+    cl::desc("Continue even after a valid RHS is found. (default=false)"),
+    cl::init(false));
+
 int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
   std::string ErrStr;
@@ -203,17 +207,19 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
       }
     } else if (InferRHS || ReInferRHS) {
       int OldCost;
+      std::vector<Inst *> RHSs;
       if (ReInferRHS) {
         OldCost = cost(Rep.Mapping.RHS);
         Rep.Mapping.RHS = 0;
       }
       if (std::error_code EC = S->infer(Rep.BPCs, Rep.PCs, Rep.Mapping.LHS,
-                                        Rep.Mapping.RHS, IC)) {
+                                        RHSs, CheckAllGuesses, IC)) {
         llvm::errs() << EC.message() << '\n';
         Ret = 1;
         ++Error;
       }
-      if (Rep.Mapping.RHS) {
+      if (!RHSs.empty()) {
+        Rep.Mapping.RHS = RHSs.front();
         ++Success;
         if (ReInferRHS) {
           int NewCost = cost(Rep.Mapping.RHS);
@@ -227,17 +233,27 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
         } else {
           llvm::outs() << "; RHS inferred successfully\n";
         }
-        if (PrintRepl) {
-          PrintReplacement(llvm::outs(), Rep.BPCs, Rep.PCs, Rep.Mapping);
-        } else if (PrintReplSplit) {
-          ReplacementContext Context;
-          PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
-                              Rep.Mapping.LHS, Context);
-          PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
+
+        if (CheckAllGuesses) {
+          for (unsigned RI = 0 ; RI < RHSs.size() ; RI++) {
+            llvm::errs()<<"; result " << (RI + 1) <<":\n";
+            ReplacementContext RC;
+            PrintReplacementRHS(llvm::outs(), RHSs[RI], RC);
+            llvm::errs()<<"\n"; 
+          }
         } else {
-          ReplacementContext Context;
-          PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS,
-                              ReInferRHS ? Context : Contexts[Index]);
+          if (PrintRepl) {
+            PrintReplacement(llvm::outs(), Rep.BPCs, Rep.PCs, Rep.Mapping);
+          } else if (PrintReplSplit) {
+            ReplacementContext Context;
+            PrintReplacementLHS(llvm::outs(), Rep.BPCs, Rep.PCs,
+                                Rep.Mapping.LHS, Context);
+            PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
+          } else {
+            ReplacementContext Context;
+            PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS,
+                                ReInferRHS ? Context : Contexts[Index]);
+          }
         }
       } else {
         ++Fail;

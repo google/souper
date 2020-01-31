@@ -1,6 +1,6 @@
 ; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-suppress-foldable-operations=false -souper-enumerative-synthesis -souper-enumerative-synthesis-check-all-guesses %solver %s > %t1
-; RUN: %souper-check -infer-rhs -souper-suppress-foldable-operations=false -souper-enumerative-synthesis -souper-use-alive -souper-enumerative-synthesis-check-all-guesses %solver %s > %t2
+; RUN: %souper-check -infer-rhs -souper-suppress-foldable-operations=false -souper-enumerative-synthesis -souper-check-all-guesses %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-suppress-foldable-operations=false -souper-enumerative-synthesis -souper-use-alive -souper-check-all-guesses %solver %s > %t2
 ; RUN: %FileCheck %s < %t1
 ; RUN: %FileCheck %s < %t2
 

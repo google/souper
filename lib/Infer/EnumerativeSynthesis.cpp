@@ -100,9 +100,6 @@ namespace {
   static cl::opt<bool> IgnoreCost("souper-enumerative-synthesis-ignore-cost",
     cl::desc("Ignore cost of RHSes -- just generate them. (default=false)"),
     cl::init(false));
-  static cl::opt<bool> CheckAllGuesses("souper-enumerative-synthesis-check-all-guesses",
-    cl::desc("Continue even after a valid RHS is found. (default=false)"),
-    cl::init(false));
   static cl::opt<bool> SuppressFoldables("souper-suppress-foldable-operations",
     cl::desc("Avoid synthesizing operations such as mul x, 1 that can be folded away (default=true)"),
     cl::init(true));
@@ -653,9 +650,10 @@ std::error_code synthesizeWithAlive(SynthesisContext &SC, std::vector<Inst *> &R
     }
     assert (RHS);
     RHSs.emplace_back(RHS);
-    if (!CheckAllGuesses) {
+    if (!SC.CheckAllGuesses) {
       return EC;
-    } else {
+    }
+    if (DebugLevel > 3) {
       llvm::outs() << "; result " << RHSs.size() << ":\n";
       ReplacementContext RC;
       RC.printInst(RHS, llvm::outs(), false);
@@ -792,9 +790,10 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
 
     assert(RHS);
     RHSs.emplace_back(RHS);
-    if (!CheckAllGuesses) {
+    if (!SC.CheckAllGuesses) {
       return EC;
-    } else {
+    }
+    if (DebugLevel > 3) {
       llvm::outs() << "; result " << RHSs.size() << ":\n";
       ReplacementContext RC;
       RC.printInst(RHS, llvm::outs(), true);
@@ -839,9 +838,10 @@ std::error_code
 EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const BlockPCs &BPCs,
                                 const std::vector<InstMapping> &PCs,
-                                Inst *LHS, Inst *&RHS,
-                                InstContext &IC, unsigned Timeout) {
-  SynthesisContext SC{IC, SMTSolver, LHS, getUBInstCondition(SC.IC, SC.LHS), PCs, BPCs, Timeout};
+                                Inst *LHS, std::vector<Inst *> &RHSs,
+                                bool CheckAllGuesses, InstContext &IC, unsigned Timeout) {
+  SynthesisContext SC{IC, SMTSolver, LHS, getUBInstCondition(SC.IC, SC.LHS),
+                      PCs, BPCs, CheckAllGuesses, Timeout};
   std::error_code EC;
   std::vector<Inst *> Cands;
   findCands(SC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
@@ -872,8 +872,6 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::vector<Inst *> Guesses;
   uint64_t GuessCount = 0;
 
-  std::vector<Inst *> RHSs;
-
   auto Generate = [&SC, &Guesses, &RHSs, &EC, &GuessCount](Inst *Guess) {
     GuessCount++;
     Guesses.push_back(Guess);
@@ -881,7 +879,7 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       sortGuesses(Guesses);
       EC = verify(SC, RHSs, Guesses);
       Guesses.clear();
-      return CheckAllGuesses || (!CheckAllGuesses && RHSs.empty()); // Continue if no RHS
+      return SC.CheckAllGuesses || (!SC.CheckAllGuesses && RHSs.empty()); // Continue if no RHS
     }
     return true;
   };
@@ -905,10 +903,6 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   if (DebugLevel > 1)
     llvm::errs() << "There are " << GuessCount << " Guesses\n";
-
-  if (!RHSs.empty()) {
-    RHS = RHSs[0];
-  }
 
   return EC;
 }

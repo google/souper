@@ -260,9 +260,10 @@ public:
         Changed = true;
         continue;
       }
+      std::vector<Inst *> RHSs;
       if (std::error_code EC =
           S->infer(Cand.BPCs, Cand.PCs, Cand.Mapping.LHS,
-                   Cand.Mapping.RHS, IC)) {
+                   RHSs, /*AllowMultipleRHSs=*/false, IC)) {
         if (EC == std::errc::timed_out ||
             EC == std::errc::value_too_large) {
           continue;
@@ -270,8 +271,10 @@ public:
           report_fatal_error("Unable to query solver: " + EC.message() + "\n");
         }
       }
-      if (!Cand.Mapping.RHS)
+      if (RHSs.empty())
         continue;
+
+      Cand.Mapping.RHS = RHSs.front();
 
       Instruction *I = Cand.Origin;
       assert(Cand.Mapping.LHS->hasOrigin(I));
