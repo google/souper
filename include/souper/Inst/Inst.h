@@ -275,6 +275,7 @@ struct SynthesisContext {
   Inst *LHSUB;
   const std::vector<InstMapping> &PCs;
   const BlockPCs &BPCs;
+  bool CheckAllGuesses;
   unsigned Timeout;
 };
 

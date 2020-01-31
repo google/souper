@@ -31,7 +31,8 @@ public:
   virtual ~Solver();
   virtual std::error_code
   infer(const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-        Inst *LHS, Inst *&RHS, InstContext &IC) = 0;
+        Inst *LHS, std::vector<Inst *> &RHS, bool AllowMultipleRHSs,
+        InstContext &IC) = 0;
   virtual std::error_code
   inferConst(const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
              Inst *LHS, Inst *&RHS, std::set<Inst *> &ConstSet,

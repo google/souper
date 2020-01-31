@@ -21,6 +21,7 @@
 
 #include <utility>
 #include <system_error>
+#include <vector>
 
 extern bool UseAlive;
 extern unsigned DebugLevel;
@@ -33,7 +34,8 @@ public:
   std::error_code synthesize(SMTLIBSolver *SMTSolver,
                              const BlockPCs &BPCs,
                              const std::vector<InstMapping> &PCs,
-                             Inst *TargetLHS, Inst *&RHS,
+                             Inst *TargetLHS, std::vector<Inst *> &RHSs,
+                             bool CheckAllGuesses,
                              InstContext &IC, unsigned Timeout);
 
 };
