@@ -384,11 +384,30 @@ namespace souper {
   }
 
   bool isConcrete(Inst *I, bool ConsiderConsts, bool ConsiderHoles) {
-    return !hasGivenInst(I, [ConsiderConsts, ConsiderHoles](Inst *instr) {
-        return
-          (ConsiderConsts && isReservedConst(instr)) ||
-          (ConsiderHoles && isHole(instr));
+    std::vector<Inst *> Insts;
+    if (I->nReservedConsts == -1) {
+      Insts.clear();
+      findInsts(I, Insts, [](Inst *instr) {
+        return isReservedConst(instr);
       });
+      I->nReservedConsts = Insts.size();
+    }
+
+    if (I->nHoles == -1) {
+      Insts.clear();
+      findInsts(I, Insts, [](Inst *instr) {
+        return isHole(instr);
+      });
+      I->nHoles = Insts.size();
+    }
+
+    bool retval = true;
+    if (ConsiderConsts)
+      retval &= I->nReservedConsts == 0;
+    if (ConsiderHoles)
+      retval &= I->nHoles == 0;
+
+    return retval;
   }
 
   // Tries to get the concrete value from @I

@@ -183,6 +183,8 @@ struct Inst : llvm::FoldingSetNode {
   llvm::BasicBlock* HarvestFrom;
   llvm::ConstantRange Range=llvm::ConstantRange(1, true);
   std::vector<llvm::ConstantRange> RangeRefinement;
+  int nReservedConsts = -1;
+  int nHoles = -1;
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a
