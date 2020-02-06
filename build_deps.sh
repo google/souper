@@ -75,7 +75,7 @@ git -C ${llvm_srcdir} apply $(pwd)/patches/0002-disable-instcombine-select-to-lo
 
 mkdir -p $llvm_builddir
 
-cmake_flags="../llvm -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_FORCE_ENABLE_STATS=On -DLLVM_TARGETS_TO_BUILD=host -DCMAKE_BUILD_TYPE=$llvm_build_type -DZ3_INCLUDE_DIR=$z3_installdir/include -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a -DLLVM_ENABLE_PROJECTS='llvm;clang;compiler-rt'"
+cmake_flags="../llvm -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_FORCE_ENABLE_STATS=On -DCMAKE_BUILD_TYPE=$llvm_build_type -DZ3_INCLUDE_DIR=$z3_installdir/include -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a -DLLVM_ENABLE_PROJECTS='llvm;clang;compiler-rt'"
 
 if [ -n "`which ninja`" ] ; then
   (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")
