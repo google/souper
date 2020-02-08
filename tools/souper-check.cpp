@@ -236,10 +236,10 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 
         if (CheckAllGuesses) {
           for (unsigned RI = 0 ; RI < RHSs.size() ; RI++) {
-            llvm::errs()<<"; result " << (RI + 1) <<":\n";
+            llvm::outs()<<"; result " << (RI + 1) <<":\n";
             ReplacementContext RC;
             PrintReplacementRHS(llvm::outs(), RHSs[RI], RC);
-            llvm::errs()<<"\n"; 
+            llvm::outs()<<"\n";
           }
         } else {
           if (PrintRepl) {
