@@ -25,7 +25,6 @@
 
 static const unsigned MaxTries = 30;
 static const unsigned MaxInputSpecializationTries = 2;
-static const unsigned MaxLHSCands = 15;
 
 bool UseAlive;
 unsigned DebugLevel;
@@ -103,6 +102,9 @@ namespace {
   static cl::opt<bool> SuppressFoldables("souper-suppress-foldable-operations",
     cl::desc("Avoid synthesizing operations such as mul x, 1 that can be folded away (default=true)"),
     cl::init(true));
+  static cl::opt<unsigned> MaxLHSCands("souper-max-lhs-cands",
+    cl::desc("Gather at most this many inputs from a LHS to use as synthesis inputs (default=8)"),
+    cl::init(8));
 }
 
 // TODO
