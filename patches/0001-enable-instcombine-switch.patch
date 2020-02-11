@@ -1,14 +1,14 @@
-From eab9b53927583f7e742b67f6a6d668c12c301ebc Mon Sep 17 00:00:00 2001
+From e87e847c6fcc1a246c0e53b2e3465feae4192805 Mon Sep 17 00:00:00 2001
 From: Pranav Kant <pranavk@cs.utah.edu>
-Date: Tue, 7 Jan 2020 15:58:11 -0700
-Subject: [PATCH 1/2] enable-instcombine-switch
+Date: Tue, 11 Feb 2020 13:24:14 -0700
+Subject: [PATCH] enable-instcombine-switch
 
 ---
  llvm/lib/Transforms/InstCombine/InstructionCombining.cpp | 6 ++++++
  1 file changed, 6 insertions(+)
 
 diff --git a/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp b/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp
-index e31023607e8..3d38b5af651 100644
+index bf32996d96e..ca47bcf7bae 100644
 --- a/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp
 +++ b/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp
 @@ -148,6 +148,10 @@ static cl::opt<unsigned>
@@ -29,8 +29,8 @@ index e31023607e8..3d38b5af651 100644
 +  if (DisableInstructionCombiner)
 +    return false;
    auto &DL = F.getParent()->getDataLayout();
-   ExpensiveCombines |= EnableExpensiveCombines;
-   MaxIterations = std::min(MaxIterations, LimitMaxIterations.getValue());
+   if (EnableExpensiveCombines.getNumOccurrences())
+     ExpensiveCombines = EnableExpensiveCombines;
 -- 
 2.21.0
 

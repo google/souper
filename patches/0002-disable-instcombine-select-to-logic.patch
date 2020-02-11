@@ -1,7 +1,7 @@
 From 84baeaf6b13d5198100df499d1b56c3a9d02d1bd Mon Sep 17 00:00:00 2001
 From: Pranav Kant <pranavk@cs.utah.edu>
 Date: Tue, 7 Jan 2020 15:59:05 -0700
-Subject: [PATCH 2/2] disable-instcombine-select-to-logic
+Subject: [PATCH] disable-instcombine-select-to-logic
 
 ---
  llvm/lib/Transforms/InstCombine/InstCombineSelect.cpp | 4 ++--
