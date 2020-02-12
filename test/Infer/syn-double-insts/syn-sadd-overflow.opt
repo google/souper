@@ -1,5 +1,5 @@
 ; REQUIRES: solver, synthesis, long-duration-synthesis
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-dataflow-pruning=true -souper-enumerative-synthesis-num-instructions=2 %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-dataflow-pruning=true -souper-enumerative-synthesis-num-instructions=2 -souper-max-lhs-cands=15 %solver %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; synthesis overflow
