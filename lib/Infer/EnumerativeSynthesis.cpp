@@ -864,7 +864,7 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::vector<PruneFunc> PruneFuncs = { [&Visited](Inst *I, std::vector<Inst*> &ReservedInsts)  {
     return CountPrune(I, ReservedInsts, Visited);
   }};
-  if (EnableDataflowPruning) {
+  if (EnableDataflowPruning && BPCs.empty()) {
     DataflowPruning.init();
     PruneFuncs.push_back(DataflowPruning.getPruneFunc());
   }

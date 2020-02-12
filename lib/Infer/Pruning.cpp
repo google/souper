@@ -211,7 +211,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       }
     }
 
-    if (LHSHasPhi) {
+    if (LHSHasPhi && !PCHasPhi) {
       auto LHSCR = LHSConstantRange[I];
       auto RHSCR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
       if (!RHSCR.isFullSet()) {
@@ -492,17 +492,28 @@ void PruningManager::init() {
     Ante = SC.IC.getInst(Inst::And, 1, {Ante, Eq});
   }
 
-  findVars(Ante, InputVars);
-
-  InputVals = generateInputSets(InputVars);
-
-  for (auto &&Input : InputVals) {
-    ConcreteInterpreters.emplace_back(SC.LHS, Input);
+  if (hasGivenInst(Ante, [](Inst *I){ return I->K == Inst::Phi;})) {
+    PCHasPhi = true;
   }
 
   if (hasGivenInst(SC.LHS, [](Inst *I){ return I->K == Inst::Phi;})) {
-    // Have to abstract interpret LHS because of phi
     LHSHasPhi = true;
+  }
+
+  findVars(Ante, InputVars);
+
+  if (!PCHasPhi) {
+    InputVals = generateInputSets(InputVars);
+  }
+
+  if (!LHSHasPhi && !PCHasPhi) {
+    for (auto &&Input : InputVals) {
+      ConcreteInterpreters.emplace_back(SC.LHS, Input);
+    }
+  }
+
+  if (LHSHasPhi) {
+    // Have to abstract interpret LHS because of phi
     for (unsigned I = 0; I < InputVals.size(); I++) {
       LHSKnownBits.push_back(KnownBitsAnalysis().findKnownBits(SC.LHS, ConcreteInterpreters[I]));
       LHSConstantRange.push_back(ConstantRangeAnalysis().findConstantRange(SC.LHS, ConcreteInterpreters[I]));

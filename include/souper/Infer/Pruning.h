@@ -52,7 +52,7 @@ private:
   llvm::KnownBits LHSKnownBitsNoSpec;
   InputVarInfo LHSMustDemandedBits;
   bool LHSHasPhi = false;
-
+  bool PCHasPhi = false;
   PruneFunc DataflowPrune;
   unsigned NumPruned;
   unsigned TotalGuesses;
