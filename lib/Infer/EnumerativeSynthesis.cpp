@@ -888,7 +888,9 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   // add nops guesses separately
   for (auto I : Cands) {
-    addGuess(I, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
+    if (I->Width == SC.LHS->Width) {
+      addGuess(I, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
+    }
   }
 
   getGuesses(Cands, SC.LHS->Width,
