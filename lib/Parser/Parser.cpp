@@ -1075,7 +1075,7 @@ bool Parser::parseLine(std::string &ErrStr) {
 
       Block *B = 0;
 
-      if (IK == Inst::Var || IK == Inst::ReservedConst) {
+      if (IK == Inst::Var || IK == Inst::ReservedConst || IK == Inst::ReservedInst) {
         llvm::APInt Zero(InstWidth, 0, false), One(InstWidth, 0, false),
                     ConstOne(InstWidth, 1, false), Lower(InstWidth, 0, false),
                     Upper(InstWidth, 0, false);
@@ -1241,6 +1241,10 @@ bool Parser::parseLine(std::string &ErrStr) {
           I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
                            NonNegative, PowOfTwo, Negative, SignBits,
                            ++ReservedConstCounter);
+        else if (IK == Inst::ReservedInst) {
+          I = IC.createHole(InstWidth);
+          I->Name = InstName;
+        }
 
         Context.setInst(InstName, I);
         return true;

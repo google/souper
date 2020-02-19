@@ -1,0 +1,15 @@
+; REQUIRES: solver, synthesis
+
+; RUN: %souper-check %solver -try-dataflow-pruning %s > %t
+; RUN: %FileCheck %s < %t
+
+; CHECK: Pruning succeeded
+
+%0:i64 = var
+%1:i64 = mul %0, 2
+%2:i64 = add %1, 2:i64
+%3:i64 = sub %2, 1:i64
+infer %3
+%4:i64 = reservedinst
+%5:i64 = and %0, %4
+result %5
