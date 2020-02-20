@@ -1145,6 +1145,32 @@ namespace souper {
     return Result;
   }
 
+
+/** python + z3 script as evidence for the following transfer functions
+# unsat indicates one hole input is sufficient to make the output a hole(/any possible value)
+# sat indicates both inputs have to be holes for that
+**BEGIN SCRIPT
+from z3 import *
+s = Solver()
+x, y, z = Consts("x y z", BitVecSort(16))
+s.push(); s.add(ForAll(z, y != (x + z))); print("+", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x - z))); print("-", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x * z))); print("*", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x / z))); print("/", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x | z))); print("|", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x & z))); print("&", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x ^ z))); print("^", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != SRem(x, z))); print("srem", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != URem(x, z))); print("urem", s.check()); s.pop()
+y = Const("r", BoolSort())
+s.push(); s.add(ForAll(z, y != (x == z))); print("==", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x != z))); print("!=", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != ULE(x, z))); print("ule", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != ULT(x, z))); print("ult", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x <= z))); print("sle", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
+**END SCRIPT*/
+
   bool HoleAnalysis::findIfHole(souper::Inst *I) {
     if (Cache.find(I) != Cache.end()) {
       return Cache[I];
@@ -1177,14 +1203,11 @@ namespace souper {
     switch (I->K) {
       case Inst::Add:
       case Inst::Sub:
-      case Inst::BitReverse:
-      case Inst::BSwap:
       case Inst::Eq:
       case Inst::Ne:
-      case Inst::Sle:
-      case Inst::Slt:
-      case Inst::Ule:
-      case Inst::Ult:
+      case Inst::Xor:
+      case Inst::BitReverse:
+      case Inst::BSwap:
       case Inst::Trunc: {
         Cache[I] = hasHoleInput;
         return hasHoleInput;
@@ -1202,9 +1225,11 @@ namespace souper {
         return Cond;
       }
 
+      // The NSW/NUW/NW variants for Add/Sub could be more precise.
+      // I have not been able to prove that.
+      // Conservatively, their place is here.
       case Inst::And:
       case Inst::Or:
-      case Inst::Xor:
       case Inst::AddNSW:
       case Inst::AddNUW:
       case Inst::AddNW:
@@ -1218,7 +1243,11 @@ namespace souper {
       case Inst::SDiv:
       case Inst::UDiv:
       case Inst::SRem:
-      case Inst::URem: {
+      case Inst::URem:
+      case Inst::Sle:
+      case Inst::Slt:
+      case Inst::Ule:
+      case Inst::Ult:{
         Cache[I] = allHoles;
         return allHoles;
       }
