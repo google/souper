@@ -936,13 +936,16 @@ namespace souper {
 #define RB1 findRestrictedBits(I->Ops[1])
 #define RB2 findRestrictedBits(I->Ops[2])
   llvm::APInt RestrictedBitsAnalysis::findRestrictedBits(souper::Inst *I) {
-    if (RBCache.find(I) != RBCache.end()) {
-      return RBCache[I];
-    }
-
     llvm::APInt Result(I->Width, 0);
     llvm::APInt AllZeroes = Result;
     Result.setAllBits();
+    if (RBCache.find(I) != RBCache.end()) {
+      llvm::APInt CachedResult = RBCache[I];
+      if (I->K == Inst::Var) {
+        RBCache[I] = Result; // set to all ones after 'first' use
+      }
+      return CachedResult;
+    }
 
     if (isReservedConst(I)) {
       // nop, all bits set
