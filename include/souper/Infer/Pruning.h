@@ -59,6 +59,10 @@ private:
   std::vector<llvm::ConstantRange> LHSConstantRange;
   HoleAnalysis HA;
   llvm::KnownBits LHSKnownBitsNoSpec;
+
+  std::vector<llvm::KnownBits> RBInputKB;
+  std::vector<llvm::KnownBits> LHSKnownBitsForPartialRB;
+
   InputVarInfo LHSMustDemandedBits;
   bool LHSHasPhi = false;
   std::unordered_map<Inst *, ExprInfo> LHSInfo;

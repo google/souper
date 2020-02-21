@@ -152,6 +152,27 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       return true;
     }
 
+    if (InputVars.size() == 1) {
+      for (int i = 0; i < RBInputKB.size(); ++i) {
+        std::unordered_map<Inst *, llvm::APInt> Cache;
+        Cache[InputVars[0]] = RBInputKB[i].One | RBInputKB[i].Zero;
+        RestrictedBitsAnalysis RBA{Cache};
+        auto RB = RBA.findRestrictedBits(RHS);
+        auto KB = LHSKnownBitsForPartialRB[i];
+        if ((~RB & (KB.Zero | KB.One)) != 0) {
+          if (StatsLevel > 2) {
+            llvm::errs() << "  pruned using partial restricted bits analysis.\n";
+            llvm::errs() << "  LHSKBInput : "
+                         << KnownBitsAnalysis::knownBitsString(RBInputKB[i]) << "\n";
+            llvm::errs() << "  LHSKB : " << KnownBitsAnalysis::knownBitsString(KB) << "\n";
+            llvm::errs() << "  RB    : " << RB.toString(2, false) << "\n";
+          }
+          return true;
+        }
+      }
+    }
+
+
 //     auto LHSCR = ConstantRangeAnalysis().findConstantRange(SC.LHS, BlankCI, false);
 //     if (StatsLevel > 2) {
 //         llvm::errs() << "  LHSCR : " << LHSCR << "\n";
@@ -546,8 +567,26 @@ void PruningManager::init() {
       return !isInfeasible(I, StatsLevel);
     };
   }
-
   ConcreteInterpreter BlankCI;
+  if (InputVars.size() == 1) {
+    auto Width = InputVars[0]->Width;
+    llvm::KnownBits KB(Width);
+    KB.One |= ((1 << Width/2) - 1); // set half the known ones
+    RBInputKB.push_back(KB);
+
+    KB.One = llvm::APInt(Width, 1);
+    RBInputKB.push_back(KB);
+
+    // Incresing number of abstract inputs do not seem to have much effect
+
+    for (auto KB : RBInputKB) {
+      std::unordered_map<Inst *, llvm::KnownBits> Cache;
+      Cache[InputVars[0]] = KB;
+      KnownBitsAnalysis KBA{Cache};
+      LHSKnownBitsForPartialRB.push_back(KBA.findKnownBits(SC.LHS, BlankCI, false));
+    }
+  }
+
   LHSKnownBitsNoSpec =  KnownBitsAnalysis().findKnownBits(SC.LHS, BlankCI, false);
   LHSMustDemandedBits = MustDemandedBitsAnalysis().findMustDemandedBits(SC.LHS);
 
