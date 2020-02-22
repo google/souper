@@ -19,7 +19,7 @@ if [ -d "third_party" ]; then
   exit 1;
 fi
 
-ncpus=$(command nproc 2>/dev/null || echo 8)
+ncpus=$(command nproc 2>/dev/null || command sysctl -n hw.ncpu 2>/dev/null || echo 8)
 
 # hiredis version 0.14.0
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
