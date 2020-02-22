@@ -19,6 +19,8 @@ if [ -d "third_party" ]; then
   exit 1;
 fi
 
+ncpus=$(command nproc 2>/dev/null || command sysctl -n hw.ncpu 2>/dev/null || echo 8)
+
 # hiredis version 0.14.0
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
 llvm_repo=https://github.com/llvm/llvm-project.git
@@ -42,7 +44,7 @@ z3_installdir=$(pwd)/third_party/z3-install
 git clone $z3_repo $z3_srcdir
 mkdir -p $z3_installdir
 
-(cd $z3_srcdir && git checkout $z3_commit && python scripts/mk_make.py --staticlib --prefix=$z3_installdir && cd build && make -j8 install)
+(cd $z3_srcdir && git checkout $z3_commit && python scripts/mk_make.py --staticlib --prefix=$z3_installdir && cd build && make -j $ncpus install)
 
 export PATH=$z3_installdir/bin:$PATH
 export LD_LIBRARY_PATH=$z3_installdir/lib:$LD_LIBRARY_PATH
@@ -58,7 +60,7 @@ if [ -n "`which ninja`" ] ; then
   ninja -C $alive_builddir
 else
   (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type)
-  make -C $alive_builddir -j8
+  make -C $alive_builddir -j $ncpus
 fi
 
 llvm_srcdir=third_party/llvm
@@ -83,8 +85,8 @@ if [ -n "`which ninja`" ] ; then
   ninja -C $llvm_builddir install
 else
   (cd $llvm_builddir && cmake $cmake_flags "$@")
-  make -C $llvm_builddir -j8
-  make -C $llvm_builddir -j8 install
+  make -C $llvm_builddir -j $ncpus
+  make -C $llvm_builddir -j $ncpus install
 fi
 
 # we want these but they don't get installed by default
