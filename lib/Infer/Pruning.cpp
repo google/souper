@@ -122,8 +122,10 @@ std::pair<llvm::APInt, llvm::APInt> knownBitsNarrowing
 // TODO : Comment out debug stmts and conditions before benchmarking
 bool PruningManager::isInfeasible(souper::Inst *RHS,
                                  unsigned StatsLevel) {
-  bool HasHole = !isConcrete(RHS, false, true);
-  bool RHSIsConcrete = isConcrete(RHS);
+  std::unordered_map<Inst *, ExprInfo> RHSInfo = LHSInfo;
+  ExprInfo::analyze(RHS, RHSInfo);
+  bool HasHole = RHSInfo[RHS].HasHole;
+  bool RHSIsConcrete = !RHSInfo[RHS].HasHole && !RHSInfo[RHS].HasConst;
 
   std::map<Inst *, std::vector<llvm::ConstantRange>> ConstantLimits;
   std::map<Inst *, llvm::APInt> ConstantKnownNotZero;
@@ -542,6 +544,8 @@ void PruningManager::init() {
   ConcreteInterpreter BlankCI;
   LHSKnownBitsNoSpec =  KnownBitsAnalysis().findKnownBits(SC.LHS, BlankCI, false);
   LHSMustDemandedBits = MustDemandedBitsAnalysis().findMustDemandedBits(SC.LHS);
+
+  ExprInfo::analyze(SC.LHS, LHSInfo);
 }
 
 bool PruningManager::isInputValid(ValueCache &Cache) {
@@ -685,4 +689,25 @@ std::vector<ValueCache> PruningManager::generateInputSets(
   return InputSets;
 }
 
+void ExprInfo::analyze(Inst *Root,
+                       std::unordered_map<Inst *, ExprInfo> &Result) {
+  ExprInfo EI{false, false, false};
+  if (Root->K == Inst::ReservedConst ||
+     (Root->K == Inst::Var && Root->SynthesisConstID != 0)) {
+    EI.HasConst = true;
+  } else if (Root->K == Inst::Var) {
+    EI.HasInput = true;
+  }
+  if (Root->K == Inst::Hole) {
+    EI.HasHole = true;
+  }
+  for (auto &&Op : Root->Ops) {
+    analyze(Op, Result);
+    auto &Part = Result[Op];
+    EI.HasHole |= Part.HasHole;
+    EI.HasConst |= Part.HasConst;
+    EI.HasInput |= Part.HasInput;
+  }
+  Result[Root] = EI;
+}
 }
