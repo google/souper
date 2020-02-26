@@ -1153,4 +1153,118 @@ namespace souper {
     return Result;
   }
 
+
+/** python + z3 script as evidence for the following transfer functions
+# unsat indicates one hole input is sufficient to make the output a hole(/any possible value)
+# sat indicates both inputs have to be holes for that
+**BEGIN SCRIPT
+from z3 import *
+s = Solver()
+x, y, z = Consts("x y z", BitVecSort(16))
+s.push(); s.add(ForAll(z, y != (x + z))); print("+", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x - z))); print("-", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x * z))); print("*", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x / z))); print("/", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x | z))); print("|", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x & z))); print("&", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x ^ z))); print("^", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != SRem(x, z))); print("srem", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != URem(x, z))); print("urem", s.check()); s.pop()
+y = Const("r", BoolSort())
+s.push(); s.add(ForAll(z, y != (x == z))); print("==", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x != z))); print("!=", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != ULE(x, z))); print("ule", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != ULT(x, z))); print("ult", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x <= z))); print("sle", s.check()); s.pop()
+s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
+**END SCRIPT*/
+
+  bool HoleAnalysis::findIfHole(souper::Inst *I) {
+    if (Cache.find(I) != Cache.end()) {
+      return Cache[I];
+    }
+
+    if (I->K == Inst::Hole || I->K == Inst::ReservedInst) {
+      Cache[I] = true;
+      return true;
+    }
+    bool op0isHole = false;
+    bool op1isHole = false;
+    bool op2isHole = false;
+    bool hasHoleInput = false;
+    bool allHoles = true;
+    for (auto i = 0 ; i < I->Ops.size(); ++i) {
+      bool isHole = findIfHole(I->Ops[i]);
+      hasHoleInput |= isHole;
+      if (i == 0 && isHole) {
+        op0isHole = true;
+      }
+      if (i == 1 && isHole) {
+        op1isHole = true;
+      }
+      if (i == 2 && isHole) {
+        op2isHole = true;
+      }
+      allHoles &= isHole;
+    }
+
+    switch (I->K) {
+      case Inst::Add:
+      case Inst::Sub:
+      case Inst::Eq:
+      case Inst::Ne:
+      case Inst::Xor:
+      case Inst::BitReverse:
+      case Inst::BSwap:
+      case Inst::Trunc: {
+        Cache[I] = hasHoleInput;
+        return hasHoleInput;
+      }
+      case Inst::Shl:
+      case Inst::LShr:
+      case Inst::AShr: {
+        Cache[I] = op1isHole;
+        return op1isHole;
+      }
+
+      case Inst::Select : {
+        auto Cond = op0isHole && (op1isHole || op2isHole);
+        Cache[I] = Cond;
+        return Cond;
+      }
+
+      // The NSW/NUW/NW variants for Add/Sub could be more precise.
+      // I have not been able to prove that.
+      // Conservatively, their place is here.
+      case Inst::And:
+      case Inst::Or:
+      case Inst::AddNSW:
+      case Inst::AddNUW:
+      case Inst::AddNW:
+      case Inst::SubNSW:
+      case Inst::SubNUW:
+      case Inst::SubNW:
+      case Inst::Mul:
+      case Inst::MulNSW:
+      case Inst::MulNUW:
+      case Inst::MulNW:
+      case Inst::SDiv:
+      case Inst::UDiv:
+      case Inst::SRem:
+      case Inst::URem:
+      case Inst::Sle:
+      case Inst::Slt:
+      case Inst::Ule:
+      case Inst::Ult:{
+        Cache[I] = allHoles;
+        return allHoles;
+      }
+
+      // It's sound to always return false, for the purpose we are using this.
+      default: {
+        Cache[I] = false;
+        return false;
+      }
+    }
+  }
 }
