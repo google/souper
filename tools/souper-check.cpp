@@ -17,6 +17,7 @@
 #include "llvm/Support/KnownBits.h"
 
 #include "souper/Infer/ConstantSynthesis.h"
+#include "souper/Infer/Pruning.h"
 #include "souper/Inst/InstGraph.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/GetSolverFromArgs.h"
@@ -63,6 +64,10 @@ static cl::opt<bool> ParseLHSOnly("parse-lhs-only",
 
 static cl::opt<bool> EmitLHSDot("emit-lhs-dot",
     cl::desc("Emit DOT format DAG for LHS of given souper IR (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> TryDataflowPruning("try-dataflow-pruning",
+    cl::desc("Attempt to prove inequivalence using dataflow analysis (default=false)"),
     cl::init(false));
 
 static cl::opt<bool> CheckAllGuesses("souper-check-all-guesses",
@@ -290,6 +295,19 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
           ++Fail;
           llvm::outs() << "; Failed to infer RHS\n";
         }
+      }
+    } else if (TryDataflowPruning) {
+      SynthesisContext SC{IC, /*Solver(UNUSED)*/nullptr, Rep.Mapping.LHS,
+        /*LHSUB(UNUSED)*/nullptr, Rep.PCs, Rep.BPCs,
+        /*CheckAllGuesses(UNUSED)*/true, /*Timeout(UNUSED)*/100};
+      std::vector<Inst *> Inputs;
+      findVars(SC.LHS, Inputs);
+      PruningManager P(SC, Inputs, /*StatsLevel=*/3);
+      P.init();
+      if (P.isInfeasible(Rep.Mapping.RHS, /*StatsLevel=*/3)) {
+        llvm::outs() << "Pruning succeeded.\n";
+      } else {
+        llvm::outs() << "Pruning failed.\n";
       }
     } else {
       bool Valid;
