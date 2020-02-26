@@ -493,6 +493,10 @@ namespace souper {
 
 
     switch(I->K) {
+    case Inst::Freeze: {
+      Result = KB0;
+      break;
+    }
     case Inst::Phi: {
       std::vector<llvm::KnownBits> vec;
       for (auto &Op : I->Ops) {
@@ -790,6 +794,10 @@ namespace souper {
     }
 
     switch (I->K) {
+    case Inst::Freeze: {
+      Result = CR0;
+      break;
+    }
     case Inst::Const:
     case Inst::Var :
       if (isReservedConst(I))
