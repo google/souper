@@ -28,6 +28,14 @@ namespace souper {
 
 typedef std::function<bool(Inst *, std::vector<Inst *>&)> PruneFunc;
 
+struct ExprInfo {
+  bool HasHole;
+  bool HasInput;
+  bool HasConst;
+  // Also consider properties like "JustArithmetic, JustBitwise, etc"
+  static void analyze(Inst *Root, std::unordered_map<Inst *, ExprInfo> &Result);
+};
+
 class PruningManager {
 public:
   PruningManager(SynthesisContext &SC_, std::vector< souper::Inst *> &Inputs_,
@@ -52,6 +60,7 @@ private:
   llvm::KnownBits LHSKnownBitsNoSpec;
   InputVarInfo LHSMustDemandedBits;
   bool LHSHasPhi = false;
+  std::unordered_map<Inst *, ExprInfo> LHSInfo;
 
   PruneFunc DataflowPrune;
   unsigned NumPruned;
