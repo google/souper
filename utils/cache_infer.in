@@ -20,7 +20,6 @@ use Redis;
 use Getopt::Long;
 use File::Temp;
 use Time::HiRes;
-use BSD::Resource;
 
 eval { require Sys::CPU; Sys::CPU->import(); };
 
@@ -91,6 +90,9 @@ sub infer($) {
         }
         $output .= $line;
     }
+    close INF;
+    close $fh;
+    unlink $tmpfn;
     # exit 1 unless $ok || $failed;
     my $red = Redis->new();
     $red->ping || die "no server?";
