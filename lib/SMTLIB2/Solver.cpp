@@ -312,7 +312,7 @@ public:
 }
 
 SolverProgram souper::makeExternalSolverProgram(StringRef Path) {
-  std::string PathStr = Path;
+  std::string PathStr = Path.str();
   return [PathStr](const std::vector<std::string> &Args, StringRef RedirectIn,
                    StringRef RedirectOut, StringRef RedirectErr,
                    unsigned Timeout) {

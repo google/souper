@@ -27,11 +27,11 @@ class UniqueNameSet {
 public:
   std::string makeName(llvm::StringRef OrigName) {
     if (!OrigName.empty() && Names.insert(OrigName).second)
-      return OrigName;
+      return OrigName.str();
 
     unsigned i = 0;
     while (true) {
-      std::string S = OrigName;
+      std::string S = OrigName.str();
       llvm::raw_string_ostream SS(S);
       SS << i;
       if (Names.insert(SS.str()).second)

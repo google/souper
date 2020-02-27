@@ -171,7 +171,7 @@ FoundChar:
       ++Begin;
     } while (Begin != End && ((*Begin >= 'a' && *Begin <= 'z') ||
              (*Begin == '.') || (*Begin >= 'A' && *Begin <= 'Z')));
-    std::string DataFlowFact = StringRef(TokenBegin, Begin - TokenBegin);
+    std::string DataFlowFact = StringRef(TokenBegin, Begin - TokenBegin).str();
     if (DataFlowFact == "knownBits") {
       if (*Begin != '=') {
         ErrStr = "expected '=' for knownBits";
@@ -186,7 +186,7 @@ FoundChar:
         return Token{Token::Error, Begin, 0, APInt()};
       }
       return Token{Token::KnownBits, TokenBegin, size_t(Begin - TokenBegin), APInt(),
-                   "", 0, StringRef(PatternBegin, Begin - PatternBegin)};
+                   "", 0, StringRef(PatternBegin, Begin - PatternBegin).str()};
     } else
       return Token{Token::Ident, TokenBegin, size_t(Begin - TokenBegin), APInt()};
   }
@@ -807,7 +807,7 @@ bool Parser::parseInstAttribute(std::string &ErrStr, Inst *LHS) {
         ErrStr = makeErrStr("demandedBits pattern must be of same length as infer operand width");
         return false;
       }
-      std::string DemandedBitsPattern = CurTok.str();
+      std::string DemandedBitsPattern = CurTok.str().str();
       for (unsigned i = 0; i < LHS->Width; ++i) {
         if (DemandedBitsPattern[i] == '1') {
           DemandedBitsVal += ConstOne.shl(DemandedBitsPattern.length() - 1 - i);
@@ -1036,7 +1036,7 @@ bool Parser::parseLine(std::string &ErrStr) {
         return false;
       }
 
-      Inst::Kind IK = Inst::getKind(CurTok.str());
+      Inst::Kind IK = Inst::getKind(CurTok.str().str());
 
       if (IK == Inst::None) {
         if (CurTok.str() == "block") {
