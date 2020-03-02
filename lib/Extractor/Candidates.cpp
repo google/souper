@@ -546,6 +546,11 @@ Inst *ExprBuilder::buildHelper(Value *V) {
       }
     }
   } else if (auto Call = dyn_cast<CallInst>(V)) {
+    for (auto &&Arg : Call->args()) {
+      if (!Arg->getType()->isSized()) {
+        return makeArrayRead(V);
+      }
+    }
     LibFunc Func;
     if (auto II = dyn_cast<IntrinsicInst>(Call)) {
       Inst *L = get(II->getOperand(0));
