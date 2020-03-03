@@ -521,6 +521,8 @@ void PruningManager::init() {
     DataflowPrune= [this](Inst *I, std::vector<Inst *> &RI) {
       TotalGuesses++;
       ReplacementContext RC;
+      RC.printInst(SC.LHS, llvm::errs(), true);
+      llvm::errs() << "=>?\n";
       RC.printInst(I, llvm::errs(), true);
       if (isInfeasible(I, StatsLevel)) {
         NumPruned++;
