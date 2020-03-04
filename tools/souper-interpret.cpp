@@ -143,7 +143,13 @@ static int Interpret(const MemoryBufferRef &MB, Solver *S) {
 
       auto PrintDB = [](std::string Preamble, auto DB) {
         llvm::outs() << Preamble << "\n";
-        for (auto P : DB) {
+        std::vector<std::pair<Inst *, llvm::APInt>> Copy(DB.size());
+        std::copy(DB.begin(), DB.end(), Copy.begin());
+        std::sort(Copy.begin(), Copy.end(),
+                  [] (std::pair<Inst *, llvm::APInt> A, std::pair<Inst *, llvm::APInt> B) {
+                    return A.first->Name < B.first->Name;
+                  });
+        for (auto P : Copy) {
           llvm::outs() << "var : " << P.first->Name << '\t' << souper::getPaddedBinaryString(P.second) << "\n";
         }
         llvm::outs() << "=====\n";
