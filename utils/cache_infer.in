@@ -27,6 +27,7 @@ my $NPROCS = 4;
 $NPROCS = Sys::CPU::cpu_count() if defined(&Sys::CPU::cpu_count);
 
 my $CPU_LIMIT = 15 * 60;
+my $RAM_LIMIT = 4 * 1024 * 1024 * 1024;
 
 sub usage() {
     print <<"END";
@@ -201,7 +202,9 @@ foreach my $k (sort byrank @keys) {
     my $pid = fork();
     die unless $pid >= 0;
     if ($pid == 0) {
-	die "setrlimit" unless setrlimit(RLIMIT_CPU, $CPU_LIMIT, $CPU_LIMIT);
+	die "setrlimit CPU" unless setrlimit(RLIMIT_CPU, $CPU_LIMIT, $CPU_LIMIT);
+	die "setrlimit RSS" unless setrlimit(RLIMIT_RSS, $RAM_LIMIT, $RAM_LIMIT);
+	die "setrlimit VMEM" unless setrlimit(RLIMIT_VMEM, $RAM_LIMIT, $RAM_LIMIT);
 	infer ($k);
 	# not reachable
     }
