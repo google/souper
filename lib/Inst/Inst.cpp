@@ -272,22 +272,22 @@ bool ReplacementContext::empty() {
 }
 
 Inst *ReplacementContext::getInst(llvm::StringRef Name) {
-  auto InstIt = NameToInst.find(Name);
+  auto InstIt = NameToInst.find(Name.str());
   return (InstIt == NameToInst.end()) ? 0 : InstIt->second;
 }
 
 void ReplacementContext::setInst(llvm::StringRef Name, Inst *I) {
-  NameToInst[Name] = I;
+  NameToInst[Name.str()] = I;
   InstNames[I] = Name;
 }
 
 Block *ReplacementContext::getBlock(llvm::StringRef Name) {
-  auto BlockIt = NameToBlock.find(Name);
+  auto BlockIt = NameToBlock.find(Name.str());
   return (BlockIt == NameToBlock.end()) ? 0 : BlockIt->second;
 }
 
 void ReplacementContext::setBlock(llvm::StringRef Name, Block *B) {
-  NameToBlock[Name] = B;
+  NameToBlock[Name.str()] = B;
   BlockNames[B] = Name;
 }
 
