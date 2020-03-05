@@ -1,0 +1,14 @@
+; REQUIRES: solver, synthesis
+
+; RUN: %souper-check %solver -try-dataflow-pruning %s > %t
+; RUN: %FileCheck %s < %t
+
+; CHECK: Pruning failed
+
+%0:i16 = var (nonNegative)
+%1 = sdiv %0, 8
+infer %1
+%2:i16 = reservedconst
+%3 = lshr %0, %2
+result %3
+

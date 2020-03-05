@@ -572,12 +572,53 @@ void PruningManager::init() {
   ExprInfo::analyze(SC.LHS, LHSInfo);
 }
 
+bool isDataflowConsistent(ValueCache &Cache) {
+  for (auto &&Pair : Cache) {
+    if (Pair.second.hasValue()) {
+      auto *I = Pair.first;
+      llvm::APInt V = Pair.second.getValue();
+
+      if ((I->KnownZeros & V) != 0 || (I->KnownOnes & ~V) != 0) {
+        return false;
+      }
+
+      if (!I->Range.isFullSet()) {
+        if (!I->Range.contains(V)) {
+          return false;
+        }
+      }
+
+      if (I->NonZero && !V) {
+        return false;
+      }
+
+      if (I->NonNegative && V.isNegative()) {
+        return false;
+      }
+
+      if (I->PowOfTwo && !V.isPowerOf2()) {
+        return false;
+      }
+
+      if (I->Negative && !V.isNegative()) {
+        return false;
+      }
+
+      if (I->NumSignBits > V.getNumSignBits()) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 bool PruningManager::isInputValid(ValueCache &Cache) {
   ConcreteInterpreter CI(SC.LHS, Cache);
 
-  if (auto V = CI.evaluateInst(Ante); V.hasValue() && V.getValue().getLimitedValue() == 1)
-    return true;
-
+  if (isDataflowConsistent(Cache)) {
+    if (auto V = CI.evaluateInst(Ante); V.hasValue() && V.getValue().getLimitedValue() == 1)
+      return true;
+  }
   if (StatsLevel > 2) {
     llvm::errs() << "Input failed PC check: ";
     for (auto &&p : Cache) {
