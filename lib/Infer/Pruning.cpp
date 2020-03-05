@@ -12,10 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "llvm/Support/CommandLine.h"
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Pruning.h"
 #include "souper/Extractor/Candidates.h"
 #include <cstdlib>
+
+namespace {
+  static llvm::cl::opt<bool> EnableHeavyDataflowPruning("souper-dataflow-pruning-heavy",
+    llvm::cl::desc("Enable all pruning techniques (default=false)"),
+    llvm::cl::init(false));
+
+  static llvm::cl::opt<bool> AbstractInterpretPhi("souper-dataflow-ai-phi",
+    llvm::cl::desc("Abstract interpret Phi instead of assuming first argument (default=false)"),
+    llvm::cl::init(false));
+}
 
 namespace souper {
 
@@ -165,15 +176,16 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
 //       }
 //       return true;
 //     }
+    if (EnableHeavyDataflowPruning) {
+      for (auto C : Constants) {
+        auto CutOff = 0xFFFFFF;
+        ConstantLimits[C].push_back(mkCR(C, 1, CutOff));
+        ConstantLimits[C].push_back(mkCR(C, 0, CutOff).inverse());
+        // ^ Initialize with full-set instead of this when we can gracefully deal with wrapped ranges
 
-    for (auto C : Constants) {
-      auto CutOff = 0xFFFFFF;
-      ConstantLimits[C].push_back(mkCR(C, 1, CutOff));
-      ConstantLimits[C].push_back(mkCR(C, 0, CutOff).inverse());
-      // ^ Initialize with full-set instead of this when we can gracefully deal with wrapped ranges
-
-      ConstantKnownNotOne[C] = llvm::APInt(C->Width, 0);
-      ConstantKnownNotZero[C] = llvm::APInt(C->Width, 0);
+        ConstantKnownNotOne[C] = llvm::APInt(C->Width, 0);
+        ConstantKnownNotZero[C] = llvm::APInt(C->Width, 0);
+      }
     }
   }
 
@@ -219,7 +231,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       }
     }
 
-    if (LHSHasPhi) {
+    if (LHSHasPhi && AbstractInterpretPhi) {
       auto LHSCR = LHSConstantRange[I];
       auto RHSCR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
       if (!RHSCR.isFullSet()) {
@@ -296,7 +308,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
             return true;
           }
 
-          if (!HasHole) {
+          if (!HasHole && EnableHeavyDataflowPruning) {
             // !Concrete and !HasHole, must have a Symbolic Constant
             for (auto C : Constants) {
               if (ConstantLimits[C].size() <= MAX_PARTS) {
@@ -380,31 +392,33 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     }
   }
 
-  for (auto &C : ConstantLimits) {
-    auto &Rs = C.second;
-    if (!Rs.empty()) {
-      // The other case is handled in the input specialization loop
-      if (StatsLevel > 2) {
-        llvm::errs() << "  Constant narrowing possibility. Restrict to: ";
-        for (auto X : Rs) {
-          llvm::errs() << X << "\t";
+  if (EnableHeavyDataflowPruning) {
+    for (auto &C : ConstantLimits) {
+      auto &Rs = C.second;
+      if (!Rs.empty()) {
+        // The other case is handled in the input specialization loop
+        if (StatsLevel > 2) {
+          llvm::errs() << "  Constant narrowing possibility. Restrict to: ";
+          for (auto X : Rs) {
+            llvm::errs() << X << "\t";
+          }
+          llvm::errs() << "\n";
         }
-        llvm::errs() << "\n";
-      }
 
-      size_t ResidualSize = 0;
-      for (auto &&R : Rs) {
-        ResidualSize += getSetSize(R).getLimitedValue();
-      }
+        size_t ResidualSize = 0;
+        for (auto &&R : Rs) {
+          ResidualSize += getSetSize(R).getLimitedValue();
+        }
 
-      if (ResidualSize < 8192 && Rs.size() < 3) {
-        // TODO: Tune. These thresholds control when the solver is involved
-        C.first->RangeRefinement = Rs;
+        if (ResidualSize < 8192 && Rs.size() < 3) {
+          // TODO: Tune. These thresholds control when the solver is involved
+          C.first->RangeRefinement = Rs;
+        }
       }
     }
-}
+  }
 
-  if (!LHSHasPhi) {
+  if (!LHSHasPhi && EnableHeavyDataflowPruning) {
     return isInfeasibleWithSolver(RHS, StatsLevel);
   } else {
     return false;
@@ -493,7 +507,7 @@ PruningManager::PruningManager(
                     InputVars(Inputs_) {}
 
 void PruningManager::init() {
-
+  setPhiConcretePreds(SC.LHS);
   Ante = SC.IC.getConst(llvm::APInt(1, true));
   for (auto PC : SC.PCs ) {
     Inst *Eq = SC.IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
@@ -509,11 +523,13 @@ void PruningManager::init() {
   }
 
   if (hasGivenInst(SC.LHS, [](Inst *I){ return I->K == Inst::Phi;})) {
-    // Have to abstract interpret LHS because of phi
     LHSHasPhi = true;
-    for (unsigned I = 0; I < InputVals.size(); I++) {
-      LHSKnownBits.push_back(KnownBitsAnalysis().findKnownBits(SC.LHS, ConcreteInterpreters[I]));
-      LHSConstantRange.push_back(ConstantRangeAnalysis().findConstantRange(SC.LHS, ConcreteInterpreters[I]));
+    if (AbstractInterpretPhi) {
+      // Abstract interpret LHS because of phi
+      for (unsigned I = 0; I < InputVals.size(); I++) {
+        LHSKnownBits.push_back(KnownBitsAnalysis().findKnownBits(SC.LHS, ConcreteInterpreters[I]));
+        LHSConstantRange.push_back(ConstantRangeAnalysis().findConstantRange(SC.LHS, ConcreteInterpreters[I]));
+      }
     }
   }
 
@@ -718,4 +734,26 @@ void ExprInfo::analyze(Inst *Root,
   }
   Result[Root] = EI;
 }
+
+void PruningManager::setPhiConcretePreds(Inst *Root) {
+  std::unordered_set<Inst *> Visited;
+  std::vector<Inst *> Stack{Root};
+  while (!Stack.empty()) {
+    Inst *Current = Stack.back();
+
+    Stack.pop_back();
+
+    if (Current->K == Inst::Phi) {
+      Current->B->ConcretePred = 0;
+    }
+    Visited.insert(Current);
+
+    for (auto Child : Current->Ops) {
+      if (Visited.find(Child) == Visited.end()) {
+        Stack.push_back(Child);
+      }
+    }
+  }
+}
+
 }
