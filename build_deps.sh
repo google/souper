@@ -25,13 +25,13 @@ ncpus=$(command nproc 2>/dev/null || command sysctl -n hw.ncpu 2>/dev/null || ec
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
 llvm_repo=https://github.com/llvm/llvm-project.git
 # llvm_checkout specifies the git branch or hash to checkout to
-llvm_checkout=b6b3fcdcb8cdfb887e26d27bee03b997d2d65888
+llvm_checkout=40fc80a0232d5af7b853433363a5cff9ee58ab9e
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=9823174bb34fcb9c8e33c37e7e04d46bfe3a29a5
 alive_repo=https://github.com/manasij7479/alive2.git
 z3_repo=https://github.com/Z3Prover/z3.git
-z3_commit=6330bf7d258c67cc086f4c2ee402e5d87af5d078
+z3_commit=37bc4a4407d1cd4eab9de1e26c546aba5d4e8d26
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
