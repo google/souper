@@ -500,9 +500,10 @@ namespace souper {
     case Inst::Phi: {
       std::vector<llvm::KnownBits> vec;
       for (auto &Op : I->Ops) {
-        vec.emplace_back(findKnownBits(Op, CI));
+        vec.emplace_back(findKnownBits(Op, CI, UsePartialEval));
       }
       Result = mergeKnownBits(vec);
+      break;
     }
     case Inst::AddNUW :
     case Inst::AddNW :

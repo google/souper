@@ -99,9 +99,6 @@ namespace {
   static cl::opt<bool> IgnoreCost("souper-enumerative-synthesis-ignore-cost",
     cl::desc("Ignore cost of RHSes -- just generate them. (default=false)"),
     cl::init(false));
-  static cl::opt<bool> SuppressFoldables("souper-suppress-foldable-operations",
-    cl::desc("Avoid synthesizing operations such as mul x, 1 that can be folded away (default=true)"),
-    cl::init(true));
   static cl::opt<unsigned> MaxLHSCands("souper-max-lhs-cands",
     cl::desc("Gather at most this many inputs from a LHS to use as synthesis inputs (default=8)"),
     cl::init(8));
@@ -780,7 +777,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
 
       EC = CS.synthesize(SC.SMTSolver, SC.BPCs, SC.PCs, InstMapping (SC.LHS, I), ConstSet,
                          ResultConstMap, SC.IC, /*MaxTries=*/MaxTries, SC.Timeout,
-                         SuppressFoldables);
+                         /*AvoidNops=*/true);
       if (!ResultConstMap.empty()) {
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;

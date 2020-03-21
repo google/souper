@@ -1,17 +1,12 @@
 ; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-suppress-foldable-operations=false -souper-enumerative-synthesis -souper-check-all-guesses %solver %s > %t1
-; RUN: %souper-check -infer-rhs -souper-suppress-foldable-operations=false -souper-enumerative-synthesis -souper-use-alive -souper-check-all-guesses %solver %s > %t2
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-check-all-guesses %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-double-check -souper-check-all-guesses %solver %s > %t2
 ; RUN: %FileCheck %s < %t1
 ; RUN: %FileCheck %s < %t2
 
-; CHECK: %1:i8 = mul 1:i8, %0
-; CHECK: %1:i8 = and 255:i8, %0
-; CHECK: %1:i8 = or 0:i8, %0
-; CHECK: %1:i8 = xor 0:i8, %0
-; CHECK: %1:i8 = shl %0, 0:i8
-; CHECK: %1:i8 = ashr %0, 0:i8
-; CHECK: %1:i8 = lshr %0, 0:i8
-
+; CHECK: result %0
+; CHECK: %1:i8 = freeze %0
+; CHECK-NEXT: result %1
 
 %0:i8 = var
 %1:i8 = add 1:i8, %0
