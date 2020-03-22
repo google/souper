@@ -156,8 +156,6 @@ void addGuess(Inst *RHS, unsigned TargetWidth, InstContext &IC, int MaxCost, std
   }
 }
 
-typedef std::function<bool(Inst *, std::vector<Inst *> &)> PruneFunc;
-
 // Does a short-circuiting AND operation
 PruneFunc MkPruneFunc(std::vector<PruneFunc> Funcs) {
   return [Funcs](Inst *I, std::vector<Inst *> &RI) {
@@ -790,16 +788,28 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       }
     }
 
-    assert(RHS);
-    RHSs.emplace_back(RHS);
-    if (!SC.CheckAllGuesses) {
-      return EC;
+    if (DoubleCheckWithAlive) {
+      if (!isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
+        llvm::errs() << "Transformation proved wrong by alive.";
+        ReplacementContext RC;
+        RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
+        llvm::errs() << "=>";
+        ReplacementContext RC2;
+        RC2.printInst(RHS, llvm::errs(), /*printNames=*/true);
+        RHS = nullptr;
+      }
     }
-    if (DebugLevel > 3) {
-      llvm::outs() << "; result " << RHSs.size() << ":\n";
-      ReplacementContext RC;
-      RC.printInst(RHS, llvm::outs(), true);
-      llvm::outs() << "\n";
+    if (RHS) {
+      RHSs.emplace_back(RHS);
+      if (!SC.CheckAllGuesses) {
+        return EC;
+      }
+      if (DebugLevel > 3) {
+        llvm::outs() << "; result " << RHSs.size() << ":\n";
+        ReplacementContext RC;
+        RC.printInst(RHS, llvm::outs(), true);
+        llvm::outs() << "\n";
+      }
     }
   }
   return EC;
@@ -811,29 +821,8 @@ std::error_code verify(SynthesisContext &SC, std::vector<Inst *> &RHSs,
   if (SkipSolver || Guesses.empty())
     return EC;
 
-  if (UseAlive) {
-    return synthesizeWithAlive(SC, RHSs, Guesses);
-  } else {
-    auto Ret = synthesizeWithKLEE(SC, RHSs, Guesses);
-    if (DoubleCheckWithAlive && !Ret && !RHSs.empty()) {
-      for (auto RHS : RHSs) {
-        if (isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
-          continue;
-        } else {
-          llvm::errs() << "Transformation proved wrong by alive.";
-          ReplacementContext RC;
-          RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
-          llvm::errs() << "=>";
-          ReplacementContext RC2;
-          RC2.printInst(RHS, llvm::errs(), /*printNames=*/true);
-          RHS = nullptr;
-          std::error_code EC;
-          return EC;
-        }
-      }
-    }
-    return Ret;
-  }
+  return UseAlive ? synthesizeWithAlive(SC, RHSs, Guesses) :
+                    synthesizeWithKLEE(SC, RHSs, Guesses);
 }
 
 std::error_code
