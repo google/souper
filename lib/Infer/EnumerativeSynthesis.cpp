@@ -156,8 +156,6 @@ void addGuess(Inst *RHS, unsigned TargetWidth, InstContext &IC, int MaxCost, std
   }
 }
 
-typedef std::function<bool(Inst *, std::vector<Inst *> &)> PruneFunc;
-
 // Does a short-circuiting AND operation
 PruneFunc MkPruneFunc(std::vector<PruneFunc> Funcs) {
   return [Funcs](Inst *I, std::vector<Inst *> &RI) {
@@ -816,9 +814,11 @@ std::error_code verify(SynthesisContext &SC, std::vector<Inst *> &RHSs,
   } else {
     auto Ret = synthesizeWithKLEE(SC, RHSs, Guesses);
     if (DoubleCheckWithAlive && !Ret && !RHSs.empty()) {
-      for (auto RHS : RHSs) {
+      auto Iter = RHSs.begin();
+      while (Iter != RHSs.end()) {
+        auto RHS = *Iter;
         if (isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
-          continue;
+          ++Iter;
         } else {
           llvm::errs() << "Transformation proved wrong by alive.";
           ReplacementContext RC;
@@ -826,9 +826,7 @@ std::error_code verify(SynthesisContext &SC, std::vector<Inst *> &RHSs,
           llvm::errs() << "=>";
           ReplacementContext RC2;
           RC2.printInst(RHS, llvm::errs(), /*printNames=*/true);
-          RHS = nullptr;
-          std::error_code EC;
-          return EC;
+          RHSs.erase(Iter);
         }
       }
     }
