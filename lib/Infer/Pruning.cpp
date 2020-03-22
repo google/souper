@@ -177,7 +177,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     }
   }
 
-  if (!HasHole) {
+  if (!HasHole && EnableDemandedBitsPruning) {
     auto DontCareBits = DontCareBitsAnalysis().findDontCareBits(RHS);
 
     for (auto Pair : LHSMustDemandedBits) {
@@ -189,7 +189,6 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
                        << DontCareBits[Pair.first].toString(2, false) << "\n";
           llvm::errs() << "  pruned using demanded bits analysis.\n";
         }
-
         return true;
       }
     }
@@ -552,7 +551,13 @@ void PruningManager::init() {
   ConcreteInterpreter BlankCI;
   LHSKnownBitsNoSpec =  KnownBitsAnalysis().findKnownBits(SC.LHS, BlankCI, false);
   LHSMustDemandedBits = MustDemandedBitsAnalysis().findMustDemandedBits(SC.LHS);
-
+  EnableDemandedBitsPruning = false;
+  for (auto Pair : LHSMustDemandedBits) {
+    if (Pair.second != 0) {
+      EnableDemandedBitsPruning = true;
+      break;
+    }
+  }
   ExprInfo::analyze(SC.LHS, LHSInfo);
 }
 

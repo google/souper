@@ -60,6 +60,7 @@ private:
   HoleAnalysis HA;
   llvm::KnownBits LHSKnownBitsNoSpec;
   InputVarInfo LHSMustDemandedBits;
+  bool EnableDemandedBitsPruning = false;
   bool LHSHasPhi = false;
   std::unordered_map<Inst *, ExprInfo> LHSInfo;
 
