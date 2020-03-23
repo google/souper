@@ -979,6 +979,10 @@ namespace souper {
         Result = RB0.reverseBits();
         break;
 
+      case Inst::Freeze:
+        Result = RB0;
+        break;
+
       case Inst::Trunc:
         Result = RB0.trunc(I->Width);
         break;
@@ -1216,6 +1220,7 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
       case Inst::Xor:
       case Inst::BitReverse:
       case Inst::BSwap:
+      case Inst::Freeze:
       case Inst::Trunc: {
         Cache[I] = hasHoleInput;
         return hasHoleInput;
