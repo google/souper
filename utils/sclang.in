@@ -122,8 +122,8 @@ was performed.
 
 SOUPER_USE_ALIVE -- Send queries to Alive2
 
-LLVM_DISABLE_INSTRUCTION_COMBINER -- Disable the invocation of instruction
-combiner during compilation.
+LLVM_DISABLE_PEEPHOLES -- Disable the invocation of llvm peephole
+transformations in compilation.
 
 SOUPER_STATS -- Ask LLVM to print statistics.
 
@@ -264,8 +264,8 @@ if ($souper) {
     if (exists $ENV{"SOUPER_HARVEST_USES"}) {
         push @ARGV, ("-mllvm", "-souper-harvest-uses");
     }
-    if (exists $ENV{"LLVM_DISABLE_INSTRUCTION_COMBINER"}) {
-        push @ARGV, ("-mllvm", "-disable-instruction-combiner");
+    if (exists $ENV{"LLVM_DISABLE_PEEPHOLES"}) {
+        push @ARGV, ("-mllvm", "-disable-all-peepholes");
     }
 }
 

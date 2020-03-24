@@ -71,7 +71,7 @@ git clone $llvm_repo $llvm_srcdir
 git -C $llvm_srcdir checkout $llvm_checkout
 
 # Apply instcombine switch patch
-git -C ${llvm_srcdir} apply $(pwd)/patches/0001-enable-instcombine-switch.patch
+git -C ${llvm_srcdir} apply $(pwd)/patches/0001-peephole-switch.patch
 # Disable the broken select -> logic optimizations
 git -C ${llvm_srcdir} apply $(pwd)/patches/0002-disable-instcombine-select-to-logic.patch
 
