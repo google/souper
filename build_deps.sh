@@ -23,15 +23,15 @@ ncpus=$(command nproc 2>/dev/null || command sysctl -n hw.ncpu 2>/dev/null || ec
 
 # hiredis version 0.14.0
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
-llvm_repo=https://github.com/llvm/llvm-project.git
+llvm_repo=https://github.com/regehr/llvm-project.git
 # llvm_checkout specifies the git branch or hash to checkout to
-llvm_checkout=40fc80a0232d5af7b853433363a5cff9ee58ab9e
+llvm_checkout=disable-peepholes
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=9823174bb34fcb9c8e33c37e7e04d46bfe3a29a5
 alive_repo=https://github.com/manasij7479/alive2.git
 z3_repo=https://github.com/Z3Prover/z3.git
-z3_commit=37bc4a4407d1cd4eab9de1e26c546aba5d4e8d26
+z3_commit=a55791330749491214d48591ba8e55fc6c29f8fc
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
@@ -70,8 +70,6 @@ llvm_builddir=$(pwd)/${llvm_srcdir}/${llvm_build_type}-build
 git clone $llvm_repo $llvm_srcdir
 git -C $llvm_srcdir checkout $llvm_checkout
 
-# Apply instcombine switch patch
-git -C ${llvm_srcdir} apply $(pwd)/patches/0001-peephole-switch.patch
 # Disable the broken select -> logic optimizations
 git -C ${llvm_srcdir} apply $(pwd)/patches/0002-disable-instcombine-select-to-logic.patch
 
