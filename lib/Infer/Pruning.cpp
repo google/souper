@@ -189,11 +189,11 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     }
   }
 
-  if (!HasHole) {
+  if (!HasHole && EnableDemandedBitsPruning) {
     auto DontCareBits = DontCareBitsAnalysis().findDontCareBits(RHS);
 
     for (auto Pair : LHSMustDemandedBits) {
-      if (DontCareBits.find(Pair.first) != DontCareBits.end() && (Pair.second & DontCareBits[Pair.first]) != 0) {
+      if (Pair.second != 0 && DontCareBits.find(Pair.first) == DontCareBits.end()) {
         // This input is must demanded in LHS and DontCare in RHS.
         if (StatsLevel > 2) {
           llvm::errs() << "Var : " << Pair.first->Name << " : ";
@@ -201,7 +201,6 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
                        << DontCareBits[Pair.first].toString(2, false) << "\n";
           llvm::errs() << "  pruned using demanded bits analysis.\n";
         }
-
         return true;
       }
     }
@@ -568,7 +567,14 @@ void PruningManager::init() {
   ConcreteInterpreter BlankCI;
   LHSKnownBitsNoSpec =  KnownBitsAnalysis().findKnownBits(SC.LHS, BlankCI, false);
   LHSMustDemandedBits = MustDemandedBitsAnalysis().findMustDemandedBits(SC.LHS);
-
+  improveMustDemandedBits(LHSMustDemandedBits);
+  EnableDemandedBitsPruning = false;
+  for (auto Pair : LHSMustDemandedBits) {
+    if (Pair.second != 0) {
+      EnableDemandedBitsPruning = true;
+      break;
+    }
+  }
   ExprInfo::analyze(SC.LHS, LHSInfo);
 }
 
@@ -634,6 +640,35 @@ bool PruningManager::isInputValid(ValueCache &Cache) {
   }
 
   return false;
+}
+
+void PruningManager::improveMustDemandedBits(InputVarInfo &IVI) {
+  for (size_t i = 0; i < InputVals.size(); ++i) {
+    for (size_t j = 0; j < InputVals.size(); ++j) {
+      for (auto &Pair : IVI) {
+        auto Var = Pair.first;
+        auto &I1 = InputVals[i][Var];
+        auto &I2 = InputVals[j][Var];
+        if (I1.hasValue() && I1.hasValue() &&
+            I1.getValue() != I2.getValue()) {
+          auto &MDB = Pair.second;
+          for (size_t k = 0; k < Var->Width; ++k) {
+            if (!MDB[k] && I1.getValue()[k] != I2.getValue()[k]) {
+              auto V1 = ConcreteInterpreters[i].evaluateInst(SC.LHS);
+              auto V2 = ConcreteInterpreters[j].evaluateInst(SC.LHS);
+              if (V1.hasValue() && V2.hasValue() &&
+                  V1.getValue() != V2.getValue()) {
+                MDB.setBit(k);
+                // If two input values of a variable differing in the
+                // k'th bit can produce differing outputs, the k'th
+                // is required/must demanded/important.
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 namespace {
