@@ -551,6 +551,7 @@ void PruningManager::init() {
   ConcreteInterpreter BlankCI;
   LHSKnownBitsNoSpec =  KnownBitsAnalysis().findKnownBits(SC.LHS, BlankCI, false);
   LHSMustDemandedBits = MustDemandedBitsAnalysis().findMustDemandedBits(SC.LHS);
+  improveMustDemandedBits(LHSMustDemandedBits);
   EnableDemandedBitsPruning = false;
   for (auto Pair : LHSMustDemandedBits) {
     if (Pair.second != 0) {
@@ -582,6 +583,35 @@ bool PruningManager::isInputValid(ValueCache &Cache) {
   }
 
   return false;
+}
+
+void PruningManager::improveMustDemandedBits(InputVarInfo &IVI) {
+  for (size_t i = 0; i < InputVals.size(); ++i) {
+    for (size_t j = 0; j < InputVals.size(); ++j) {
+      for (auto &Pair : IVI) {
+        auto Var = Pair.first;
+        auto &I1 = InputVals[i][Var];
+        auto &I2 = InputVals[j][Var];
+        if (I1.hasValue() && I1.hasValue() &&
+            I1.getValue() != I2.getValue()) {
+          auto &MDB = Pair.second;
+          for (size_t k = 0; k < Var->Width; ++k) {
+            if (!MDB[k] && I1.getValue()[k] != I2.getValue()[k]) {
+              auto V1 = ConcreteInterpreters[i].evaluateInst(SC.LHS);
+              auto V2 = ConcreteInterpreters[j].evaluateInst(SC.LHS);
+              if (V1.hasValue() && V2.hasValue() &&
+                  V1.getValue() != V2.getValue()) {
+                MDB.setBit(k);
+                // If two input values of a variable differing in the
+                // k'th bit can produce differing outputs, the k'th
+                // is required/must demanded/important.
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 namespace {
