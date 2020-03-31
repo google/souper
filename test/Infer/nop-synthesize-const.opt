@@ -1,0 +1,9 @@
+; REQUIRES: solver
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-nop-guesses-only=true %solver %s > %t1
+; RUN: %FileCheck %s < %t1
+; CHECK: sub %0, 18:i32
+
+%0:i32 = var
+%1:i32 = sub %0, 13:i32
+%2:i32 = sub %1, 5:i32
+infer %2

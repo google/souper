@@ -1175,14 +1175,15 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
                           std::map<Inst *, Inst *> &InstCache,
                           std::map<Block *, Block *> &BlockCache,
                           std::map<Inst *, llvm::APInt> *ConstMap,
-                          bool CloneVars) {
-
+                          bool CloneVars, bool CloneBlocks,
+                          bool SubstCWithReservedC) {
   if (InstCache.count(I))
     return InstCache.at(I);
 
   std::vector<Inst *> Ops;
   for (auto const &Op : I->Ops)
-    Ops.push_back(getInstCopy(Op, IC, InstCache, BlockCache, ConstMap, CloneVars));
+    Ops.push_back(getInstCopy(Op, IC, InstCache, BlockCache, ConstMap,
+                              CloneVars, CloneBlocks, SubstCWithReservedC));
 
   Inst *Copy = 0;
   if (I->K == Inst::Var) {
@@ -1210,7 +1211,9 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
       }
     }
   } else if (I->K == Inst::Phi) {
-    if (!BlockCache.count(I->B)) {
+    if (!CloneBlocks) {
+      Copy = I;
+    } else if (!BlockCache.count(I->B)) {
       auto BlockCopy = IC.createBlock(I->B->Preds);
       BlockCache[I->B] = BlockCopy;
       Copy = IC.getPhi(BlockCopy, Ops, I->DemandedBits);
@@ -1218,7 +1221,12 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
       Copy = IC.getPhi(BlockCache.at(I->B), Ops, I->DemandedBits);
     }
   } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
-    Copy = I;
+    if (I->K == Inst::Const && SubstCWithReservedC) {
+      unsigned C = IC.getReservedConst()->SynthesisConstID;
+      Copy = IC.createSynthesisConstant(I->Width, C);
+    } else {
+      Copy = I;
+    }
   } else {
     Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits, I->Available);
   }

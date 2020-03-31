@@ -102,6 +102,9 @@ namespace {
   static cl::opt<unsigned> MaxLHSCands("souper-max-lhs-cands",
     cl::desc("Gather at most this many inputs from a LHS to use as synthesis inputs (default=8)"),
     cl::init(8));
+  static cl::opt<bool> NOPGuessesOnly("souper-enumerative-synthesis-nop-guesses-only",
+    cl::desc("Only generate NOP guesses."),
+    cl::init(false));
 }
 
 // TODO
@@ -428,7 +431,7 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
       // PRUNE: don't generate an i1 using funnel shift
       if (Width == 1 && (Op == Inst::FShr || Op == Inst::FShl))
         continue;
-      
+
       Inst *V1;
       if (I->K == Inst::ReservedConst) {
         V1 = IC.createSynthesisConstant(Width, I->SynthesisConstID);
@@ -875,12 +878,21 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   // add nops guesses separately
   for (auto I : Cands) {
     if (I->Width == SC.LHS->Width) {
-      addGuess(I, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
+      // Substitute the constants in I with reserved constants.
+      std::map<Inst *, Inst *> ICache;
+      std::map<Block *, Block *> BCache;
+
+      Inst* N = getInstCopy(I, SC.IC, ICache, BCache, nullptr,
+                            /*CloneVars=*/false, /*CloneBlocks=*/false,
+                            /*SubstCWithReservedC=*/true);
+      addGuess(N, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
     }
   }
 
-  getGuesses(Cands, SC.LHS->Width,
-             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, Generate);
+  if (!NOPGuessesOnly) {
+    getGuesses(Cands, SC.LHS->Width,
+               LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, Generate);
+  }
 
   if (!Guesses.empty() && !SkipSolver) {
     sortGuesses(Guesses);
