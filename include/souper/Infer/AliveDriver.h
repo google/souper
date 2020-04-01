@@ -44,8 +44,9 @@ private:
   Inst *LHS, *PreCondition;
 
   Cache LExprCache, RExprCache;
+  std::vector<std::pair<const Inst *, IR::Value *>> Inputs;
   std::map<const Inst *, std::string> NameMap;
-  void copyInputs(Cache &From, Cache &To, IR::Function &RHS);
+  void copyInputs(Cache &To, IR::Function &RHS);
 
   std::unordered_map<int, IR::Type*> TypeCache;
 
@@ -58,6 +59,7 @@ private:
 
   int InstNumbers;
   std::unordered_map<const Inst *, std::string> NamesCache;
+  bool IsLHS;
 
   InstContext &IC;
   smt::smt_initializer smt_init;
