@@ -196,6 +196,46 @@ namespace souper {
     bool findIfHole(souper::Inst *I);
   };
 
+  class ForcedValueAnalysis {
+  public:
+    ForcedValueAnalysis(Inst *RHS_) : RHS(RHS_), Conflict(false) {
+      countSymbolicInsts(RHS);
+    }
+    struct Value {
+      llvm::APInt Concrete;
+      // Add Range and Knownbits, maybe
+      bool conflict(Value &Other) {
+        return Concrete != Other.Concrete;
+      }
+    };
+
+    std::unordered_map<souper::Inst *, std::vector<Value>> ForcedValues;
+
+    using Worklist = std::vector<std::pair<Inst *, Value>>;
+
+    // Returns true on conflict
+    bool force(llvm::APInt Result, ConcreteInterpreter &CI);
+
+    // Adds to the worklist
+    // Returns true on conflict
+    bool forceInst(souper::Inst *I, Value Result,
+                   ConcreteInterpreter &CI,
+                   Worklist &ToDo);
+
+    // Returns true on conflict
+    bool addForcedValue(Inst *I, Value V);
+
+    bool conflict() {
+      return Conflict;
+    }
+
+    // Counts uses, not defs.
+    void countSymbolicInsts(Inst *I);
+
+    Inst *RHS;
+    bool Conflict;
+  };
+
 }
 
 #endif
