@@ -22,6 +22,7 @@
 
 #include <queue>
 #include <functional>
+#include <set>
 
 static const unsigned MaxTries = 30;
 static const unsigned MaxInputSpecializationTries = 2;
@@ -428,7 +429,7 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
       // PRUNE: don't generate an i1 using funnel shift
       if (Width == 1 && (Op == Inst::FShr || Op == Inst::FShl))
         continue;
-      
+
       Inst *V1;
       if (I->K == Inst::ReservedConst) {
         V1 = IC.createSynthesisConstant(Width, I->SynthesisConstID);
@@ -891,8 +892,20 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     DataflowPruning.printStats(llvm::errs());
   }
 
+  // Guesses count
   if (DebugLevel > 1)
     llvm::errs() << "There are " << GuessCount << " Guesses\n";
+
+  // RHSs count, before duplication
+  if (DebugLevel > 3)
+    llvm::errs() << "There are " << RHSs.size() << " RHSs before deduplication\n";
+
+  std::set<Inst *> Dedup(RHSs.begin(), RHSs.end());
+  RHSs.assign(Dedup.begin(), Dedup.end());
+
+  // RHSs count, after duplication
+  if (DebugLevel > 3)
+    llvm::errs() << "There are " << RHSs.size() << " RHSs after deduplication\n";
 
   return EC;
 }
