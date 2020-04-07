@@ -1276,4 +1276,124 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
       }
     }
   }
+
+  struct ValueTF {
+    static llvm::APInt Add(llvm::APInt Result, llvm::APInt Operand) {
+      return Result - Operand;
+    }
+    static llvm::APInt Xor(llvm::APInt Result, llvm::APInt Operand) {
+      return (Result | Operand) & ~(Result & Operand);
+    }
+    static llvm::APInt Sub0(llvm::APInt Result, llvm::APInt Operand0) {
+      return Operand0 - Result;
+    }
+    static llvm::APInt Sub1(llvm::APInt Result, llvm::APInt Operand1) {
+      return Operand1 + Result;
+    }
+
+    static bool supported(Inst::Kind K) {
+      return K == Inst::Kind::Add ||
+             K == Inst::Kind::Xor ||
+             K == Inst::Kind::Sub;
+    }
+
+    static llvm::APInt get0(Inst::Kind K, llvm::APInt R, llvm::APInt Op0) {
+      switch (K) {
+        case Inst::Add : return Add(R, Op0);
+        case Inst::Xor : return Xor(R, Op0);
+        case Inst::Sub : return Sub0(R, Op0);
+        default: llvm_unreachable("Unsupported instruction.");
+      }
+    }
+    static llvm ::APInt get1(Inst::Kind K, llvm::APInt R, llvm::APInt Op1) {
+      switch (K) {
+        case Inst::Add : return Add(R, Op1);
+        case Inst::Xor : return Xor(R, Op1);
+        case Inst::Sub : return Sub1(R, Op1);
+        default: llvm_unreachable("Unsupported instruction.");
+      }
+    }
+  };
+
+  bool ForcedValueAnalysis::forceInst(souper::Inst *I, Value Result,
+    ConcreteInterpreter &CI, Worklist &ToDo) {
+    std::vector<EvalValue> OpValues;
+    size_t Missing = 0;
+    for (auto Op : I->Ops) {
+      if (Op->nReservedConsts == 0 && Op->nHoles == 0) {
+        // only evaluate when fully concrete
+        OpValues.push_back(CI.evaluateInst(Op));
+      } else {
+        Missing++;
+        OpValues.push_back(EvalValue());
+      }
+    }
+    if (!Missing) { // All operands could be fully evaluated
+      return false; // Subtree is fully concrete
+    }
+
+    if (ValueTF::supported(I->K)) {
+      if (OpValues[0].hasValue() && !OpValues[1].hasValue()) {
+        auto Inv = ValueTF::get0(I->K, Result.Concrete, OpValues[0].getValue());
+        if (isReservedConst(I->Ops[1])) {
+          if (addForcedValue(I->Ops[1], {Inv})) {
+            return true;
+          }
+        } else {
+          ToDo.push_back({I->Ops[1], {Inv}});
+        }
+      }
+      if (OpValues[1].hasValue() && !OpValues[0].hasValue()) {
+        auto Inv = ValueTF::get1(I->K, Result.Concrete, OpValues[1].getValue());
+        if (isReservedConst(I->Ops[0])) {
+          if (addForcedValue(I->Ops[0], {Inv})) {
+            return true;
+          }
+        } else {
+          ToDo.push_back({I->Ops[0], {Inv} });
+        }
+      }
+    }
+
+    return false;
+  }
+
+  void ForcedValueAnalysis::countSymbolicInsts(Inst *I) {
+    I->nReservedConsts = isReservedConst(I) ? 1 : 0;
+    I->nHoles = isHole(I) ? 1 : 0;
+    for (auto Op : I->Ops) {
+      if (Op->nReservedConsts == -1 || Op->nHoles == -1) {
+        countSymbolicInsts(Op);
+      }
+      I->nReservedConsts += Op->nReservedConsts;
+      I->nHoles += Op->nHoles;
+    }
+  }
+
+  bool ForcedValueAnalysis::force(llvm::APInt Result, ConcreteInterpreter &CI) {
+    Worklist ToDo{{RHS, {Result}}};
+    while (!ToDo.empty()) {
+      auto &&[I, Val] = ToDo.back();
+      ToDo.pop_back();
+      if (forceInst(I, Val, CI, ToDo)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool ForcedValueAnalysis::addForcedValue(Inst *I, Value V) {
+    if (conflict()) {
+      return true;
+    }
+    for (auto &&Val : ForcedValues[I]) {
+      if (Val.conflict(V)) {
+        return true;
+      }
+    }
+    ForcedValues[I].push_back(V);
+    return false;
+  }
+
+
 }

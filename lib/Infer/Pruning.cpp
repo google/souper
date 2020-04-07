@@ -207,7 +207,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
   }
 
   bool FoundNonTopAnalysisResult = false;
-
+  ForcedValueAnalysis FVA(RHS);
   for (int I = 0; I < InputVals.size(); ++I) {
     if (I > 9 && !FoundNonTopAnalysisResult) {
       break;
@@ -305,6 +305,22 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
               llvm::errs() << "\n";
             }
             return true;
+          }
+
+          if (RHS->nReservedConsts > 0) {
+            if (FVA.force(Val, ConcreteInterpreters[I])) {
+              // failed to force
+              if (StatsLevel > 2) {
+                llvm::errs() << "Pruned using ForcedValueAnalysis.\n";
+                if (HasHole) {
+                  llvm::errs() << "Inst had a hole.";
+                } else {
+                  llvm::errs() << "Inst had a symbolic const.";
+                }
+                llvm::errs() << "\n";
+              }
+              return true;
+            }
           }
 
           if (!HasHole && EnableHeavyDataflowPruning) {
