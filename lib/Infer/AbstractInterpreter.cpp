@@ -1294,7 +1294,9 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
     static bool supported(Inst::Kind K) {
       return K == Inst::Kind::Add ||
              K == Inst::Kind::Xor ||
-             K == Inst::Kind::Sub;
+             K == Inst::Kind::Sub ||
+             K == Inst::Kind::Freeze ||
+             K == Inst::Kind::BSwap;
     }
 
     static llvm::APInt get0(Inst::Kind K, llvm::APInt R, llvm::APInt Op0) {
@@ -1313,10 +1315,24 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
         default: llvm_unreachable("Unsupported instruction.");
       }
     }
+    static llvm::APInt getUnary(Inst::Kind K, llvm::APInt R) {
+      switch (K) {
+        case Inst::Freeze : return R;
+        case Inst::BSwap : return R.byteSwap();
+        default: llvm_unreachable("Unsupported Instruction.");
+      }
+    }
+
   };
 
   bool ForcedValueAnalysis::forceInst(souper::Inst *I, Value Result,
     ConcreteInterpreter &CI, Worklist &ToDo) {
+
+    if (!Result.hasConcrete()) {
+      // TODO: This has to change when known bits is supported
+      return false;
+    }
+
     std::vector<EvalValue> OpValues;
     size_t Missing = 0;
     for (auto Op : I->Ops) {
@@ -1333,25 +1349,26 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
     }
 
     if (ValueTF::supported(I->K)) {
-      if (OpValues[0].hasValue() && !OpValues[1].hasValue()) {
-        auto Inv = ValueTF::get0(I->K, Result.Concrete, OpValues[0].getValue());
-        if (isReservedConst(I->Ops[1])) {
-          if (addForcedValue(I->Ops[1], {Inv})) {
+      if (I->Ops.size() == 1) {
+        auto Inv = ValueTF::getUnary(I->K, Result.Concrete());
+        if (addForcedValue(I->Ops[0], {Inv}, ToDo)) {
+          return true;
+        }
+      } else if (I->Ops.size() == 2) {
+        if (OpValues[0].hasValue() && !OpValues[1].hasValue()) {
+          auto Inv = ValueTF::get0(I->K, Result.Concrete(), OpValues[0].getValue());
+          if (addForcedValue(I->Ops[1], {Inv}, ToDo)) {
             return true;
           }
-        } else {
-          ToDo.push_back({I->Ops[1], {Inv}});
         }
-      }
-      if (OpValues[1].hasValue() && !OpValues[0].hasValue()) {
-        auto Inv = ValueTF::get1(I->K, Result.Concrete, OpValues[1].getValue());
-        if (isReservedConst(I->Ops[0])) {
-          if (addForcedValue(I->Ops[0], {Inv})) {
+        if (OpValues[1].hasValue() && !OpValues[0].hasValue()) {
+          auto Inv = ValueTF::get1(I->K, Result.Concrete(), OpValues[1].getValue());
+          if (addForcedValue(I->Ops[0], {Inv}, ToDo)) {
             return true;
           }
-        } else {
-          ToDo.push_back({I->Ops[0], {Inv} });
         }
+      } else {
+        // TODO Ternary; some cases for select should be easy.
       }
     }
 
@@ -1382,18 +1399,21 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
     return false;
   }
 
-  bool ForcedValueAnalysis::addForcedValue(Inst *I, Value V) {
-    if (conflict()) {
-      return true;
-    }
-    for (auto &&Val : ForcedValues[I]) {
-      if (Val.conflict(V)) {
+  bool ForcedValueAnalysis::addForcedValue(Inst *I, Value V, Worklist &ToDo) {
+    if (isReservedConst(I)) {
+      if (conflict()) {
         return true;
       }
+      for (auto &&Val : ForcedValues[I]) {
+        if (Val.conflict(V)) {
+          return true;
+        }
+      }
+      ForcedValues[I].push_back(V);
+    } else {
+      ToDo.push_back({I, V});
     }
-    ForcedValues[I].push_back(V);
     return false;
   }
-
 
 }
