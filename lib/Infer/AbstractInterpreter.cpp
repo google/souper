@@ -1277,21 +1277,21 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
     }
   }
 
-  struct ValueTF {
-    static llvm::APInt Add(llvm::APInt Result, llvm::APInt Operand) {
+  namespace ValueTF {
+    llvm::APInt Add(llvm::APInt Result, llvm::APInt Operand) {
       return Result - Operand;
     }
-    static llvm::APInt Xor(llvm::APInt Result, llvm::APInt Operand) {
+    llvm::APInt Xor(llvm::APInt Result, llvm::APInt Operand) {
       return (Result | Operand) & ~(Result & Operand);
     }
-    static llvm::APInt Sub0(llvm::APInt Result, llvm::APInt Operand0) {
+    llvm::APInt Sub0(llvm::APInt Result, llvm::APInt Operand0) {
       return Operand0 - Result;
     }
-    static llvm::APInt Sub1(llvm::APInt Result, llvm::APInt Operand1) {
+    llvm::APInt Sub1(llvm::APInt Result, llvm::APInt Operand1) {
       return Operand1 + Result;
     }
 
-    static bool supported(Inst::Kind K) {
+    bool supported(Inst::Kind K) {
       return K == Inst::Kind::Add ||
              K == Inst::Kind::Xor ||
              K == Inst::Kind::Sub ||
@@ -1299,7 +1299,7 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
              K == Inst::Kind::BSwap;
     }
 
-    static llvm::APInt get0(Inst::Kind K, llvm::APInt R, llvm::APInt Op0) {
+    llvm::APInt get0(Inst::Kind K, llvm::APInt R, llvm::APInt Op0) {
       switch (K) {
         case Inst::Add : return Add(R, Op0);
         case Inst::Xor : return Xor(R, Op0);
@@ -1307,7 +1307,7 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
         default: llvm_unreachable("Unsupported instruction.");
       }
     }
-    static llvm ::APInt get1(Inst::Kind K, llvm::APInt R, llvm::APInt Op1) {
+    llvm ::APInt get1(Inst::Kind K, llvm::APInt R, llvm::APInt Op1) {
       switch (K) {
         case Inst::Add : return Add(R, Op1);
         case Inst::Xor : return Xor(R, Op1);
@@ -1315,15 +1315,14 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
         default: llvm_unreachable("Unsupported instruction.");
       }
     }
-    static llvm::APInt getUnary(Inst::Kind K, llvm::APInt R) {
+    llvm::APInt getUnary(Inst::Kind K, llvm::APInt R) {
       switch (K) {
         case Inst::Freeze : return R;
         case Inst::BSwap : return R.byteSwap();
         default: llvm_unreachable("Unsupported Instruction.");
       }
     }
-
-  };
+  }
 
   bool ForcedValueAnalysis::forceInst(souper::Inst *I, Value Result,
     ConcreteInterpreter &CI, Worklist &ToDo) {
