@@ -205,12 +205,11 @@ namespace souper {
     public:
       Value(llvm::APInt Val_) : Val{Val_} {}
       bool conflict(Value &Other) {
-        if (hasConcrete() && Concrete() != Other.Concrete()) {
-          return true;
-        }
-        return false;
+        return hasConcrete() && Other.hasConcrete() && Concrete() != Other.Concrete();
       }
-      bool hasConcrete() {return Val.hasValue();}
+      bool hasConcrete() {
+        return Val.hasValue();
+      }
       const llvm::APInt &Concrete() {return Val.getValue();}
     private:
       llvm::Optional<llvm::APInt> Val;
