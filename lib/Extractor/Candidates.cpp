@@ -263,6 +263,7 @@ Inst *ExprBuilder::buildConstant(Constant *c) {
   }
 }
 
+#if 0
 Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
                             gep_type_iterator end) {
   unsigned PSize = DL.getPointerSizeInBits();
@@ -290,6 +291,7 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
   }
   return Ptr;
 }
+#endif
 
 void ExprBuilder::markExternalUses (Inst *I) {
   std::map<Inst *, unsigned> UsesCount;
