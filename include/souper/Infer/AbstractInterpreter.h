@@ -203,18 +203,55 @@ namespace souper {
     }
     class Value {
     public:
-      Value(llvm::APInt Val_) : hasValue(true), Val{Val_} {}
+      Value() : hasValue(false) {}
+      Value(llvm::APInt Val_) : hasValue(true), Val{Val_} {
+        KB.One = Val;
+        KB.Zero = ~Val;
+      }
+      Value(llvm::KnownBits KB_) : hasValue(false), KB(KB_) {
+        if (KB.isConstant()) {
+          hasValue = true;
+          Val = KB.getConstant();
+        }
+      }
       bool conflict(Value &Other) {
-        return hasConcrete() && Other.hasConcrete() && Concrete() != Other.Concrete();
+        bool ValueConflict = hasConcrete() && Other.hasConcrete()
+                             && Concrete() != Other.Concrete();
+        bool KBConflict = ((KB.Zero & Other.KB.One)|
+                           (KB.One & Other.KB.Zero)) != 0;
+        return ValueConflict || KBConflict;
       }
       bool hasConcrete() {
         return hasValue;
       }
-      llvm::APInt Concrete() {return Val;}
+      bool hasKB() {
+        return !KB.isUnknown();
+      }
+      llvm::APInt Concrete() {
+        assert(hasValue && "Must have value");
+        return Val;
+      }
+      llvm::KnownBits getKB() {
+        return KB;
+      }
+
+      template<typename Stream>
+      void print(Stream &Out) {
+        Out << "[";
+        if (hasValue) {
+          Out << Val << ", ";
+        }
+        if (hasKB()) {
+          Out << Inst::getKnownBitsString(KB.Zero, KB.One);
+        }
+        Out << "]\n";
+      }
+
     private:
       bool hasValue = false;
       llvm::APInt Val;
-      // Add Range and Knownbits, maybe
+      llvm::KnownBits KB;
+      // Add ConstantRange maybe
     };
 
     std::unordered_map<souper::Inst *, std::vector<Value>> ForcedValues;
