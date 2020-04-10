@@ -203,16 +203,17 @@ namespace souper {
     }
     class Value {
     public:
-      Value(llvm::APInt Val_) : Val{Val_} {}
+      Value(llvm::APInt Val_) : hasValue(true), Val{Val_} {}
       bool conflict(Value &Other) {
         return hasConcrete() && Other.hasConcrete() && Concrete() != Other.Concrete();
       }
       bool hasConcrete() {
-        return Val.hasValue();
+        return hasValue;
       }
-      const llvm::APInt &Concrete() {return Val.getValue();}
+      llvm::APInt Concrete() {return Val;}
     private:
-      llvm::Optional<llvm::APInt> Val;
+      bool hasValue = false;
+      llvm::APInt Val;
       // Add Range and Knownbits, maybe
     };
 
