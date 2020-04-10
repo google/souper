@@ -201,12 +201,20 @@ namespace souper {
     ForcedValueAnalysis(Inst *RHS_) : RHS(RHS_), Conflict(false) {
       countSymbolicInsts(RHS);
     }
-    struct Value {
-      llvm::APInt Concrete;
-      // Add Range and Knownbits, maybe
+    class Value {
+    public:
+      Value(llvm::APInt Val_) : hasValue(true), Val{Val_} {}
       bool conflict(Value &Other) {
-        return Concrete != Other.Concrete;
+        return hasConcrete() && Other.hasConcrete() && Concrete() != Other.Concrete();
       }
+      bool hasConcrete() {
+        return hasValue;
+      }
+      llvm::APInt Concrete() {return Val;}
+    private:
+      bool hasValue = false;
+      llvm::APInt Val;
+      // Add Range and Knownbits, maybe
     };
 
     std::unordered_map<souper::Inst *, std::vector<Value>> ForcedValues;
@@ -216,14 +224,14 @@ namespace souper {
     // Returns true on conflict
     bool force(llvm::APInt Result, ConcreteInterpreter &CI);
 
-    // Adds to the worklist
     // Returns true on conflict
     bool forceInst(souper::Inst *I, Value Result,
                    ConcreteInterpreter &CI,
                    Worklist &ToDo);
 
+    // Adds to the worklist
     // Returns true on conflict
-    bool addForcedValue(Inst *I, Value V);
+    bool addForcedValue(Inst *I, Value V, Worklist &ToDo);
 
     bool conflict() {
       return Conflict;
