@@ -1277,6 +1277,34 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
     }
   }
 
+  namespace BackwardsKnownBitsTF {
+
+    llvm::KnownBits And(llvm::KnownBits R, llvm::KnownBits Op) {
+      auto KB0 = (R.Zero & R.One)  |
+                 (Op.One & R.Zero) |
+                 (Op.Zero & R.One) |
+                 (Op.Zero & Op.One);
+      auto KB1 = R.One | (Op.Zero & Op.One);
+      llvm::KnownBits Result;
+      Result.Zero = KB0;
+      Result.One = KB1;
+      return Result; // Direct constructor is private for some reason
+    }
+
+    llvm::KnownBits Or(llvm::KnownBits R, llvm::KnownBits Op) {
+      auto KB0 = R.Zero | (Op.Zero & Op.One);
+      auto KB1 = (R.Zero & R.One)  |
+           (Op.One & R.Zero) |
+           (Op.Zero & R.One) |
+           (Op.Zero & R.Zero)|
+           (Op.Zero & Op.One);
+      llvm::KnownBits Result;
+      Result.Zero = KB0;
+      Result.One = KB1;
+      return Result;
+    }
+  }
+
   namespace ValueTF {
     llvm::APInt Add(llvm::APInt Result, llvm::APInt Operand) {
       return Result - Operand;
@@ -1290,47 +1318,44 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
     llvm::APInt Sub1(llvm::APInt Result, llvm::APInt Operand1) {
       return Operand1 + Result;
     }
-
-    bool supported(Inst::Kind K) {
-      return K == Inst::Kind::Add ||
-             K == Inst::Kind::Xor ||
-             K == Inst::Kind::Sub ||
-             K == Inst::Kind::Freeze ||
-             K == Inst::Kind::BSwap;
-    }
-
-    llvm::APInt get0(Inst::Kind K, llvm::APInt R, llvm::APInt Op0) {
-      switch (K) {
-        case Inst::Add : return Add(R, Op0);
-        case Inst::Xor : return Xor(R, Op0);
-        case Inst::Sub : return Sub0(R, Op0);
-        default: llvm_unreachable("Unsupported instruction.");
-      }
-    }
-    llvm ::APInt get1(Inst::Kind K, llvm::APInt R, llvm::APInt Op1) {
-      switch (K) {
-        case Inst::Add : return Add(R, Op1);
-        case Inst::Xor : return Xor(R, Op1);
-        case Inst::Sub : return Sub1(R, Op1);
-        default: llvm_unreachable("Unsupported instruction.");
-      }
-    }
-    llvm::APInt getUnary(Inst::Kind K, llvm::APInt R) {
-      switch (K) {
-        case Inst::Freeze : return R;
-        case Inst::BSwap : return R.byteSwap();
-        default: llvm_unreachable("Unsupported Instruction.");
-      }
+  }
+  using FV = ForcedValueAnalysis::Value;
+#define IFV(Op, Opn) !R.hasConcrete() ? FV() : FV(ValueTF::Op(R.Concrete(), Opn.Concrete()))
+  FV get0(Inst::Kind K, FV R, FV Op0) {
+    switch (K) {
+      case Inst::Add : return IFV(Add, Op0);
+      case Inst::Xor : return IFV(Xor, Op0);
+      case Inst::Sub : return IFV(Sub0, Op0);
+      case Inst::And : return {BackwardsKnownBitsTF::And(R.getKB(),
+                                                       Op0.getKB())};
+      case Inst::Or : return {BackwardsKnownBitsTF::Or(R.getKB(),
+                                                       Op0.getKB())};
+      default: return {};
     }
   }
+  FV get1(Inst::Kind K, FV R, FV Op1) {
+    switch (K) {
+      case Inst::Add : return IFV(Add, Op1);
+      case Inst::Xor : return IFV(Xor, Op1);
+      case Inst::Sub : return IFV(Sub1, Op1);
+      case Inst::And : return {BackwardsKnownBitsTF::And(R.getKB(),
+                                                         Op1.getKB())};
+      case Inst::Or : return {BackwardsKnownBitsTF::Or(R.getKB(),
+                                                         Op1.getKB())};
+      default: return {};
+    }
+  }
+  FV getUnary(Inst::Kind K, FV R) {
+    switch (K) {
+      case Inst::Freeze : return R;
+      case Inst::BSwap : return {R.Concrete().byteSwap()};
+      default: return {};
+    }
+  }
+#undef IFV
 
   bool ForcedValueAnalysis::forceInst(souper::Inst *I, Value Result,
     ConcreteInterpreter &CI, Worklist &ToDo) {
-
-    if (!Result.hasConcrete()) {
-      // TODO: This has to change when known bits is supported
-      return false;
-    }
 
     std::vector<EvalValue> OpValues;
     size_t Missing = 0;
@@ -1347,30 +1372,33 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
       return false; // Subtree is fully concrete
     }
 
-    if (ValueTF::supported(I->K)) {
-      if (I->Ops.size() == 1) {
-        auto Inv = ValueTF::getUnary(I->K, Result.Concrete());
-        if (addForcedValue(I->Ops[0], {Inv}, ToDo)) {
+    if (I->Ops.size() == 1) {
+      auto Inv = getUnary(I->K, Result);
+      if (Inv.hasConcrete() || Inv.hasKB()) {
+        if (addForcedValue(I->Ops[0], Inv, ToDo)) {
           return true;
         }
-      } else if (I->Ops.size() == 2) {
-        if (OpValues[0].hasValue() && !OpValues[1].hasValue()) {
-          auto Inv = ValueTF::get0(I->K, Result.Concrete(), OpValues[0].getValue());
-          if (addForcedValue(I->Ops[1], {Inv}, ToDo)) {
-            return true;
-          }
-        }
-        if (OpValues[1].hasValue() && !OpValues[0].hasValue()) {
-          auto Inv = ValueTF::get1(I->K, Result.Concrete(), OpValues[1].getValue());
-          if (addForcedValue(I->Ops[0], {Inv}, ToDo)) {
-            return true;
-          }
-        }
-      } else {
-        // TODO Ternary; some cases for select should be easy.
       }
+    } else if (I->Ops.size() == 2) {
+      if (OpValues[0].hasValue() && !OpValues[1].hasValue()) {
+        auto Inv = get0(I->K, Result, {OpValues[0].getValue()});
+        if (Inv.hasConcrete() || Inv.hasKB()) {
+          if (addForcedValue(I->Ops[1], Inv, ToDo)) {
+            return true;
+          }
+        }
+      }
+      if (OpValues[1].hasValue() && !OpValues[0].hasValue()) {
+        auto Inv = get1(I->K, Result, {OpValues[1].getValue()});
+        if (Inv.hasConcrete() || Inv.hasKB()) {
+          if (addForcedValue(I->Ops[0], Inv, ToDo)) {
+            return true;
+          }
+        }
+      }
+    } else {
+      // TODO Ternary; some cases for select should be easy.
     }
-
     return false;
   }
 
@@ -1399,12 +1427,20 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
   }
 
   bool ForcedValueAnalysis::addForcedValue(Inst *I, Value V, Worklist &ToDo) {
+//    ReplacementContext RC;
+//    llvm::errs() << "Trying to force: \n";
+//    RC.printInst(I, llvm::errs(), true);
+//    V.print(llvm::errs());
+
     if (isReservedConst(I)) {
       if (conflict()) {
         return true;
       }
       for (auto &&Val : ForcedValues[I]) {
         if (Val.conflict(V)) {
+//          llvm::errs() << "Failed to force: \n";
+//          RC.printInst(I, llvm::errs(), true);
+//          V.print(llvm::errs());
           return true;
         }
       }
