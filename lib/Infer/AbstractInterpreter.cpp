@@ -1382,6 +1382,9 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
     } else if (I->Ops.size() == 2) {
       if (OpValues[0].hasValue() && !OpValues[1].hasValue()) {
         auto Inv = get0(I->K, Result, {OpValues[0].getValue()});
+        if (Inv.getKB().hasConflict()) {
+          return true;
+        }
         if (Inv.hasConcrete() || Inv.hasKB()) {
           if (addForcedValue(I->Ops[1], Inv, ToDo)) {
             return true;
@@ -1390,6 +1393,9 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
       }
       if (OpValues[1].hasValue() && !OpValues[0].hasValue()) {
         auto Inv = get1(I->K, Result, {OpValues[1].getValue()});
+        if (Inv.getKB().hasConflict()) {
+          return true;
+        }
         if (Inv.hasConcrete() || Inv.hasKB()) {
           if (addForcedValue(I->Ops[0], Inv, ToDo)) {
             return true;

@@ -209,7 +209,7 @@ namespace souper {
         KB.Zero = ~Val;
       }
       Value(llvm::KnownBits KB_) : hasValue(false), KB(KB_) {
-        if (KB.isConstant()) {
+        if (!KB.hasConflict() && KB.isConstant()) {
           hasValue = true;
           Val = KB.getConstant();
         }
