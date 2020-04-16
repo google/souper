@@ -1,0 +1,3 @@
+Also test:
+- AggressiveInstCombine
+- InstSimplify
