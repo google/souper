@@ -1280,28 +1280,98 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
   namespace BackwardsKnownBitsTF {
 
     llvm::KnownBits And(llvm::KnownBits R, llvm::KnownBits Op) {
-      auto KB0 = (R.Zero & R.One)  |
-                 (Op.One & R.Zero) |
-                 (Op.Zero & R.One) |
-                 (Op.Zero & Op.One);
-      auto KB1 = R.One | (Op.Zero & Op.One);
-      llvm::KnownBits Result;
-      Result.Zero = KB0;
-      Result.One = KB1;
-      return Result; // Direct constructor is private for some reason
+//      auto KB0 = (R.Zero & R.One)  |
+//                 (Op.One & R.Zero) |
+//                 (Op.Zero & R.One) |
+//                 (Op.Zero & Op.One);
+//      auto KB1 = R.One | (Op.Zero & Op.One);
+      // This is POSSIBLY wrong.
+      // TODO exhaustive tester
+      // TODO figure out correct boolean function
+      llvm::KnownBits Other(R.getBitWidth());
+      assert(!R.hasConflict() && !Op.hasConflict());
+      for (size_t i = 0; i < R.getBitWidth(); ++i) {
+        if (R.One[i]) {
+          if (Op.Zero[i]) {
+            // conflict
+            Other.Zero.setBit(i);
+            Other.One.setBit(i);
+          } else {
+            Other.One.setBit(i);
+          }
+        }
+        if (R.Zero[i]) {
+          if (Op.Zero[i]) {
+            Other.Zero.setBit(i);
+          }
+        }
+      }
+      return Other;
     }
 
     llvm::KnownBits Or(llvm::KnownBits R, llvm::KnownBits Op) {
-      auto KB0 = R.Zero | (Op.Zero & Op.One);
-      auto KB1 = (R.Zero & R.One)  |
-           (Op.One & R.Zero) |
-           (Op.Zero & R.One) |
-           (Op.Zero & R.Zero)|
-           (Op.Zero & Op.One);
-      llvm::KnownBits Result;
-      Result.Zero = KB0;
-      Result.One = KB1;
-      return Result;
+//      auto KB0 = R.Zero | (Op.Zero & Op.One);
+//      auto KB1 = (R.Zero & R.One)  |
+//           (Op.One & R.Zero) |
+//           (Op.Zero & R.One) |
+//           (Op.Zero & R.Zero)|
+//           (Op.Zero & Op.One);
+      // ^ This is wrong. Figure out the correct boolean functions
+      llvm::KnownBits Other(R.getBitWidth());
+      assert(!R.hasConflict() && !Op.hasConflict());
+      for (size_t i = 0; i < R.getBitWidth(); ++i) {
+        if (R.One[i]) {
+          if (Op.Zero[i]) {
+            Other.One.setBit(i);
+          }
+        }
+        if (R.Zero[i]) {
+          if (Op.One[i]) {
+            // conflict
+            Other.Zero.setBit(i);
+            Other.One.setBit(i);
+          } else {
+            Other.Zero.setBit(i);
+          }
+        }
+      }
+      return Other;
+    }
+
+    llvm::KnownBits Add(llvm::KnownBits R, llvm::KnownBits Op) {
+      return BinaryTransferFunctionsKB::sub(R, Op);
+    }
+
+    llvm::KnownBits Sub0(llvm::KnownBits Result, llvm::KnownBits Operand0) {
+      return BinaryTransferFunctionsKB::sub(Operand0, Result);
+    }
+
+    llvm::KnownBits Sub1(llvm::KnownBits Result, llvm::KnownBits Operand1) {
+      return BinaryTransferFunctionsKB::add(Operand1, Result);
+    }
+
+    llvm::KnownBits Xor(llvm::KnownBits R, llvm::KnownBits Op) {
+      llvm::KnownBits Other(R.getBitWidth());
+      assert(!R.hasConflict() && !Op.hasConflict());
+      for (size_t i = 0; i < R.getBitWidth(); ++i) {
+        if (R.One[i]) {
+          if (Op.Zero[i]) {
+            Other.One.setBit(i);
+          }
+          if (Op.One[i]) {
+            Other.Zero.setBit(i);
+          }
+        }
+        if (R.Zero[i]) {
+          if (Op.One[i]) {
+            Other.One.setBit(i);
+          }
+          if (Op.Zero[i]) {
+            Other.Zero.setBit(i);
+          }
+        }
+      }
+      return Other;
     }
   }
 
@@ -1320,16 +1390,20 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
     }
   }
   using FV = ForcedValueAnalysis::Value;
-#define IFV(Op, Opn) !R.hasConcrete() ? FV() : FV(ValueTF::Op(R.Concrete(), Opn.Concrete()))
+
+#define IFV(Op, Opn) !R.hasConcrete() || !Opn.hasConcrete() ? \
+    FV(BackwardsKnownBitsTF::Op(R.getKB(), Opn.getKB())) :    \
+    FV(ValueTF::Op(R.Concrete(), Opn.Concrete()))
+
   FV get0(Inst::Kind K, FV R, FV Op0) {
     switch (K) {
       case Inst::Add : return IFV(Add, Op0);
       case Inst::Xor : return IFV(Xor, Op0);
       case Inst::Sub : return IFV(Sub0, Op0);
-      case Inst::And : return {BackwardsKnownBitsTF::And(R.getKB(),
-                                                       Op0.getKB())};
-      case Inst::Or : return {BackwardsKnownBitsTF::Or(R.getKB(),
-                                                       Op0.getKB())};
+      case Inst::And : return FV(BackwardsKnownBitsTF::And(R.getKB(),
+                                                       Op0.getKB()));
+      case Inst::Or : return FV(BackwardsKnownBitsTF::Or(R.getKB(),
+                                                       Op0.getKB()));
       default: return {};
     }
   }
@@ -1338,17 +1412,17 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
       case Inst::Add : return IFV(Add, Op1);
       case Inst::Xor : return IFV(Xor, Op1);
       case Inst::Sub : return IFV(Sub1, Op1);
-      case Inst::And : return {BackwardsKnownBitsTF::And(R.getKB(),
-                                                         Op1.getKB())};
-      case Inst::Or : return {BackwardsKnownBitsTF::Or(R.getKB(),
-                                                         Op1.getKB())};
+      case Inst::And : return FV(BackwardsKnownBitsTF::And(R.getKB(),
+                                                         Op1.getKB()));
+      case Inst::Or : return FV(BackwardsKnownBitsTF::Or(R.getKB(),
+                                                         Op1.getKB()));
       default: return {};
     }
   }
   FV getUnary(Inst::Kind K, FV R) {
     switch (K) {
       case Inst::Freeze : return R;
-      case Inst::BSwap : return {R.Concrete().byteSwap()};
+      case Inst::BSwap : return FV(R.Concrete().byteSwap());
       default: return {};
     }
   }
@@ -1374,6 +1448,9 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
 
     if (I->Ops.size() == 1) {
       auto Inv = getUnary(I->K, Result);
+      if (Inv.hasKB() && Inv.getKB().hasConflict()) {
+        return true;
+      }
       if (Inv.hasConcrete() || Inv.hasKB()) {
         if (addForcedValue(I->Ops[0], Inv, ToDo)) {
           return true;
@@ -1381,8 +1458,8 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
       }
     } else if (I->Ops.size() == 2) {
       if (OpValues[0].hasValue() && !OpValues[1].hasValue()) {
-        auto Inv = get0(I->K, Result, {OpValues[0].getValue()});
-        if (Inv.getKB().hasConflict()) {
+        auto Inv = get0(I->K, Result, FV(OpValues[0].getValue()));
+        if (Inv.hasKB() && Inv.getKB().hasConflict()) {
           return true;
         }
         if (Inv.hasConcrete() || Inv.hasKB()) {
@@ -1392,8 +1469,8 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
         }
       }
       if (OpValues[1].hasValue() && !OpValues[0].hasValue()) {
-        auto Inv = get1(I->K, Result, {OpValues[1].getValue()});
-        if (Inv.getKB().hasConflict()) {
+        auto Inv = get1(I->K, Result, FV(OpValues[1].getValue()));
+        if (Inv.hasKB() && Inv.getKB().hasConflict()) {
           return true;
         }
         if (Inv.hasConcrete() || Inv.hasKB()) {
