@@ -185,6 +185,7 @@ struct Inst : llvm::FoldingSetNode {
   std::vector<llvm::ConstantRange> RangeRefinement;
   int nReservedConsts = -1;
   int nHoles = -1;
+  bool IsBorder = false;
 };
 
 /// A mapping from an Inst to a replacement. This may either represent a

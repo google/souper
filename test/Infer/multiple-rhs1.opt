@@ -5,8 +5,6 @@
 ; RUN: %FileCheck %s < %t2
 
 ; CHECK: result %0
-; CHECK: %1:i8 = freeze %0
-; CHECK-NEXT: result %1
 
 %0:i8 = var
 %1:i8 = add 1:i8, %0

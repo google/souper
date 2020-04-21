@@ -34,7 +34,7 @@ using namespace souper;
 using namespace llvm;
 
 static const std::vector<Inst::Kind> UnaryOperators = {
-  Inst::CtPop, Inst::BSwap, Inst::BitReverse, Inst::Cttz, Inst::Ctlz, Inst::Freeze
+  Inst::CtPop, Inst::BSwap, Inst::BitReverse, Inst::Cttz, Inst::Ctlz
 };
 
 static const std::vector<Inst::Kind> BinaryOperators = {
@@ -207,10 +207,6 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
     unaryExclList.push_back(Inst::BitReverse);
   }
 
-  // disable generating freeze of freeze
-  if (unaryHoleUsers.size() == 1 && unaryHoleUsers[0]->K == Inst::Freeze)
-    unaryExclList.push_back(Inst::Freeze);
-
   std::vector<Inst *> PartialGuesses;
 
   std::vector<Inst *> Comps(Inputs.begin(), Inputs.end());
@@ -229,9 +225,6 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
   // Unary Operators
   for (auto K : UnaryOperators) {
     if (std::find(unaryExclList.begin(), unaryExclList.end(), K) != unaryExclList.end())
-      continue;
-
-    if (K != Inst::Freeze && Width <= 1)
       continue;
 
     for (auto Comp : Comps) {
@@ -727,6 +720,51 @@ bool isBigQuerySat(SynthesisContext &SC,
   return BigQueryIsSat;
 }
 
+// if B == NULL, insert freeze to each border, otherwise replace all (freeze B) with B
+static Inst *FreezeCopy(Inst *I, InstContext &IC,
+                        std::map<Inst *, Inst *> &InstCache,
+                        std::map<Block *, Block *> &BlockCache,
+                        Inst *B) {
+
+  if (InstCache.count(I))
+    return InstCache.at(I);
+
+  std::vector<Inst *> Ops;
+  for (auto const &Op : I->Ops) {
+    Ops.push_back(FreezeCopy(Op, IC, InstCache, BlockCache, B));
+  }
+
+  Inst *Copy = 0;
+  if (!B && I->IsBorder) {
+    // explicitly forbid cloning the parameter of freeze
+    Copy = IC.getInst(Inst::Freeze, I->Width, { I }, I->DemandedBits, I->Available);
+  } else if (I->K == Inst::Freeze) {
+    if (I->Ops[0] == B) {
+      Copy = Ops[0];
+    } else {
+      // ditto
+      Copy = IC.getInst(Inst::Freeze, I->Width, { I->Ops[0] }, I->DemandedBits, I->Available);
+    }
+  } else if (I->K == Inst::Var) {
+    Copy = I;
+  } else if (I->K == Inst::Phi) {
+    if (!BlockCache.count(I->B)) {
+      auto BlockCopy = IC.createBlock(I->B->Preds);
+      BlockCache[I->B] = BlockCopy;
+      Copy = IC.getPhi(BlockCopy, Ops, I->DemandedBits);
+    } else {
+      Copy = IC.getPhi(BlockCache.at(I->B), Ops, I->DemandedBits);
+    }
+  } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
+    Copy = I;
+  } else {
+    Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits, I->Available);
+  }
+  assert(Copy);
+  InstCache[I] = Copy;
+  return Copy;
+}
+
 std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RHSs,
                                    const std::vector<souper::Inst *> &Guesses) {
   std::error_code EC;
@@ -788,13 +826,48 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
 
     if (DoubleCheckWithAlive) {
       if (!isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
-        llvm::errs() << "Transformation proved wrong by alive.\n";
-        ReplacementContext RC;
-        auto str = RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
-        llvm::errs() << "infer " << str << "\n";
-        str = RC.printInst(RHS, llvm::errs(), /*printNames=*/true);
-        llvm::errs() << "result " << str << "\n";
-        RHS = nullptr;
+        std::map<Inst *, Inst *> InstCache;
+        std::map<Block *, Block *> BlockCache;
+
+        Inst *F = FreezeCopy(RHS, SC.IC, InstCache, BlockCache, nullptr);
+
+        if (!isTransformationValid(SC.LHS, F, SC.PCs, SC.IC)) {
+          llvm::errs() << "Error: transformation proved wrong by alive, even with freeze inserted in border\n\n";
+          ReplacementContext RC;
+          RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
+          llvm::errs() << "\n=>\n\n";
+          RC.printInst(RHS, llvm::errs(), /*printNames=*/true);
+          llvm::errs() << "\n; RHS after inserting freeze \n\n";
+          RC.printInst(F, llvm::errs(), /*printNames=*/true);
+          RHS = nullptr;
+          return EC;
+        }
+
+        // Get border insts
+        std::set<Inst *> Visited;
+        std::vector<Inst *> Borders;
+        std::queue<Inst *> Q;
+        Q.push(RHS);
+        while (!Q.empty()) {
+          Inst *I = Q.front();
+          Q.pop();
+          if (I->IsBorder)
+            Borders.push_back(I);
+          if (Visited.insert(I).second)
+            for (auto Op : I->orderedOps())
+              Q.push(Op);
+        }
+        // Remove freezes
+        for (auto Border : Borders) {
+          auto I = F;
+          InstCache.clear();
+          BlockCache.clear();
+          F = FreezeCopy(F, SC.IC, InstCache, BlockCache, Border);
+          if (!isTransformationValid(SC.LHS, F, SC.PCs, SC.IC)) {
+            F = I;
+          }
+        }
+        RHS = F;
       }
     }
     if (RHS) {

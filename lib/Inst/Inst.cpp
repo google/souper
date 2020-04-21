@@ -1084,6 +1084,7 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
             I->K == Inst::SSubWithOverflow || I->K == Inst::USubWithOverflow ||
             I->K == Inst::SMulWithOverflow || I->K == Inst::UMulWithOverflow)
           continue;
+        I->IsBorder = true;
         Guesses.emplace_back(I);
         if (Guesses.size() >= Max)
           return;

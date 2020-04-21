@@ -1,0 +1,15 @@
+; REQUIRES: solver, solver-model
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-iN=false -souper-enumerative-synthesis -souper-double-check %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: %5:i1 = freeze %3
+; CHECK: %6:i1 = or %1, %5
+
+
+%0:i8 = var ; 0
+%1:i1 = eq 0:i8, %0
+%2:i8 = var ; 1
+%3:i1 = eq 0:i8, %2
+%4:i1 = select %1, 1:i1, %3
+infer %4
