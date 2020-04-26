@@ -26,6 +26,26 @@ namespace {
   static llvm::cl::opt<bool> AbstractInterpretPhi("souper-dataflow-ai-phi",
     llvm::cl::desc("Abstract interpret Phi instead of assuming first argument (default=false)"),
     llvm::cl::init(false));
+
+  static llvm::cl::opt<bool> EnableKB("souper-dataflow-pruning-kb",
+    llvm::cl::desc("Prune with known-bits analysis (default=true)"),
+    llvm::cl::init(true));
+
+  static llvm::cl::opt<bool> EnableCR("souper-dataflow-pruning-cr",
+    llvm::cl::desc("Prune with integer-ranges analysis (default=true)"),
+    llvm::cl::init(true));
+
+  static llvm::cl::opt<bool> EnableFB("souper-dataflow-pruning-fb",
+    llvm::cl::desc("Prune with forced-bits analysis (default=true)"),
+    llvm::cl::init(true));
+
+  static llvm::cl::opt<bool> EnableRB("souper-dataflow-pruning-rb",
+    llvm::cl::desc("Prune with required-bits analysis (default=true)"),
+    llvm::cl::init(true));
+
+  static llvm::cl::opt<bool> EnableBB("souper-dataflow-pruning-bb",
+    llvm::cl::desc("Prune with bivalent-bits analysis (default=true)"),
+    llvm::cl::init(true));
 }
 
 namespace souper {
@@ -151,7 +171,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     return false;
   }
 
-  if (!Constants.empty()) {
+  if (EnableBB && !Constants.empty()) {
     auto RestrictedBits = RestrictedBitsAnalysis().findRestrictedBits(RHS);
     if ((~RestrictedBits & (LHSKnownBitsNoSpec.Zero | LHSKnownBitsNoSpec.One)) != 0) {
 //     if (RestrictedBits == 0 && (LHSKB.Zero != 0 || LHSKB.One != 0)) {
@@ -189,7 +209,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
     }
   }
 
-  if (!HasHole && EnableDemandedBitsPruning) {
+  if (!HasHole && EnableDemandedBitsPruning && EnableRB) {
     auto DontCareBits = DontCareBitsAnalysis().findDontCareBits(RHS);
 
     for (auto Pair : LHSMustDemandedBits) {
@@ -255,7 +275,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       if (!RHSKB.isUnknown()) {
         FoundNonTopAnalysisResult = true;
       }
-      if ((LHSKB.Zero & RHSKB.One) != 0 || (LHSKB.One & RHSKB.Zero) != 0) {
+      if (EnableKB && (LHSKB.Zero & RHSKB.One) != 0 || (LHSKB.One & RHSKB.Zero) != 0) {
         if (StatsLevel > 2) {
           llvm::errs() << "  LHS KnownBits = " << KnownBitsAnalysis::knownBitsString(LHSKB) << "\n";
           llvm::errs() << "  RHS KnownBits = " << KnownBitsAnalysis::knownBitsString(RHSKB) << "\n";
@@ -279,7 +299,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
           auto CR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
           if (StatsLevel > 2)
             llvm::errs() << "  RHS ConstantRange = " << CR << "\n";
-          if (!CR.contains(Val)) {
+          if (EnableCR && !CR.contains(Val)) {
             if (StatsLevel > 2) {
               llvm::errs() << "  pruned using CR! ";
               if (HasHole) {
@@ -294,7 +314,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
           auto KB = KnownBitsAnalysis().findKnownBits(RHS, ConcreteInterpreters[I]);
           if (StatsLevel > 2)
             llvm::errs() << "  RHS KnownBits = " << KnownBitsAnalysis::knownBitsString(KB) << "\n";
-          if ((KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
+          if (EnableKB && (KB.Zero & Val) != 0 || (KB.One & ~Val) != 0) {
             if (StatsLevel > 2) {
               llvm::errs() << "  pruned using KB! ";
               if (HasHole) {
@@ -307,7 +327,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
             return true;
           }
 
-          if (RHS->nReservedConsts > 0) {
+          if (EnableFB && RHS->nReservedConsts > 0) {
             if (FVA.force(Val, ConcreteInterpreters[I])) {
               // failed to force
               if (StatsLevel > 2) {
