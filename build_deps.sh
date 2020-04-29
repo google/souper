@@ -44,10 +44,17 @@ z3_installdir=$(pwd)/third_party/z3-install
 git clone $z3_repo $z3_srcdir
 mkdir -p $z3_installdir
 
-(cd $z3_srcdir && git checkout $z3_commit && python scripts/mk_make.py --staticlib --prefix=$z3_installdir && cd build && make -j $ncpus install)
+(cd $z3_srcdir && git checkout $z3_commit && python scripts/mk_make.py --prefix=$z3_installdir && cd build && make -j $ncpus install)
 
 export PATH=$z3_installdir/bin:$PATH
 export LD_LIBRARY_PATH=$z3_installdir/lib:$LD_LIBRARY_PATH
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  # Mac
+  Z3_SHAREDLIB=libz3.dylib
+else
+  Z3_SHAREDLIB=libz3.so
+fi
 
 alivedir=third_party/alive2
 alive_builddir=$alivedir/build
@@ -56,10 +63,10 @@ git clone $alive_repo $alivedir/alive2
 git -C $alivedir/alive2 checkout $alive_commit
 
 if [ -n "`which ninja`" ] ; then
-  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
+  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/$Z3_SHAREDLIB -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
   ninja -C $alive_builddir
 else
-  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type)
+  (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/$Z3_SHAREDLIB -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type)
   make -C $alive_builddir -j $ncpus
 fi
 
@@ -75,7 +82,7 @@ git -C ${llvm_srcdir} apply $(pwd)/patches/0002-disable-instcombine-select-to-lo
 
 mkdir -p $llvm_builddir
 
-cmake_flags="../llvm -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_FORCE_ENABLE_STATS=On -DCMAKE_BUILD_TYPE=$llvm_build_type -DZ3_INCLUDE_DIR=$z3_installdir/include -DZ3_LIBRARIES=$z3_installdir/lib/libz3.a -DLLVM_ENABLE_PROJECTS='llvm;clang;compiler-rt'"
+cmake_flags="../llvm -DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=On -DLLVM_FORCE_ENABLE_STATS=On -DCMAKE_BUILD_TYPE=$llvm_build_type -DZ3_INCLUDE_DIR=$z3_installdir/include -DZ3_LIBRARIES=$z3_installdir/lib/$Z3_SHAREDLIB -DLLVM_ENABLE_PROJECTS='llvm;clang;compiler-rt'"
 
 if [ -n "`which ninja`" ] ; then
   (cd $llvm_builddir && cmake -G Ninja $cmake_flags "$@")

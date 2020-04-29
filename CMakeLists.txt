@@ -142,7 +142,7 @@ include_directories(${Z3_INCLUDE_DIRECTORY})
 
 find_library(Z3_LIBRARY
   NAMES
-  libz3.a
+  z3
   PATHS
   third_party/z3-install/lib
   NO_DEFAULT_PATH)
