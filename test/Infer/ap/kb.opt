@@ -1,0 +1,55 @@
+; REQUIRES: solver, synthesis
+
+; RUN: %souper-check -infer-abstract-precondition %s > %t
+; RUN: %FileCheck %s < %t
+
+%0:i8 = var
+%1 = add %0, %0
+infer %1
+%2 = mul %0, 2
+result %2
+;CHECK: Already valid.
+
+%0:i8 = var
+%1 = add %0, 1
+%2 = or %1, 7
+infer %2
+%3 = add %0, 2
+result %3
+;CHECK: xxxxx101
+
+%0:i8 = var
+%1 = and %0, 15
+infer %1
+result %0
+;CHECK: 0000xxxx
+
+%0:i16 = var
+%1 = add %0, 1
+infer %1
+%2 = or %0, 67
+%3 = shl %2, 2
+result %3
+;CHECK: 1111111110101011
+
+%0:i8 = var
+%1 = add %0, 1
+%2 = or %1, 7
+infer %2
+%3 = add %0, 2
+%4 = or %3, 7
+result %4
+;CHECK: xxxxxxx1
+;CHECK: xxxxx0xx
+;CHECK: xxxxxx0x
+
+%0:i8 = var (knownBits=xxxxxxx0)
+%1:i8 = add 1:i8, %0
+%2:i8 = or 7:i8, %1
+infer %2
+%3:i8 = add 2:i8, %0
+%4:i8 = or 7:i8, %3
+result %4
+;CHECK: xxxxx0xx
+;CHECK: xxxxxx0x
+

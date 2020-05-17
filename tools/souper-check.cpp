@@ -59,6 +59,11 @@ static cl::opt<bool> InferConst("infer-const",
     cl::desc("Try to infer constants for a Souper replacement (default=false)"),
     cl::init(false));
 
+static cl::opt<bool> InferAP("infer-abstract-precondition",
+    cl::desc("Try to infer an abstract precondition which makes the given"
+             "transformation valid. (default=false)"),
+    cl::init(false));
+
 static cl::opt<bool> ReInferRHS("reinfer-rhs",
     cl::desc("Try to infer a new RHS and compare its cost with the existing RHS (default=false)"),
     cl::init(false));
@@ -318,6 +323,13 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
       } else {
         llvm::outs() << "Pruning failed.\n";
       }
+    } else if (InferAP) {
+        bool FoundWeakest = false;
+        S->abstractPrecondition(Rep.BPCs, Rep.PCs, Rep.Mapping, IC, FoundWeakest);
+        if (!FoundWeakest) {
+          llvm::outs() << "Failed to find WP.\n";
+        }
+
     } else {
       bool Valid;
       std::vector<std::pair<Inst *, APInt>> Models;
