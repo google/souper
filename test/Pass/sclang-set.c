@@ -1,5 +1,5 @@
 // REQUIRES: solver
-// RUN: SOUPER_SOLVER=%solver SOUPER_NO_EXTERNAL_CACHE=1 %sclang -O %s -S -o - -emit-llvm 2>&1 | %FileCheck %s
+// RUN: SOUPER_SOLVER=%solver SOUPER_NO_EXTERNAL_CACHE=1 %sclang -O3 %s -S -o - -emit-llvm 2>&1 | %FileCheck %s
 // CHECK: ret i32 -268435456
 
 #include <limits.h>

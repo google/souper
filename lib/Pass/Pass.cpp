@@ -28,11 +28,11 @@
 #include "llvm/IR/Module.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
-#include "llvm/PassSupport.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Transforms/Scalar/DCE.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
@@ -191,7 +191,6 @@ public:
   }
 
   bool runOnFunction(Function *F) {
-    bool Changed = false;
     InstContext IC;
     ExprBuilderContext EBC;
     std::map<Inst *, Value *> ReplacedValues;
@@ -257,7 +256,6 @@ public:
       }
       if (DynamicProfileAll) {
         dynamicProfile(F, Cand);
-        Changed = true;
         continue;
       }
       std::vector<Inst *> RHSs;
@@ -295,6 +293,9 @@ public:
       }
 
       // here we finally commit to having a viable replacement
+
+      if (DebugLevel > 1)
+        errs() << "#########################################################\n";
 
       if (ReplacementIdx < FirstReplace || ReplacementIdx > LastReplace) {
         if (DebugLevel > 1)
@@ -339,7 +340,6 @@ public:
 
       if (Cand.Mapping.LHS->HarvestKind == HarvestType::HarvestedFromDef) {
         I->replaceAllUsesWith(NewVal);
-        Changed = true;
       } else {
         for (llvm::Value::use_iterator UI = I->use_begin();
              UI != I->use_end(); ) {
@@ -349,24 +349,30 @@ public:
           auto *Usr = dyn_cast<llvm::Instruction>(U.getUser());
           if (Usr && Usr->getParent() == Cand.Mapping.LHS->HarvestFrom) {
             U.set(NewVal);
-            Changed = true;
           }
         }
       }
-    }
 
-    if (DebugLevel > 2) {
-      if (DebugLevel > 4) {
-        errs() << "\nModule after replacement:\n";
-        F->getParent()->dump();
-      } else {
-        errs() << "\nFunction after replacement:\n\n";
-        F->print(errs());
+      eliminateDeadCode(*F, TLI);
+
+      if (DebugLevel > 2) {
+        if (DebugLevel > 4) {
+          errs() << "\nModule after replacement:\n";
+          F->getParent()->dump();
+        } else {
+          errs() << "\nFunction after replacement:\n\n";
+          F->print(errs());
+        }
+        errs() << "\n";
       }
-      errs() << "\n";
+
+      if (DebugLevel > 1)
+        errs() << "#########################################################\n";
+
+      return true;
     }
 
-    return Changed;
+    return false;
   }
 
   bool runOnModule(Module &M) {
@@ -375,9 +381,15 @@ public:
     std::vector<Function *> FL;
     for (auto &I : M)
       FL.push_back((Function *)&I);
-    for (auto *F : FL)
-      if (!F->isDeclaration())
-        Changed = runOnFunction(F) || Changed;
+    for (auto *F : FL) {
+      if (F->isDeclaration())
+        continue;
+      while (runOnFunction(F)) {
+        Changed = true;
+        if (DebugLevel > 2)
+          errs() << "rescanning function after transformation was applied\n";
+      }
+    }
     if (DebugLevel > 1)
       errs() << "\nTotal of " << ReplacementsDone << " replacements done on this module\n";
     return Changed;

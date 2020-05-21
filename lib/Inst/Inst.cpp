@@ -903,19 +903,12 @@ int Inst::getCost(Inst::Kind K) {
     case Var:
     case Const:
     case UntypedConst:
-    case Phi:
     case SAddO:
     case UAddO:
     case SSubO:
     case USubO:
     case SMulO:
     case UMulO:
-    case SAddWithOverflow:
-    case UAddWithOverflow:
-    case SSubWithOverflow:
-    case USubWithOverflow:
-    case SMulWithOverflow:
-    case UMulWithOverflow:
       return 0;
     case BitReverse:
     case BSwap:
