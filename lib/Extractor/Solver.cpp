@@ -423,7 +423,6 @@ public:
 
     if (InferInts && SMTSolver->supportsModels() && LHS->Width > 1) {
       Inst *C = IC.createSynthesisConstant(LHS->Width, /*SynthesisConstID=*/1);
-
       if (UseAlive) {
         Inst *Ante = IC.getConst(llvm::APInt(1, true));
         for (auto PC : PCs ) {

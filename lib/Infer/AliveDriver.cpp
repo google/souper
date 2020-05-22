@@ -381,7 +381,6 @@ souper::AliveDriver::synthesizeConstants(souper::Inst *RHS) {
 std::map<souper::Inst *, llvm::APInt>
 souper::AliveDriver::synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext &IC) {
   std::map<souper::Inst *, llvm::APInt> ConstMap;
-
   std::map<std::string, Inst *> Consts;
   std::set<Inst *> Visited;
   getReservedConsts(RHS, Consts, Visited);
@@ -391,7 +390,7 @@ souper::AliveDriver::synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext
 
   RExprCache.clear();
   IR::Function RHSF;
-  if (!translateRoot(RHS, nullptr, RHSF, RExprCache)) {
+  if (!translateRoot(RHS, PreCondition, RHSF, RExprCache)) {
     if (DebugLevel > 2)
       llvm::errs() << "Failed to translate RHS.\n";
     // TODO: Eventually turn this into an assertion
@@ -431,7 +430,7 @@ souper::AliveDriver::synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext
 
     // Second Query
     {
-      if (verify(GWithC)) {
+      if (verify(GWithC, PreCondition)) {
         break;
       } else {
         continue;
@@ -477,9 +476,11 @@ bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
   tools::TransformVerify tv(t, /*check_each_var=*/false);
 
   if (auto errs = tv.verify()) {
-    std::ostringstream os;
-    os << errs << "\n";
-    llvm::errs() << os.str();
+    if (DebugLevel >= 1) {
+      std::ostringstream os;
+      os << errs << "\n";
+      llvm::errs() << os.str();
+    }
     return false; // TODO: Encode errs into ErrorCode
   } else {
     if (DebugLevel > 2)
