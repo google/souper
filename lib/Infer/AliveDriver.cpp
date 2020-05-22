@@ -496,7 +496,9 @@ bool souper::AliveDriver::translateRoot(const souper::Inst *I, const Inst *PC,
   }
   FunctionBuilder Builder(F);
   if (PC) {
-    Builder.assume(ExprCache[PC]);
+    auto Zero = Builder.val(getType(I->Width), llvm::APInt(I->Width, 0));
+    ExprCache[I] = Builder.select(getType(I->Width), "%ifpc",
+                   ExprCache[PC], ExprCache[I], Zero);
   }
   Builder.ret(getType(I->Width), ExprCache[I]);
   F.setType(getType(I->Width));
@@ -766,7 +768,7 @@ bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
     Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
   }
   AliveDriver Verifier(LHS, Ante, IC);
-  return Verifier.verify(RHS);
+  return Verifier.verify(RHS, Ante);
 }
 
 
