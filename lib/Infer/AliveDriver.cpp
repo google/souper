@@ -340,6 +340,8 @@ souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &I
   //This should go away once non-input variable names are not discarded
 
   if (!translateRoot(LHS, PreCondition, LHSF, LExprCache)) {
+    ReplacementContext RC;
+    RC.printInst(LHS, llvm::outs(), true);
     llvm::report_fatal_error("Failed to translate LHS.\n");
   }
   if (DisableUndefInput) {
@@ -604,6 +606,15 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
         ExprCache[I->Ops[0]],
         ExprCache[I->Ops[1]],
         ExprCache[I->Ops[2]]);
+      return true;
+    }
+
+    case souper::Inst::Phi: {
+      if (I->Ops.size() != 1) {
+        assert(false && "Phi with muliple arguments unimplemented");
+        return false;
+      }
+      ExprCache[I] = ExprCache[I->Ops[0]];
       return true;
     }
 
