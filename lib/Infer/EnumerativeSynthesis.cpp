@@ -788,12 +788,12 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
 
     if (DoubleCheckWithAlive) {
       if (!isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
-        llvm::errs() << "Transformation proved wrong by alive.";
+        llvm::errs() << "Transformation proved wrong by alive.\n";
         ReplacementContext RC;
-        RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
-        llvm::errs() << "=>";
-        ReplacementContext RC2;
-        RC2.printInst(RHS, llvm::errs(), /*printNames=*/true);
+        auto str = RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
+        llvm::errs() << "infer " << str << "\n";
+        str = RC.printInst(RHS, llvm::errs(), /*printNames=*/true);
+        llvm::errs() << "result " << str << "\n";
         RHS = nullptr;
       }
     }
