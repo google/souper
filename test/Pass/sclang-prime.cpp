@@ -1,6 +1,7 @@
 // REQUIRES: solver
 // RUN: SOUPER_SOLVER=%solver SOUPER_NO_EXTERNAL_CACHE=1 %sclang++ -O3 %s -S -o - -emit-llvm 2>&1 | %FileCheck %s
 // CHECK: ret i1 false
+// XFAIL: *
 
 #include <limits.h>
 
