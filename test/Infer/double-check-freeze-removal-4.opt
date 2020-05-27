@@ -1,0 +1,23 @@
+; REQUIRES: solver, solver-model, long-duration-synthesis
+
+; RUN: %souper-check %solver -infer-rhs -souper-infer-iN=false -souper-enumerative-synthesis -souper-double-check -souper-enumerative-synthesis-num-instructions=2 -souper-check-all-guesses %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: %0:i1 = var
+; CHECK: %1:i1 = var
+; CHECK: %2:i1 = freeze %1
+; CHECK: %3:i1 = var
+; CHECK: %4:i1 = freeze %3
+; CHECK: %5:i1 = and %2, %4
+; CHECK: %6:i1 = or %0, %5
+; CHECK: result %6
+
+%0:i1 = var
+%1:i1 = var
+; make cost model happy
+%2:i1 = eq %0, 1:i1
+%3:i1 = eq %1, 1:i1
+%4:i1 = and %2, %3
+%5:i1 = var
+%6:i1 = select %5, 1:i1, %4
+infer %6

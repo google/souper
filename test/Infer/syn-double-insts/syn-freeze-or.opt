@@ -1,7 +1,8 @@
-; REQUIRES: solver, synthesis
+; REQUIRES: solver, synthesis, unsupported
 ; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-use-alive -souper-enumerative-synthesis-num-instructions=2 -souper-dataflow-pruning %solver %s > %t1
 ; RUN: %FileCheck %s < %t1
 
+; No longer supported, freeze synthesis is now handled by alive double-check
 ; synthesis freeze
 ; takes about a minute
 
