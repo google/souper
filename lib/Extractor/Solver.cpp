@@ -389,7 +389,7 @@ public:
      * guess a few constants that are likely to be cheap for the
      * backend to make
      */
-    if (InferInts || LHS->Width == 1) {
+    if (!EnableEnumerativeSynthesis && InferInts || LHS->Width == 1) {
       std::vector<Inst *>Guesses { IC.getConst(APInt(LHS->Width, 0)),
                                    IC.getConst(APInt(LHS->Width, 1)) };
       if (LHS->Width > 1)
@@ -421,7 +421,7 @@ public:
       }
     }
 
-    if (InferInts && SMTSolver->supportsModels() && LHS->Width > 1) {
+    if (!EnableEnumerativeSynthesis && InferInts && SMTSolver->supportsModels() && LHS->Width > 1) {
       Inst *C = IC.createSynthesisConstant(LHS->Width, /*SynthesisConstID=*/1);
 
       if (UseAlive) {

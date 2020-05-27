@@ -873,6 +873,9 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     return true;
   };
 
+  // add constant guess
+  Guesses.push_back(IC.createSynthesisConstant(SC.LHS->Width, 1));
+
   // add nops guesses separately
   for (auto I : Cands) {
     if (I->Width == SC.LHS->Width) {
