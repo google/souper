@@ -1,6 +1,6 @@
 ; REQUIRES: solver
 
-; RUN: %llvm-as %s -o - | %souper %solver -souper-enumerative-synthesis | %FileCheck %s
+; RUN: %llvm-as %s -o - | %souper %solver | %FileCheck %s
 
 declare i64 @llvm.fshl.i64(i64, i64, i64) nounwind readnone
 declare i64 @llvm.fshr.i64(i64, i64, i64) nounwind readnone

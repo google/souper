@@ -1,7 +1,7 @@
 ; REQUIRES: solver, solver-model
 
 ; RUN: %llvm-as -o %t1 %s
-; RUN: %souper %solver -souper-infer-iN %t1 > %t2
+; RUN: %souper %solver -souper-only-infer-iN %t1 > %t2
 ; RUN: %FileCheck %s -check-prefix=SUCCESS < %t2
 
 ; SUCCESS: cand %12 301:i10

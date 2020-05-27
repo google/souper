@@ -33,7 +33,6 @@ class SMTLIBSolver {
 public:
   virtual ~SMTLIBSolver();
   virtual std::string getName() const = 0;
-  virtual bool supportsModels() const = 0;
   virtual std::error_code isSatisfiable(llvm::StringRef Query, bool &Result,
                                         unsigned NumModels,
                                         std::vector<llvm::APInt> *Models,
@@ -43,10 +42,6 @@ public:
 SolverProgram makeExternalSolverProgram(llvm::StringRef Path);
 SolverProgram makeInternalSolverProgram(int MainPtr(int argc, char **argv));
 
-std::unique_ptr<SMTLIBSolver> createBoolectorSolver(SolverProgram Prog,
-                                                    bool Keep);
-std::unique_ptr<SMTLIBSolver> createCVC4Solver(SolverProgram Prog, bool Keep);
-std::unique_ptr<SMTLIBSolver> createSTPSolver(SolverProgram Prog, bool Keep);
 std::unique_ptr<SMTLIBSolver> createZ3Solver(SolverProgram Prog, bool Keep);
 
 }

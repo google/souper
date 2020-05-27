@@ -1,5 +1,5 @@
 ; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis -souper-enumerative-synthesis-num-instructions=1 %solver %s > %t1
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 %solver %s > %t1
 
 ; CHECK: trunc %0
 %0:i8 = var

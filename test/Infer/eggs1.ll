@@ -1,7 +1,7 @@
 ; REQUIRES: solver, solver-model
 
 ; RUN: %llvm-as -o %t1 %s
-; RUN: %souper %solver -souper-infer-iN %t1 > %t2
+; RUN: %souper %solver -souper-only-infer-iN %t1 > %t2
 ; RUN: %FileCheck %s -implicit-check-not=FIRST < %t2
 ; RUN: %FileCheck %s -implicit-check-not=SECOND < %t2
 

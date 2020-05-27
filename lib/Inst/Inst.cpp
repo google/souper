@@ -1265,10 +1265,13 @@ void souper::separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
                               bool CloneVars) {
   for (const auto &BPC : BPCs) {
     auto BPCCopy = BPC;
+    assert(BPC.B);
     assert(BlockCache[BPC.B]);
     BPCCopy.B = BlockCache[BPC.B];
-    BPCCopy.PC = InstMapping(getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache, ConstMap, CloneVars),
-                             getInstCopy(BPC.PC.RHS, IC, InstCache, BlockCache, ConstMap, CloneVars));
+    BPCCopy.PC = InstMapping(getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache,
+                                         ConstMap, CloneVars),
+                             getInstCopy(BPC.PC.RHS, IC, InstCache, BlockCache,
+                                         ConstMap, CloneVars));
     BPCsCopy.emplace_back(BPCCopy);
   }
 }
@@ -1281,8 +1284,10 @@ void souper::separatePCs(const std::vector<InstMapping> &PCs,
                          std::map<Inst *, llvm::APInt> *ConstMap,
                          bool CloneVars) {
   for (const auto &PC : PCs)
-    PCsCopy.emplace_back(getInstCopy(PC.LHS, IC, InstCache, BlockCache, ConstMap, CloneVars),
-                         getInstCopy(PC.RHS, IC, InstCache, BlockCache, ConstMap, CloneVars));
+    PCsCopy.emplace_back(getInstCopy(PC.LHS, IC, InstCache, BlockCache,
+                                     ConstMap, CloneVars),
+                         getInstCopy(PC.RHS, IC, InstCache, BlockCache,
+                                     ConstMap, CloneVars));
 }
 
 

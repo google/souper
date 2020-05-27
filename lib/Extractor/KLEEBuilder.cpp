@@ -42,8 +42,8 @@ public:
   std::string GetExprStr(const BlockPCs &BPCs,
                          const std::vector<InstMapping> &PCs,
                          InstMapping Mapping,
-                         std::vector<Inst *> *ModelVars, bool Negate) override {
-    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, /*Precondition=*/0, Negate);
+                         std::vector<Inst *> *ModelVars, bool Negate, bool DropUB) override {
+    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, /*Precondition=*/0, Negate, DropUB);
     if (!Cand)
       return std::string();
     prepopulateExprMap(Cand);
@@ -63,11 +63,11 @@ public:
                          const std::vector<InstMapping> &PCs,
                          InstMapping Mapping,
                          std::vector<Inst *> *ModelVars,
-                         Inst *Precondition, bool Negate) override {
+                         Inst *Precondition, bool Negate, bool DropUB) override {
     std::string SMTStr;
     llvm::raw_string_ostream SMTSS(SMTStr);
     ConstraintManager Manager;
-    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Precondition, Negate);
+    Inst *Cand = GetCandidateExprForReplacement(BPCs, PCs, Mapping, Precondition, Negate, DropUB);
     if (!Cand)
       return std::string();
     prepopulateExprMap(Cand);

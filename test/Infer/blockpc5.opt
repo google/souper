@@ -4,7 +4,7 @@
 ; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,sub %s > %t1 2>&1
 ; RUN: %FileCheck %s -check-prefix=InstSynthesis < %t1
 
-; RUN: %souper-check %solver -infer-rhs -souper-enumerative-synthesis %s > %t2 2>&1
+; RUN: %souper-check %solver -infer-rhs -souper-enumerative-synthesis-max-instructions=1 %s > %t2 2>&1
 ; RUN: %FileCheck %s -check-prefix=EnumerativeSynthesis < %t2
 
 ; EnumerativeSynthesis: sub 210:i32, %1

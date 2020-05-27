@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-infer-iN=false %t
+; RUN: %souper %solver -check -souper-only-infer-i1 %t
 
 ; Function Attrs: nounwind readnone
 declare i32 @llvm.bitreverse.i32(i32) #0

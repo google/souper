@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-infer-iN=false %t
+; RUN: %souper %solver -check -souper-only-infer-i1 %t
 
 declare i64 @llvm.fshl.i64(i64, i64, i64) nounwind readnone
 

@@ -47,17 +47,8 @@ namespace {
 static cl::opt<bool> NoInfer("souper-no-infer",
     cl::desc("Populate the external cache, but don't infer replacements (default=false)"),
     cl::init(false));
-static cl::opt<int>MaxNops("souper-max-nops",
-    cl::desc("maximum number of values from the LHS to try to use as the RHS (default=20)"),
-    cl::init(20));
-static cl::opt<bool> InferInts("souper-infer-iN",
-    cl::desc("Infer iN integers for N>1 (default=true)"),
-    cl::init(true));
 static cl::opt<bool> InferInsts("souper-infer-inst",
     cl::desc("Infer instructions (default=false)"),
-    cl::init(false));
-static cl::opt<bool> EnableEnumerativeSynthesis("souper-enumerative-synthesis",
-    cl::desc("Use exaustive search for instruction synthesis (default=false)"),
     cl::init(false));
 static cl::opt<int> MaxLHSSize("souper-max-lhs-size",
     cl::desc("Max size of LHS (in bytes) to put in external cache (default=1024)"),
@@ -108,7 +99,7 @@ public:
     return AllOnes;
   }
 
-  Inst* traverse(Inst *Node, unsigned BitPos, InstContext &IC,
+  Inst *traverse(Inst *Node, unsigned BitPos, InstContext &IC,
                  std::string VarName,
                  std::map<Inst *, Inst *> &InstCache, bool SetBit) {
     if (InstCache.count(Node))
@@ -379,49 +370,8 @@ public:
                         bool AllowMultipleRHSs, InstContext &IC) override {
     std::error_code EC;
 
-    /*
-     * TODO: try to synthesize undef before synthesizing a concrete
-     * integer
-     */
-
-    /*
-     * Even though we have real integer synthesis below, first try to
-     * guess a few constants that are likely to be cheap for the
-     * backend to make
-     */
-    if (InferInts || LHS->Width == 1) {
-      std::vector<Inst *>Guesses { IC.getConst(APInt(LHS->Width, 0)),
-                                   IC.getConst(APInt(LHS->Width, 1)) };
-      if (LHS->Width > 1)
-        Guesses.emplace_back(IC.getConst(APInt::getAllOnesValue(LHS->Width)));
-      for (auto I : Guesses) {
-        InstMapping Mapping(LHS, I);
-
-        if (UseAlive) {
-          bool IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS,
-                                               PCs, IC);
-          if (IsValid) {
-            RHSs.emplace_back(I);
-            return std::error_code();
-          }
-          // TODO: Propagate errors from Alive backend, exit early for errors
-        } else {
-          std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, 0, /*Precondition=*/0);
-          if (Query.empty())
-            return std::make_error_code(std::errc::value_too_large);
-          bool IsSat;
-          EC = SMTSolver->isSatisfiable(Query, IsSat, 0, 0, Timeout);
-          if (EC)
-            return EC;
-          if (!IsSat) {
-            RHSs.emplace_back(I);
-            return EC;
-          }
-        }
-      }
-    }
-
-    if (InferInts && SMTSolver->supportsModels() && LHS->Width > 1) {
+    // FIXME -- it's a bit messy to have this custom logic here
+    if (LHS->HarvestKind == HarvestType::HarvestedFromUse) {
       Inst *C = IC.createSynthesisConstant(LHS->Width, /*SynthesisConstID=*/1);
       if (UseAlive) {
         Inst *Ante = IC.getConst(llvm::APInt(1, true));
@@ -448,27 +398,24 @@ public:
           return std::error_code();
         }
       }
+      // only synthesize a constant for values harvested from uses--
+      // do not continue with more synthesis
+      return EC;
     }
 
-    // Do not do further synthesis if LHS is harvested from uses.
-    if (LHS->HarvestKind == HarvestType::HarvestedFromUse)
-      return EC;
-
-    if(SMTSolver->supportsModels()) {
-      if (EnableEnumerativeSynthesis) {
-        EnumerativeSynthesis ES;
-        EC = ES.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHSs,
-                           AllowMultipleRHSs, IC, Timeout);
-        if (EC || !RHSs.empty())
-          return EC;
-      } else if (InferInsts) {
-        InstSynthesis IS;
-        Inst *RHS;
-        EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
-        RHSs.emplace_back(RHS);
-        if (EC || RHS)
-          return EC;
-      }
+    if (InferInsts) {
+      InstSynthesis IS;
+      Inst *RHS;
+      EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
+      RHSs.emplace_back(RHS);
+      if (EC || RHS)
+        return EC;
+    } else {
+      EnumerativeSynthesis ES;
+      EC = ES.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHSs,
+                         AllowMultipleRHSs, IC, Timeout);
+      if (EC || !RHSs.empty())
+        return EC;
     }
 
     RHSs.clear();
@@ -485,7 +432,7 @@ public:
       return std::error_code();
     }
     std::string Query;
-    if (Model && SMTSolver->supportsModels()) {
+    if (Model) {
       std::vector<Inst *> ModelInsts;
       std::string Query = BuildQuery(IC, BPCs, PCs, Mapping, &ModelInsts, /*Precondition=*/0);
       if (Query.empty())
