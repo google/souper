@@ -40,7 +40,8 @@ class ExprBuilder {
   const unsigned MAX_PHI_DEPTH = 25;
 public:
   enum Builder {
-    KLEE
+    KLEE,
+    Z3
   };
 
   ExprBuilder(InstContext &IC) : LIC(&IC) {}
@@ -110,6 +111,7 @@ std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
        std::vector<Inst *> *ModelVars, Inst *Precondition, bool Negate=false);
 
 std::unique_ptr<ExprBuilder> createKLEEBuilder(InstContext &IC);
+std::unique_ptr<ExprBuilder> createZ3Builder(InstContext &IC);
 Inst *getUBInstCondition(InstContext &IC, Inst *Root);
 }
 
