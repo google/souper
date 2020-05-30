@@ -134,8 +134,8 @@ my %whitelist = ();
 sub getenv($) {
     (my $e) = @_;
     die unless $e =~ /^SOUPER_/;
-    return undef unless exists($ENV{$e});
     $whitelist{$e} = 1;
+    return undef unless exists($ENV{$e});
     return $ENV{$e};
 }
 
