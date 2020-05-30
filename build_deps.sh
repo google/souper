@@ -24,8 +24,8 @@ ncpus=$(command nproc 2>/dev/null || command sysctl -n hw.ncpu 2>/dev/null || ec
 # hiredis version 0.14.0
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
 llvm_repo=https://github.com/regehr/llvm-project.git
-# llvm_checkout specifies the git branch or hash to checkout to
-llvm_checkout=disable-peepholes
+# llvm_commit specifies the git branch or hash to checkout to
+llvm_commit=disable-peepholes
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=92ad3f5f2f963ef5bd43f71a4137427bd6cce51b
@@ -41,10 +41,10 @@ fi
 
 z3_srcdir=$(pwd)/third_party/z3
 z3_installdir=$(pwd)/third_party/z3-install
-git clone $z3_repo $z3_srcdir
+mkdir -p $z3_srcdir
+(cd $z3_srcdir && git init && git remote add origin $z3_repo && git fetch origin $z3_commit && git reset --hard FETCH_HEAD)
 mkdir -p $z3_installdir
-
-(cd $z3_srcdir && git checkout $z3_commit && python scripts/mk_make.py --prefix=$z3_installdir && cd build && make -j $ncpus install)
+(cd $z3_srcdir && python scripts/mk_make.py --prefix=$z3_installdir && cd build && make -j $ncpus install)
 
 export PATH=$z3_installdir/bin:$PATH
 export LD_LIBRARY_PATH=$z3_installdir/lib:$LD_LIBRARY_PATH
@@ -74,8 +74,8 @@ llvm_srcdir=third_party/llvm
 llvm_installdir=$(pwd)/${llvm_srcdir}/$llvm_build_type
 llvm_builddir=$(pwd)/${llvm_srcdir}/${llvm_build_type}-build
 
-git clone $llvm_repo $llvm_srcdir
-git -C $llvm_srcdir checkout $llvm_checkout
+mkdir -p $llvm_srcdir
+(cd $llvm_srcdir && git init && git remote add origin $llvm_repo && git fetch origin $llvm_commit && git reset --hard FETCH_HEAD)
 
 # Disable the broken select -> logic optimizations
 git -C ${llvm_srcdir} apply $(pwd)/patches/0002-disable-instcombine-select-to-logic.patch
