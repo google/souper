@@ -346,7 +346,7 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   std::set<Inst *> Visited;
   visitConstants(Mapping.RHS, Visited, ConstConstraints, ConstSet, IC, AvoidNops);
 
-  for (int I = 0 ; I < MaxTries; ++I)  {
+  for (int I = 0; I < MaxTries; ++I)  {
     bool IsSat;
     std::vector<Inst *> ModelInstsFirstQuery;
     std::vector<llvm::APInt> ModelValsFirstQuery;
@@ -357,8 +357,7 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                         IC.getInst(Inst::And, 1, {SubstAnte, TriedAnte})});
 
     std::string Query = BuildQuery(IC, BPCs, PCs, InstMapping(Mapping.LHS, Mapping.RHS),
-                                   &ModelInstsFirstQuery, FirstQueryAnte, true);
-
+                                   &ModelInstsFirstQuery, FirstQueryAnte, true, true);
 
     if (Query.empty())
       return std::make_error_code(std::errc::value_too_large);
@@ -367,9 +366,8 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                   &ModelValsFirstQuery, Timeout);
 
     if (EC) {
-      if (DebugLevel > 3) {
-        llvm::errs()<<"ConstantSynthesis: solver returns error on first query\n";
-      }
+      if (DebugLevel > 3)
+        llvm::errs() << "ConstantSynthesis: solver returns error on first query\n";
       return EC;
     }
 
@@ -381,9 +379,8 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       return std::error_code();
     }
 
-    if (DebugLevel > 3) {
+    if (DebugLevel > 3)
       llvm::errs() << "first query is SAT, returning the model:\n";
-    }
 
     Inst* TriedAnteLocal = FalseConst;
     std::map<Inst *, llvm::APInt> ConstMap;
@@ -417,12 +414,10 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       Block->ConcretePred = 0;
     }
 
-    if (DebugLevel > 2) {
-      if (Pruner) {
-        if (Pruner->isInfeasible(RHSCopy, DebugLevel)) {
-          //TODO(manasij)
-          llvm::errs() << "Second Query Skipping opportunity.\n";
-        }
+    if (DebugLevel > 2 && Pruner) {
+      if (Pruner->isInfeasible(RHSCopy, DebugLevel)) {
+        //TODO(manasij)
+        llvm::errs() << "Second Query Skipping opportunity.\n";
       }
     }
 

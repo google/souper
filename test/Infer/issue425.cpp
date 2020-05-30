@@ -1,6 +1,6 @@
 // REQUIRES: solver, synthesis
 
-// RUN: SOUPER_SOLVER=%solver SOUPER_ENUMERATIVE_SYNTHESIS=1 SOUPER_NO_EXTERNAL_CACHE=1 %sclang++ -O %s -S -o - -emit-llvm 2>&1 | %FileCheck %s
+// RUN: SOUPER_SOLVER=%solver SOUPER_NO_EXTERNAL_CACHE=1 %sclang++ -O %s -S -o - -emit-llvm 2>&1 | %FileCheck %s
 // CHECK-NOT: error
 
 // Regression test for issue #425

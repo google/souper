@@ -70,15 +70,12 @@ namespace {
     "The larger the number is, the more fine-grained debug "
     "information will be printed"),
     cl::Hidden, cl::location(DebugLevel), cl::init(0));
-  static cl::opt<unsigned> MaxNumInstructions("souper-enumerative-synthesis-num-instructions",
-    cl::desc("Maximum number of instructions to synthesize (default=1)."),
-    cl::init(1));
+  static cl::opt<unsigned> MaxNumInstructions("souper-enumerative-synthesis-max-instructions",
+    cl::desc("Maximum number of instructions to synthesize (default=0)."),
+    cl::init(0));
   static cl::opt<unsigned> MaxV("souper-enumerative-synthesis-max-verification-load",
     cl::desc("Maximum number of guesses verified at once (default=300)."),
     cl::init(300));
-  static cl::opt<bool> EnableBigQuery("souper-enumerative-synthesis-enable-big-query",
-    cl::desc("Enable big query in enumerative synthesis (default=false)"),
-    cl::init(false));
   static cl::opt<bool, /*ExternalStorage=*/true>
     AliveFlagParser("souper-use-alive", cl::desc("Use Alive2 as the backend"),
     cl::Hidden, cl::location(UseAlive), cl::init(false));
@@ -95,14 +92,20 @@ namespace {
     cl::desc("Double check synthesis result with alive (default=false)"),
     cl::init(false));
   static cl::opt<bool> SkipSolver("souper-enumerative-synthesis-skip-solver",
-    cl::desc("Skip refinement check after generating guesses.(default=false)"),
+    cl::desc("Skip refinement check after generating guesses (default=false)"),
     cl::init(false));
   static cl::opt<bool> IgnoreCost("souper-enumerative-synthesis-ignore-cost",
     cl::desc("Ignore cost of RHSes -- just generate them. (default=false)"),
     cl::init(false));
   static cl::opt<unsigned> MaxLHSCands("souper-max-lhs-cands",
-    cl::desc("Gather at most this many inputs from a LHS to use as synthesis inputs (default=8)"),
+    cl::desc("Gather at most this many values from a LHS to use as synthesis inputs (default=8)"),
     cl::init(8));
+  static cl::opt<bool> OnlyInferI1("souper-only-infer-i1",
+    cl::desc("Only infer integer constants with width 1 (default=false)"),
+    cl::init(false));
+  static cl::opt<bool> OnlyInferIN("souper-only-infer-iN",
+    cl::desc("Only infer integer constants (default=false)"),
+    cl::init(false));
 }
 
 // TODO
@@ -167,10 +170,7 @@ PruneFunc MkPruneFunc(std::vector<PruneFunc> Funcs) {
 }
 
 bool CountPrune(Inst *I, std::vector<Inst *> &ReservedInsts, std::set<Inst*> Visited) {
-  if (souper::countHelper(I, Visited) > MaxNumInstructions)
-    return false;
-
-  return true;
+  return !(souper::countHelper(I, Visited) > MaxNumInstructions);
 }
 
 //TODO(manasij/zhengyang) souper::cost needs a caching layer
@@ -674,75 +674,26 @@ std::error_code isConcreteCandidateSat(SynthesisContext &SC, Inst *RHSGuess, boo
   return EC;
 }
 
-bool isBigQuerySat(SynthesisContext &SC,
-                   const std::vector<souper::Inst *> &Guesses) {
-  // Big Query
-  // TODO: Need to check if big query actually saves us time or just wastes time
-  std::error_code EC;
-  std::map<Inst *, Inst *> InstCache;
-  std::map<Block *, Block *> BlockCache;
-  Inst *Ante = SC.IC.getConst(APInt(1, true));
-  BlockPCs BPCsCopy;
-  std::vector<InstMapping> PCsCopy;
-
-  for (auto I : Guesses) {
-    // separate sub-expressions by copying vars
-    std::map<Inst *, Inst *> InstCache;
-    std::map<Block *, Block *> BlockCache;
-
-    Inst *Eq = SC.IC.getInst(Inst::Eq, 1,
-                         {getInstCopy(SC.LHS, SC.IC, InstCache, BlockCache, 0, true),
-                          getInstCopy(I, SC.IC, InstCache, BlockCache, 0, true)});
-
-    Ante = SC.IC.getInst(Inst::And, 1, {Ante, Eq});
-    separateBlockPCs(SC.BPCs, BPCsCopy, InstCache, BlockCache, SC.IC, 0, true);
-    separatePCs(SC.PCs, PCsCopy, InstCache, BlockCache, SC.IC, 0, true);
-  }
-
-  if (DebugLevel > 2) {
-    llvm::errs() << "\n\n--------------------------------------------\nBigQuery\n";
-    ReplacementContext RC;
-    RC.printInst(Ante, llvm::errs(), false);
-  }
-
-  // (LHS != i_1) && (LHS != i_2) && ... && (LHS != i_n) == true
-  InstMapping Mapping(Ante, SC.IC.getConst(APInt(1, true)));
-  std::string Query = BuildQuery(SC.IC, BPCsCopy, PCsCopy, Mapping, 0, 0, /*Negate=*/false);
-  if (Query.empty()) {
-    if (DebugLevel > 2)
-      llvm::errs() << "Big Query is too big, skipping\n";
-    return false;
-  }
-  bool BigQueryIsSat;
-  EC = SC.SMTSolver->isSatisfiable(Query, BigQueryIsSat, 0, 0, SC.Timeout);
-  if (EC)
-    return false;
-  if (!BigQueryIsSat) {
-    if (DebugLevel > 2)
-      llvm::errs() << "big query is unsat, all done\n";
-  } else {
-    if (DebugLevel > 2)
-      llvm::errs() << "big query is sat, looking for small queries\n";
-  }
-  return BigQueryIsSat;
-}
-
 std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RHSs,
                                    const std::vector<souper::Inst *> &Guesses) {
   std::error_code EC;
-
-  if (EnableBigQuery && isBigQuerySat(SC,Guesses)) {
-    return EC; // None of the guesses work
-  }
 
   // find the valid one
   int GuessIndex = -1;
   Inst *RHS;
 
+  if (DebugLevel > 2) {
+    llvm::errs() << "\n-------------------------------------------------\n";
+    ReplacementContext Context;
+    auto S = GetReplacementLHSString(SC.BPCs, SC.PCs,
+                                     SC.LHS, Context);
+    llvm::errs() << S << "\n";
+  }
+
   for (auto I : Guesses) {
     GuessIndex++;
     if (DebugLevel > 2) {
-      llvm::errs() << "\n--------------------------------------------\nguess " << GuessIndex << "\n\n";
+      llvm::errs() << "\n--------------------------------\nguess " << GuessIndex << "\n\n";
       ReplacementContext RC;
       RC.printInst(I, llvm::errs(), /*printNames=*/true);
       llvm::errs() << "\n";
@@ -750,30 +701,27 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
     }
 
     std::set<Inst *> ConstSet;
+    std::map <Inst *, llvm::APInt> ResultConstMap;
     souper::getConstants(I, ConstSet);
     bool GuessHasConstant = !ConstSet.empty();
     if (!GuessHasConstant) {
       bool IsSAT;
 
       EC = isConcreteCandidateSat(SC, I, IsSAT);
-      if (EC) {
+      if (EC)
         return EC;
-      }
       if (IsSAT) {
         if (DebugLevel > 3)
           llvm::errs() << "second query is SAT-- constant doesn't work\n";
         continue;
       } else {
         if (DebugLevel > 3)
-          llvm::errs() << "query is UNSAT\n";
+          llvm::errs() << "second query is UNSAT\n";
         RHS = I;
       }
     } else {
-      // guess has constant
-
+      // guess has constant(s)
       ConstantSynthesis CS;
-      std::map <Inst *, llvm::APInt> ResultConstMap;
-
       EC = CS.synthesize(SC.SMTSolver, SC.BPCs, SC.PCs, InstMapping (SC.LHS, I), ConstSet,
                          ResultConstMap, SC.IC, /*MaxTries=*/MaxTries, SC.Timeout,
                          /*AvoidNops=*/true);
@@ -797,6 +745,22 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
         RHS = nullptr;
       }
     }
+
+    // FIXME shrink constants properly, this is a placeholder where we
+    // just see if we can replace every constant with zero
+    if (!ResultConstMap.empty() && DoubleCheckWithAlive) {
+      std::map <Inst *, llvm::APInt> ZeroConstMap;
+      for (auto it : ResultConstMap) {
+        auto I = it.first;
+        ZeroConstMap[I] = llvm::APInt(I->Width, 0);
+      }
+      std::map<Inst *, Inst *> InstCache;
+      std::map<Block *, Block *> BlockCache;
+      auto newRHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ZeroConstMap, false);
+      if (isTransformationValid(SC.LHS, newRHS, SC.PCs, SC.IC))
+        RHS = newRHS;
+    }
+    
     if (RHS) {
       RHSs.emplace_back(RHS);
       if (!SC.CheckAllGuesses) {
@@ -829,8 +793,14 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
                                 const std::vector<InstMapping> &PCs,
                                 Inst *LHS, std::vector<Inst *> &RHSs,
                                 bool CheckAllGuesses, InstContext &IC, unsigned Timeout) {
+  if ((OnlyInferI1 || OnlyInferIN) && MaxNumInstructions >= 1)
+    llvm::report_fatal_error("Sorry, it is an error to synthesize >= 1 instructions "
+                             "in integer-only mode");
+  if (OnlyInferI1 && OnlyInferIN)
+    llvm::report_fatal_error("Sorry, it is an error to specify synthesizing both only "
+                             "i1 and only iN values");
   SynthesisContext SC{IC, SMTSolver, LHS, getUBInstCondition(SC.IC, SC.LHS),
-                      PCs, BPCs, CheckAllGuesses, Timeout};
+      PCs, BPCs, CheckAllGuesses, Timeout};
   std::error_code EC;
   std::vector<Inst *> Cands;
   findCands(SC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
@@ -857,12 +827,9 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   }
   auto PruneCallback = MkPruneFunc(PruneFuncs);
 
-
   std::vector<Inst *> Guesses;
-  uint64_t GuessCount = 0;
 
-  auto Generate = [&SC, &Guesses, &RHSs, &EC, &GuessCount](Inst *Guess) {
-    GuessCount++;
+  auto Generate = [&SC, &Guesses, &RHSs, &EC](Inst *Guess) {
     Guesses.push_back(Guess);
     if (Guesses.size() >= MaxV && !SkipSolver) {
       sortGuesses(Guesses);
@@ -873,15 +840,22 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     return true;
   };
 
-  // add nops guesses separately
-  for (auto I : Cands) {
-    if (I->Width == SC.LHS->Width) {
-      addGuess(I, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
+  // add constant guess
+  // TODO add a poison/undef guess
+  if (!(OnlyInferI1 && SC.LHS->Width > 1))
+    Guesses.push_back(IC.createSynthesisConstant(SC.LHS->Width, 1));
+
+  // add nop guesses
+  if (!OnlyInferI1 && !OnlyInferIN) {
+    for (auto I : Cands) {
+      if (I->Width == SC.LHS->Width)
+        addGuess(I, SC.LHS->Width, SC.IC, LHSCost, Guesses, TooExpensive);
     }
   }
 
-  getGuesses(Cands, SC.LHS->Width,
-             LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, Generate);
+  if (MaxNumInstructions > 0)
+    getGuesses(Cands, SC.LHS->Width,
+               LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, Generate);
 
   if (!Guesses.empty() && !SkipSolver) {
     sortGuesses(Guesses);
@@ -890,11 +864,8 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
   if (DebugLevel >= 1) {
     DataflowPruning.printStats(llvm::errs());
+    llvm::errs() << "There are " << Guesses.size() << " Guesses\n";
   }
-
-  // Guesses count
-  if (DebugLevel > 1)
-    llvm::errs() << "There are " << GuessCount << " Guesses\n";
 
   // RHSs count, before duplication
   if (DebugLevel > 3)

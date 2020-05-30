@@ -56,7 +56,6 @@ my $solver = $ENV{"SOUPER_SOLVER"};
 die $need_solver unless $solver;
 
 my $OPTS = "";
-$OPTS .= "-souper-infer-iN " if $ENV{"SOUPER_INFER_INT"};
 
 $OPTS .= "-souper-synthesis-wiring-iterations=30 ";
 $OPTS .= "-souper-infer-inst ";

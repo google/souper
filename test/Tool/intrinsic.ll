@@ -1,7 +1,7 @@
 ; REQUIRES: solver
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper %solver -check -souper-only-infer-i1 %t
 
 declare i64 @llvm.bswap.i64(i64) #0
 

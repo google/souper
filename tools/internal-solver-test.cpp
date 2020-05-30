@@ -26,7 +26,7 @@ int solver_main(int argc, char **argv) {
 
 int main() {
   std::unique_ptr<SMTLIBSolver> Solver =
-      createBoolectorSolver(makeInternalSolverProgram(solver_main), false);
+      createZ3Solver(makeInternalSolverProgram(solver_main), false);
   bool Sat;
   if (std::error_code EC =
           Solver->isSatisfiable("foo", Sat, 0, 0, /*Timeout=*/1)) {

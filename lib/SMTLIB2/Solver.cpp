@@ -205,15 +205,13 @@ class ProcessSMTLIBSolver : public SMTLIBSolver {
   std::string Name;
   bool Keep;
   SolverProgram Prog;
-  bool SupportsModels;
   std::vector<std::string> Args;
   std::vector<const char *> ArgPtrs;
 
 public:
   ProcessSMTLIBSolver(std::string Name, bool Keep, SolverProgram Prog,
-                      bool SupportsModels, const std::vector<std::string> &Args)
-      : Name(Name), Keep(Keep), Prog(Prog), SupportsModels(SupportsModels),
-        Args(Args) {
+                      const std::vector<std::string> &Args)
+      : Name(Name), Keep(Keep), Prog(Prog), Args(Args) {
     std::transform(Args.begin(), Args.end(), std::back_inserter(ArgPtrs),
                    [](const std::string &Arg) { return Arg.c_str(); });
     ArgPtrs.push_back(0);
@@ -221,10 +219,6 @@ public:
 
   std::string getName() const override {
     return Name;
-  }
-
-  bool supportsModels() const override {
-    return SupportsModels;
   }
 
   std::error_code isSatisfiable(StringRef Query, bool &Result,
@@ -371,26 +365,8 @@ SolverProgram souper::makeInternalSolverProgram(int MainPtr(int argc,
   };
 }
 
-std::unique_ptr<SMTLIBSolver> souper::createBoolectorSolver(SolverProgram Prog,
-                                                            bool Keep) {
-  return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("Boolector", Keep, Prog, false, {"--smt2"}));
-}
-
-std::unique_ptr<SMTLIBSolver> souper::createCVC4Solver(SolverProgram Prog,
-                                                       bool Keep) {
-  return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("CVC4", Keep, Prog, true, {"--lang=smt"}));
-}
-
-std::unique_ptr<SMTLIBSolver> souper::createSTPSolver(SolverProgram Prog,
-                                                      bool Keep) {
-  return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("STP", Keep, Prog, false, {"--SMTLIB2"}));
-}
-
 std::unique_ptr<SMTLIBSolver> souper::createZ3Solver(SolverProgram Prog,
                                                      bool Keep) {
   return std::unique_ptr<SMTLIBSolver>(
-      new ProcessSMTLIBSolver("Z3", Keep, Prog, true, {"-smt2", "-in"}));
+      new ProcessSMTLIBSolver("Z3", Keep, Prog, {"-smt2", "-in"}));
 }

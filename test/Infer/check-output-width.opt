@@ -1,8 +1,8 @@
 ; REQUIRES: solver, solver-model
 
-; RUN: %souper-check %solver -souper-infer-iN=false -infer-rhs -souper-infer-inst -souper-synthesis-comps=const %s > %t1
-; RUN: %souper-check %solver -souper-infer-iN=false -infer-rhs -souper-enumerative-synthesis %s > %t2
+; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=const %s > %t1
 ; RUN: %FileCheck %s < %t1
+; RUN: %souper-check %solver -infer-rhs %s > %t2
 ; RUN: %FileCheck %s < %t2
 
 ; CHECK: Failed to infer RHS

@@ -1,5 +1,5 @@
 ; REQUIRES: solver
-; RUN: %souper-check %solver -infer-rhs -souper-enumerative-synthesis %s > %t2
+; RUN: %souper-check %solver -infer-rhs %s > %t2
 ; RUN: %FileCheck %s < %t2
 ; CHECK: RHS inferred successfully
 ; CHECK: RHS inferred successfully

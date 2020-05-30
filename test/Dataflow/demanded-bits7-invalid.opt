@@ -1,6 +1,6 @@
 ; REQUIRES: solver, solver-model
 
-; RUN: %souper-check %solver -infer-rhs -souper-infer-iN %s > %t 2>&1
+; RUN: %souper-check %solver -infer-rhs -souper-only-infer-iN %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: Failed to infer RHS

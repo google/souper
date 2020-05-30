@@ -48,11 +48,13 @@ public:
 
   virtual std::string GetExprStr(const BlockPCs &BPCs,
                  const std::vector<InstMapping> &PCs, InstMapping Mapping,
-                 std::vector<Inst *> *ModelVars, bool Negate=false) = 0;
+                 std::vector<Inst *> *ModelVars, bool Negate=false,
+                 bool DropUB = false) = 0;
 
   virtual std::string BuildQuery(const BlockPCs &BPCs,
                  const std::vector<InstMapping> &PCs, InstMapping Mapping,
-                 std::vector<Inst *> *ModelVars, Inst *Precondition,  bool Negate=false) = 0;
+                 std::vector<Inst *> *ModelVars, Inst *Precondition,  bool Negate=false,
+                 bool DropUB = false) = 0;
 
   Inst *getDataflowConditions(Inst *I);
   Inst *getUBInstCondition(Inst *Root);
@@ -102,12 +104,13 @@ protected:
 
   Inst *GetCandidateExprForReplacement(
          const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-         InstMapping Mapping, Inst *Precondition, bool Negate);
+         InstMapping Mapping, Inst *Precondition, bool Negate, bool DropUB);
 };
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
        const std::vector<InstMapping> &PCs, InstMapping Mapping,
-       std::vector<Inst *> *ModelVars, Inst *Precondition, bool Negate=false);
+       std::vector<Inst *> *ModelVars, Inst *Precondition, bool Negate=false,
+       bool DropUB=false);
 
 std::unique_ptr<ExprBuilder> createKLEEBuilder(InstContext &IC);
 Inst *getUBInstCondition(InstContext &IC, Inst *Root);

@@ -1,10 +1,9 @@
 ; REQUIRES: solver, solver-model
 
 ; RUN: %llvm-as -o %t1 %s
-; RUN: %souper %solver -souper-infer-inst %t1 -souper-synthesis-comp-num=0 -souper-infer-iN=false > %t2
-; RUN: %FileCheck %s -check-prefix=SUCCESS < %t2
+; RUN: %souper %solver -souper-enumerative-synthesis-max-instructions=0 -souper-double-check %t1 | %FileCheck %s
 
-; SUCCESS: cand %12 %0
+; CHECK: cand %12 301:i10
 
 ; A woman was carrying a large basket of eggs when a passer-by bumped her and
 ; she dropped the basket and all the eggs broke. The passer-by asked how many

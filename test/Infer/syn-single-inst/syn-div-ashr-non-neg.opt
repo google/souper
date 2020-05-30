@@ -1,6 +1,6 @@
 ; REQUIRES: solver, synthesis
 
-; RUN: %souper-check %solver -infer-rhs -souper-infer-iN=false -souper-enumerative-synthesis %s > %t1
+; RUN: %souper-check %solver -infer-rhs -souper-enumerative-synthesis-max-instructions=1 %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK: {{(ashr|lshr)}} %0, 3:i16

@@ -519,7 +519,7 @@ public:
                          souper::InstMapping Mapping,
                          std::vector<souper::Inst *> * ModelVars,
                          souper::Inst *Precondition,
-                         bool Negate) override {
+                         bool Negate, bool DropUB) override {
     llvm::report_fatal_error("Do not call");
     return "";
   }
@@ -527,7 +527,7 @@ public:
                          const std::vector<souper::InstMapping> & PCs,
                          souper::InstMapping Mapping,
                          std::vector<souper::Inst *> * ModelVars,
-                         bool Negate) override {
+                         bool Negate, bool DropUB) override {
     llvm::report_fatal_error("Do not call");
     return "";
   }
