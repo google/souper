@@ -407,9 +407,9 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 
     std::map<Inst *, Inst *> InstCache;
     std::map<Block *, Block *> BlockCache;
-    Inst *LHSCopy = getInstCopy(Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, false);
     Inst *RHSCopy = getInstCopy(Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, false);
-    std::vector<Block *> Blocks = getBlocksFromPhis(LHSCopy);
+    assert(BlockCache.empty());
+    std::vector<Block *> Blocks = getBlocksFromPhis(Mapping.LHS);
     for (auto Block : Blocks) {
       Block->ConcretePred = 0;
     }
@@ -421,16 +421,11 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       }
     }
 
-    BlockPCs BPCsCopy;
-    std::vector<InstMapping> PCsCopy;
-    separateBlockPCs(BPCs, BPCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
-    separatePCs(PCs, PCsCopy, InstCache, BlockCache, IC, &ConstMap, false);
-
     // check if the constant is valid for all inputs
     std::vector<Inst *> ModelInstsSecondQuery;
     std::vector<llvm::APInt> ModelValsSecondQuery;
 
-    Query = BuildQuery(IC, BPCsCopy, PCsCopy, InstMapping(LHSCopy, RHSCopy),
+    Query = BuildQuery(IC, BPCs, PCs, InstMapping(Mapping.LHS, RHSCopy),
                        &ModelInstsSecondQuery, 0);
 
     if (Query.empty())
@@ -476,8 +471,8 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       std::map<Inst *, Inst *> InstCache;
       std::map<Block *, Block *> BlockCache;
       if (EnableConcreteInterpreter) {
-        ConcreteInterpreter CI(LHSCopy, VC);
-        auto LHSV = CI.evaluateInst(LHSCopy);
+        ConcreteInterpreter CI(Mapping.LHS, VC);
+        auto LHSV = CI.evaluateInst(Mapping.LHS);
 
         if (!LHSV.hasValue()) {
           llvm::report_fatal_error("the model returned from second query evaluates to poison for LHS");
