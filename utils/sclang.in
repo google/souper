@@ -84,9 +84,6 @@ when EnumerativeSynthesis is enabled.
 
 SOUPER_REDIS_PORT -- Mention the port to use the redis-server on.
 
-SOUPER_NO_EXPLOIT_UB -- Do not exploit LLVM-level undefined behavior
-when making inferences.
-
 SOUPER_NO_EXTERNAL_CACHE -- Don't ask the running Redis instance for
 cached inferences.
 
@@ -119,7 +116,7 @@ SOUPER_USE_ALIVE -- Send queries to Alive2
 
 SOUPER_DOUBLE_CHECK -- Only verify results with Alive2
 
-LLVM_DISABLE_PEEPHOLES -- Disable the invocation of llvm peephole
+SOUPER_DISABLE_LLVM_PEEPHOLES -- Disable the invocation of llvm peephole
 transformations in compilation.
 
 SOUPER_STATS -- Ask LLVM to print statistics.
@@ -178,7 +175,7 @@ if (defined $skip_files) {
     }
 }
 
-$souper = 0 if defined getenv("SOUPER_NO_SOUPER");
+$souper = 0 if getenv("SOUPER_NO_SOUPER");
 $souper = 0 unless compiling();
 
 if ($souper) {
@@ -202,12 +199,8 @@ if ($souper) {
         push @ARGV, ("-mllvm", "-souper-exploit-blockpcs");
     }
 
-    if (getenv("SOUPER_NO_EXPLOIT_UB")) {
-        push @ARGV, ("-mllvm", "-souper-exploit-ub=false");
-    }
-
-    if (getenv("SOUPER_NO_EXTERNAL_CACHE")) {
-        push @ARGV, ("-mllvm", "-souper-external-cache=false");
+    if (!getenv("SOUPER_NO_EXTERNAL_CACHE")) {
+        push @ARGV, ("-mllvm", "-souper-external-cache");
     }
 
     if (getenv("SOUPER_NO_INFER")) {
