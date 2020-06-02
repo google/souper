@@ -1,7 +1,7 @@
-; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 -souper-check-all-guesses %solver %s > %t1
+; REQUIRES: synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 -souper-check-all-guesses %s > %t1
 ; RUN: %FileCheck %s < %t1
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 -souper-double-check -souper-check-all-guesses %solver %s > %t2
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 -souper-double-check -souper-check-all-guesses %s > %t2
 ; RUN: %FileCheck %s < %t2
 
 ; CHECK: result %0

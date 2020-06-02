@@ -23,7 +23,7 @@
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/CandidateMapUtils.h"
-#include "souper/Tool/GetSolverFromArgs.h"
+#include "souper/Tool/GetSolver.h"
 
 using namespace llvm;
 using namespace souper;

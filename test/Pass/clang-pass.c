@@ -1,6 +1,4 @@
-// REQUIRES: solver
-
-// RUN: %clang -Xclang -load -Xclang %pass -O2 -mllvm %solver -emit-llvm -S -o - %s -mllvm -print-after-all 2>&1 | %FileCheck %s
+// RUN: %clang -Xclang -load -Xclang %pass -O2 -emit-llvm -S -o - %s -mllvm -print-after-all 2>&1 | %FileCheck %s
 
 // Check that peephole passes are registered at least twice.
 

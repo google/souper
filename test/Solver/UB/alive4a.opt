@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %souper-check %solver %s > %t 2>&1
+
+; RUN: %souper-check %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
 ; CHECK-NOT: LGTM

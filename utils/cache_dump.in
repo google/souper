@@ -163,16 +163,13 @@ sub parse ($$) {
     }
 }
 
-my $solver = $ENV{"SOUPER_SOLVER"};
-die unless $solver;
-
 sub known ($) {
     (my $opt) = @_;
     (my $fh, my $tmpfn) = File::Temp::tempfile();
     print $fh $opt;
     $fh->flush();
     my $arg = "-infer-known-bits";
-    my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
+    my $cmd = "${check} $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -188,7 +185,7 @@ sub nonNeg ($) {
     print $fh $opt;
     $fh->flush();
     my $arg = "-infer-non-neg";
-    my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
+    my $cmd = "${check} $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -204,7 +201,7 @@ sub neg ($) {
     print $fh $opt;
     $fh->flush();
     my $arg = "-infer-neg";
-    my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
+    my $cmd = "${check} $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -220,7 +217,7 @@ sub powerTwo ($) {
     print $fh $opt;
     $fh->flush();
     my $arg = "-infer-power-two";
-    my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
+    my $cmd = "${check} $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -236,7 +233,7 @@ sub nonZero ($) {
     print $fh $opt;
     $fh->flush();
     my $arg = "-infer-non-zero";
-    my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
+    my $cmd = "${check} $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -252,7 +249,7 @@ sub signBits ($) {
     print $fh $opt;
     $fh->flush();
     my $arg = "-infer-sign-bits";
-    my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
+    my $cmd = "${check} $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -268,7 +265,7 @@ sub demandedbits ($) {
     print $fh $opt;
     $fh->flush();
     my $arg = "-infer-demanded-bits";
-    my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
+    my $cmd = "${check} $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
     while (my $line = <INF>) {
        print $line;
@@ -278,19 +275,12 @@ sub demandedbits ($) {
     unlink $tmpfn;
 }
 
-my $need_solver = <<END;
-$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as
--stp-path=/path/to/stp
-END
-
 sub checkstr ($) {
     (my $s) = @_;
-    my $solver = $ENV{"SOUPER_SOLVER"};
-    die $need_solver unless $solver;
     (my $fh, my $tmpfn) = File::Temp::tempfile();
     print $fh $s;
     $fh->flush();
-    open INF, "${check} ${solver} < $tmpfn 2>/dev/null |";
+    open INF, "${check} < $tmpfn 2>/dev/null |";
     my $output = "";
     while (my $line = <INF>) {
         chomp $line;

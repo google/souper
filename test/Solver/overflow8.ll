@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-only-infer-i1 %t
+; RUN: %souper -check -souper-only-infer-i1 %t
 
 ; Function Attrs: nounwind readnone
 declare { i32, i1 } @llvm.sadd.with.overflow.i32(i32, i32) #1

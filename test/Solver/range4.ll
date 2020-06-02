@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper -check %t
 
 define i1 @cmp_with_range1(i64*, i64*) {
   %v1 = load i64, i64* %0, !range !0

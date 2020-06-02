@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-only-infer-i1 %t
+; RUN: %souper -check -souper-only-infer-i1 %t
 
 declare i48 @llvm.fshr.i48(i48, i48, i48) nounwind readnone
 

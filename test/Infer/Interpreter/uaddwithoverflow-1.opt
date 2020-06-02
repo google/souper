@@ -1,8 +1,8 @@
-; RUN: %souper-interpret %solver -input-values=%0=3,%1=3 %s > %t 2>&1
+; RUN: %souper-interpret -input-values=%0=3,%1=3 %s > %t 2>&1
 ; RUN: %FileCheck -check-prefix=TEST1 %s < %t
 ; TEST1: Value: 0
 
-; RUN: %souper-interpret %solver -input-values=%0=9,%1=9 %s > %t 2>&1
+; RUN: %souper-interpret -input-values=%0=9,%1=9 %s > %t 2>&1
 ; RUN: %FileCheck -check-prefix=TEST2 %s < %t
 ; TEST2: Value: -1
 

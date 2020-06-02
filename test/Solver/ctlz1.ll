@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-only-infer-i1 %t
+; RUN: %souper -check -souper-only-infer-i1 %t
 
 declare i64 @llvm.ctlz.i64(i64) nounwind readnone
 

@@ -1,4 +1,4 @@
-; RUN: %souper-check %solver -parse-lhs-only -emit-lhs-dot %s > %t 2>&1
+; RUN: %souper-check -parse-lhs-only -emit-lhs-dot %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: digraph "Souper IR graph"  {

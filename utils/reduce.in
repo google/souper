@@ -18,14 +18,7 @@ use warnings;
 use strict;
 use File::Temp;
 
-my $usage = <<END;
-$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as
--stp-path=/path/to/stp
-END
-my $solver = $ENV{"SOUPER_SOLVER"};
-die $usage unless $solver;
-
-my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15 ${solver}";
+my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15";
 
 sub check ($) {
     (my $s) = @_;

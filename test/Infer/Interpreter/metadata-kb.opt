@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %souper-interpret %solver %s > %t 2>&1
+
+; RUN: %souper-interpret %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: KnownBits result:

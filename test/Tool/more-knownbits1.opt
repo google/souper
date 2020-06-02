@@ -1,6 +1,6 @@
-; REQUIRES: solver, solver-model
 
-; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t 2>&1
+
+; RUN: %souper-check -infer-rhs -print-replacement %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 ; Hex of 2147483648 is 0x80000000
 

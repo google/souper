@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-comps=fshr -S -o - | %FileCheck %s
+
+; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-infer-inst -souper-synthesis-comps=fshr -S -o - | %FileCheck %s
 
 define i32 @rotate(i32 %x, i32 %n) {
 ; CHECK: define i32 @rotate(i32 %x, i32 %n) {

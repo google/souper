@@ -1,9 +1,9 @@
-; REQUIRES: solver, solver-model
+
 
 ; Enumerative search does not support this test, the result is too expensive
 ; under the cost model
 
-; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-comps=and -souper-synthesis-ignore-cost %s > %t1
+; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-comps=and -souper-synthesis-ignore-cost %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK: result %2

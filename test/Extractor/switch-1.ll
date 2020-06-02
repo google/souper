@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-only-infer-iN=true %t
+; RUN: %souper -check -souper-only-infer-iN=true %t
 
 define zeroext i1 @foo(i32 %a, i32 %b) {
 entry:

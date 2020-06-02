@@ -1,7 +1,5 @@
-; REQUIRES: solver
-
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper -check %t
 
 define i1 @cmp_with_range(i8*, i8*) {
   %v1 = load i8, i8* %0, !range !0

@@ -1,5 +1,5 @@
-; REQUIRES: solver
-; RUN: %souper-check %solver %s | %FileCheck %s
+
+; RUN: %souper-check %s | %FileCheck %s
 ; CHECK: Invalid
 
 %0:i31 = var

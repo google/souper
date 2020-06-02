@@ -1,5 +1,3 @@
-// REQUIRES: solver
-
 // RUN: %clang -O2 -S -o - %s -emit-llvm | %FileCheck -check-prefix=TEST1 %s
 // TEST1: and i64 %x, 1
 

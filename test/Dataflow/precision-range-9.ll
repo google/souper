@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -infer-range %t > %t2 || true
+; RUN: %souper -infer-range %t > %t2 || true
 ; RUN: %FileCheck %s < %t2
 
 define i32 @foo(i32 %x3, i32 %x4, i32 %x1, i32 %x2, i64 %_phiinput) {

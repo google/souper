@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-only-infer-iN -souper-double-check %t
+; RUN: %souper -check -souper-only-infer-iN -souper-double-check %t
 
 define i16 @fn1a() {
   %s1 = add i16 0, 0, !expected !0

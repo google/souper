@@ -1,14 +1,14 @@
-; REQUIRES: solver
 
-; RUN: %souper-check %solver -print-replacement %s > %t1
+
+; RUN: %souper-check -print-replacement %s > %t1
 ; RUN: %FileCheck %s < %t1
 ; RUN: %parser-test < %t1
-; RUN: %souper-check %solver %t1 | %FileCheck %s
+; RUN: %souper-check %t1 | %FileCheck %s
 
-; RUN: %souper-check %solver -print-replacement-split %s > %t2
+; RUN: %souper-check -print-replacement-split %s > %t2
 ; RUN: %FileCheck %s < %t2
 ; RUN: %parser-test < %t2
-; RUN: %souper-check %solver %t2 | %FileCheck %s
+; RUN: %souper-check %t2 | %FileCheck %s
 
 ; CHECK: LGTM
 

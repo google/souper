@@ -1,6 +1,4 @@
-// REQUIRES: solver
-
-// RUN: SOUPER_SOLVER=%solver SOUPER_NO_EXTERNAL_CACHE=1 %sclang -O %s -o %t
+// RUN: SOUPER_NO_EXTERNAL_CACHE=1 %sclang -O %s -o %t
 
 // RUN: %t | %FileCheck %s
 // CHECK: checksum = 3

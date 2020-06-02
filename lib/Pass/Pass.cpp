@@ -39,7 +39,7 @@
 #include "souper/KVStore/KVStore.h"
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Codegen/Codegen.h"
-#include "souper/Tool/GetSolverFromArgs.h"
+#include "souper/Tool/GetSolver.h"
 #include "souper/Tool/CandidateMapUtils.h"
 #include "set"
 

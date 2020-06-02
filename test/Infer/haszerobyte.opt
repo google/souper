@@ -1,5 +1,5 @@
-; REQUIRES: solver
-; RUN: %souper-check %solver %s | %FileCheck %s
+
+; RUN: %souper-check %s | %FileCheck %s
 ; CHECK: LGTM
 
 ; !((v & 0xff) && (v & 0xff00) && (v & 0xff0000) && (v & 0xff000000))

@@ -18,7 +18,7 @@
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Parser/Parser.h"
-#include "souper/Tool/GetSolverFromArgs.h"
+#include "souper/Tool/GetSolver.h"
 #include "souper/Util/LLVMUtils.h"
 
 using namespace llvm;

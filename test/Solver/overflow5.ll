@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper -check %t
 
 ; Function Attrs: nounwind readnone
 declare { i32, i1 } @llvm.uadd.with.overflow.i32(i32, i32) #1

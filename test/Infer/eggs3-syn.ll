@@ -1,7 +1,7 @@
-; REQUIRES: solver, solver-model
+
 
 ; RUN: %llvm-as -o %t1 %s
-; RUN: %souper %solver -souper-enumerative-synthesis-max-instructions=0 -souper-double-check %t1 | %FileCheck %s
+; RUN: %souper -souper-enumerative-synthesis-max-instructions=0 -souper-double-check %t1 | %FileCheck %s
 
 ; CHECK: cand %12 301:i10
 

@@ -93,6 +93,7 @@ endif()
 include_directories(include third_party/klee/include)
 include_directories(include "${ALIVE_DIR}")
 include_directories(include "${ALIVE_DIR}/alive2")
+include_directories(include "${CMAKE_BINARY_DIR}/include")
 
 set(KLEE_EXPR_FILES
   third_party/klee/lib/Expr/Constraints.cpp
@@ -154,7 +155,7 @@ find_program(Z3
   third_party/z3-install/bin
   NO_DEFAULT_PATH)
 
-set(TEST_SOLVER "-z3-path=${Z3}")
+set(SOUPER_SOLVER ${Z3})
 
 set(SOUPER_CLANG_TOOL_FILES
   lib/ClangTool/Actions.cpp
@@ -239,7 +240,7 @@ add_library(souperSMTLIB2 STATIC
 set(SOUPER_TOOL_FILES
   lib/Tool/CandidateMapUtils.cpp
   include/souper/Tool/CandidateMapUtils.h
-  include/souper/Tool/GetSolverFromArgs.h
+  include/souper/Tool/GetSolver.h.in
 )
 
 add_library(souperTool STATIC
@@ -439,6 +440,7 @@ configure_file(${CMAKE_SOURCE_DIR}/utils/cache_dfa.in ${CMAKE_BINARY_DIR}/cache_
 configure_file(${CMAKE_SOURCE_DIR}/utils/cache_import.in ${CMAKE_BINARY_DIR}/cache_import @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/utils/cache_infer.in ${CMAKE_BINARY_DIR}/cache_infer @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/utils/py_souper2llvm.in ${CMAKE_BINARY_DIR}/py_souper2llvm @ONLY)
+configure_file(${CMAKE_SOURCE_DIR}/include/souper/Tool/GetSolver.h.in ${CMAKE_BINARY_DIR}/include/souper/Tool/GetSolver.h @ONLY)
 
 if (BUILD_CLANG_TOOL)
   configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang @ONLY)

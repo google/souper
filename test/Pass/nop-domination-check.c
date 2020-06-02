@@ -1,6 +1,4 @@
-; REQUIRES: solver
-
-; RUN: env SOUPER_NO_EXTERNAL_CACHE=1 SOUPER_INFER_NOP=1 SOUPER_SOLVER=%solver %sclang -O2 -c -mllvm -stats -o - %s 2>&1 | %FileCheck %s
+; RUN: env SOUPER_NO_EXTERNAL_CACHE=1 SOUPER_INFER_NOP=1 %sclang -O2 -c -mllvm -stats -o - %s 2>&1 | %FileCheck %s
 
 ; Reduced from SPEC CINT17 502.gcc_r/decNumber.c, this test will
 ; fail if domination check in Pass.cpp is disabled.

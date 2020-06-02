@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %llvm-as %s -o - | %souper %solver -souper-infer-inst -souper-synthesis-comps=fshr,const | %FileCheck %s
+
+; RUN: %llvm-as %s -o - | %souper -souper-infer-inst -souper-synthesis-comps=fshr,const | %FileCheck %s
 
 ; XFAIL: *
 ; FIXME: does not seem to try to reduce the constant.

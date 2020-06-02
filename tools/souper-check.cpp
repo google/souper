@@ -20,7 +20,7 @@
 #include "souper/Infer/Pruning.h"
 #include "souper/Inst/InstGraph.h"
 #include "souper/Parser/Parser.h"
-#include "souper/Tool/GetSolverFromArgs.h"
+#include "souper/Tool/GetSolver.h"
 #include "souper/Util/DfaUtils.h"
 
 using namespace llvm;

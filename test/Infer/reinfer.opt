@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %souper-check %solver -print-counterexample=false -reinfer-rhs %s > %t 2>&1
+
+; RUN: %souper-check -print-counterexample=false -reinfer-rhs %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 ; CHECK: no cost regression
 ; CHECK: no cost regression

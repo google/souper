@@ -33,10 +33,7 @@ $ cd /path/to/souper-build
 $ cmake -DCMAKE_BUILD_TYPE=$buildtype /path/to/souper
 ```
    Again, the build type is optional and defaults to Release. In any case it
-   must match the build type used when compiling the dependencies. If you want
-   to run Souper's full test suite, add this option to CMake (with the
-   appropriate solver and path to the solver executable):
-   -DTEST_SOLVER="-z3-path=/usr/bin/z3"
+   must match the build type used when compiling the dependencies.
 
 3. Run 'make' from the build directory.
 
@@ -89,7 +86,6 @@ $ /path/to/opt -load /path/to/libsouperPass.so -souper \
 
 Or use the drop-in compiler replacements sclang and sclang++:
 ```
-$ export SOUPER_SOLVER=-z3-path=/usr/bin/z3
 $ /path/to/configure CC=/path/to/sclang CXX=/path/to/sclang++
 $ make
 ```

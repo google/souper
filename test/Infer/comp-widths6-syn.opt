@@ -1,6 +1,6 @@
-; REQUIRES: solver, solver-model
 
-; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=select,add %s > %t1
+
+; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=select,add %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK:      %7:i64 = zext %1

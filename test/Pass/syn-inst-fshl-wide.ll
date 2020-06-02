@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-comps=fshl -S -o - | %FileCheck %s
+
+; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-infer-inst -souper-synthesis-comps=fshl -S -o - | %FileCheck %s
 
 define i32 @naive(i32 %a, i32 %b, i32 %c) {
 ; CHECK: define i32 @naive(i32 %a, i32 %b, i32 %c) {

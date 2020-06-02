@@ -1,4 +1,4 @@
-; REQUIRES: solver
+
 
 ; RUN: %opt -O2 -S -o - %s | %FileCheck -check-prefix=TEST1 %s
 ; TEST1: add i32 %in, 5

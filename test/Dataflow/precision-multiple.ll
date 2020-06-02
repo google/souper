@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -infer-range -infer-non-zero %t > %t2 || true
+; RUN: %souper -infer-range -infer-non-zero %t > %t2 || true
 ; RUN: %FileCheck %s < %t2
 
 define i8 @foo(i8 %x1, i64 %_phiinput) {

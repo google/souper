@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper -dce %solver -souper-infer-inst -souper-synthesis-comps=bitreverse -S -o - %s | %FileCheck %s \
+; RUN: %opt -load %pass -souper -dce -souper-infer-inst -souper-synthesis-comps=bitreverse -S -o - %s | %FileCheck %s \
 ; RUN: --implicit-check-not="shl i8" --implicit-check-not="and i8" --implicit-check-not="or i8" --implicit-check-not="lshr i8"
 
 ; Below LLVM IR is retrieved by compiling following C program:

@@ -105,9 +105,6 @@ SOUPER_SKIP_FILES -- Do not apply Souper (as if SOUPER_NO_SOUPER were
 set) to any of the comma-separated list of files found in the value of
 this variable.
 
-SOUPER_SOLVER -- The SAT solver for Souper to use, e.g.
--z3-path=/usr/bin/z3.
-
 SOUPER_STATIC_PROFILE -- During compilation, communicate with a running
 Redis instance in order to record the number of times each optimization
 was performed.
@@ -159,10 +156,6 @@ if (defined $bitcodedir && -d $bitcodedir && fork() == 0) {
     die "bailing, exec failed";
 }
 
-my $solver = getenv("SOUPER_SOLVER");
-die "$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as -stp-path=/path/to/stp"
-    unless defined $solver;
-
 my $souper = 1;
 # this environment variable is a comma-separated list of source files that
 # souper should avoid processing, for example because they trigger known bugs
@@ -183,7 +176,6 @@ $souper = 0 unless compiling();
 if ($souper) {
     push @ARGV, (
         "-Xclang", "-load",
-        "-mllvm", $solver,
         "-mllvm", "-solver-timeout=15",
         );
 }

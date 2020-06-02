@@ -1,6 +1,6 @@
-; REQUIRES: solver, solver-model, synthesis
+; REQUIRES: synthesis
 
-; RUN: %souper-check %solver -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=ule,and,xor,const %s > %t1
+; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=ule,and,xor,const %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK:      %5:i32 = {{(and|xor)}} %0, %1

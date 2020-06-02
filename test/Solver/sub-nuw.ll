@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-only-infer-i1 %t
+; RUN: %souper -check -souper-only-infer-i1 %t
 
 define i256 @foo(i256 %a, i256 %b) #0 {
 entry:

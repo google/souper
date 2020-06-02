@@ -1,6 +1,4 @@
-// REQUIRES: solver
-
-// RUN: SOUPER_SOLVER=%solver SOUPER_HARVEST_USES=1 SOUPER_NO_EXTERNAL_CACHE=1 %sclang -O %s -S -o - -emit-llvm 2>&1 | %FileCheck %s
+// RUN: SOUPER_HARVEST_USES=1 SOUPER_NO_EXTERNAL_CACHE=1 %sclang -O %s -S -o - -emit-llvm 2>&1 | %FileCheck %s
 
 int a(int x);
 int b(int x);

@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper %solver -souper-harvest-uses -S -o - %s | %FileCheck %s
+; RUN: %opt -load %pass -souper -souper-harvest-uses -S -o - %s | %FileCheck %s
 
 define i1 @fn1(i1) {
   %x = and i1 1, %0

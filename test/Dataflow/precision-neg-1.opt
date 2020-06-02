@@ -1,5 +1,5 @@
-; REQUIRES: solver
-; RUN: %souper-check %solver -infer-neg %s | %FileCheck %s
+
+; RUN: %souper-check -infer-neg %s | %FileCheck %s
 
 ; CHECK: negative from souper:   true
 

@@ -1,6 +1,6 @@
-; REQUIRES: solver, synthesis
+; REQUIRES: synthesis
 
-; RUN: %souper-check %solver -try-dataflow-pruning %s > %t 2>&1
+; RUN: %souper-check -try-dataflow-pruning %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: pruned using concrete interpreter!

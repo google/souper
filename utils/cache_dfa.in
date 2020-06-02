@@ -81,9 +81,6 @@ my @all_keys = $r->keys('*');
 
 print "; Inspecting ".scalar(@all_keys)." Redis values\n";
 
-my $solver = $ENV{"SOUPER_SOLVER"};
-die unless $solver;
-
 sub souper_known ($) {
     (my $opt) = @_;
     (my $fh, my $tmpfn) = File::Temp::tempfile();
@@ -103,7 +100,7 @@ sub souper_known ($) {
     } elsif ($SIGNBITS) {
         $arg = "-infer-sign-bits -solver-timeout=30";
     }
-    my $cmd = "${check} $solver $arg < $tmpfn 2>/dev/null |";
+    my $cmd = "${check} $arg < $tmpfn 2>/dev/null |";
     open INF, $cmd;
     my $k = "";
     while (my $line = <INF>) {

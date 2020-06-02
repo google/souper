@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %opt -load %pass -souper %solver -S -o - %s
+
+; RUN: %opt -load %pass -souper -S -o - %s
 
 @a = dso_local local_unnamed_addr global i32 0, align 4
 
