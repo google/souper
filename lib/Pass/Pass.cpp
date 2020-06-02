@@ -191,6 +191,21 @@ public:
   }
 
   bool runOnFunction(Function *F) {
+    std::string FunctionName;
+    if (F->hasLocalLinkage()) {
+      FunctionName =
+        (F->getParent()->getModuleIdentifier() + ":" + F->getName()).str();
+    } else {
+      FunctionName = F->getName();
+    }
+
+    if (DebugLevel > 1) {
+      errs() << "\n";
+      errs() << "; entering Souper's runOnFunction() for " << FunctionName << "()\n\n";
+      F->getParent()->dump();
+      errs() << "\n";
+    }
+
     InstContext IC;
     ExprBuilderContext EBC;
     std::map<Inst *, Value *> ReplacedValues;
@@ -210,21 +225,11 @@ public:
     TargetLibraryInfo* TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(*F);
     if (!TLI)
       report_fatal_error("getTLI() failed");
+
     FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, LVI, SE, TLI, IC, EBC);
 
-    std::string FunctionName;
-    if (F->hasLocalLinkage()) {
-      FunctionName =
-        (F->getParent()->getModuleIdentifier() + ":" + F->getName()).str();
-    } else {
-      FunctionName = F->getName();
-    }
-
-    if (DebugLevel > 1) {
-      errs() << "\n";
-      errs() << "; Listing all replacements for " << FunctionName << "\n";
-      errs() << "; Using solver: " << S->getName() << '\n';
-    }
+    if (DebugLevel > 3)
+      errs() << "; extracted candidates\n";
 
     CandidateMap CandMap;
     for (auto &B : CS.Blocks) {
@@ -240,7 +245,6 @@ public:
         AddToCandidateMap(CandMap, R);
       }
     }
-
 
     for (auto &Cand : CandMap) {
 
@@ -366,16 +370,24 @@ public:
         errs() << "\n";
       }
 
-      if (DebugLevel > 1)
+      if (DebugLevel > 1) {
         errs() << "#########################################################\n";
+        errs() << "; exiting Souper's runOnFunction() for " << FunctionName << "()\n";
+      }
 
       return true;
     }
 
+    if (DebugLevel > 1) {
+      errs() << "#########################################################\n";
+      errs() << "; exiting Souper's runOnFunction() for " << FunctionName << "()\n";
+    }
     return false;
   }
 
   bool runOnModule(Module &M) {
+    if (DebugLevel > 3)
+      errs() << "\nEntering the Souper pass's runOnModule()\n\n";
     bool Changed = false;
     // get the list first since the dynamic profiling adds functions as it goes
     std::vector<Function *> FL;
@@ -391,7 +403,8 @@ public:
       }
     }
     if (DebugLevel > 1)
-      errs() << "\nTotal of " << ReplacementsDone << " replacements done on this module\n";
+      errs() << "\nExiting the Souper pass's runOnModule() with "
+             << ReplacementsDone << " replacements\n";
     return Changed;
   }
 

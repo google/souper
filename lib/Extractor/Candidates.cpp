@@ -157,7 +157,7 @@ struct ExprBuilder {
   void addPC(BasicBlock *BB, BasicBlock *Pred, std::vector<InstMapping> &PCs);
   void addPathConditions(BlockPCs &BPCs, std::vector<InstMapping> &PCs,
                          std::unordered_set<Block *> &VisitedBlocks,
-                         BasicBlock *BB);
+                         BasicBlock *BB, int Depth);
   Inst *get(Value *V, APInt DemandedBits);
   Inst *get(Value *V);
   Inst *getFromUse(Value *V);
@@ -762,10 +762,12 @@ void ExprBuilder::addPC(BasicBlock *BB, BasicBlock *Pred,
 void ExprBuilder::addPathConditions(BlockPCs &BPCs,
                                     std::vector<InstMapping> &PCs,
                                     std::unordered_set<Block *> &VisitedBlocks,
-                                    BasicBlock *BB) {
+                                    BasicBlock *BB, int Depth) {
   if (auto Pred = BB->getSinglePredecessor()) {
-    addPathConditions(BPCs, PCs, VisitedBlocks, Pred);
-    addPC(BB, Pred, PCs);
+    if (Depth < 25) {
+      addPathConditions(BPCs, PCs, VisitedBlocks, Pred, Depth + 1);
+      addPC(BB, Pred, PCs);
+    }
   } else if (ExploitBPCs) {
     // BB is the entry of the function.
     if (pred_begin(BB) == pred_end(BB))
@@ -794,9 +796,8 @@ void ExprBuilder::addPathConditions(BlockPCs &BPCs,
     for (unsigned i = 0; i < BI.Preds.size(); ++i) {
       auto Pred = BI.Preds[i];
       std::vector<InstMapping> PCs;
-      if (Pred->getSinglePredecessor()) {
-        addPathConditions(BPCs, PCs, VisitedBlocks, Pred);
-      }
+      if (Pred->getSinglePredecessor())
+        addPathConditions(BPCs, PCs, VisitedBlocks, Pred, 0);
       // In case the predecessor is a br or switch instruction.
       addPC(BB, Pred, PCs);
       for (auto PC : PCs)
@@ -1026,7 +1027,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
     }
     if (!BCS->Replacements.empty()) {
       std::unordered_set<Block *> VisitedBlocks;
-      EB.addPathConditions(BCS->BPCs, BCS->PCs, VisitedBlocks, &BB);
+      EB.addPathConditions(BCS->BPCs, BCS->PCs, VisitedBlocks, &BB, 0);
 
       InstClasses Vars, BPCVars;
       auto PCSets = AddPCSets(BCS->PCs, Vars);

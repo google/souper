@@ -5,7 +5,7 @@
 
 ; Check that the souper pass dumps all replacements.
 
-; CHECK: Listing all replacements for foo
+; CHECK: entering Souper's runOnFunction() for foo()
 ; CHECK: 0:i1 = eq 1:i32, 1:i32
 define i1 @foo() {
 entry:
