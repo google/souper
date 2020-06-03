@@ -1,5 +1,5 @@
-; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 -souper-double-check %solver %s > %t1
+; REQUIRES: synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 -souper-double-check %s > %t1
 ; RUN: %FileCheck %s < %t1
 ; CHECK: select %2, 17:i32, 21:i32
 

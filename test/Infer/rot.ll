@@ -1,5 +1,5 @@
-; REQUIRES: solver
-; RUN: %llvm-as %s -o - | %souper %solver > %t1
+
+; RUN: %llvm-as %s -o - | %souper > %t1
 ; RUN: %FileCheck %s < %t1
 ; CHECK: cand %5 %0
 

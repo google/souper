@@ -1,5 +1,5 @@
-; REQUIRES: solver
-; RUN: %souper-check %solver -infer-range %s | %FileCheck %s
+
+; RUN: %souper-check -infer-range %s | %FileCheck %s
 
 ; CHECK: range from souper: [1,0)
 

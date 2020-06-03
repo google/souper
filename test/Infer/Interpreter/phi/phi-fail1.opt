@@ -1,4 +1,4 @@
-; RUN: %souper-interpret %solver -input-values=%0=8  %s > %t 2>&1 || true
+; RUN: %souper-interpret -input-values=%0=8  %s > %t 2>&1 || true
 ; RUN: %FileCheck -check-prefix=TEST1 %s < %t
 ; TEST1: Error: value '8' is to large for block %0
 

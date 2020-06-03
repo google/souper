@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -infer-sign-bits %t > %t2 || true
+; RUN: %souper -infer-sign-bits %t > %t2 || true
 ; RUN: %FileCheck %s < %t2
 
 define i32 @foo(i8 %x1, i8 %x2, i64 %_phiinput) {

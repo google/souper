@@ -1,6 +1,6 @@
-; REQUIRES: solver, solver-model
 
-; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t 2>&1
+
+; RUN: %souper-check -infer-rhs -print-replacement %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 ; CHECK:      %0:i16 = var (negative)
 ; CHECK-NEXT: %1:i32 = sext %0

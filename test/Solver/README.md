@@ -7,10 +7,9 @@ and adding `!1 = !{i1 1}` at the end of the file.
 
 Example:
 ```llvm
-; REQUIRES: solver
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-infer-iN=false %t
+; RUN: %souper -check -souper-infer-iN=false %t
 
 define i32 @foo(i32 %x) {
 entry:

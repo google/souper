@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper %solver -S -stats -o - %s 2>&1 | %FileCheck %s
+; RUN: %opt -load %pass -souper -S -stats -o - %s 2>&1 | %FileCheck %s
 
 ; CHECK: store i32 %cond.i
 

@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper -check %t
 
 ; Function Attrs: nounwind readnone
 declare { i8, i1 } @llvm.sadd.with.overflow.i8(i8, i8)

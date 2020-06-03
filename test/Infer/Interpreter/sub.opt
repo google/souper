@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %souper-interpret %solver -input-values=%0=30000,%1=1000 %s > %t 2>&1
+
+; RUN: %souper-interpret -input-values=%0=30000,%1=1000 %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: Value: 29000

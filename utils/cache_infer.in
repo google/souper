@@ -48,20 +48,13 @@ GetOptions(
     "verbose" => \$VERBOSE,
     ) or usage();
 
-my $need_solver = <<END;
-$0 requires the SOUPER_SOLVER environment variable to be defined, e.g. as
--stp-path=/path/to/stp
-END
-my $solver = $ENV{"SOUPER_SOLVER"};
-die $need_solver unless $solver;
-
 my $OPTS = "";
 
 $OPTS .= "-souper-synthesis-wiring-iterations=30 ";
 $OPTS .= "-souper-infer-inst ";
 $OPTS .= "-souper-synthesis-comps=mul,select,const,const,shl,lshr,ashr,and,or,xor,add,sub,slt,ult,sle,ule,eq,ne";
 
-my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15 ${solver}";
+my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15";
 
 my $r = Redis->new();
 $r->ping || die "no server?";

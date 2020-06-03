@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper %solver -souper-infer-inst -souper-synthesis-comps=add,const -S -o - %s | %FileCheck %s
+; RUN: %opt -load %pass -souper -souper-infer-inst -souper-synthesis-comps=add,const -S -o - %s | %FileCheck %s
 
 ; Investigation and improvement are needed. Current instruction synthesis can
 ; not optimization instruction with outside uses smartly. This case shows this

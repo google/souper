@@ -1,5 +1,5 @@
-; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-check-all-guesses %solver %s > %t1
+; REQUIRES: synthesis
+; RUN: %souper-check -infer-rhs -souper-check-all-guesses %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK: result %0

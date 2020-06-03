@@ -1,5 +1,5 @@
-; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 %solver %s > %t1
+; REQUIRES: synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; %20 is (ctpop %0), but due to the MaxCands bound in enumerative synthesis,

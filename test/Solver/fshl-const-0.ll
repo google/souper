@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-only-infer-i1 %t
+; RUN: %souper -check -souper-only-infer-i1 %t
 
 declare i8 @llvm.fshl.i8(i8, i8, i8) nounwind readnone
 

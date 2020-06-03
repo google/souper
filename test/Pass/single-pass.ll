@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %opt -load %pass -souper %solver -S -o - %s | %FileCheck %s
+
+; RUN: %opt -load %pass -souper -S -o - %s | %FileCheck %s
 
 ; CHECK-LABEL: @foo
 define i32 @foo(i32 %x) {

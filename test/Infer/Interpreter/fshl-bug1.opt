@@ -1,4 +1,4 @@
-; RUN: %souper-interpret %solver -input-values=%0=0,%1=0 %s > %t 2>&1
+; RUN: %souper-interpret -input-values=%0=0,%1=0 %s > %t 2>&1
 ; RUN: %FileCheck  %s < %t
 ; CHECK: Same precision
 

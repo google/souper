@@ -1,7 +1,5 @@
-; REQUIRES: solver
-
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check %t 2> %t2 || true
+; RUN: %souper -check %t 2> %t2 || true
 ; RUN: %FileCheck %s < %t2
 
 define i1 @cmp_with_range(i8*, i8*) {

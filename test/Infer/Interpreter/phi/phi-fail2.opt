@@ -1,4 +1,4 @@
-; RUN: %souper-interpret %solver -input-values=%0=0,%0=1  %s > %t 2>&1 || true
+; RUN: %souper-interpret -input-values=%0=0,%0=1  %s > %t 2>&1 || true
 ; RUN: %FileCheck -check-prefix=TEST1 %s < %t
 ; TEST1: Error: duplicate value for %0
 

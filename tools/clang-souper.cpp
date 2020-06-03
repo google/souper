@@ -27,7 +27,7 @@
 #include "llvm/Support/Signals.h"
 #include "souper/ClangTool/Actions.h"
 #include "souper/Tool/CandidateMapUtils.h"
-#include "souper/Tool/GetSolverFromArgs.h"
+#include "souper/Tool/GetSolver.h"
 #include <system_error>
 
 using namespace clang;

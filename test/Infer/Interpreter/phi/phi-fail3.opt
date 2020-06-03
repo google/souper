@@ -1,4 +1,4 @@
-; RUN: %souper-interpret %solver  %s > %t 2>&1 || true
+; RUN: %souper-interpret  %s > %t 2>&1 || true
 ; RUN: %FileCheck -check-prefix=TEST1 %s < %t
 ; TEST1: Interpreter can't find an input for block, exiting
 

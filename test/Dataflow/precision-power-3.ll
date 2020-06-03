@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -infer-power-two %t > %t2 || true
+; RUN: %souper -infer-power-two %t > %t2 || true
 ; RUN: %FileCheck %s < %t2
 
 define i8 @foo(i32 %x1, i64 %_phiinput) {

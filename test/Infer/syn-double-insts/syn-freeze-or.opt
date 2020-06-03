@@ -1,5 +1,5 @@
-; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-use-alive -souper-enumerative-synthesis-max-instructions=2 -souper-dataflow-pruning %solver %s > %t1
+; REQUIRES: synthesis
+; RUN: %souper-check -infer-rhs -souper-use-alive -souper-enumerative-synthesis-max-instructions=2 -souper-dataflow-pruning %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; synthesis freeze

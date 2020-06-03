@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -infer-non-zero %t > %t2 || true
+; RUN: %souper -infer-non-zero %t > %t2 || true
 ; RUN: %FileCheck %s < %t2
 
 

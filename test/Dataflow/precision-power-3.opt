@@ -1,5 +1,5 @@
-; REQUIRES: solver
-; RUN: %souper-check %solver -infer-power-two %s | %FileCheck %s
+
+; RUN: %souper-check -infer-power-two %s | %FileCheck %s
 
 ; CHECK: powerOfTwo from souper:   true
 

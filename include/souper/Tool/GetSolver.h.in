@@ -24,9 +24,7 @@
 
 namespace souper {
 
-static llvm::cl::opt<std::string> Z3Path(
-    "z3-path", llvm::cl::desc("Path to Z3 executable"), llvm::cl::init(""),
-    llvm::cl::value_desc("path"));
+static std::string Z3Path = "@SOUPER_SOLVER@";
 
 static llvm::cl::opt<bool> KeepSolverInputs(
     "keep-solver-inputs", llvm::cl::desc("Do not clean up solver inputs"),

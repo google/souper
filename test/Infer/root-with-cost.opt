@@ -1,6 +1,6 @@
-; REQUIRES: solver, synthesis
-; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=3 %solver %s > %t1
-; RUN: %souper-check -infer-rhs %solver %s > %t2
+; REQUIRES: synthesis
+; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=3 %s > %t1
+; RUN: %souper-check -infer-rhs %s > %t2
 ; RUN: %FileCheck %s < %t1
 ; RUN: %FileCheck %s < %t2
 

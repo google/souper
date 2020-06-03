@@ -1,4 +1,4 @@
-; REQUIRES: solver
+
 
 ; RUN: %opt -O2 -S -o - %s | %FileCheck -check-prefix=TEST1 %s
 ; TEST1: %c = xor i40 %c.demorgan, -1

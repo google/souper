@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper -check %t
 
 define i32 @fn1(i32 %a) #0 {
 entry:

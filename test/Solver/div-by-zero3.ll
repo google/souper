@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-only-infer-i1 -souper-double-check %t
+; RUN: %souper -check -souper-only-infer-i1 -souper-double-check %t
 
 define void @fn1() {
 entry:

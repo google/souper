@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check -souper-only-infer-i1=true %t
+; RUN: %souper -check -souper-only-infer-i1=true %t
 
 declare i32 @llvm.ctlz.i32(i32) nounwind readnone
 declare i32 @llvm.cttz.i32(i32) nounwind readnone

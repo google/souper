@@ -1,5 +1,5 @@
-; REQUIRES: solver
-; RUN: %souper-check %solver -infer-sign-bits %s | %FileCheck %s
+
+; RUN: %souper-check -infer-sign-bits %s | %FileCheck %s
 
 ; CHECK: signBits from souper:   16
 

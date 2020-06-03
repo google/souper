@@ -27,7 +27,7 @@
 #include "souper/Extractor/Candidates.h"
 #include "souper/SMTLIB2/Solver.h"
 #include "souper/Tool/CandidateMapUtils.h"
-#include "souper/Tool/GetSolverFromArgs.h"
+#include "souper/Tool/GetSolver.h"
 #include <iostream>
 
 using namespace llvm;

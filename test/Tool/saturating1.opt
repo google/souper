@@ -1,6 +1,6 @@
-; REQUIRES: solver
 
-; RUN: %souper-check %solver -infer-rhs -print-replacement %s > %t1
+
+; RUN: %souper-check -infer-rhs -print-replacement %s > %t1
 ; RUN: %FileCheck %s -check-prefix=SUCCESS < %t1
 
 ; SUCCESS: RHS inferred successfully

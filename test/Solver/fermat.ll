@@ -1,7 +1,7 @@
-; REQUIRES: solver
+
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper %solver -check %t
+; RUN: %souper -check %t
 
 define i1 @fermat(i20 %a, i20 %b, i20 %c) #0 {
 entry:

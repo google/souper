@@ -1,6 +1,6 @@
-; REQUIRES: solver, synthesis
+; REQUIRES: synthesis
 
-; RUN: %souper-check %solver -infer-const -souper-constant-synthesis-use-concrete-interpreter %s > %t
+; RUN: %souper-check -infer-const -souper-constant-synthesis-use-concrete-interpreter %s > %t
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: add 2:i8, %0
