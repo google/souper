@@ -24,8 +24,16 @@
 
 namespace souper {
 
-static std::string Z3Path = "@SOUPER_SOLVER@";
+static std::string Z3Path = "@Z3@";
 
+#if 0
+constexpr bool strings_equal(char const * a, char const * b) {
+    return *a == *b && (*a == '\0' || strings_equal(a + 1, b + 1));
+}
+
+static_assert(!strings_equal(Z3Path, ""), "strings are not equal");
+#endif
+ 
 static llvm::cl::opt<bool> KeepSolverInputs(
     "keep-solver-inputs", llvm::cl::desc("Do not clean up solver inputs"),
     llvm::cl::init(false));
