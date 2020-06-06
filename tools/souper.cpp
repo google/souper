@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
   }
 
   KVStore *KV = 0;
-  std::unique_ptr<Solver> S = GetSolverFromArgs(KV);
+  std::unique_ptr<Solver> S = GetSolver(KV);
 
   InstContext IC;
   ExprBuilderContext EBC;

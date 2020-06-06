@@ -101,11 +101,9 @@ struct SouperPass : public ModulePass {
 public:
   SouperPass() : ModulePass(ID) {
     if (!S) {
-      S = GetSolverFromArgs(KV);
+      S = GetSolver(KV);
       if (StaticProfile && !KV)
         KV = new KVStore;
-      if (!S)
-        report_fatal_error("Souper requires a solver to be specified");
     }
   }
 

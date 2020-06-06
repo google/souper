@@ -278,11 +278,7 @@ int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
   KVStore *KV = 0;
   std::unique_ptr<Solver> S = 0;
-  S = GetSolverFromArgs(KV);
-  if (!S) {
-    llvm::errs() << "Specify a solver\n";
-    return 1;
-  }
+  S = GetSolver(KV);
 
   auto MB = MemoryBuffer::getFileOrSTDIN(InputFilename);
   if (!MB) {

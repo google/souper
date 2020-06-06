@@ -52,6 +52,6 @@ int main(int argc, const char **argv) {
   Tool.run(Factory.get());
 
   KVStore *KV = 0;
-  std::unique_ptr<Solver> S = GetSolverFromArgs(KV);
+  std::unique_ptr<Solver> S = GetSolver(KV);
   return SolveCandidateMap(llvm::outs(), CandMap, S.get(), IC, 0) ? 0 : 1;
 }

@@ -361,14 +361,10 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
   KVStore *KV = 0;
+
   std::unique_ptr<Solver> S = 0;
-  if (!ParseOnly && !ParseLHSOnly) {
-    S = GetSolverFromArgs(KV);
-    if (!S) {
-      llvm::errs() << "Specify a solver\n";
-      return 1;
-    }
-  }
+  if (!ParseOnly && !ParseLHSOnly)
+    S = GetSolver(KV);
 
   auto MB = MemoryBuffer::getFileOrSTDIN(InputFilename);
   if (!MB) {
