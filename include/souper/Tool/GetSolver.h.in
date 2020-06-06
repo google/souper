@@ -12,40 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SOUPER_TOOL_GETSOLVERFROMARGS_H
-#define SOUPER_TOOL_GETSOLVERFROMARGS_H
+#ifndef SOUPER_TOOL_GETSOLVER_H
+#define SOUPER_TOOL_GETSOLVER_H
 
 #include "llvm/Support/CommandLine.h"
 #include "souper/Extractor/Solver.h"
 #include "souper/KVStore/KVStore.h"
 #include "souper/SMTLIB2/Solver.h"
+#include <unistd.h>
 #include <memory>
 #include <string>
 
 namespace souper {
 
-static std::string Z3Path = "@Z3@";
+static constexpr const char *Z3Path = "@Z3@";
+static_assert(Z3Path[0] != 0 && Z3Path[0] != '@',
+              "CMake does not seem to have rewritten the solver path correctly");
 
-#if 0
-constexpr bool strings_equal(char const * a, char const * b) {
-    return *a == *b && (*a == '\0' || strings_equal(a + 1, b + 1));
-}
-
-static_assert(!strings_equal(Z3Path, ""), "strings are not equal");
-#endif
- 
 static llvm::cl::opt<bool> KeepSolverInputs(
     "keep-solver-inputs", llvm::cl::desc("Do not clean up solver inputs"),
     llvm::cl::init(false));
-
-static std::unique_ptr<SMTLIBSolver> GetUnderlyingSolverFromArgs() {
-  if (!Z3Path.empty()) {
-    return createZ3Solver(makeExternalSolverProgram(Z3Path),
-                          KeepSolverInputs);
-  } else {
-    return nullptr;
-  }
-}
 
 static llvm::cl::opt<bool> MemCache(
   "souper-internal-cache",
@@ -62,8 +48,20 @@ static llvm::cl::opt<int> SolverTimeout(
   llvm::cl::desc("Solver timeout in seconds (default=no timeout)"),
   llvm::cl::init(0));
 
-static std::unique_ptr<Solver> GetSolverFromArgs(KVStore *&KV) {
-  std::unique_ptr<SMTLIBSolver> US = GetUnderlyingSolverFromArgs();
+static bool exists_and_executable(const char *fn) {
+  return access(fn, X_OK) != -1;
+}
+
+static std::unique_ptr<SMTLIBSolver> GetUnderlyingSolver() {
+  std::string Z3PathStr(Z3Path);
+  if (!exists_and_executable(Z3Path))
+    llvm::report_fatal_error("Solver '" + Z3PathStr + "' does not exist or is not executable");
+  return createZ3Solver(makeExternalSolverProgram(Z3PathStr),
+                        KeepSolverInputs);
+}
+
+static std::unique_ptr<Solver> GetSolver(KVStore *&KV) {
+  std::unique_ptr<SMTLIBSolver> US = GetUnderlyingSolver();
   if (!US) return NULL;
   std::unique_ptr<Solver> S = createBaseSolver (std::move(US), SolverTimeout);
   if (ExternalCache) {
@@ -78,4 +76,4 @@ static std::unique_ptr<Solver> GetSolverFromArgs(KVStore *&KV) {
 
 }
 
-#endif  // SOUPER_TOOL_GETSOLVERFROMARGS_H
+#endif  // SOUPER_TOOL_GETSOLVER_H
