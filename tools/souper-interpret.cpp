@@ -24,6 +24,15 @@
 using namespace llvm;
 using namespace souper;
 
+unsigned DebugLevel;
+
+static cl::opt<unsigned, /*ExternalStorage=*/true>
+DebugFlagParser("souper-debug-level",
+     cl::desc("Control the verbose level of debug output (default=1). "
+     "The larger the number is, the more fine-grained debug "
+     "information will be printed."),
+     cl::location(DebugLevel), cl::init(1));
+
 static cl::list<std::string>
 InputValueStrings("input-values", cl::desc("<input values>"),
                   cl::CommaSeparated);
@@ -31,11 +40,6 @@ InputValueStrings("input-values", cl::desc("<input values>"),
 static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input souper optimization>"),
               cl::init("-"));
-
-static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::init(1),
-     cl::desc("Control the verbose level of debug output (default=1). "
-     "The larger the number is, the more fine-grained debug "
-     "information will be printed."));
 
 namespace {
   enum class CompareDataflowResult {

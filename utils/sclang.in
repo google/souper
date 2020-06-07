@@ -76,9 +76,6 @@ synthesizer.
 SOUPER_ENUMERATIVE_SYNTHESIS_NUM_INSTS -- Number of instructions for
 EnumerativeSynthesis synthesizer.
 
-SOUPER_ENUMERATIVE_SYNTHESIS_DEBUG -- Debug level for
-EnumerativeSynthesis synthesizer.
-
 SOUPER_DATAFLOW_PRUNING -- Enable dataflow pruning. This only makes sense
 when EnumerativeSynthesis is enabled.
 
@@ -117,6 +114,10 @@ SOUPER_DISABLE_LLVM_PEEPHOLES -- Disable the invocation of llvm peephole
 transformations in compilation.
 
 SOUPER_STATS -- Ask LLVM to print statistics.
+
+SOUPER_TIME_REPORT -- Ask LLVM to print a time report for passes
+
+SOUPER_VERIFY -- Run the module verifier before and after Souper runs
 
 EOF
         exit(-1);
@@ -239,10 +240,6 @@ if (getenv("SOUPER_ENUMERATIVE_SYNTHESIS_MAX_INSTS") && $souper) {
     push @ARGV, ("-mllvm", "-souper-enumerative-synthesis-max-instructions=".$ENV{"SOUPER_ENUMERATIVE_SYNTHESIS_MAX_INSTS"});
 }
 
-if (getenv("SOUPER_ENUMERATIVE_SYNTHESIS_DEBUG") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-enumerative-synthesis-debug-level=".$ENV{"SOUPER_ENUMERATIVE_SYNTHESIS_DEBUG"});
-}
-
 if (getenv("SOUPER_DATAFLOW_PRUNING") && $souper) {
     push @ARGV, ("-mllvm", "-souper-dataflow-pruning");
 }
@@ -253,6 +250,14 @@ if (getenv("SOUPER_REDIS_PORT") && $souper) {
 
 if (getenv("SOUPER_STATS") && $souper) {
     push @ARGV, ("-mllvm", "-stats");
+}
+
+if (getenv("SOUPER_TIME_REPORT") && $souper) {
+    push @ARGV, ("-ftime-report");
+}
+
+if (getenv("SOUPER_VERIFY_IR") && $souper) {
+    push @ARGV, ("-mllvm", "-souper-verify");
 }
 
 if (getenv("SOUPER_NO_HARVEST_DATAFLOW_FACTS") && $souper) {

@@ -28,7 +28,7 @@ static const unsigned MaxTries = 30;
 static const unsigned MaxInputSpecializationTries = 2;
 
 bool UseAlive;
-unsigned DebugLevel;
+extern unsigned DebugLevel;
 
 using namespace souper;
 using namespace llvm;
@@ -64,12 +64,6 @@ static const std::vector<Inst::Kind> TernaryOperators = {
 };
 
 namespace {
-  static cl::opt<unsigned, /*ExternalStorage=*/true>
-    DebugFlagParser("souper-enumerative-synthesis-debug-level",
-    cl::desc("Synthesis debug level (default=0). "
-    "The larger the number is, the more fine-grained debug "
-    "information will be printed"),
-    cl::Hidden, cl::location(DebugLevel), cl::init(0));
   static cl::opt<unsigned> MaxNumInstructions("souper-enumerative-synthesis-max-instructions",
     cl::desc("Maximum number of instructions to synthesize (default=0)."),
     cl::init(0));

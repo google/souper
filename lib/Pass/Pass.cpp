@@ -30,6 +30,7 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Scalar/DCE.h"
@@ -49,16 +50,22 @@ STATISTIC(DominanceCheckFailed, "Number of failed replacement due to dominance c
 using namespace souper;
 using namespace llvm;
 
+unsigned DebugLevel;
+
 namespace {
 std::unique_ptr<Solver> S;
 unsigned ReplacementIdx, ReplacementsDone;
 KVStore *KV;
 
-static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
-     cl::init(1),
+static cl::opt<unsigned, /*ExternalStorage=*/true>
+DebugFlagParser("souper-debug-level",
      cl::desc("Control the verbose level of debug output (default=1). "
      "The larger the number is, the more fine-grained debug "
-     "information will be printed."));
+     "information will be printed."),
+     cl::location(DebugLevel), cl::init(1));
+
+static cl::opt<bool> Verify("souper-verify", cl::init(false),
+    cl::desc("Verify the module before and after Souper (default=false)"));
 
 static cl::opt<bool> DynamicProfile("souper-dynamic-profile", cl::init(false),
     cl::desc("Dynamic profiling of Souper optimizations (default=false)"));
@@ -232,11 +239,11 @@ public:
     CandidateMap CandMap;
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
-        if (DebugLevel > 3) {
+        if (DebugLevel > 4) {
           errs() << "\n; *****";
           errs() << "\n; For LLVM instruction:\n;";
           R.Origin->print(errs());
-          errs() << "\n; Generating replacement:\n";
+          errs() << "\n; Looking for a replacement for:\n";
           ReplacementContext Context;
           PrintReplacementLHS(errs(), R.BPCs, R.PCs, R.Mapping.LHS, Context);
         }
@@ -386,6 +393,8 @@ public:
   bool runOnModule(Module &M) {
     if (DebugLevel > 3)
       errs() << "\nEntering the Souper pass's runOnModule()\n\n";
+    if (Verify && verifyModule(M, &errs()))
+      llvm::report_fatal_error("module broken before Souper");
     bool Changed = false;
     // get the list first since the dynamic profiling adds functions as it goes
     std::vector<Function *> FL;
@@ -400,6 +409,8 @@ public:
           errs() << "rescanning function after transformation was applied\n";
       }
     }
+    if (Verify && verifyModule(M, &errs()))
+      llvm::report_fatal_error("module broken after (and probably by) Souper");
     if (DebugLevel > 1)
       errs() << "\nExiting the Souper pass's runOnModule() with "
              << ReplacementsDone << " replacements\n";
