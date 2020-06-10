@@ -24,6 +24,8 @@
 using namespace llvm;
 using namespace souper;
 
+unsigned DebugLevel;
+
 LLVMContext C;
 
 struct ExtractorTest : testing::Test {

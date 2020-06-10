@@ -74,12 +74,9 @@ llvm_installdir=$(pwd)/third_party/llvm-${llvm_build_type}-install
 mkdir -p $llvm_srcdir
 (cd $llvm_srcdir && git init && git remote add origin $llvm_repo && git fetch origin $llvm_commit && git reset --hard FETCH_HEAD)
 
-# Disable the broken select -> logic optimizations
-git -C ${llvm_srcdir} apply $(pwd)/patches/0002-disable-instcombine-select-to-logic.patch
-
 mkdir -p $llvm_builddir
 
-cmake_flags="-DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=TRUE -DLLVM_FORCE_ENABLE_STATS=TRUE -DCMAKE_BUILD_TYPE=$llvm_build_type -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_PROJECTS='llvm;clang;compiler-rt'"
+cmake_flags="-DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_FORCE_ENABLE_STATS=ON -DCMAKE_BUILD_TYPE=$llvm_build_type -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_PROJECTS='llvm;clang;compiler-rt'"
 
 if [ -n "`which ninja`" ] ; then
   (cd $llvm_builddir && cmake ${llvm_srcdir}/llvm -G Ninja $cmake_flags "$@")

@@ -31,6 +31,7 @@ namespace {
     cl::desc("Maximum number of input specializations in constant synthesis (default=15)."),
     cl::init(15));
 }
+
 namespace souper {
 
 Inst *getUBConstraint(Inst::Kind K, unsigned OpNum, Inst *C,

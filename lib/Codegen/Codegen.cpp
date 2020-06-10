@@ -31,6 +31,8 @@ STATISTIC(DominanceCheckFailed,
 
 using namespace llvm;
 
+extern unsigned DebugLevel;
+
 namespace souper {
 
 llvm::Type *Codegen::GetInstReturnType(llvm::LLVMContext &Context, Inst *I) {
@@ -79,12 +81,16 @@ llvm::Value *Codegen::getValue(Inst *I) {
           ++InstructionReplaced;
           return V;
         } else {
+	  if (DebugLevel > 2)
+	    llvm::errs() << "dominance check failed\n";
           ++DominanceCheckFailed;
         }
       } else {
         report_fatal_error("Unhandled LLVM instruction in getValue()");
       }
     }
+    if (DebugLevel > 2)
+      llvm::errs() << "returning nullptr from getValue()\n";
     return nullptr;
   }
 

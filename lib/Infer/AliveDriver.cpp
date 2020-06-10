@@ -38,6 +38,10 @@ static llvm::cl::opt<bool> DisableUndefInput("alive-disable-undef-input",
   llvm::cl::desc("Assume inputs can not be undef (default = false)"),
   llvm::cl::init(false));
 
+static llvm::cl::opt<bool> SkipAliveSolver("alive-skip-solver",
+  llvm::cl::desc("Omit Alive solver calls for performance testing (default = false)"),
+  llvm::cl::init(false));
+
 class FunctionBuilder {
 public:
   FunctionBuilder(IR::Function &F_) : F(F_) {}
@@ -232,6 +236,9 @@ performCegisFirstQuery(tools::Transform &t,
     }
   }
 
+  if (SkipAliveSolver)
+    return SynthesisResult;
+
   // TODO: implement synthesis with refinement
   smt::Solver::check({{(Sv.first.value == Tv.first.value) && (TriedExpr),
           [&](const smt::Result &R) {
@@ -311,6 +318,9 @@ synthesizeConstantUsingSolver(tools::Transform &t,
     smt::expr::mkForAll(Vars, SrcRet.first.value == TgtRet.first.value);
 
   std::map<souper::Inst *, llvm::APInt> SynthesisResult;
+
+  if (SkipAliveSolver)
+    return SynthesisResult;
 
   smt::Solver::check({{preprocess(t, QVars, SrcRet.second,
                        std::move(SimpleConstExistsCheck)),
@@ -474,6 +484,9 @@ bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
   t.src = std::move(LHSF);
   t.tgt = std::move(RHSF);
   tools::TransformVerify tv(t, /*check_each_var=*/false);
+
+  if (SkipAliveSolver)
+    return false;
 
   if (auto errs = tv.verify()) {
     if (DebugLevel >= 1) {
@@ -780,6 +793,8 @@ bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
     Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
   }
   AliveDriver Verifier(LHS, Ante, IC);
+  if (SkipAliveSolver)
+    return false;
   return Verifier.verify(RHS, Ante);
 }
 

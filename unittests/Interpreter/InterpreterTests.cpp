@@ -32,6 +32,8 @@ namespace {
 
 }
 
+int DebugLevel;
+
 using namespace llvm;
 using namespace souper;
 
