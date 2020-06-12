@@ -76,14 +76,14 @@ mkdir -p $llvm_srcdir
 
 mkdir -p $llvm_builddir
 
-cmake_flags="-DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_FORCE_ENABLE_STATS=ON -DCMAKE_BUILD_TYPE=$llvm_build_type -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_PROJECTS='llvm;clang;compiler-rt'"
+cmake_flags="-DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_FORCE_ENABLE_STATS=ON -DCMAKE_BUILD_TYPE=$llvm_build_type -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_PROJECTS=\'llvm;clang;compiler-rt\'"
 
 if [ -n "`which ninja`" ] ; then
-  (cd $llvm_builddir && cmake ${llvm_srcdir}/llvm -G Ninja $cmake_flags "$@")
+  (cd $llvm_builddir && cmake ${llvm_srcdir}/llvm -G Ninja $cmake_flags -DCMAKE_CXX_FLAGS="-DDISABLE_WRONG_OPTIMIZATIONS_DEFAULT_VALUE=true -DDISABLE_PEEPHOLES_DEFAULT_VALUE=false" "$@")
   ninja -C $llvm_builddir
   ninja -C $llvm_builddir install
 else
-  (cd $llvm_builddir && cmake $cmake_flags "$@")
+  (cd $llvm_builddir && cmake $cmake_flags -DCMAKE_CXX_FLAGS="-DDISABLE_WRONG_OPTIMIZATIONS_DEFAULT_VALUE=true -DDISABLE_PEEPHOLES_DEFAULT_VALUE=false" "$@")
   make -C $llvm_builddir -j $ncpus
   make -C $llvm_builddir -j $ncpus install
 fi

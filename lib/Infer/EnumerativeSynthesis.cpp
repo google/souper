@@ -674,7 +674,6 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
 
   // find the valid one
   int GuessIndex = -1;
-  Inst *RHS;
 
   if (DebugLevel > 2) {
     llvm::errs() << "\n-------------------------------------------------\n";
@@ -694,6 +693,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       llvm::errs() << "Cost = " << souper::cost(I, /*IgnoreDepsWithExternalUses=*/true) << "\n";
     }
 
+    Inst *RHS = nullptr;
     std::set<Inst *> ConstSet;
     std::map <Inst *, llvm::APInt> ResultConstMap;
     souper::getConstants(I, ConstSet);
@@ -728,8 +728,13 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       }
     }
 
+    assert(RHS);
+
     if (DoubleCheckWithAlive) {
-      if (!isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
+      if (isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
+	if (DebugLevel > 3)
+	  llvm::errs() << "Transformation proved correct by alive.\n";
+      } else {
         llvm::errs() << "Transformation proved wrong by alive.\n";
         ReplacementContext RC;
         auto str = RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
@@ -742,7 +747,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
 
     // FIXME shrink constants properly, this is a placeholder where we
     // just see if we can replace every constant with zero
-    if (!ResultConstMap.empty() && DoubleCheckWithAlive) {
+    if (false && RHS && !ResultConstMap.empty() && DoubleCheckWithAlive) {
       std::map <Inst *, llvm::APInt> ZeroConstMap;
       for (auto it : ResultConstMap) {
         auto I = it.first;
@@ -757,9 +762,8 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
     
     if (RHS) {
       RHSs.emplace_back(RHS);
-      if (!SC.CheckAllGuesses) {
+      if (!SC.CheckAllGuesses)
         return EC;
-      }
       if (DebugLevel > 3) {
         llvm::outs() << "; result " << RHSs.size() << ":\n";
         ReplacementContext RC;
