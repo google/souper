@@ -73,7 +73,7 @@ those that fall within the range [SOUPER_FIRST_OPT
 SOUPER_INFER_INST -- Try to synthesis instructions with InstSynthesis
 synthesizer.
 
-SOUPER_ENUMERATIVE_SYNTHESIS_NUM_INSTS -- Number of instructions for
+SOUPER_ENUMERATIVE_SYNTHESIS_MAX_INSTS -- Number of instructions for
 EnumerativeSynthesis synthesizer.
 
 SOUPER_DATAFLOW_PRUNING -- Enable dataflow pruning. This only makes sense
@@ -256,7 +256,7 @@ if (getenv("SOUPER_TIME_REPORT") && $souper) {
     push @ARGV, ("-ftime-report");
 }
 
-if (getenv("SOUPER_VERIFY_IR") && $souper) {
+if (getenv("SOUPER_VERIFY") && $souper) {
     push @ARGV, ("-mllvm", "-souper-verify");
 }
 

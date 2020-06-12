@@ -399,6 +399,9 @@ add_custom_target(check
   DEPENDS extractor_tests inst_tests parser-test parser_tests profileRuntime souper souper-check souper-interpret souper2llvm souperPass souperPassProfileAll count-insts interpreter_tests
   USES_TERMINAL)
 
+# we want assertions even in release mode!
+string(REPLACE "-DNDEBUG" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
 find_program(GO_EXECUTABLE NAMES go DOC "go executable")
 if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
   add_executable(souperweb-backend
