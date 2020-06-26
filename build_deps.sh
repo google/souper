@@ -25,7 +25,7 @@ ncpus=$(command nproc 2>/dev/null || command sysctl -n hw.ncpu 2>/dev/null || ec
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
 llvm_repo=https://github.com/regehr/llvm-project.git
 # llvm_commit specifies the git branch or hash to checkout to
-llvm_commit=disable-peepholes
+llvm_commit=disable-peepholes-v03
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=92ad3f5f2f963ef5bd43f71a4137427bd6cce51b
