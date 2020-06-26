@@ -747,7 +747,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
 
     // FIXME shrink constants properly, this is a placeholder where we
     // just see if we can replace every constant with zero
-    if (false && RHS && !ResultConstMap.empty() && DoubleCheckWithAlive) {
+    if (RHS && !ResultConstMap.empty() && DoubleCheckWithAlive) {
       std::map <Inst *, llvm::APInt> ZeroConstMap;
       for (auto it : ResultConstMap) {
         auto I = it.first;
@@ -860,7 +860,7 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     EC = verify(SC, RHSs, Guesses);
   }
 
-  if (DebugLevel >= 1) {
+  if (DebugLevel > 1) {
     DataflowPruning.printStats(llvm::errs());
     llvm::errs() << "There are " << Guesses.size() << " Guesses\n";
   }
