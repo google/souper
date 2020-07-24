@@ -3,8 +3,8 @@
 ; RUN: %FileCheck %s < %t1
 
 ; JDR: I broke this and it's not clear how to fix and also we're
-  working on better ways to test pruning, so XFAILing for now and
-  Manasij can decide its fate later
+; working on better ways to test pruning, so XFAILing for now and
+; Manasij can decide its fate later
 
 ; XFAIL: *
 
@@ -30,4 +30,3 @@ infer %5
 ; CHECK: %2:i32 = mul 0:i32, %1
 ; CHECK: %3:i32 = var ; reservedconst_2
 ; CHECK: %4:i32 = select %0, %2, %3
-
