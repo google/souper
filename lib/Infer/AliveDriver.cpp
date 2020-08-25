@@ -52,6 +52,15 @@ public:
       (std::make_unique<IR::Freeze>(t, std::move(name), *toValue(t, a)));
   }
 
+  IR::Value *undef(IR::Type &t, std::string name) {
+    auto undef = std::make_unique<IR::UndefValue>(t);
+    auto undef_ptr = undef.get();
+    F.addUndef(std::move(undef));
+    return append
+      (std::make_unique<IR::UnaryOp>(t, std::move(name),
+        *undef_ptr, IR::UnaryOp::Copy));
+  }
+
   template <typename A, typename B, typename ...Others>
   IR::Value *binOp(IR::Type &t, std::string name, A a, B b,Others... others) {
     return append
@@ -510,6 +519,9 @@ bool souper::AliveDriver::translateRoot(const souper::Inst *I, const Inst *PC,
   if (PC && !translateAndCache(PC, F, ExprCache)) {
     return false;
   }
+
+  translateDemandedBits(I, F, ExprCache);
+
   FunctionBuilder Builder(F);
   if (PC) {
     auto Zero = Builder.val(getType(I->Width), llvm::APInt(I->Width, 0));
@@ -774,6 +786,25 @@ souper::AliveDriver::translateDataflowFacts(const souper::Inst* I,
     return true;
   } else {
     return false;
+  }
+}
+
+void
+souper::AliveDriver::translateDemandedBits(const souper::Inst* I,
+                     IR::Function& F,
+                     souper::AliveDriver::Cache& ExprCache) {
+  FunctionBuilder Builder(F);
+
+  auto DemandedBits = IsLHS ? I->DemandedBits : LHS->DemandedBits;
+
+  assert(DemandedBits.getBitWidth() == I-> Width && "Uninitialized DemandedBits");
+
+  if (!DemandedBits.isAllOnesValue()) {
+    auto DBMask = Builder.val(getType(I->Width), DemandedBits);
+
+    ExprCache[I] = Builder.binOp(getType(I->Width),
+                                 "%" + std::to_string(InstNumbers++), ExprCache[I],
+                                 DBMask, IR::BinOp::And);
   }
 }
 

@@ -1,5 +1,7 @@
 
 
+; RUN: %souper-check -souper-use-alive %s > %t 2>&1
+; RUN: %FileCheck %s < %t
 ; RUN: %souper-check %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
