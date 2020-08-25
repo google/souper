@@ -731,17 +731,24 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
     assert(RHS);
 
     if (DoubleCheckWithAlive) {
-      if (isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
-	if (DebugLevel > 3)
-	  llvm::errs() << "Transformation proved correct by alive.\n";
+      if (!SC.BPCs.empty()) {
+        if (DebugLevel > 1)
+          llvm::errs() << "WARNING: Alive double checking not supported with BlockPCs.\n";
       } else {
-        llvm::errs() << "Transformation proved wrong by alive.\n";
-        ReplacementContext RC;
-        auto str = RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
-        llvm::errs() << "infer " << str << "\n";
-        str = RC.printInst(RHS, llvm::errs(), /*printNames=*/true);
-        llvm::errs() << "result " << str << "\n";
-        RHS = nullptr;
+        if (isTransformationValid(SC.LHS, RHS, SC.PCs, SC.IC)) {
+          if (DebugLevel > 3)
+            llvm::errs() << "Transformation proved correct by alive.\n";
+        } else {
+          if (DebugLevel > 1) {
+            llvm::errs() << "Transformation proved wrong by alive.\n";
+            ReplacementContext RC;
+            auto str = RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
+            llvm::errs() << "infer " << str << "\n";
+            str = RC.printInst(RHS, llvm::errs(), /*printNames=*/true);
+            llvm::errs() << "result " << str << "\n";
+          }
+          RHS = nullptr;
+        }
       }
     }
 

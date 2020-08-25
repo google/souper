@@ -52,6 +52,15 @@ public:
       (std::make_unique<IR::Freeze>(t, std::move(name), *toValue(t, a)));
   }
 
+  IR::Value *undef(IR::Type &t, std::string name) {
+    auto undef = std::make_unique<IR::UndefValue>(t);
+    auto undef_ptr = undef.get();
+    F.addUndef(std::move(undef));
+    return append
+      (std::make_unique<IR::UnaryOp>(t, std::move(name),
+        *undef_ptr, IR::UnaryOp::Copy));
+  }
+
   template <typename A, typename B, typename ...Others>
   IR::Value *binOp(IR::Type &t, std::string name, A a, B b,Others... others) {
     return append
@@ -118,7 +127,7 @@ public:
   template <typename T>
   void assume(T &&V) {
     auto AI =
-      std::make_unique<IR::Assume>(*std::move(V), /*if_non_poison=*/ true);
+      std::make_unique<IR::Assume>(*std::move(V), /*if_non_poison=*/ false);
       //TODO: FIgure out whether if_non_poison can be uconditionally true
     F.getBB("").addInstr(std::move(AI));
   }
@@ -625,10 +634,33 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
 
     case souper::Inst::Phi: {
       if (I->Ops.size() != 1) {
-        assert(false && "Phi with muliple arguments unimplemented");
-        return false;
+        auto FreeVar =
+           Builder.freeze(getType(I->Width),
+                       "%" + std::to_string(InstNumbers++),
+           Builder.undef(getType(I->Width),
+                       "%" + std::to_string(InstNumbers++)));
+
+        auto PhiConstraint = Builder.iCmp(getType(1),
+             "%" + std::to_string(InstNumbers++),
+             IR::ICmp::EQ, FreeVar, ExprCache[I->Ops[0]]);
+
+        for (int i = 1; i < I->Ops.size(); ++i) {
+          auto Current = Builder.iCmp(getType(1),
+             "%" + std::to_string(InstNumbers++),
+             IR::ICmp::EQ, FreeVar, ExprCache[I->Ops[i]]);
+          PhiConstraint = Builder.binOp(getType(1),
+             "%" + std::to_string(InstNumbers++),
+             PhiConstraint, Current, IR::BinOp::Or);
+        }
+
+        //TODO: Add blockpc constraints
+
+        Builder.assume(PhiConstraint);
+
+        ExprCache[I] = FreeVar; // No longer a free var
+      } else {
+        ExprCache[I] = ExprCache[I->Ops[0]];
       }
-      ExprCache[I] = ExprCache[I->Ops[0]];
       return true;
     }
 
@@ -787,11 +819,16 @@ IR::Type &souper::AliveDriver::getType(int n) {
 bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
                                    const std::vector<InstMapping> &PCs,
                                    InstContext &IC) {
-  Inst *Ante = IC.getConst(llvm::APInt(1, true));
-  for (auto PC : PCs ) {
-    Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
-    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+
+  Inst *Ante = nullptr;
+  if (!PCs.empty()) {
+    Ante = IC.getConst(llvm::APInt(1, true));
+    for (auto PC : PCs ) {
+      Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+      Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+    }
   }
+
   AliveDriver Verifier(LHS, Ante, IC);
   if (SkipAliveSolver)
     return false;

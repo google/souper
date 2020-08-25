@@ -366,7 +366,7 @@ target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore
 target_link_libraries(count-insts souperParser)
 target_link_libraries(souper2llvm souperParser souperCodegen)
 target_link_libraries(extractor_tests souperExtractor souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
-target_link_libraries(inst_tests souperInfer souperInst souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
+target_link_libraries(inst_tests souperInfer souperPass souperInst souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(interpreter_tests souperInfer souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY})
 
