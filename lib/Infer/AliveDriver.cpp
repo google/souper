@@ -23,6 +23,7 @@
 #include <set>
 #include <sstream>
 #include <string_view>
+#include <unordered_set>
 #include <z3.h>
 
 extern unsigned DebugLevel;
@@ -351,18 +352,27 @@ synthesizeConstantUsingSolver(tools::Transform &t,
   return SynthesisResult;
 }
 
-souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_)
+souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_,
+                                 std::vector<Inst *> ExtraInputs)
     : LHS(LHS_), PreCondition(PreCondition_), IC(IC_) {
   IsLHS = true;
   InstNumbers = 101;
   //FIXME: Magic number. 101 is chosen arbitrarily.
   //This should go away once non-input variable names are not discarded
 
+  // If alive ever supports src and tgt with different number of arguments in future, this can go away.
+  for (auto Extra : ExtraInputs) {
+    if (!translateAndCache(Extra, LHSF, LExprCache)) {
+      llvm::report_fatal_error("Warning: Failed to translate extra input.\n");
+    }
+  }
+
   if (!translateRoot(LHS, PreCondition, LHSF, LExprCache)) {
     ReplacementContext RC;
     RC.printInst(LHS, llvm::outs(), true);
     llvm::report_fatal_error("Failed to translate LHS.\n");
   }
+
   if (DisableUndefInput) {
     util::config::disable_undef_input = true;
   }
@@ -583,6 +593,9 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
   for (auto &&Op : Ops) {
     if (!translateAndCache(Op, F, ExprCache)) {
       return false;
+    }
+    if (I->K == Inst::ExtractValue) {
+      break; // Break after translating main arg, idx is handled separately.
     }
   }
 
@@ -814,7 +827,114 @@ IR::Type &souper::AliveDriver::getType(int n) {
   }
   return *TypeCache[n];
 }
+namespace souper {
+void collectPhis(souper::Inst *I, std::map<souper::Block *, std::set<souper::Inst *>> &Phis) {
+  std::vector<Inst *> Stack{I};
+  std::unordered_set<Inst *> Visited;
+  while (!Stack.empty()) {
+    auto Current = Stack.back();
+    Stack.pop_back();
+    if (Current->K == Inst::Phi) {
+      Phis[Current->B].insert(Current);
+    }
+    Visited.insert(Current);
+    for (auto Child : Current->Ops) {
+      if (Visited.find(Child) == Visited.end()) {
+        Stack.push_back(Child);
+      }
+    }
+  }
+}
 
+struct RefinementProblem {
+  souper::Inst *LHS;
+  souper::Inst *RHS;
+  souper::Inst *Pre;
+
+  RefinementProblem ReplacePhi(souper::InstContext &IC, std::map<Block *, size_t> &Change) {
+    std::map<souper::Block *, std::set<souper::Inst *>> Phis;
+    collectPhis(LHS, Phis);
+    collectPhis(Pre, Phis);
+
+    if (Phis.empty()) {
+      return *this; // Base case, no more Phis
+    }
+
+    std::map<Inst *, Inst *> InstCache;
+    for (auto Pair : Phis) {
+      for (auto Phi : Pair.second) {
+        InstCache[Phi] = Phi->Ops[Change[Pair.first]];
+      }
+    }
+    std::map<Block *, Block *> BlockCache;
+    std::map<Inst *, llvm::APInt> ConstMap;
+    RefinementProblem Result;
+    Result.LHS = getInstCopy(LHS, IC, InstCache, BlockCache, &ConstMap, false);
+    Result.RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ConstMap, false);
+    Result.Pre = getInstCopy(Pre, IC, InstCache, BlockCache, &ConstMap, false);
+
+    // Recursively call ReplacePhi, because Result might have Phi`s
+    return Result.ReplacePhi(IC, Change);
+  }
+  bool operator == (const RefinementProblem &P) const {
+    return LHS == P.LHS && RHS == P.RHS && Pre == P.Pre;
+  }
+  struct Hash
+  {
+    std::size_t operator()(const RefinementProblem &P) const
+    {
+      return std::hash<Inst *>()(P.LHS)
+             ^ std::hash<Inst *>()(P.RHS) << 1
+             ^ std::hash<Inst *>()(P.Pre) << 2;
+    }
+  };
+
+};
+
+std::unordered_set<RefinementProblem, RefinementProblem::Hash>
+  explodePhis(InstContext &IC, RefinementProblem P) {
+  std::map<souper::Block *, std::set<souper::Inst *>> Phis;
+  collectPhis(P.LHS, Phis);
+  collectPhis(P.Pre, Phis);
+
+  if (Phis.empty()) {
+    return {P};
+  }
+
+  std::vector<Block *> Blocks;
+  for (auto &&Pair : Phis) {
+    Blocks.push_back(Pair.first);
+  }
+
+  std::vector<std::map<Block *, size_t>> ChangeList;
+
+  for (size_t i = 0; i < Blocks.size(); ++i) { // Each block
+    if (i == 0) {
+      for (size_t j = 0; j < Blocks[i]->Preds; ++j) {
+        ChangeList.push_back({{Blocks[i], j}});
+      }
+    } else {
+      std::vector<std::map<Block *, size_t>> NewChangeList;
+      for (size_t j = 0; j < Blocks[i]->Preds; ++j) {
+        for (auto Change : ChangeList) {
+          Change.insert({Blocks[i], j});
+          NewChangeList.push_back(Change);
+        }
+      }
+      std::swap(ChangeList, NewChangeList);
+    }
+  }
+
+  std::unordered_set<RefinementProblem, RefinementProblem::Hash> Result;
+
+  for (auto Change : ChangeList) {
+    Result.insert(P.ReplacePhi(IC, Change));
+  }
+
+  return Result;
+}
+
+}
 bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
                                    const std::vector<InstMapping> &PCs,
                                    InstContext &IC) {
@@ -823,10 +943,33 @@ bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
     Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
     Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
   }
-  AliveDriver Verifier(LHS, Ante, IC);
+
+  auto Goals = explodePhis(IC, {LHS, RHS, Ante});
+  // Alive2 and Souper have different PHI semantics.
+  // The current solution decomposes problems with PHI nodes into
+  // simpler problems without PHI.
+  // Example: f(x, y) = phi %block, %x, %y is decomposed into two functions:
+  // * f_1(x, y) = %x
+  // * f_2(x, y) = %y
+
   if (SkipAliveSolver)
     return false;
-  return Verifier.verify(RHS, Ante);
+  if (DebugLevel > 3)
+    llvm::errs() << "Number of sub-goals : " << Goals.size() << "\n";
+  for (auto Goal : Goals) {
+    if (DebugLevel > 3) {
+      llvm::errs() << "Goal:\n";
+      ReplacementContext RC;
+      RC.printInst(Goal.LHS, llvm::errs(), true);
+      llvm::errs() << "\n------\n";
+    }
+    std::vector<Inst *> Vars;
+    findVars(Goal.RHS, Vars);
+    AliveDriver Verifier(Goal.LHS, Goal.Pre, IC, Vars);
+    if (!Verifier.verify(Goal.RHS, Goal.Pre))
+      return false;
+  }
+  return true;
 }
 
 
