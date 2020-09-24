@@ -28,6 +28,8 @@
 using namespace llvm;
 using namespace souper;
 
+unsigned DebugLevel;
+
 extern "C" int boolector_main(int argc, char **argv);
 
 LLVMContext Context;
