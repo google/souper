@@ -1,0 +1,13 @@
+if [ "$OSTYPE" = "darwin19" ]
+then
+    export SHLIB_FLAGS="-L @LLVM_BINDIR@/../lib -Wl,-no_compact_unwind -l LLVM"
+    export SHLIB=funcs.dylib
+else
+    export SHLIB_FLAGS="-L @LLVM_BINDIR@/../lib -l LLVMSupport"
+    export SHLIB=funcs.so
+fi
+
+rm -f funcs.o funcs.so $SHLIB
+
+@LLVM_BINDIR@/clang++ -O1 -c funcs.cpp -I@LLVM_INCLUDEDIR@ -fpic &&
+@LLVM_BINDIR@/clang++ -shared $SHLIB_FLAGS funcs.o -o $SHLIB

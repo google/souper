@@ -1,0 +1,19 @@
+#!/usr/bin/perl -w
+
+use strict;
+use autodie;
+
+my $NICE = "nice -10";
+
+die "need numeric argument" unless scalar(@ARGV) == 1;
+my $N = $ARGV[0];
+
+for (my $i=0; $i<$N; $i++) {
+    mkdir("work$i") or die;
+}
+
+for (my $i=0; $i<$N; $i++) {
+    chdir("work$i") or die;
+    system("nohup $NICE ../gen_xfer.pl run 2000 &");
+    chdir("..") or die;
+}
