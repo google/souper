@@ -105,6 +105,12 @@ namespace souper {
     return {a.udiv(b)};
   }
 
+  EvalValue evaluateSDiv(llvm::APInt a, llvm::APInt b) {
+    if (b == 0 || (a.isMinSignedValue() && b == -1))
+      return EvalValue::ub();
+    return {a.sdiv(b)};
+  }
+
   EvalValue evaluateURem(llvm::APInt a, llvm::APInt b) {
     if (b == 0)
       return EvalValue::ub();

@@ -101,6 +101,7 @@ EvalValue evaluateSubNW(llvm::APInt A, llvm::APInt B);
 EvalValue evaluateMulNSW(llvm::APInt a, llvm::APInt b);
 EvalValue evaluateMulNUW(llvm::APInt a, llvm::APInt b);
 EvalValue evaluateMulNW(llvm::APInt a, llvm::APInt b);
+EvalValue evaluateSDiv(llvm::APInt A, llvm::APInt B);
 EvalValue evaluateUDiv(llvm::APInt A, llvm::APInt B);
 EvalValue evaluateURem(llvm::APInt A, llvm::APInt B);
 EvalValue evaluateShl(llvm::APInt A, llvm::APInt B);
