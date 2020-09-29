@@ -17,6 +17,7 @@
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "Verification.h"
 #include "InterpreterInfra.h"
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Interpreter.h"
@@ -255,4 +256,18 @@ int main(int argc, char *argv[]) {
 
   dlclose(handle);
 #endif
+
+//  // Verification stub
+//  z3::context ctx;
+//  KnownOneDomain KB0(ctx);
+//  KB0.Ops["and"] = std::make_unique<BinOp>(
+//   [](auto a, auto b){return a & b;}, // concrete
+//   [](auto a, auto b) {
+//     return ~a;
+//  }); // abstract
+
+//  for (int i = 1; i <= 64; ++i) {
+//   KB0.Verify("and", i);
+//   std::cout << "\n";
+//  }
 }
