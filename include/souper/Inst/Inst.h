@@ -256,7 +256,8 @@ public:
                   llvm::ConstantRange Range,
                   llvm::APInt Zero, llvm::APInt One,
                   bool NonZero, bool NonNegative, bool PowOfTwo,
-                  bool Negative, unsigned NumSignBits, unsigned SynthesisConstID);
+                  bool Negative, unsigned NumSignBits,
+                  llvm::APInt Demandedbits, unsigned SynthesisConstID);
   Block *createBlock(unsigned Preds);
 
   Inst *getPhi(Block *B, const std::vector<Inst *> &Ops);

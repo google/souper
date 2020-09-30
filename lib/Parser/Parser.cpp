@@ -1236,11 +1236,12 @@ bool Parser::parseLine(std::string &ErrStr) {
         Inst *I;
         if (IK == Inst::Var)
           I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
-                           NonNegative, PowOfTwo, Negative, SignBits, 0);
+                           NonNegative, PowOfTwo, Negative, SignBits,
+                           llvm::APInt::getAllOnesValue(InstWidth), 0);
         else if (IK == Inst::ReservedConst)
           I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
                            NonNegative, PowOfTwo, Negative, SignBits,
-                           ++ReservedConstCounter);
+                           llvm::APInt::getAllOnesValue(InstWidth), ++ReservedConstCounter);
         else if (IK == Inst::ReservedInst) {
           I = IC.createHole(InstWidth);
           I->Name = InstName;

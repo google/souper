@@ -633,7 +633,8 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
                              llvm::ConstantRange Range,
                              llvm::APInt Zero, llvm::APInt One, bool NonZero,
                              bool NonNegative, bool PowOfTwo, bool Negative,
-                             unsigned NumSignBits, unsigned SynthesisConstID) {
+                             unsigned NumSignBits, llvm::APInt DemandedBits,
+                             unsigned SynthesisConstID) {
   // Create a new vector of Insts if Width is not found in VarInstsByWidth
   auto &InstList = VarInstsByWidth[Width];
   unsigned Number = InstList.size();
@@ -653,6 +654,7 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name,
   I->PowOfTwo = PowOfTwo;
   I->Negative = Negative;
   I->NumSignBits = NumSignBits;
+  I->DemandedBits = DemandedBits;
   I->SynthesisConstID = SynthesisConstID;
   return I;
 }
@@ -661,7 +663,8 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
   return createVar(Width, Name, /*Range=*/llvm::ConstantRange(Width, /*isFullSet=*/ true),
                     /*KnownZero=*/ llvm::APInt(Width, 0), /*KnownOne=*/ llvm::APInt(Width, 0),
                     /*NonZero=*/ false, /*NonNegative=*/ false, /*PowerOfTwo=*/ false,
-                    /*Negative=*/ false, /*SignBits=*/ 1, /*SynthesisConstID=*/0);
+                    /*Negative=*/ false, /*SignBits=*/ 1,
+                    /*DemandedBits=*/llvm::APInt::getAllOnesValue(Width), /*SynthesisConstID=*/0);
 }
 
 Inst *InstContext::createSynthesisConstant(unsigned Width, unsigned SynthesisConstID) {
@@ -669,7 +672,8 @@ Inst *InstContext::createSynthesisConstant(unsigned Width, unsigned SynthesisCon
                    /*Range=*/llvm::ConstantRange(Width, /*isFullSet=*/ true),
                    /*KnownZero=*/ llvm::APInt(Width, 0), /*KnownOne=*/ llvm::APInt(Width, 0),
                    /*NonZero=*/ false, /*NonNegative=*/ false, /*PowerOfTwo=*/ false,
-                   /*Negative=*/ false, /*SignBits=*/ 1, /*SynthesisConstID=*/SynthesisConstID);
+                   /*Negative=*/ false, /*SignBits=*/ 1,
+                   /*DemandedBits=*/llvm::APInt::getAllOnesValue(Width), /*SynthesisConstID=*/SynthesisConstID);
 }
 
 
@@ -1197,6 +1201,7 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
         Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
                             I->KnownOnes, I->NonZero, I->NonNegative,
                             I->PowOfTwo, I->Negative, I->NumSignBits,
+                            I->DemandedBits,
                             I->SynthesisConstID);
       else {
         Copy = I;
@@ -1242,6 +1247,7 @@ Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
       Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
                           I->KnownOnes, I->NonZero, I->NonNegative,
                           I->PowOfTwo, I->Negative, I->NumSignBits,
+                          I->DemandedBits,
                           I->SynthesisConstID);
     } else {
       Copy = I;
