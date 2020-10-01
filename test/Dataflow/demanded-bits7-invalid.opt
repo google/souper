@@ -1,6 +1,6 @@
 
 
-; RUN: %souper-check -infer-rhs -souper-only-infer-iN %s > %t 2>&1
+; RUN: %souper-check -souper-double-check -infer-rhs -souper-only-infer-iN %s > %t 2>&1
 ; RUN: %FileCheck %s < %t
 
 ; CHECK: Failed to infer RHS

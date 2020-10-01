@@ -403,7 +403,7 @@ target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore
 target_link_libraries(count-insts souperParser)
 target_link_libraries(souper2llvm souperParser souperCodegen)
 target_link_libraries(extractor_tests souperExtractor souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
-target_link_libraries(inst_tests souperInfer souperInst souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
+target_link_libraries(inst_tests souperInfer souperPass souperInst souperExtractor ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(parser_tests souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(interpreter_tests souperInfer souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(bulk_tests souperInfer souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
@@ -449,7 +449,7 @@ if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
     PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
   target_include_directories(souperweb-backend PRIVATE "${LLVM_INCLUDEDIR}")
 
-  target_link_libraries(souperweb-backend souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
+  target_link_libraries(souperweb-backend souperTool souperExtractor souperPass souperKVStore souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
 
   add_custom_target(souperweb ALL COMMAND ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/souperweb ${CMAKE_SOURCE_DIR}/tools/souperweb.go
                                   COMMENT "Building souperweb")
