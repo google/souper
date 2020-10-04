@@ -90,8 +90,7 @@ llvm::Value *Codegen::getValue(Inst *I) {
       }
     }
     if (DebugLevel > 2)
-      llvm::errs() << "returning nullptr from getValue()\n";
-    return nullptr;
+      llvm::errs() << "dominance check failed. falling back into code generation\n";    
   }
 
   // otherwise, recursively generate code
