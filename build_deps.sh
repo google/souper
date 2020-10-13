@@ -28,7 +28,7 @@ llvm_repo=https://github.com/regehr/llvm-project.git
 llvm_commit=disable-peepholes-v03
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
-alive_commit=92ad3f5f2f963ef5bd43f71a4137427bd6cce51b
+alive_commit=v1
 alive_repo=https://github.com/manasij7479/alive2.git
 z3_repo=https://github.com/Z3Prover/z3.git
 z3_commit=z3-4.8.8
@@ -56,8 +56,7 @@ fi
 alivedir=$(pwd)/third_party/alive2
 alive_builddir=$(pwd)/third_party/alive2-build
 mkdir -p $alivedir $alive_builddir
-git clone $alive_repo $alivedir
-git -C $alivedir checkout $alive_commit
+git clone $alive_repo $alivedir --branch $alive_commit
 
 if [ -n "`which ninja`" ] ; then
   (cd $alive_builddir && cmake ../alive2 -DZ3_LIBRARIES=$z3_installdir/lib/$Z3_SHAREDLIB -DZ3_INCLUDE_DIR=$z3_installdir/include -DCMAKE_BUILD_TYPE=$llvm_build_type -GNinja)
