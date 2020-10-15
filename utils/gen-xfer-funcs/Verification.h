@@ -5,6 +5,7 @@
 #include <functional>
 #include <unordered_map>
 #include <memory>
+#include <vector>
 
 namespace souper {  
 using z3::expr;
