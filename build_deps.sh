@@ -25,13 +25,13 @@ ncpus=$(command nproc 2>/dev/null || command sysctl -n hw.ncpu 2>/dev/null || ec
 hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
 llvm_repo=https://github.com/regehr/llvm-project.git
 # llvm_commit specifies the git branch or hash to checkout to
-llvm_commit=disable-peepholes-v03
+llvm_commit=disable-peepholes-v04
 klee_repo=https://github.com/rsas/klee
 klee_branch=pure-bv-qf-llvm-7.0
 alive_commit=v1
 alive_repo=https://github.com/manasij7479/alive2.git
 z3_repo=https://github.com/Z3Prover/z3.git
-z3_commit=z3-4.8.8
+z3_commit=z3-4.8.9
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then

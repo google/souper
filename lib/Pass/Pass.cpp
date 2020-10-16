@@ -181,8 +181,10 @@ public:
     BasicBlock::iterator BI(Cand.Origin);
     while (isa<PHINode>(*BI))
       ++BI;
+    Align A{8};
     new AtomicRMWInst(AtomicRMWInst::Add, CntVar,
-                      ConstantInt::get(C, APInt(64, 1)), AtomicOrdering::Monotonic,
+                      ConstantInt::get(C, APInt(64, 1)),
+                      A, AtomicOrdering::Monotonic,
                       SyncScope::System, Cand.Origin);
   }
 
