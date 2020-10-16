@@ -656,6 +656,7 @@ bool isDataflowConsistent(ValueCache &Cache) {
 
 bool PruningManager::isInputValid(ValueCache &Cache) {
   ConcreteInterpreter CI(SC.LHS, Cache);
+  CI.setEvalPhiFirstBranch();
 
   if (isDataflowConsistent(Cache)) {
     if (auto V = CI.evaluateInst(Ante); V.hasValue() && V.getValue().getLimitedValue() == 1)

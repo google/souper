@@ -111,7 +111,7 @@ EvalValue evaluateAShr(llvm::APInt A, llvm::APInt B);
   class ConcreteInterpreter {
     ValueCache Cache;
     bool CacheWritable = false;
-
+    bool EvalPhiFirstBranch = false;
     EvalValue evaluateSingleInst(Inst *I, std::vector<EvalValue> &Args);
 
   public:
@@ -122,7 +122,7 @@ EvalValue evaluateAShr(llvm::APInt A, llvm::APInt B);
       evaluateInst(I);
       CacheWritable = false;
     }
-
+    void setEvalPhiFirstBranch() {EvalPhiFirstBranch = true;};
     EvalValue evaluateInst(Inst *Root);
   };
 

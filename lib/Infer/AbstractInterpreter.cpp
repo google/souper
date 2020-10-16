@@ -1114,6 +1114,10 @@ namespace souper {
         auto RB1 = RB.findRestrictedBits(I->Ops[1]);
         // Take bivalent bits of opposite operand to independent variables
         for (auto V : IVARS) {
+          if (V->Width != I->Ops[0]->Width ||
+              V->Width != I->Ops[1]->Width) {
+            continue;
+          }
           if (A.find(V) == A.end())
             A[V] = APInt::getNullValue(V->Width);
           if (B.find(V) == B.end())

@@ -29,7 +29,8 @@ namespace souper {
 class AliveDriver {
   typedef std::unordered_map<const Inst *, IR::Value *> Cache;
 public:
-  AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_);
+  AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_,
+               std::vector<Inst *> ExtraInputs = {});
 
   std::map<Inst *, llvm::APInt> synthesizeConstants(souper::Inst *RHS);
   std::map<Inst *, llvm::APInt> synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext &IC);
