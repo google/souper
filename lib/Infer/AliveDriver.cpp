@@ -576,7 +576,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
                                             Cache &ExprCache) {
   // unused translation; this is souper's internal instruction to represent overflow instructions
   if (souper::Inst::isOverflowIntrinsicSub(I->K)) {
-    return true; 
+    return true;
   }
 
   if (ExprCache.find(I) != ExprCache.end()) {
@@ -659,6 +659,11 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     case souper::Inst::ExtractValue: {
       unsigned idx = I->Ops[1]->Val.getLimitedValue();
       assert(idx <= 1 && "Only extractvalue with overflow instructions are supported.");
+      if (idx == 0) {
+        t = getType(I->Ops[0]->Width - 1);
+      } else {
+        t = getType(1);
+      }
       ExprCache[I] = Builder.extractvalue(t, Name, ExprCache[I->Ops[0]], idx);
       return true;
     }
@@ -675,7 +680,8 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     }
 
     #define BINOPOV(SOUPER, ALIVE) case souper::Inst::SOUPER: {  \
-      ExprCache[I] = Builder.binOp(t, Name, ExprCache[Ops[0]],   \
+      ExprCache[I] = Builder.binOp(getOverflowType               \
+      (I->Ops[0]->Width), Name, ExprCache[Ops[0]],               \
       ExprCache[Ops[1]], IR::BinOp::ALIVE);                      \
       return true;                                               \
     }
@@ -820,12 +826,25 @@ souper::AliveDriver::translateDemandedBits(const souper::Inst* I,
   }
 }
 
-IR::Type &souper::AliveDriver::getType(int n) {
+IR::Type &souper::AliveDriver::getType(int Width) {
+  std::string n = "i" + std::to_string(Width);
   if (TypeCache.find(n) == TypeCache.end()) {
-    TypeCache[n] = new IR::IntType("i" + std::to_string(n), n);
+    TypeCache[n] = new IR::IntType(std::move(n), Width);
   }
   return *TypeCache[n];
 }
+
+IR::Type &souper::AliveDriver::getOverflowType(int Width) {
+  std::string n = "o" + std::to_string(Width);
+  if (TypeCache.find(n) == TypeCache.end()) {
+    std::vector<IR::Type *> Types = {&getType(Width), &getType(1)};
+    std::vector<bool> Padding = {false, false};
+    TypeCache[n] = new IR::StructType(std::move(n),std::move(Types),
+                                      std::move(Padding));
+  }
+  return *TypeCache[n];
+}
+
 namespace souper {
 void collectPhis(souper::Inst *I, std::map<souper::Block *, std::set<souper::Inst *>> &Phis) {
   std::vector<Inst *> Stack{I};
