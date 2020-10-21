@@ -49,9 +49,11 @@ private:
   std::map<const Inst *, std::string> NameMap;
   void copyInputs(Cache &To, IR::Function &RHS);
 
-  std::unordered_map<int, IR::Type*> TypeCache;
+  std::unordered_map<std::string, IR::Type*> TypeCache;
+
 
   IR::Type &getType(int n);
+  IR::Type &getOverflowType(int n);
 
   bool translateRoot(const Inst *I, const Inst *PC, IR::Function &F, Cache &ExprCache);
   bool translateAndCache(const Inst *I, IR::Function &F, Cache &ExprCache);
