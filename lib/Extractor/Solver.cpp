@@ -428,7 +428,7 @@ public:
                           std::vector<std::pair<Inst *, llvm::APInt>> *Model)
   override {
     if (UseAlive) {
-      IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS, PCs, IC);
+      IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS, PCs, BPCs, IC);
       return std::error_code();
     }
     std::string Query;

@@ -868,11 +868,15 @@ struct RefinementProblem {
   souper::Inst *LHS;
   souper::Inst *RHS;
   souper::Inst *Pre;
+  BlockPCs BPCs;
 
   RefinementProblem ReplacePhi(souper::InstContext &IC, std::map<Block *, size_t> &Change) {
     std::map<souper::Block *, std::set<souper::Inst *>> Phis;
     collectPhis(LHS, Phis);
     collectPhis(Pre, Phis);
+    for (auto &BPC : BPCs) {
+      collectPhis(BPC.PC.LHS, Phis);
+    }
 
     if (Phis.empty()) {
       return *this; // Base case, no more Phis
@@ -890,12 +894,29 @@ struct RefinementProblem {
     Result.LHS = getInstCopy(LHS, IC, InstCache, BlockCache, &ConstMap, false);
     Result.RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ConstMap, false);
     Result.Pre = getInstCopy(Pre, IC, InstCache, BlockCache, &ConstMap, false);
+    Result.BPCs = BPCs;
+    for (auto &BPC : Result.BPCs) {
+      BPC.PC.LHS = getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache,
+                               &ConstMap, false);
+    }
 
     // Recursively call ReplacePhi, because Result might have Phi`s
     return Result.ReplacePhi(IC, Change);
   }
   bool operator == (const RefinementProblem &P) const {
-    return LHS == P.LHS && RHS == P.RHS && Pre == P.Pre;
+    if (LHS == P.LHS && RHS == P.RHS &&
+        Pre == P.Pre && BPCs.size() == P.BPCs.size()) {
+      for (size_t i = 0; i < BPCs.size(); ++i) {
+        if (BPCs[i].B != P.BPCs[i].B ||
+            BPCs[i].PC.LHS != P.BPCs[i].PC.LHS ||
+            BPCs[i].PC.RHS != P.BPCs[i].PC.RHS) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      return false;
+    }
   }
   struct Hash
   {
@@ -903,7 +924,8 @@ struct RefinementProblem {
     {
       return std::hash<Inst *>()(P.LHS)
              ^ std::hash<Inst *>()(P.RHS) << 1
-             ^ std::hash<Inst *>()(P.Pre) << 2;
+             ^ std::hash<Inst *>()(P.Pre) << 2
+             ^ std::hash<size_t>()(P.BPCs.size());
     }
   };
 
@@ -946,15 +968,25 @@ std::unordered_set<RefinementProblem, RefinementProblem::Hash>
   std::unordered_set<RefinementProblem, RefinementProblem::Hash> Result;
 
   for (auto Change : ChangeList) {
-    Result.insert(P.ReplacePhi(IC, Change));
+    auto Goal = P.ReplacePhi(IC, Change);
+    // Consider switching to better data structures for dealing with BPCs
+    for (auto &[Block, Pred] : Change) {
+      for (auto &BPC : Goal.BPCs) {
+        if (BPC.B == Block && BPC.PredIdx == Pred) {
+          auto Ante = IC.getInst(Inst::Eq, 1, {BPC.PC.LHS, BPC.PC.RHS});
+          Goal.Pre = IC.getInst(Inst::And, 1, {Goal.Pre, Ante});
+        }
+      }
+    }
+    Result.insert(Goal);
   }
-
   return Result;
 }
 
 }
-bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
+bool souper::isTransformationValid(souper::Inst *LHS, souper::Inst *RHS,
                                    const std::vector<InstMapping> &PCs,
+                                   const souper::BlockPCs &BPCs,
                                    InstContext &IC) {
   Inst *Ante = IC.getConst(llvm::APInt(1, true));
   for (auto PC : PCs ) {
@@ -962,7 +994,7 @@ bool souper::isTransformationValid(souper::Inst* LHS, souper::Inst* RHS,
     Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
   }
 
-  auto Goals = explodePhis(IC, {LHS, RHS, Ante});
+  auto Goals = explodePhis(IC, {LHS, RHS, Ante, BPCs});
   // Alive2 and Souper have different PHI semantics.
   // The current solution decomposes problems with PHI nodes into
   // simpler problems without PHI.
