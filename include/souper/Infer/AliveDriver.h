@@ -70,7 +70,7 @@ private:
 };
 
 bool isTransformationValid(Inst* LHS, Inst* RHS, const std::vector<InstMapping> &PCs,
-                           InstContext &IC);
+                           const souper::BlockPCs &BPCs, InstContext &IC);
 
 bool isCandidateInfeasible(Inst *RHS, ValueCache &C, llvm::APInt LHSValue,
                           InstContext &IC);
