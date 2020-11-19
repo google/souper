@@ -12,6 +12,7 @@ using z3::expr;
 using z3::context;
 using BinF = std::function<expr(expr, expr)>;
 using UnF = std::function<expr(expr)>;
+using NF = std::function<expr(std::vector<expr>)>;
 
 struct Op {
   virtual expr ApplyConcrete(std::vector<expr> Input) = 0;
@@ -19,19 +20,21 @@ struct Op {
 };
 
 struct BinOp : public Op {
-  BinOp(BinF C, BinF A) : Concrete(C), TF(A) {};
+  BinOp(BinF C, NF A) : Concrete(C), TF(A) {};
   BinF Concrete;
-  BinF TF;
+  NF TF;
   
   expr ApplyConcrete(std::vector<expr> Input) override {
     return Concrete(Input[0], Input[1]);
   }
   
   expr ApplyAbstract(std::vector<expr> Input) override {
-    return TF(Input[0], Input[1]);
+    return TF(Input);
   }
 };
 
+// Currently unused. Verification assumes binary ops
+// TODO Fix
 struct UnOp : public Op {
   UnF Concrete;
   UnF TF;
@@ -46,17 +49,27 @@ struct UnOp : public Op {
 };
 
 struct AbstractDomain {
-  AbstractDomain(context& ctx_) : ctx(ctx_) {}
+  AbstractDomain(context& ctx_, size_t NumComponents_ = 1)
+    : ctx(ctx_), NumComponents(NumComponents_) {}
 
   // concrete \in \gamma(abstract)?
   virtual expr MembershipTest(expr Concrete,
                               expr Abstract,
                               size_t Width) = 0;
 
+
+  virtual expr ComposedMembershipTest(expr Concrete,
+                              expr Abstract,
+                              size_t Width, size_t idx) {
+    assert (NumComponents == 1 && "Unexpected call to default MT.");
+    return MembershipTest(Concrete, Abstract, Width);
+  }
+
   bool Verify(std::string OpName, size_t Width);
   
   context &ctx;
   std::unordered_map<std::string, std::shared_ptr<Op>> Ops;
+  size_t NumComponents;
 };
 
 struct KnownZeroDomain : public AbstractDomain {
@@ -87,6 +100,26 @@ struct KnownOneDomain : public AbstractDomain {
     return ((~Concrete & Abstract) == zero);                              
   } 
 };
+
+// The first `Component` is the result domain,
+// but TF's can optionally use other domain inputs.
+
+struct ComposedDomain : public AbstractDomain {
+  ComposedDomain(std::vector<std::shared_ptr<AbstractDomain>> Components_, context &ctx_)
+    : Components (Components_), AbstractDomain(ctx_, Components_.size()) {}
+
+  expr ComposedMembershipTest(expr Concrete, expr Abstract, size_t Width, size_t idx) override {
+    return Components[idx]->MembershipTest(Concrete, Abstract, Width);
+  }
+
+  expr MembershipTest(expr Concrete, expr Abstract, size_t Width) override {
+    return ComposedMembershipTest(Concrete, Abstract, Width, /*idx=*/0);
+  }
+
+  std::vector<std::shared_ptr<AbstractDomain>> Components;
+};
+
+
 
 // Example API usage
 

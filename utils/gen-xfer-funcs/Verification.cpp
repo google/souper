@@ -11,20 +11,29 @@ bool AbstractDomain::Verify(std::string OpName, size_t Width) {
 //   p.set("bv_literals", false);
   s.set(p);
   
-  auto abstractx = ctx.bv_const("ax", Width);
-  auto abstracty = ctx.bv_const("ay", Width);
-  
   auto concretex = ctx.bv_const("cx", Width);
   auto concretey = ctx.bv_const("cy", Width);
-  
 
-  auto concrete_result = Ops[OpName]->ApplyConcrete({concretex, concretey});
-  auto abstract_result = Ops[OpName]->ApplyAbstract({abstractx, abstracty});
+  std::vector<expr> abstract_inputs;
+  for (int i =0; i < NumComponents; ++i) {
+    expr abstractx = ctx.bv_const(("ax_"+std::to_string(i)).c_str(), Width);
+    expr abstracty = ctx.bv_const(("ay_"+std::to_string(i)).c_str(), Width);
+
+    s.add(ComposedMembershipTest(concretex, abstractx, Width, i)); // cx \in \gamma(ax)
+
+    s.add(ComposedMembershipTest(concretey, abstracty, Width, i)); // cy \in \gamma(ay)
+
+    abstract_inputs.push_back(abstractx);
+    abstract_inputs.push_back(abstracty);
+  }
   
-  s.add(MembershipTest(concretex, abstractx, Width)); // cx \in \gamma(ax) 
-  s.add(MembershipTest(concretey, abstracty, Width)); // cy \in \gamma(ay)
-  s.add(!MembershipTest(concrete_result,
-                        abstract_result, Width)); // cr \notin \gamma(ar)  
+  auto concrete_result = Ops[OpName]->ApplyConcrete({concretex, concretey});
+
+  auto abstract_result = Ops[OpName]->ApplyAbstract(abstract_inputs);
+
+  s.add(!ComposedMembershipTest(
+    concrete_result, abstract_result, Width, /*idx*/0));
+  // cr \notin \gamma(ar)
   
   // Does there exist (cx, cy, ax, ay) such that the 
   // Op(cx, cy) \notin \gamma(TF(ax, ay))
@@ -37,12 +46,17 @@ bool AbstractDomain::Verify(std::string OpName, size_t Width) {
   } else {
     std::cout << "Invalid.\t";
     auto &&m = s.get_model();
-    std::cout << "ax:" << m.eval(abstractx) << "\t"
-        << "ay:" << m.eval(abstracty) << "\t"
+    std::cout
         << "ar:" << m.eval(abstract_result) << "\t"
         << "cx:" << m.eval(concretex) << "\t"
         << "cy:" << m.eval(concretey) << "\t"
-        << "cr:" << m.eval(concrete_result) << "\t";
+        << "cr:" << m.eval(concrete_result) << "\t"
+        << "ar:(";
+    for (auto e : abstract_inputs) {
+      std::cout << m.eval(e) << ' ';
+    }
+    std::cout << ")\t";
+
     return false;
   }
 }
