@@ -65,7 +65,7 @@ struct AbstractDomain {
     return MembershipTest(Concrete, Abstract, Width);
   }
 
-  bool Verify(std::string OpName, size_t Width);
+  bool Verify(std::string OpName, size_t ConcreteWidth, size_t AbstractWidth);
   
   context &ctx;
   std::unordered_map<std::string, std::shared_ptr<Op>> Ops;
@@ -83,7 +83,7 @@ struct KnownZeroDomain : public AbstractDomain {
     // 1, 1 -> F
     auto zero = ctx.bv_val(0, Width);
     return ((Abstract & Concrete) == zero);                                  
-  } 
+  }
 };
 
 struct KnownOneDomain : public AbstractDomain {
@@ -100,6 +100,8 @@ struct KnownOneDomain : public AbstractDomain {
     return ((~Concrete & Abstract) == zero);                              
   } 
 };
+
+
 
 // The first `Component` is the result domain,
 // but TF's can optionally use other domain inputs.
@@ -119,24 +121,21 @@ struct ComposedDomain : public AbstractDomain {
   std::vector<std::shared_ptr<AbstractDomain>> Components;
 };
 
+struct ConstantRangeDomain : public AbstractDomain {
+  ConstantRangeDomain(context &ctx) : AbstractDomain(ctx) {}
+  expr MembershipTest(expr Concrete,
+                      expr Abstract, size_t Width) override {
+    // TODO: Might not exactly reflect LLVM CR semantics
+    // Check full-set and empty-set
+    auto left = Abstract.extract(Width - 1, 0);
+    auto right = Abstract.extract(2 * Width - 1, Width);
+    auto in = Concrete >= left && Concrete < right;
+    auto out = Concrete < left || Concrete >= right;
+    return ite(left < right, in, out);
+  }
+};
 
-
-// Example API usage
-
-// int main(int argc, char **argv) {
-//   context ctx;
-//   KnownZeroDomain KnownZero(ctx);
-//   KnownZero.Ops["and"] = std::make_unique<BinOp>(
-//     [](auto a, auto b){return a & b;}, // concrete
-//     [](auto a, auto b){return ~a;} // abstract
-//   );
-//   
-//   for (int i = 1; i <= 64; ++i) {
-//     KnownZero.Verify("and", i);
-//     std::cout << "\n";
-//   }
-// }
-
+// Example API usage in demo-main.cpp
 }
 
 #endif
