@@ -26,6 +26,7 @@
 #include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/InstSynthesis.h"
+#include "souper/Infer/Preconditions.h"
 #include "souper/Infer/Pruning.h"
 #include "souper/KVStore/KVStore.h"
 #include "souper/Parser/Parser.h"
@@ -266,147 +267,37 @@ public:
                   const std::vector<InstMapping> &PCs,
                   InstMapping &Mapping, InstContext &IC,
                   bool &FoundWeakest) override {
-    bool Valid;
-    PrintReplacement(llvm::outs(), BPCs, PCs, Mapping);
+    SynthesisContext SC{IC, SMTSolver.get(), Mapping.LHS, /*LHSUB*/nullptr, PCs,
+                      BPCs, /*CheckAllGuesses=*/false, Timeout};
 
-    std::vector<std::pair<Inst *, APInt>> Models;
-    if (std::error_code EC = isValid(IC, BPCs, PCs, Mapping, Valid, &Models)) {
-      llvm::errs() << EC.message() << '\n';
-    }
+    std::vector<std::map<Inst *, llvm::KnownBits>> Results =
+            inferAbstractKBPreconditions(SC, Mapping.RHS, SMTSolver.get(), this, FoundWeakest);
 
-    if (Valid) {
-      llvm::outs() << "Already valid.\n";
-      return {};
-    }
+    ReplacementContext RC;
+    auto LHSStr = RC.printInst(Mapping.LHS, llvm::outs(), true);
+    llvm::outs() << "infer " << LHSStr << "\n";
+    auto RHSStr = RC.printInst(Mapping.RHS, llvm::outs(), true);
+    llvm::outs() << "result " << RHSStr << "\n";
+    for (size_t i = 0; i < Results.size(); ++i) {
+      for (auto It = Results[i].begin(); It != Results[i].end(); ++It) {
+        auto &&P = *It;
+        std::string dummy;
+        llvm::raw_string_ostream str(dummy);
+        auto VarStr = RC.printInst(P.first, str, false);
+        llvm::outs() << VarStr << " -> " << Inst::getKnownBitsString(P.second.Zero, P.second.One);
 
-    std::vector<Inst *> Vars;
-    findVars(Mapping.LHS, Vars);
-    assert(Vars.size() == 1);
-
-    auto OriginalZero = Vars[0]->KnownZeros;
-    auto originalOne = Vars[0]->KnownOnes;
-
-    std::vector<llvm::KnownBits> Results;
-    Inst *Precondition = IC.getConst(llvm::APInt(1, true));
-
-    while (true) { // guaranteed to terminate
-      std::vector<Inst *> ModelInsts;
-      std::vector<llvm::APInt> ModelVals;
-      unsigned W = Vars[0]->Width;
-      if (!Results.empty()) {
-        auto KB = Results.back();
-
-        auto &I = Vars[0];
-        I->KnownOnes = originalOne;
-        I->KnownZeros = OriginalZero;
-        auto Zero = IC.getConst(llvm::APInt(W, 0));
-        auto AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(W));
-
-        auto A = IC.getInst(Inst::And, W, {I, IC.getConst(KB.One)});
-
-        auto B = IC.getInst(Inst::And, W,
-                   {IC.getInst(Inst::Xor, W, {I, AllOnes}),
-                    IC.getConst(KB.Zero)});
-
-        auto New = IC.getInst(Inst::And, 1,
-                     {IC.getInst(Inst::Eq, 1, {A, Zero}),
-                      IC.getInst(Inst::Eq, 1, {B, Zero})});
-
-        // Do not find an input belonging to a derived abstract set.
-        Precondition = IC.getInst(Inst::And, 1, {Precondition, New});
-      }
-
-      Models.clear();
-      std::string Query = BuildQuery(IC, BPCs, PCs, Mapping,
-                                     &ModelInsts, Precondition, true);
-
-
-      auto EC = SMTSolver->isSatisfiable(Query, FoundWeakest, ModelInsts.size(),
-                                         &ModelVals, Timeout);
-
-      llvm::KnownBits Known(W);
-      if (FoundWeakest) {
-        for (unsigned J = 0; J != ModelInsts.size(); ++J) {
-          if (ModelInsts[J] == Vars[0]) {
-            Known.One = ModelVals[J];
-            llvm::outs() << "Starting with : " << Known.One << "\n";
-            Known.Zero = ~Known.One;
-            break;
-          }
-        }
-      } else {
-        if (Results.empty()) {
-          llvm::outs() << "Transformation is not valid for any input.\n";
-          return EC;
-        } else {
-          FoundWeakest = true;
-          llvm::outs() << "Exhausted search space.\n";
-          break;
+        auto Next = It;
+        Next++;
+        if (Next != Results[i].end()) {
+          llvm::outs()  << " (and) ";
         }
       }
-
-      for (unsigned I=0; I < W; I++) {
-        if (Known.Zero[I]) {
-          APInt ZeroGuess = Known.Zero & ~APInt::getOneBitSet(W, I);
-          auto OldZero = Vars[0]->KnownZeros;
-          Vars[0]->KnownZeros = ZeroGuess;
-          Vars[0]->KnownOnes = Known.One;
-          if (DebugLevel >= 3)
-            PrintReplacement(llvm::outs(), BPCs, PCs, Mapping);
-
-          Models.clear();
-          if (std::error_code EC = isValid(IC, BPCs, PCs,
-                                              Mapping, Valid, &Models)) {
-            llvm::errs() << EC.message() << '\n';
-          }
-
-          if (Valid) {
-            if (DebugLevel >= 3)
-              llvm::outs() << "Valid\n";
-            Known.Zero = ZeroGuess;
-
-          } else {
-            Vars[0]->KnownZeros = OldZero;
-            if (DebugLevel >= 3)
-              llvm::outs() << "Invalid\n";
-          }
-        }
-
-        if (Known.One[I]) {
-          APInt OneGuess = Known.One & ~APInt::getOneBitSet(W, I);
-          auto OldOne = Vars[0]->KnownOnes;
-          Vars[0]->KnownZeros = Known.Zero;
-          Vars[0]->KnownOnes = OneGuess;
-
-          if (DebugLevel >= 3)
-            PrintReplacement(llvm::outs(), BPCs, PCs, Mapping);
-
-          Models.clear();
-          if (std::error_code EC = isValid(IC, BPCs, PCs,
-                                              Mapping, Valid, &Models)) {
-            llvm::errs() << EC.message() << '\n';
-          }
-
-          if (Valid) {
-            if (DebugLevel >= 3)
-              llvm::outs() << "Valid\n";
-            Known.One = OneGuess;
-          } else {
-            Vars[0]->KnownOnes = OldOne;
-            if (DebugLevel >= 3) {
-              llvm::outs() << "Invalid\n";
-            }
-          }
-        }
+      if (i == Results.size() - 1) {
+        llvm::outs() << "\n";
+      } else  {
+        llvm::outs() << "\n(or)\n";
       }
-      llvm::outs() << "Derived : "
-                   << Inst::getKnownBitsString(Known.Zero, Known.One) << "\n";
-      Results.push_back(Known);
     }
-    for (auto R: Results) {
-      llvm::outs() << Inst::getKnownBitsString(R.Zero, R.One) << "\n";
-    }
-
     return {};
   }
 

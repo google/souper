@@ -1,0 +1,45 @@
+; REQUIRES: solver, synthesis
+
+; RUN: %souper-check -infer-abstract-precondition %s > %t
+; RUN: %FileCheck %s < %t
+
+%x:i8 = var
+%y:i8 = var
+%z = add %x, %y
+%t = add %z, 42
+%u = sub %t, %y
+infer %u
+%v = add %x, 42
+result %v
+;CHECK: Already valid.
+
+%x:i8 = var
+%y:i8 = var
+%t = add %x, 42
+%u = sub %t, %y
+infer %u
+%v = add %x, 42
+result %v
+;CHECK: %0 -> xxxxxxxx (and) %2 -> 00000000
+
+%x:i8 = var
+%y:i8 = var
+%t = and %x, 137
+%u = xor %t, %y
+infer %u
+%v = or %x, %y
+result %v
+;CHECK: %1 -> 00000000 (and) %0 -> xxxxxxxx
+;CHECK-NEXT: (or)
+;CHECK-NEXT: %1 -> xxxxxxxx (and) %0 -> 01110110
+
+%x:i8 = var
+%y:i8 = var
+%t = or %x, 42
+%u = and %t, %y
+infer %u
+%v = and %x, %y
+result %v
+;CHECK: %1 -> xx1x1xxx (and) %0 -> xxxxxx0x
+;CHECK-NEXT: (or)
+;CHECK-NEXT: %1 -> xx1x1xxx (and) %0 -> xxxxxx0x
