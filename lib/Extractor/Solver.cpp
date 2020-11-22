@@ -262,6 +262,154 @@ public:
     return std::error_code();
   }
 
+  std::error_code abstractPrecondition(const BlockPCs &BPCs,
+                  const std::vector<InstMapping> &PCs,
+                  InstMapping &Mapping, InstContext &IC,
+                  bool &FoundWeakest) override {
+    bool Valid;
+    PrintReplacement(llvm::outs(), BPCs, PCs, Mapping);
+
+    std::vector<std::pair<Inst *, APInt>> Models;
+    if (std::error_code EC = isValid(IC, BPCs, PCs, Mapping, Valid, &Models)) {
+      llvm::errs() << EC.message() << '\n';
+    }
+
+    if (Valid) {
+      llvm::outs() << "Already valid.\n";
+      return {};
+    }
+
+    std::vector<Inst *> Vars;
+    findVars(Mapping.LHS, Vars);
+    assert(Vars.size() == 1);
+
+    auto OriginalZero = Vars[0]->KnownZeros;
+    auto originalOne = Vars[0]->KnownOnes;
+
+    std::vector<llvm::KnownBits> Results;
+    Inst *Precondition = IC.getConst(llvm::APInt(1, true));
+
+    while (true) { // guaranteed to terminate
+      std::vector<Inst *> ModelInsts;
+      std::vector<llvm::APInt> ModelVals;
+      unsigned W = Vars[0]->Width;
+      if (!Results.empty()) {
+        auto KB = Results.back();
+
+        auto &I = Vars[0];
+        I->KnownOnes = originalOne;
+        I->KnownZeros = OriginalZero;
+        auto Zero = IC.getConst(llvm::APInt(W, 0));
+        auto AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(W));
+
+        auto A = IC.getInst(Inst::And, W, {I, IC.getConst(KB.One)});
+
+        auto B = IC.getInst(Inst::And, W,
+                   {IC.getInst(Inst::Xor, W, {I, AllOnes}),
+                    IC.getConst(KB.Zero)});
+
+        auto New = IC.getInst(Inst::And, 1,
+                     {IC.getInst(Inst::Eq, 1, {A, Zero}),
+                      IC.getInst(Inst::Eq, 1, {B, Zero})});
+
+        // Do not find an input belonging to a derived abstract set.
+        Precondition = IC.getInst(Inst::And, 1, {Precondition, New});
+      }
+
+      Models.clear();
+      std::string Query = BuildQuery(IC, BPCs, PCs, Mapping,
+                                     &ModelInsts, Precondition, true);
+
+
+      auto EC = SMTSolver->isSatisfiable(Query, FoundWeakest, ModelInsts.size(),
+                                         &ModelVals, Timeout);
+
+      llvm::KnownBits Known(W);
+      if (FoundWeakest) {
+        for (unsigned J = 0; J != ModelInsts.size(); ++J) {
+          if (ModelInsts[J] == Vars[0]) {
+            Known.One = ModelVals[J];
+            llvm::outs() << "Starting with : " << Known.One << "\n";
+            Known.Zero = ~Known.One;
+            break;
+          }
+        }
+      } else {
+        if (Results.empty()) {
+          llvm::outs() << "Transformation is not valid for any input.\n";
+          return EC;
+        } else {
+          FoundWeakest = true;
+          llvm::outs() << "Exhausted search space.\n";
+          break;
+        }
+      }
+
+      for (unsigned I=0; I < W; I++) {
+        if (Known.Zero[I]) {
+          APInt ZeroGuess = Known.Zero & ~APInt::getOneBitSet(W, I);
+          auto OldZero = Vars[0]->KnownZeros;
+          Vars[0]->KnownZeros = ZeroGuess;
+          Vars[0]->KnownOnes = Known.One;
+          if (DebugLevel >= 3)
+            PrintReplacement(llvm::outs(), BPCs, PCs, Mapping);
+
+          Models.clear();
+          if (std::error_code EC = isValid(IC, BPCs, PCs,
+                                              Mapping, Valid, &Models)) {
+            llvm::errs() << EC.message() << '\n';
+          }
+
+          if (Valid) {
+            if (DebugLevel >= 3)
+              llvm::outs() << "Valid\n";
+            Known.Zero = ZeroGuess;
+
+          } else {
+            Vars[0]->KnownZeros = OldZero;
+            if (DebugLevel >= 3)
+              llvm::outs() << "Invalid\n";
+          }
+        }
+
+        if (Known.One[I]) {
+          APInt OneGuess = Known.One & ~APInt::getOneBitSet(W, I);
+          auto OldOne = Vars[0]->KnownOnes;
+          Vars[0]->KnownZeros = Known.Zero;
+          Vars[0]->KnownOnes = OneGuess;
+
+          if (DebugLevel >= 3)
+            PrintReplacement(llvm::outs(), BPCs, PCs, Mapping);
+
+          Models.clear();
+          if (std::error_code EC = isValid(IC, BPCs, PCs,
+                                              Mapping, Valid, &Models)) {
+            llvm::errs() << EC.message() << '\n';
+          }
+
+          if (Valid) {
+            if (DebugLevel >= 3)
+              llvm::outs() << "Valid\n";
+            Known.One = OneGuess;
+          } else {
+            Vars[0]->KnownOnes = OldOne;
+            if (DebugLevel >= 3) {
+              llvm::outs() << "Invalid\n";
+            }
+          }
+        }
+      }
+      llvm::outs() << "Derived : "
+                   << Inst::getKnownBitsString(Known.Zero, Known.One) << "\n";
+      Results.push_back(Known);
+    }
+    for (auto R: Results) {
+      llvm::outs() << Inst::getKnownBitsString(R.Zero, R.One) << "\n";
+    }
+
+    return {};
+  }
+
   std::error_code knownBits(const BlockPCs &BPCs,
                           const std::vector<InstMapping> &PCs,
                           Inst *LHS, KnownBits &Known,
@@ -704,6 +852,13 @@ public:
     return UnderlyingSolver->negative(BPCs, PCs, LHS, Negative, IC);
   }
 
+  std::error_code abstractPrecondition(const BlockPCs &BPCs,
+                  const std::vector<InstMapping> &PCs,
+                  InstMapping &Mapping, InstContext &IC,
+                  bool &FoundWeakest) override {
+    return UnderlyingSolver->abstractPrecondition(BPCs, PCs, Mapping, IC, FoundWeakest);
+  }
+
   std::error_code knownBits(const BlockPCs &BPCs,
                             const std::vector<InstMapping> &PCs,
                             Inst *LHS, KnownBits &Known,
@@ -835,6 +990,13 @@ public:
                            Inst *LHS, bool &Negative,
                            InstContext &IC) override {
     return UnderlyingSolver->negative(BPCs, PCs, LHS, Negative, IC);
+  }
+
+  std::error_code abstractPrecondition(const BlockPCs &BPCs,
+                  const std::vector<InstMapping> &PCs,
+                  InstMapping &Mapping, InstContext &IC,
+                  bool &FoundWeakest) override {
+    return UnderlyingSolver->abstractPrecondition(BPCs, PCs, Mapping, IC, FoundWeakest);
   }
 
   std::error_code knownBits(const BlockPCs &BPCs,

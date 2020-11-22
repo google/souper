@@ -86,6 +86,12 @@ public:
                                    Inst *LHS,
                                    std::map<std::string, llvm::APInt> &DBitsVect,
                                    InstContext &IC) = 0;
+
+  virtual
+  std::error_code abstractPrecondition(const BlockPCs &BPCs,
+                  const std::vector<InstMapping> &PCs,
+                  InstMapping &Mapping, InstContext &IC,
+                  bool &FoundWeakest) = 0;
 };
 
 std::unique_ptr<Solver> createBaseSolver(
