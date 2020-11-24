@@ -17,16 +17,72 @@
 #include "llvm/Support/CommandLine.h"
 #include "hiredis.h"
 
+#include <sstream>
+
 using namespace llvm;
 using namespace souper;
 
 static cl::opt<unsigned> RedisPort("souper-redis-port", cl::init(6379),
     cl::desc("Redis server port (default=6379)"));
 
+namespace {
+
+  std::vector<std::string> getActiveOptions(StringMap<cl::Option*> &Opts) {
+    std::vector<std::string> ActiveOptions;
+
+    for (auto &K : Opts.keys()) {
+      if (Opts[K]->getNumOccurrences()) {
+	std::string StrValue;
+
+	// cl::opt<unsigned>
+	if (K == "souper-exhaustive-synthesis-num-instructions") {
+	  auto Val = static_cast<cl::opt<unsigned> *>(Opts[K]);
+	  StrValue = K.str() + "=" + std::to_string(Val->getValue());
+	}
+	// cl::opt<bool, true> with default=false
+	else if (K == "souper-use-alive") {
+	  auto Val = static_cast<cl::opt<bool, true> *>(Opts[K]);
+	  StrValue = K.str() + "=" + (Val->getValue() ? "true" : "false");
+	}
+	// cl::opt<bool> with default=false
+	else if (K == "souper-lsb-pruning" ||
+		 K == "souper-dataflow-pruning" ||
+		 K == "souper-synthesis-const-with-cegis" ||
+		 K == "souper-synthesis-ignore-cost") {
+	  auto Val = static_cast<cl::opt<bool> *>(Opts[K]);
+	  if (Val->getValue())
+	    StrValue = K.str() + "=true";
+	}
+	// cl::opt<int>
+	else if (K == "souper-synthesis-comp-num") {
+	  auto Val = static_cast<cl::opt<int> *>(Opts[K]);
+	  StrValue = K.str() + "=" + std::to_string(Val->getValue());
+	}
+	// cl::opt<std::string>
+	else if (K == "souper-synthesis-comps") {
+	  auto Val = static_cast<cl::opt<std::string> *>(Opts[K]);
+	  StrValue = K.str() + "=" + Val->getValue();
+	}
+
+	if (!StrValue.empty())
+	  ActiveOptions.emplace_back(StrValue);
+      }
+    }
+
+    return ActiveOptions;
+  }
+
+} // anon ns
+
 namespace souper {
 
 class KVStore::KVImpl {
-  redisContext *Ctx;
+  redisContext *Ctx = 0;
+
+private:
+  // checks if current redis database is compatible with current version of souper
+  bool checkCompatibility();
+
 public:
   KVImpl();
   ~KVImpl();
@@ -46,10 +102,52 @@ KVStore::KVImpl::KVImpl() {
     llvm::report_fatal_error((llvm::StringRef)"Redis connection error: " +
                              Ctx->errstr + "\n");
   }
+
+  if (!checkCompatibility()) {
+    llvm::report_fatal_error("Redis cache on port " + std::to_string(RedisPort) + " is incompatible.");
+  }
 }
 
 KVStore::KVImpl::~KVImpl() {
   redisFree(Ctx);
+}
+
+bool KVStore::KVImpl::checkCompatibility() {
+  assert(Ctx && "Cannot check compatibility on an uninitialized database.");
+
+  redisReply *reply = static_cast<redisReply*>(redisCommand(Ctx, "GET cachetype"));
+  if (!reply || Ctx->err) {
+    llvm::report_fatal_error((llvm::StringRef)"Redis error: " + Ctx->errstr);
+  }
+
+  // get all current command line used
+  StringMap<cl::Option*> &Opts =  cl::getRegisteredOptions();
+  std::vector<std::string> ActiveOptions = getActiveOptions(Opts);
+  std::sort(ActiveOptions.begin(), ActiveOptions.end());
+  std::ostringstream ActiveOptionsOSS;
+  const char *delim = ";";
+  std::copy(ActiveOptions.begin(), ActiveOptions.end(),
+	    std::ostream_iterator<std::string>(ActiveOptionsOSS, delim));
+  std::string ActiveOptionsStr = ActiveOptionsOSS.str();
+
+  switch(reply->type) {
+  case REDIS_REPLY_NIL:
+    // no version set
+    freeReplyObject(reply);
+    reply = static_cast<redisReply*>(redisCommand(Ctx, "SET cachetype %s", ActiveOptionsStr.data()));
+    // TODO: Factor out all such snippets
+    if (!reply || Ctx->err) {
+      llvm::report_fatal_error((llvm::StringRef)"Redis error: " + Ctx->errstr);
+    }
+    break;
+  case REDIS_REPLY_STRING:
+    if (llvm::StringRef value = reply->str; value != ActiveOptionsStr)
+      return false;
+    break;
+  default: return false;
+  }
+
+  return true;
 }
 
 void KVStore::KVImpl::hIncrBy(llvm::StringRef Key, llvm::StringRef Field,
