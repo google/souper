@@ -9,7 +9,7 @@ class SMTLIBSolver;
 class Solver;
 std::vector<std::map<Inst *, llvm::KnownBits>>
   inferAbstractKBPreconditions(SynthesisContext &SC, Inst *RHS,
-                               SMTLIBSolver *SMTSolver, Solver *S, bool &FoundWeakest);
+                               Solver *S, bool &FoundWeakest);
 }
 
 #endif // SOUPER_PRECONDITIONS_H
