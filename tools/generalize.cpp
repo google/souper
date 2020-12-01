@@ -32,6 +32,7 @@ static llvm::cl::opt<bool> RemoveLeaf("remove-leaf",
                    "(default=false)"),
     llvm::cl::init(false));
 
+<<<<<<< HEAD
 static llvm::cl::opt<bool> SymbolizeConstant("symbolize",
     llvm::cl::desc("Try to replace a concrete constant with a symbolic constant."
                    "(default=false)"),
@@ -46,16 +47,21 @@ static llvm::cl::opt<bool> SymbolizeNoDFP("symbolize-no-dataflow",
     llvm::cl::desc("Do not generate optimizations with dataflow preconditions."),
     llvm::cl::init(false));
 
+=======
+>>>>>>> 04440f0 (Generalization tool)
 static llvm::cl::opt<bool> FixIt("fixit",
     llvm::cl::desc("Given an invalid optimization, generate a valid one."
                    "(default=false)"),
     llvm::cl::init(false));
 
+<<<<<<< HEAD
 static cl::opt<size_t> NumResults("generalization-num-results",
     cl::desc("Number of Generalization Results"),
     cl::init(5));
 
 
+=======
+>>>>>>> 04440f0 (Generalization tool)
 void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
   bool FoundWP = false;
   std::vector<std::map<Inst *, llvm::KnownBits>> Results;
@@ -74,6 +80,7 @@ void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
   }
 }
 
+<<<<<<< HEAD
 void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
                             std::vector<Inst *> LHSConsts,
                             std::vector<Inst *> RHSConsts,
@@ -227,6 +234,12 @@ void SymbolizeAndGeneralize(InstContext &IC,
 // TODO: Return modified instructions instead of just printing out
 void RemoveLeafAndGeneralize(InstContext &IC,
                                Solver *S, ParsedReplacement Input) {
+=======
+// TODO: Return modified instructions instead of just printing out
+void RemoveLeafAndGeneralize(InstContext &IC,
+                               Solver *S, ParsedReplacement Input) {
+
+>>>>>>> 04440f0 (Generalization tool)
   if (DebugLevel > 1) {
   llvm::errs() << "Attempting to generalize by removing leaf.\n";
   }
@@ -324,9 +337,13 @@ int main(int argc, char **argv) {
       RemoveLeafAndGeneralize(IC, S.get(), Input);
     }
     // if (EviscerateRoot) {...}
+<<<<<<< HEAD
     if (SymbolizeConstant) {
       SymbolizeAndGeneralize(IC, S.get(), Input);
     }
+=======
+    // if (SymbolizeConstant) {...}
+>>>>>>> 04440f0 (Generalization tool)
     // if (LiberateWidth) {...}
   }
 
