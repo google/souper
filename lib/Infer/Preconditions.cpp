@@ -7,7 +7,7 @@ using llvm::APInt;
 namespace souper {
 std::vector<std::map<Inst *, llvm::KnownBits>>
   inferAbstractKBPreconditions(SynthesisContext &SC, Inst *RHS,
-                               SMTLIBSolver *SMTSolver, Solver *S, bool &FoundWeakest) {
+                               Solver *S, bool &FoundWeakest) {
     InstMapping Mapping(SC.LHS, RHS);
     bool Valid;
     if (DebugLevel >= 3) {
@@ -20,7 +20,10 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
     }
     std::vector<InstMapping> PCCopy = SC.PCs;
     if (Valid) {
-      llvm::outs() << "Already valid.\n";
+      FoundWeakest = true;
+      if (DebugLevel > 1) {
+        llvm::errs() << "Already valid.\n";
+      }
       return {};
     }
 
@@ -97,7 +100,7 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
                                      &ModelInsts, Precondition, true);
 
 
-      SMTSolver->isSatisfiable(Query, FoundWeakest, ModelInsts.size(),
+      S->isSatisfiable(Query, FoundWeakest, ModelInsts.size(),
                                          &ModelVals, SC.Timeout);
 
       std::map<Inst *, llvm::KnownBits> Known;

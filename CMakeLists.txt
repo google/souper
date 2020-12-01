@@ -295,6 +295,10 @@ add_executable(souper-check
   tools/souper-check.cpp
 )
 
+add_executable(generalize
+  tools/generalize.cpp
+)
+
 add_executable(souper-interpret
   tools/souper-interpret.cpp
 )
@@ -362,7 +366,7 @@ configure_file(
 )
 
 foreach(target souper internal-solver-test lexer-test parser-test souper-check count-insts
-               souper2llvm souper-interpret
+               souper2llvm souper-interpret generalize
                souperExtractor souperInfer souperInst souperKVStore souperParser
                souperSMTLIB2 souperTool souperPass souperPassProfileAll kleeExpr
                souperCodegen)
@@ -400,6 +404,7 @@ target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
 target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(generalize souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(souper-interpret souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(count-insts souperParser)

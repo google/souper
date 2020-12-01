@@ -325,11 +325,36 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
       }
     } else if (InferAP) {
         bool FoundWeakest = false;
-        S->abstractPrecondition(Rep.BPCs, Rep.PCs, Rep.Mapping, IC, FoundWeakest);
+        std::vector<std::map<Inst *, llvm::KnownBits>> Results;
+        S->abstractPrecondition(Rep.BPCs, Rep.PCs, Rep.Mapping, IC, FoundWeakest, Results);
         if (!FoundWeakest) {
           llvm::outs() << "Failed to find WP.\n";
         }
+        ReplacementContext RC;
+        auto LHSStr = RC.printInst(Rep.Mapping.LHS, llvm::outs(), true);
+        llvm::outs() << "infer " << LHSStr << "\n";
+        auto RHSStr = RC.printInst(Rep.Mapping.RHS, llvm::outs(), true);
+        llvm::outs() << "result " << RHSStr << "\n";
+        for (size_t i = 0; i < Results.size(); ++i) {
+          for (auto It = Results[i].begin(); It != Results[i].end(); ++It) {
+            auto &&P = *It;
+            std::string dummy;
+            llvm::raw_string_ostream str(dummy);
+            auto VarStr = RC.printInst(P.first, str, false);
+            llvm::outs() << VarStr << " -> " << Inst::getKnownBitsString(P.second.Zero, P.second.One);
 
+            auto Next = It;
+            Next++;
+            if (Next != Results[i].end()) {
+              llvm::outs()  << " (and) ";
+            }
+          }
+          if (i == Results.size() - 1) {
+            llvm::outs() << "\n";
+          } else  {
+            llvm::outs() << "\n(or)\n";
+          }
+        }
     } else {
       bool Valid;
       std::vector<std::pair<Inst *, APInt>> Models;

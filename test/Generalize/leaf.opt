@@ -1,0 +1,22 @@
+; REQUIRES: solver, synthesis
+; RUN: %generalize -remove-leaf %s | %souper-check > %t
+; RUN: %FileCheck %s < %t
+
+%x:i8 = var
+%y:i8 = var
+%masked = and %x, 3
+%and = and %masked, %y
+%foo = lshr %and, 2
+infer %and
+result 0:i8
+; CHECK: LGTM
+; CHECK: LGTM
+
+%x:i8 = var
+%y:i8 = var
+%a = and %x, 15
+%b = and %y, 240
+%foo = or %a, %b
+infer %foo
+result 0:i8
+; CHECK: LGTM
