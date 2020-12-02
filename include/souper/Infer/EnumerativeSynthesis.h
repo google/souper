@@ -30,6 +30,8 @@ namespace souper {
 
 class EnumerativeSynthesis {
 public:
+  EnumerativeSynthesis();
+
   // Synthesize an instruction from the specification in LHS
   std::error_code synthesize(SMTLIBSolver *SMTSolver,
                              const BlockPCs &BPCs,
@@ -37,6 +39,10 @@ public:
                              Inst *TargetLHS, std::vector<Inst *> &RHSs,
                              bool CheckAllGuesses,
                              InstContext &IC, unsigned Timeout);
+
+  std::vector<Inst *>
+  generateExprs(InstContext &IC, size_t CountLimit,
+                std::vector<Inst *> Vars, size_t Width);
 
 };
 }
