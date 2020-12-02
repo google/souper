@@ -9,3 +9,13 @@ infer %bar
 result 2:i8
 ;CHECK: LGTM
 ;CHECK: LGTM
+
+%x:i8 = var
+%foo = add %x, 42
+%bar = sub %foo, 31
+infer %bar
+%xip = add %x, 11
+result %xip
+;CHECK: LGTM
+;CHECK: LGTM
+;CHECK: LGTM

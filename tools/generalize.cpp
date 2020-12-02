@@ -71,7 +71,7 @@ void SymbolizeAndGeneralize(InstContext &IC,
   findInsts(Input.Mapping.LHS, LHSConsts, Pred);
   findInsts(Input.Mapping.RHS, RHSConsts, Pred);
 
-  if (LHSConsts.size() != 1 || RHSConsts.size() != 1) {
+  if (RHSConsts.size() != 1) {
     return;
     // TODO: Relax this restriction later
   }
@@ -79,12 +79,18 @@ void SymbolizeAndGeneralize(InstContext &IC,
   // Replace LHSConst[0] with a new variable and RHSConst[0]
   // with a synthesized function.
 
-  auto FakeConst = IC.createVar(LHSConsts[0]->Width, "fakeconst");
+  std::map<Inst *, Inst *> InstCache;
+  std::vector<Inst *> FakeConsts;
+  for (size_t i = 0; i < LHSConsts.size(); ++i) {
+    FakeConsts.push_back(
+          IC.createVar(LHSConsts[i]->Width, "fakeconst_" + std::to_string(i)));
+    InstCache[LHSConsts[i]] = FakeConsts[i];
+  }
 
   // Does it makes sense for the expression to depend on other variables?
   // If yes, expand the third argument to include inputs
   EnumerativeSynthesis ES;
-  auto Guesses = ES.generateExprs(IC, 2, {FakeConst},
+  auto Guesses = ES.generateExprs(IC, 1, FakeConsts,
                                   RHSConsts[0]->Width);
 
   // Discarding guesses with symbolic constants
@@ -107,14 +113,15 @@ void SymbolizeAndGeneralize(InstContext &IC,
   std::vector<std::vector<std::map<Inst *, llvm::KnownBits>>>
       Preconditions;
 
-  std::map<Inst *, Inst *> InstCache{{LHSConsts[0], FakeConst}};
   std::map<Block *, Block *> BlockCache;
   std::map<Inst *, APInt> ConstMap;
   auto LHS = getInstCopy(Input.Mapping.LHS, IC, InstCache,
                          BlockCache, &ConstMap, false);
   for (auto &Guess : Guesses) {
-    std::map<Inst *, Inst *> InstCache{{RHSConsts[0], Guess}};
-    auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCache,
+    std::map<Inst *, Inst *> InstCacheCopy = InstCache;
+    InstCacheCopy[RHSConsts[0]] = Guess;
+
+    auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
                            BlockCache, &ConstMap, false);
     std::vector<std::map<Inst *, llvm::KnownBits>> Results;
     bool FoundWP = false;
