@@ -4,6 +4,11 @@
 #include <llvm/Support/CommandLine.h>
 using llvm::APInt;
 
+static llvm::cl::opt<bool> FixItNoVar("fixit-no-restrict-vars",
+    llvm::cl::desc("Do not restrict input variables, only constants."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
 namespace souper {
 std::vector<std::map<Inst *, llvm::KnownBits>>
   inferAbstractKBPreconditions(SynthesisContext &SC, Inst *RHS,
@@ -34,6 +39,15 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
 
     std::vector<Inst *> Vars;
     findVars(Mapping.LHS, Vars);
+    std::set<Inst *> FilteredVars;
+
+      for (auto Var : Vars) {
+        std::string NamePrefix = Var->Name;
+        NamePrefix.resize(4);
+        if (!FixItNoVar || Var->K != Inst::Var || NamePrefix == "fake") {
+          FilteredVars.insert(Var);
+        }
+      }
 
     std::map<Inst *, VarInfo> OriginalState;
 
@@ -95,6 +109,7 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
         }
       }
 
+      // Find one input for which the given transformation is valid
       Models.clear();
       std::string Query = BuildQuery(SC.IC, SC.BPCs, PCCopy, Mapping,
                                      &ModelInsts, Precondition, true);
@@ -107,11 +122,18 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
       if (FoundWeakest) {
         for (unsigned J = 0; J < ModelInsts.size(); ++J) {
           llvm::KnownBits KBCurrent(ModelInsts[J]->Width);
-          Known[ModelInsts[J]].One = ModelVals[J];
+          if (FilteredVars.find(ModelInsts[J]) != FilteredVars.end()) {
+            Known[ModelInsts[J]].One = ModelVals[J];
+            Known[ModelInsts[J]].Zero = ~ModelVals[J];
+          } else {
+            auto Zero = llvm::APInt(ModelInsts[J]->Width, 0);
+            Known[ModelInsts[J]].One = Zero;
+            Known[ModelInsts[J]].Zero = Zero;
+          }
+
           if (DebugLevel >= 3) {
             llvm::outs() << "Starting with : " << ModelVals[J] << "\n";
           }
-          Known[ModelInsts[J]].Zero = ~ModelVals[J];
         }
       } else {
         if (Results.empty()) {
@@ -125,6 +147,7 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
           break;
         }
       }
+
       for (unsigned J = 0; J < Vars.size(); ++J) {
         Vars[J]->KnownZeros = Known[Vars[J]].Zero;
         Vars[J]->KnownOnes = Known[Vars[J]].One;

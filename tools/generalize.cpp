@@ -4,6 +4,7 @@
 
 #include "souper/Infer/Preconditions.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
+#include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Inst/InstGraph.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/GetSolver.h"
@@ -36,6 +37,15 @@ static llvm::cl::opt<bool> SymbolizeConstant("symbolize",
                    "(default=false)"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<size_t> SymbolizeNumInsts("symbolize-num-insts",
+    llvm::cl::desc("Number of instructions to synthesize"
+                   "(default=1)"),
+    llvm::cl::init(1));
+
+static llvm::cl::opt<bool> SymbolizeNoDFP("symbolize-no-dataflow",
+    llvm::cl::desc("Do not generate optimizations with dataflow preconditions."),
+    llvm::cl::init(false));
+
 static llvm::cl::opt<bool> FixIt("fixit",
     llvm::cl::desc("Given an invalid optimization, generate a valid one."
                    "(default=false)"),
@@ -64,21 +74,9 @@ void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
   }
 }
 
-void SymbolizeAndGeneralize(InstContext &IC,
-                            Solver *S, ParsedReplacement Input) {
-  std::vector<Inst *> LHSConsts, RHSConsts;
-  auto Pred = [](Inst *I) {return I->K == Inst::Const;};
-  findInsts(Input.Mapping.LHS, LHSConsts, Pred);
-  findInsts(Input.Mapping.RHS, RHSConsts, Pred);
-
-  if (RHSConsts.size() != 1) {
-    return;
-    // TODO: Relax this restriction later
-  }
-
-  // Replace LHSConst[0] with a new variable and RHSConst[0]
-  // with a synthesized function.
-
+void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
+                            std::vector<Inst *> LHSConsts,
+                            std::vector<Inst *> RHSConsts) {
   std::map<Inst *, Inst *> InstCache;
   std::vector<Inst *> FakeConsts;
   for (size_t i = 0; i < LHSConsts.size(); ++i) {
@@ -90,25 +88,8 @@ void SymbolizeAndGeneralize(InstContext &IC,
   // Does it makes sense for the expression to depend on other variables?
   // If yes, expand the third argument to include inputs
   EnumerativeSynthesis ES;
-  auto Guesses = ES.generateExprs(IC, 1, FakeConsts,
+  auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, FakeConsts,
                                   RHSConsts[0]->Width);
-
-  // Discarding guesses with symbolic constants
-  // Find a way to avoid this
-  // Here is the problem that needs to be solved for this:
-  // Given f and g\C, find N and P such that P -> (f == c\N)
-  // Weakest possible P is desirable.
-
-  std::vector<Inst *> Filtered;
-  for (auto Guess : Guesses) {
-    std::set<Inst *> ConstSet;
-    std::map <Inst *, llvm::APInt> ResultConstMap;
-    souper::getConstants(Guess, ConstSet);
-    if (ConstSet.empty()) {
-      Filtered.push_back(Guess);
-    }
-  }
-  std::swap(Guesses, Filtered);
 
   std::vector<std::vector<std::map<Inst *, llvm::KnownBits>>>
       Preconditions;
@@ -117,12 +98,51 @@ void SymbolizeAndGeneralize(InstContext &IC,
   std::map<Inst *, APInt> ConstMap;
   auto LHS = getInstCopy(Input.Mapping.LHS, IC, InstCache,
                          BlockCache, &ConstMap, false);
+
+  std::vector<Inst *> WithoutConsts;
+
+  for (auto &Guess : Guesses) {
+    std::set<Inst *> ConstSet;
+    std::map <Inst *, llvm::APInt> ResultConstMap;
+    souper::getConstants(Guess, ConstSet);
+    if (!ConstSet.empty()) {
+      std::map<Inst *, Inst *> InstCacheCopy = InstCache;
+      InstCacheCopy[RHSConsts[0]] = Guess;
+      auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
+                             BlockCache, &ConstMap, false);
+      ConstantSynthesis CS;
+      auto SMTSolver = GetUnderlyingSolver();
+      auto EC = CS.synthesize(SMTSolver.get(), Input.BPCs, Input.PCs,
+                           InstMapping (LHS, RHS), ConstSet,
+                           ResultConstMap, IC, /*MaxTries=*/30, 10,
+                           /*AvoidNops=*/true);
+      if (!ResultConstMap.empty()) {
+        std::map<Inst *, Inst *> InstCache;
+        std::map<Block *, Block *> BlockCache;
+        RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ResultConstMap, false);
+        ReplacementContext RC;
+        auto LHSStr = RC.printInst(LHS, llvm::outs(), true);
+        llvm::outs() << "infer " << LHSStr << "\n";
+        auto RHSStr = RC.printInst(RHS, llvm::outs(), true);
+        llvm::outs() << "result " << RHSStr << "\n\n";
+      } else {
+        if (DebugLevel > 2) {
+          llvm::errs() << "Costant Synthesis ((no Dataflow Preconditions)) failed. \n";
+        }
+      }
+    } else {
+      WithoutConsts.push_back(Guess);
+    }
+  }
+  std::swap(WithoutConsts, Guesses);
+  return;
   for (auto &Guess : Guesses) {
     std::map<Inst *, Inst *> InstCacheCopy = InstCache;
     InstCacheCopy[RHSConsts[0]] = Guess;
 
     auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
                            BlockCache, &ConstMap, false);
+
     std::vector<std::map<Inst *, llvm::KnownBits>> Results;
     bool FoundWP = false;
     InstMapping Mapping(LHS, RHS);
@@ -168,6 +188,9 @@ void SymbolizeAndGeneralize(InstContext &IC,
       auto RHSStr = RC.printInst(Guesses[Idx[i]], llvm::outs(), true);
       llvm::outs() << "result " << RHSStr << "\n\n";
     }
+    if (SymbolizeNoDFP) {
+      continue; // Do not print results with dataflow preconditions
+    }
     for (auto Results : Preconditions[Idx[i]]) {
       for (auto Pair : Results) {
         Pair.first->KnownOnes = Pair.second.One;
@@ -180,6 +203,33 @@ void SymbolizeAndGeneralize(InstContext &IC,
       llvm::outs() << "result " << RHSStr << "\n\n";
     }
   }
+}
+
+void SymbolizeAndGeneralize(InstContext &IC,
+                            Solver *S, ParsedReplacement Input) {
+  std::vector<Inst *> LHSConsts, RHSConsts;
+  auto Pred = [](Inst *I) {return I->K == Inst::Const;};
+  findInsts(Input.Mapping.LHS, LHSConsts, Pred);
+  findInsts(Input.Mapping.RHS, RHSConsts, Pred);
+
+  // Find RHS Consts not in LHS
+  std::vector<Inst *> RHSNewConsts;
+  for (auto Var : RHSConsts) {
+    if (std::find(LHSConsts.begin(),
+                  LHSConsts.end(), Var) == LHSConsts.end()) {
+      RHSNewConsts.push_back(Var);
+    }
+  }
+  std::swap(RHSConsts, RHSNewConsts);
+
+  // One at a time
+  for (auto LHSConst : LHSConsts) {
+    SymbolizeAndGeneralize(IC, S, Input, {LHSConst}, RHSConsts);
+  }
+  // TODO: Two at a time, etc. Is this replaceable by DFP?
+
+  // All at once
+  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts);
 }
 
 // TODO: Return modified instructions instead of just printing out
