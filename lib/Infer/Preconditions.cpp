@@ -41,13 +41,13 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
     findVars(Mapping.LHS, Vars);
     std::set<Inst *> FilteredVars;
 
-      for (auto Var : Vars) {
-        std::string NamePrefix = Var->Name;
-        NamePrefix.resize(4);
-        if (!FixItNoVar || Var->K != Inst::Var || NamePrefix == "fake") {
-          FilteredVars.insert(Var);
-        }
+    for (auto Var : Vars) {
+      std::string NamePrefix = Var->Name;
+      NamePrefix.resize(4);
+      if (!FixItNoVar || Var->K != Inst::Var || NamePrefix == "fake") {
+        FilteredVars.insert(Var);
       }
+    }
 
     std::map<Inst *, VarInfo> OriginalState;
 
@@ -137,7 +137,9 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
         }
       } else {
         if (Results.empty()) {
-          llvm::outs() << "Transformation is not valid for any input.\n";
+          if (DebugLevel >= 3) {
+            llvm::outs() << "Transformation is not valid for any input.\n";
+          }
           return {};
         } else {
           FoundWeakest = true;

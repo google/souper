@@ -135,7 +135,7 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
     }
   }
   std::swap(WithoutConsts, Guesses);
-  return;
+
   for (auto &Guess : Guesses) {
     std::map<Inst *, Inst *> InstCacheCopy = InstCache;
     InstCacheCopy[RHSConsts[0]] = Guess;
@@ -181,7 +181,7 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
     return Utility[a] > Utility[b];
   });
   for (size_t i = 0; i < std::min(Idx.size(), NumResults.getValue()); ++i) {
-    if (Preconditions[Idx[i]].empty()) {
+    if (Preconditions[Idx[i]].empty() && Guesses[Idx[i]]) {
       ReplacementContext RC;
       auto LHSStr = RC.printInst(LHS, llvm::outs(), true);
       llvm::outs() << "infer " << LHSStr << "\n";
@@ -211,16 +211,6 @@ void SymbolizeAndGeneralize(InstContext &IC,
   auto Pred = [](Inst *I) {return I->K == Inst::Const;};
   findInsts(Input.Mapping.LHS, LHSConsts, Pred);
   findInsts(Input.Mapping.RHS, RHSConsts, Pred);
-
-  // Find RHS Consts not in LHS
-  std::vector<Inst *> RHSNewConsts;
-  for (auto Var : RHSConsts) {
-    if (std::find(LHSConsts.begin(),
-                  LHSConsts.end(), Var) == LHSConsts.end()) {
-      RHSNewConsts.push_back(Var);
-    }
-  }
-  std::swap(RHSConsts, RHSNewConsts);
 
   // One at a time
   for (auto LHSConst : LHSConsts) {
