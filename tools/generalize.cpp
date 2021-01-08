@@ -76,7 +76,8 @@ void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
 
 void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
                             std::vector<Inst *> LHSConsts,
-                            std::vector<Inst *> RHSConsts) {
+                            std::vector<Inst *> RHSConsts,
+                            CandidateMap &Results) {
   std::map<Inst *, Inst *> InstCache;
   std::vector<Inst *> FakeConsts;
   for (size_t i = 0; i < LHSConsts.size(); ++i) {
@@ -120,11 +121,9 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
         RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ResultConstMap, false);
-        ReplacementContext RC;
-        auto LHSStr = RC.printInst(LHS, llvm::outs(), true);
-        llvm::outs() << "infer " << LHSStr << "\n";
-        auto RHSStr = RC.printInst(RHS, llvm::outs(), true);
-        llvm::outs() << "result " << RHSStr << "\n\n";
+
+        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, RHS)));
+
       } else {
         if (DebugLevel > 2) {
           llvm::errs() << "Costant Synthesis ((no Dataflow Preconditions)) failed. \n";
@@ -180,27 +179,22 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
   std::sort(Idx.begin(), Idx.end(), [&Utility](size_t a, size_t b) {
     return Utility[a] > Utility[b];
   });
-  for (size_t i = 0; i < std::min(Idx.size(), NumResults.getValue()); ++i) {
+
+  for (size_t i = 0; i < Idx.size(); ++i) {
     if (Preconditions[Idx[i]].empty() && Guesses[Idx[i]]) {
-      ReplacementContext RC;
-      auto LHSStr = RC.printInst(LHS, llvm::outs(), true);
-      llvm::outs() << "infer " << LHSStr << "\n";
-      auto RHSStr = RC.printInst(Guesses[Idx[i]], llvm::outs(), true);
-      llvm::outs() << "result " << RHSStr << "\n\n";
+      Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, Guesses[Idx[i]])));
     }
-    if (SymbolizeNoDFP) {
-      continue; // Do not print results with dataflow preconditions
-    }
-    for (auto Results : Preconditions[Idx[i]]) {
-      for (auto Pair : Results) {
-        Pair.first->KnownOnes = Pair.second.One;
-        Pair.first->KnownZeros = Pair.second.Zero;
+  }
+
+  if (!SymbolizeNoDFP) {
+    for (size_t i = 0; i < std::min(Idx.size(), NumResults.getValue()); ++i) {
+      for (auto Computed : Preconditions[Idx[i]]) {
+        for (auto Pair : Computed) {
+          Pair.first->KnownOnes = Pair.second.One;
+          Pair.first->KnownZeros = Pair.second.Zero;
+        }
+        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, Guesses[Idx[i]])));
       }
-      ReplacementContext RC;
-      auto LHSStr = RC.printInst(LHS, llvm::outs(), true);
-      llvm::outs() << "infer " << LHSStr << "\n";
-      auto RHSStr = RC.printInst(Guesses[Idx[i]], llvm::outs(), true);
-      llvm::outs() << "result " << RHSStr << "\n\n";
     }
   }
 }
@@ -212,14 +206,22 @@ void SymbolizeAndGeneralize(InstContext &IC,
   findInsts(Input.Mapping.LHS, LHSConsts, Pred);
   findInsts(Input.Mapping.RHS, RHSConsts, Pred);
 
+  CandidateMap Results;
+
   // One at a time
   for (auto LHSConst : LHSConsts) {
-    SymbolizeAndGeneralize(IC, S, Input, {LHSConst}, RHSConsts);
+    SymbolizeAndGeneralize(IC, S, Input, {LHSConst}, RHSConsts, Results);
   }
   // TODO: Two at a time, etc. Is this replaceable by DFP?
 
   // All at once
-  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts);
+  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
+
+  // TODO: Move sorting here
+  for (auto &&Result : Results) {
+    Result.print(llvm::outs(), true);
+    llvm::outs() << "\n";
+  }
 }
 
 // TODO: Return modified instructions instead of just printing out
