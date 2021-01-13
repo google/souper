@@ -87,25 +87,35 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
           V->KnownOnes = OriginalState[V].OriginalOne;
           V->KnownZeros = OriginalState[V].OriginalZero;
         }
-
+        Inst *NewPre = nullptr;
         for (size_t i = 0; i < Vars.size(); ++i) {
           auto &I = Vars[i];
           auto W = I->Width;
-          auto Zero = SC.IC.getConst(llvm::APInt(W, 0));
+//          auto Zero = SC.IC.getConst(llvm::APInt(W, 0));
           auto AllOnes = SC.IC.getConst(llvm::APInt::getAllOnesValue(W));
 
-          auto A = SC.IC.getInst(Inst::And, W, {I, SC.IC.getConst(KB[I].One)});
+          auto KnownOne = SC.IC.getConst(KB[I].One);
+          auto KnownZero = SC.IC.getConst(KB[I].Zero);
+          auto A = SC.IC.getInst(Inst::And, W, {I, KnownOne});
 
           auto B = SC.IC.getInst(Inst::And, W,
                      {SC.IC.getInst(Inst::Xor, W, {I, AllOnes}),
-                      SC.IC.getConst(KB[I].Zero)});
+                      KnownZero});
 
-          auto New = SC.IC.getInst(Inst::And, 1,
-                       {SC.IC.getInst(Inst::Eq, 1, {A, Zero}),
-                        SC.IC.getInst(Inst::Eq, 1, {B, Zero})});
+          auto VarConstraint = SC.IC.getInst(Inst::Or, 1,
+                       {SC.IC.getInst(Inst::Ne, 1, {A, KnownOne}),
+                        SC.IC.getInst(Inst::Ne, 1, {B, KnownZero})});
 
-          // Do not find an input belonging to a derived abstract set.
-          Precondition = SC.IC.getInst(Inst::And, 1, {Precondition, New});
+          if (NewPre) {
+            NewPre = SC.IC.getInst(Inst::Or, 1, {NewPre, VarConstraint});
+          } else {
+            NewPre = VarConstraint;
+          }
+
+        }
+        // Do not find an input belonging to a derived abstract set.
+        if (NewPre) {
+          Precondition = SC.IC.getInst(Inst::And, 1, {Precondition, NewPre});
         }
       }
 
