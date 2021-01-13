@@ -4,10 +4,15 @@
 #include <llvm/Support/CommandLine.h>
 using llvm::APInt;
 
+static llvm::cl::opt<bool> FixItNoVar("fixit-no-restrict-vars",
+    llvm::cl::desc("Do not restrict input variables, only constants."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
 namespace souper {
 std::vector<std::map<Inst *, llvm::KnownBits>>
   inferAbstractKBPreconditions(SynthesisContext &SC, Inst *RHS,
-                               SMTLIBSolver *SMTSolver, Solver *S, bool &FoundWeakest) {
+                               Solver *S, bool &FoundWeakest) {
     InstMapping Mapping(SC.LHS, RHS);
     bool Valid;
     if (DebugLevel >= 3) {
@@ -20,7 +25,10 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
     }
     std::vector<InstMapping> PCCopy = SC.PCs;
     if (Valid) {
-      llvm::outs() << "Already valid.\n";
+      FoundWeakest = true;
+      if (DebugLevel > 1) {
+        llvm::errs() << "Already valid.\n";
+      }
       return {};
     }
 
@@ -31,6 +39,15 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
 
     std::vector<Inst *> Vars;
     findVars(Mapping.LHS, Vars);
+    std::set<Inst *> FilteredVars;
+
+    for (auto Var : Vars) {
+      std::string NamePrefix = Var->Name;
+      NamePrefix.resize(4);
+      if (!FixItNoVar || Var->K != Inst::Var || NamePrefix == "fake") {
+        FilteredVars.insert(Var);
+      }
+    }
 
     std::map<Inst *, VarInfo> OriginalState;
 
@@ -70,49 +87,69 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
           V->KnownOnes = OriginalState[V].OriginalOne;
           V->KnownZeros = OriginalState[V].OriginalZero;
         }
-
+        Inst *NewPre = nullptr;
         for (size_t i = 0; i < Vars.size(); ++i) {
           auto &I = Vars[i];
           auto W = I->Width;
-          auto Zero = SC.IC.getConst(llvm::APInt(W, 0));
+//          auto Zero = SC.IC.getConst(llvm::APInt(W, 0));
           auto AllOnes = SC.IC.getConst(llvm::APInt::getAllOnesValue(W));
 
-          auto A = SC.IC.getInst(Inst::And, W, {I, SC.IC.getConst(KB[I].One)});
+          auto KnownOne = SC.IC.getConst(KB[I].One);
+          auto KnownZero = SC.IC.getConst(KB[I].Zero);
+          auto A = SC.IC.getInst(Inst::And, W, {I, KnownOne});
 
           auto B = SC.IC.getInst(Inst::And, W,
                      {SC.IC.getInst(Inst::Xor, W, {I, AllOnes}),
-                      SC.IC.getConst(KB[I].Zero)});
+                      KnownZero});
 
-          auto New = SC.IC.getInst(Inst::And, 1,
-                       {SC.IC.getInst(Inst::Eq, 1, {A, Zero}),
-                        SC.IC.getInst(Inst::Eq, 1, {B, Zero})});
+          auto VarConstraint = SC.IC.getInst(Inst::Or, 1,
+                       {SC.IC.getInst(Inst::Ne, 1, {A, KnownOne}),
+                        SC.IC.getInst(Inst::Ne, 1, {B, KnownZero})});
 
-          // Do not find an input belonging to a derived abstract set.
-          Precondition = SC.IC.getInst(Inst::And, 1, {Precondition, New});
+          if (NewPre) {
+            NewPre = SC.IC.getInst(Inst::Or, 1, {NewPre, VarConstraint});
+          } else {
+            NewPre = VarConstraint;
+          }
+
+        }
+        // Do not find an input belonging to a derived abstract set.
+        if (NewPre) {
+          Precondition = SC.IC.getInst(Inst::And, 1, {Precondition, NewPre});
         }
       }
 
+      // Find one input for which the given transformation is valid
       Models.clear();
       std::string Query = BuildQuery(SC.IC, SC.BPCs, PCCopy, Mapping,
                                      &ModelInsts, Precondition, true);
 
 
-      SMTSolver->isSatisfiable(Query, FoundWeakest, ModelInsts.size(),
+      S->isSatisfiable(Query, FoundWeakest, ModelInsts.size(),
                                          &ModelVals, SC.Timeout);
 
       std::map<Inst *, llvm::KnownBits> Known;
       if (FoundWeakest) {
         for (unsigned J = 0; J < ModelInsts.size(); ++J) {
           llvm::KnownBits KBCurrent(ModelInsts[J]->Width);
-          Known[ModelInsts[J]].One = ModelVals[J];
+          if (FilteredVars.find(ModelInsts[J]) != FilteredVars.end()) {
+            Known[ModelInsts[J]].One = ModelVals[J];
+            Known[ModelInsts[J]].Zero = ~ModelVals[J];
+          } else {
+            auto Zero = llvm::APInt(ModelInsts[J]->Width, 0);
+            Known[ModelInsts[J]].One = Zero;
+            Known[ModelInsts[J]].Zero = Zero;
+          }
+
           if (DebugLevel >= 3) {
             llvm::outs() << "Starting with : " << ModelVals[J] << "\n";
           }
-          Known[ModelInsts[J]].Zero = ~ModelVals[J];
         }
       } else {
         if (Results.empty()) {
-          llvm::outs() << "Transformation is not valid for any input.\n";
+          if (DebugLevel >= 3) {
+            llvm::outs() << "Transformation is not valid for any input.\n";
+          }
           return {};
         } else {
           FoundWeakest = true;
@@ -122,6 +159,7 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
           break;
         }
       }
+
       for (unsigned J = 0; J < Vars.size(); ++J) {
         Vars[J]->KnownZeros = Known[Vars[J]].Zero;
         Vars[J]->KnownOnes = Known[Vars[J]].One;
