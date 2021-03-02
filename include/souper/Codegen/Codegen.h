@@ -20,6 +20,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/Value.h"
 #include <map>
 
@@ -28,22 +29,28 @@ namespace souper {
 class Codegen {
   llvm::LLVMContext &Context;
   llvm::Module *M;
+  llvm::Function *F;
   llvm::IRBuilder<> &Builder;
   llvm::DominatorTree *DT;
 
   llvm::Instruction *ReplacedInst;
   const std::map<Inst *, llvm::Value *> &ReplacedValues;
-
+  
+  llvm::Value *getValueHelper(Inst *I, std::map<Inst *, llvm::Value *> &Cache, std::map<Block *, llvm::Value *> &BM);
+  bool GenControlFlow = false;
 public:
   Codegen(llvm::LLVMContext &Context_, llvm::Module *M_,
           llvm::IRBuilder<> &Builder_, llvm::DominatorTree *DT_,
           llvm::Instruction *ReplacedInst_,
-          const std::map<Inst *, llvm::Value *> &ReplacedValues_)
+          const std::map<Inst *, llvm::Value *> &ReplacedValues_,
+          bool GenControlFlow_)
       : Context(Context_), M(M_), Builder(Builder_), DT(DT_),
-        ReplacedInst(ReplacedInst_), ReplacedValues(ReplacedValues_) {}
+        ReplacedInst(ReplacedInst_), ReplacedValues(ReplacedValues_),
+        GenControlFlow(GenControlFlow_) {}
 
   static llvm::Type *GetInstReturnType(llvm::LLVMContext &Context, Inst *I);
 
+  llvm::Function *getFunction(Inst *I, const InstContext &IC);
   llvm::Value *getValue(Inst *I);
 };
 

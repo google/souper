@@ -37,6 +37,10 @@ static cl::opt<std::string>
                   cl::desc("<input souper RHS (default=stdin)>"),
                   cl::init("-"));
 
+static cl::opt<bool> GenCF("gen-cf",
+    cl::desc("Generate LLVM bitcode with control flow"),
+    cl::init(false));
+
 static cl::opt<std::string> OutputFilename(
     "o", cl::desc("<output destination for textual LLVM IR (default=stdout)>"),
     cl::init("-"));
@@ -79,26 +83,31 @@ int Work(const MemoryBufferRef &MB) {
 
   llvm::LLVMContext Context;
   llvm::Module Module("souper.ll", Context);
-
+  Function *F;
   const std::vector<llvm::Type *> ArgTypes = GetInputArgumentTypes(IC, Context);
   const auto FT = llvm::FunctionType::get(
-      /*Result=*/Codegen::GetInstReturnType(Context, RepRHS.Mapping.RHS),
-      /*Params=*/ArgTypes, /*isVarArg=*/false);
-
-  Function *F = Function::Create(FT, Function::ExternalLinkage, "fun", &Module);
-
+                                          /*Result=*/Codegen::GetInstReturnType(Context, RepRHS.Mapping.RHS),
+                                          /*Params=*/ArgTypes, /*isVarArg=*/false);
+  
+  F = Function::Create(FT, Function::ExternalLinkage, "fun", &Module);
   const std::map<Inst *, Value *> Args = GetArgsMapping(IC, F);
-
+  
   BasicBlock *BB = BasicBlock::Create(Context, "entry", F);
 
   llvm::IRBuilder<> Builder(Context);
   Builder.SetInsertPoint(BB);
 
-  Value *RetVal = Codegen(Context, &Module, Builder, /*DT*/ nullptr,
-                          /*ReplacedInst*/ nullptr, Args)
-                      .getValue(RepRHS.Mapping.RHS);
-
-  Builder.CreateRet(RetVal);
+  if (GenCF) {
+    F = Codegen(Context, &Module, Builder, /*DT*/ nullptr, nullptr,
+                /*ReplacedInst*/ Args, true)
+      .getFunction(RepRHS.Mapping.RHS, IC);
+  } else {
+    Value *RetVal = Codegen(Context, &Module, Builder, /*DT*/ nullptr,
+                            /*ReplacedInst*/ nullptr, Args, false)
+      .getValue(RepRHS.Mapping.RHS);
+    
+    Builder.CreateRet(RetVal);
+  }
 
   // Validate the generated code, checking for consistency.
   if (verifyFunction(*F, &llvm::errs()))

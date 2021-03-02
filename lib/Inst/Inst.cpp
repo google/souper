@@ -775,6 +775,7 @@ std::vector<Inst *> InstContext::getVariables() const {
   for (const auto &OuterIter : VarInstsByWidth) {
     for (const auto &InnerIter : OuterIter.getSecond()) {
       assert(InnerIter->K == Inst::Kind::Var);
+      if (InnerIter->Name == "blockpred") continue;
       AllVariables.emplace_back(InnerIter.get());
     }
   }
@@ -1309,8 +1310,8 @@ std::vector<Block *> souper::getBlocksFromPhis(Inst *I) {
     Q.pop();
     if (I->K == Inst::Phi)
       Result.push_back(I->B);
-    if (Visited.insert(I).second)
-      for (auto Op : I->orderedOps())
+    for (auto Op : I->orderedOps())
+      if (Visited.insert(Op).second)
         Q.push(Op);
   }
 
