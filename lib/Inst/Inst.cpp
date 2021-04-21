@@ -1172,7 +1172,7 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
                           std::map<Inst *, Inst *> &InstCache,
                           std::map<Block *, Block *> &BlockCache,
                           std::map<Inst *, llvm::APInt> *ConstMap,
-                          bool CloneVars) {
+                          bool CloneVars, bool CloneBlocks) {
 
   if (InstCache.count(I))
     return InstCache.at(I);
@@ -1209,9 +1209,13 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
     }
   } else if (I->K == Inst::Phi) {
     if (!BlockCache.count(I->B)) {
-      auto BlockCopy = IC.createBlock(I->B->Preds);
-      BlockCache[I->B] = BlockCopy;
-      Copy = IC.getPhi(BlockCopy, Ops, I->DemandedBits);
+      if (CloneBlocks) {
+        auto BlockCopy = IC.createBlock(I->B->Preds);
+        BlockCache[I->B] = BlockCopy;
+        Copy = IC.getPhi(BlockCopy, Ops, I->DemandedBits);
+      } else {
+        Copy = IC.getPhi(I->B, Ops, I->DemandedBits);
+      }
     } else {
       Copy = IC.getPhi(BlockCache.at(I->B), Ops, I->DemandedBits);
     }

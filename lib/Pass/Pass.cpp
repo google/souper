@@ -18,8 +18,10 @@
 #include "llvm/Analysis/DemandedBits.h"
 #include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/PostDominators.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/CodeGen/UnreachableBlockElim.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
@@ -33,6 +35,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Transforms/Scalar/ADCE.h"
 #include "llvm/Transforms/Scalar/DCE.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -233,6 +236,17 @@ public:
     if (!TLI)
       report_fatal_error("getTLI() failed");
 
+    // Run UnreachableBlockElim and ADCE locally
+    // TODO: In the long run, switch this tool to the new pass manager.
+    FunctionPassManager FM;
+    FunctionAnalysisManager FAM;
+    FAM.registerPass([&] { return PassInstrumentationAnalysis(); });
+    FAM.registerPass([&] { return DominatorTreeAnalysis(); });
+    FAM.registerPass([&] { return PostDominatorTreeAnalysis(); });
+    FM.addPass(UnreachableBlockElimPass());
+    FM.addPass(ADCEPass());
+    FM.run(*F, FAM);
+
     FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, LVI, SE, TLI, IC, EBC);
 
     if (DebugLevel > 3)
@@ -277,7 +291,12 @@ public:
             EC == std::errc::value_too_large) {
           continue;
         } else {
-          report_fatal_error("Unable to query solver: " + EC.message() + "\n");
+          llvm::errs() << "[FIXME: Crash commented out]\nUnable to query solver: " + EC.message() + "\n";
+          continue;
+          // TODO: This is a temporary workaround to suppress a protocol error which is encountered
+          // once in SPEC 2017. This workaround does not have a negative effect other than maybe
+          // missing one potential transformation.
+          //report_fatal_error("Unable to query solver: " + EC.message() + "\n");
         }
       }
       if (RHSs.empty())
