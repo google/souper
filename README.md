@@ -1,6 +1,8 @@
 Souper is a superoptimizer for LLVM IR. It uses an SMT solver to help identify
 missing peephole optimizations in LLVM's midend optimizers.
 
+The architecture and concepts of Souper are described in [Souper: A synthesizing superoptimizer](https://arxiv.org/pdf/1711.04422.pdf).
+
 # Requirements
 
 Souper should work on any reasonably modern Linux or OS X machine.
