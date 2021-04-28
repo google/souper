@@ -725,7 +725,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       if (!ResultConstMap.empty()) {
         std::map<Inst *, Inst *> InstCache;
         std::map<Block *, Block *> BlockCache;
-        RHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ResultConstMap, false);
+        RHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ResultConstMap, false, false);
       } else {
         continue;
       }
@@ -761,7 +761,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       }
       std::map<Inst *, Inst *> InstCache;
       std::map<Block *, Block *> BlockCache;
-      auto newRHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ZeroConstMap, false);
+      auto newRHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ZeroConstMap, false, false);
       if (isTransformationValid(SC.LHS, newRHS, SC.PCs, SC.BPCs, SC.IC))
         RHS = newRHS;
     }

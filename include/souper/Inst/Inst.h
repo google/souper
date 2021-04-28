@@ -315,7 +315,7 @@ Inst *getInstCopy(Inst *I, InstContext &IC,
                   std::map<Inst *, Inst *> &InstCache,
                   std::map<Block *, Block *> &BlockCache,
                   std::map<Inst *, llvm::APInt> *ConstMap,
-                  bool CloneVars);
+                  bool CloneVars, bool CloneBlocks = true);
 
 Inst *instJoin(Inst *I, Inst *Reserved, Inst *NewInst,
                std::map<Inst *, Inst *> &InstCache, InstContext &IC);
