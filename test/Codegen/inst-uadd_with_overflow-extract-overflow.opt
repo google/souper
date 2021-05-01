@@ -13,8 +13,3 @@ result %3
 ; CHECK-NEXT:   %4 = extractvalue { i8, i1 } %3, 1
 ; CHECK-NEXT:   ret i1 %4
 ; CHECK-NEXT: }
-
-; CHECK: ; Function Attrs: nounwind readnone speculatable
-; CHECK-NEXT: declare { i8, i1 } @llvm.uadd.with.overflow.i8(i8, i8) #0
-
-; CHECK: attributes #0 = { nounwind readnone speculatable willreturn }
