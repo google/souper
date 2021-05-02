@@ -84,10 +84,10 @@ set(GTEST_CXXFLAGS "-DGTEST_HAS_RTTI=0")
 set(GTEST_INCLUDEDIR "${LLVM_SRC}/utils/unittest/googletest/include")
 set(GTEST_LIBS "-lgtest_main -lgtest")
 
-set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++17")
+set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++20")
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++17")
+  set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++20")
   set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -fvisibility-inlines-hidden")
   set(PASS_LDFLAGS "-Wl,-undefined,dynamic_lookup")
 endif()
@@ -129,11 +129,32 @@ find_library(HIREDIS_LIBRARY
   third_party/hiredis-install/lib
   NO_DEFAULT_PATH)
 
-find_library(ALIVE_LIBRARY alive2 PATHS "${ALIVE_BUILDDIR}" NO_DEFAULT_PATH)
-if (ALIVE_LIBRARY)
-  message(STATUS "Alive2: ${ALIVE_LIBRARY}")
+find_library(ALIVE_IR ir PATHS "${ALIVE_BUILDDIR}" NO_DEFAULT_PATH)
+if (ALIVE_IR)
+  message(STATUS "Alive2 IR")
 else()
-  message(SEND_ERROR "Alive2 not found")
+  message(SEND_ERROR "Alive2 libir.a not found")
+endif()
+
+find_library(ALIVE_SMT smt PATHS "${ALIVE_BUILDDIR}" NO_DEFAULT_PATH)
+if (ALIVE_SMT)
+  message(STATUS "Alive2 SMT")
+else()
+  message(SEND_ERROR "Alive2 libsmt.a not found")
+endif()
+
+find_library(ALIVE_TOOLS tools PATHS "${ALIVE_BUILDDIR}" NO_DEFAULT_PATH)
+if (ALIVE_TOOLS)
+  message(STATUS "Alive2 TOOLS")
+else()
+  message(SEND_ERROR "Alive2 libtools.a not found")
+endif()
+
+find_library(ALIVE_UTIL util PATHS "${ALIVE_BUILDDIR}" NO_DEFAULT_PATH)
+if (ALIVE_UTIL)
+  message(STATUS "Alive2 UTIL")
+else()
+  message(SEND_ERROR "Alive2 libutil.a not found")
 endif()
 
 set(Z3 "${CMAKE_SOURCE_DIR}/third_party/z3-install/bin/z3")
@@ -146,6 +167,8 @@ if (Z3_LIBRARY)
 else()
   message(SEND_ERROR "Z3 shared lib not found")
 endif()
+
+set(ALIVE_LIBRARY ${ALIVE_IR} ${ALIVE_SMT} ${ALIVE_TOOLS} ${ALIVE_UTIL} ${Z3_LIBRARY})
 
 set(SOUPER_CLANG_TOOL_FILES
   lib/ClangTool/Actions.cpp

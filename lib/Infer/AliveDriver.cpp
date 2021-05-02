@@ -238,7 +238,7 @@ performCegisFirstQuery(tools::Transform &t,
 
   std::set<smt::expr> Vars;
   std::map<std::string, smt::expr> SMTConsts;
-  for (auto &[Var, Val, Pred] : TgtState.getValues()) {
+  for (auto &[Var, Val] : TgtState.getValues()) {
     auto &Name = Var->getName();
     if (startsWith("%reservedconst", Name)) {
       SMTConsts[Name] = Val.first.value;
@@ -248,107 +248,37 @@ performCegisFirstQuery(tools::Transform &t,
   if (SkipAliveSolver)
     return SynthesisResult;
 
-  // TODO: implement synthesis with refinement
-  smt::Solver::check({{(Sv.first.value == Tv.first.value) && (TriedExpr),
-          [&](const smt::Result &R) {
+  auto R = smt::check_expr((Sv.first.value == Tv.first.value) && (TriedExpr));
+  // no more guesses, stop immediately
+  if (R.isUnsat()) {
+    if (DebugLevel > 3)
+      llvm::errs()<<"No more new possible guesses\n";
+    return {};
+  } else if (R.isSat()) {
+    auto &&Model = R.getModel();
+    smt::expr TriedAnte(false);
 
-          // no more guesses, stop immediately
-          if (R.isUnsat()) {
-            if (DebugLevel > 3)
-              llvm::errs()<<"No more new possible guesses\n";
-            return;
-          } else if (R.isSat()) {
-            auto &&Model = R.getModel();
-            smt::expr TriedAnte(false);
+    for (auto &[name, expr] : SMTConsts) {
+      TriedAnte |= (expr != smt::expr::mkUInt(Model.getInt(expr), expr.bits()));
+    }
+    TriedExpr &= TriedAnte;
 
-            for (auto &[name, expr] : SMTConsts) {
-              TriedAnte |= (expr != smt::expr::mkUInt(Model.getInt(expr), expr.bits()));
-            }
-            TriedExpr &= TriedAnte;
-
-            for (auto &[name, expr] : SMTConsts) {
-              auto *I = SouperConsts[name];
-              SynthesisResult[I] = llvm::APInt(I->Width, Model.getInt(expr));
-            }
-          }
-        }}});
-
+    for (auto &[name, expr] : SMTConsts) {
+      auto *I = SouperConsts[name];
+      SynthesisResult[I] = llvm::APInt(I->Width, Model.getInt(expr));
+    }
+  }
   return SynthesisResult;
 }
 
 std::map<souper::Inst *, llvm::APInt>
 synthesizeConstantUsingSolver(tools::Transform &t,
   std::map<std::string, souper::Inst *> &SouperConsts) {
+  // Removed because implementation was bit-rotting.
+  // The combination of the options requiring this is
+  // not currently used.
+  llvm::errs() << "Direct solver based constant synthesis through alive unimplemented.";
   return {};
-
-  IR::State SrcState(t.src, true), tgt_state(t.tgt, false);
-  util::sym_exec(SrcState);
-  util::sym_exec(tgt_state);
-
-  util::Errors Errs;
-
-  auto &&SrcRet = SrcState.returnVal();
-  auto &&TgtRet = tgt_state.returnVal();
-
-  auto QVars = SrcState.getQuantVars();
-  QVars.insert(SrcRet.second.begin(), SrcRet.second.end());
-
-  auto ErrF = [&](const smt::Result &r, bool print_var, const char *msg) {
-//     tools::error(Errs, SrcState, tgt_state, r, print_var, nullptr,
-//                  SrcRet.first, TgtRet.first, msg,false);
-    //FIXME: temporarily disabled, find a way to pass a Type to tools::error
-    std::cerr << msg << "\n";
-    tools::TransformPrintOpts Opts;
-    Opts.print_fn_header = true;
-    t.print(std::cerr, Opts);
-  };
-
-  std::set<smt::expr> Vars;
-  std::map<std::string, smt::expr> SMTConsts;
-
-  for (auto &[var, val, Pred] : SrcState.getValues()) {
-    auto &name = var->getName();
-    if (startsWith("%var", name)) {
-      auto app = val.first.value.isApp();
-      assert(app);
-      Vars.insert(Z3_get_app_arg(smt::ctx(), app, 1));
-    }
-  }
-  for (auto &[var, val, Pred] : tgt_state.getValues()) {
-    auto &name = var->getName();
-    if (startsWith("%reserved", name)) {
-      auto app = val.first.value.isApp();
-      assert(app);
-      SMTConsts[name] = (Z3_get_app_arg(smt::ctx(), app, 1));
-    }
-  }
-
-  auto SimpleConstExistsCheck =
-    smt::expr::mkForAll(Vars, SrcRet.first.value == TgtRet.first.value);
-
-  std::map<souper::Inst *, llvm::APInt> SynthesisResult;
-
-  if (SkipAliveSolver)
-    return SynthesisResult;
-
-  smt::Solver::check({{preprocess(t, QVars, SrcRet.second,
-                       std::move(SimpleConstExistsCheck)),
-  [&] (const smt::Result &R) {
-    if (R.isUnsat()) {
-      ErrF(R, true, "Value mismatch");
-    } else if (R.isSat()) {
-      auto &&Model = R.getModel();
-      for (auto &[name, expr] : SMTConsts) {
-        auto *I = SouperConsts[name];
-        SynthesisResult[I] = llvm::APInt(I->Width, Model.getInt(expr));
-      }
-      return;
-    } else {
-      ErrF(R, true, "Unknown/Invalid Result, investigate.");
-    }
-  }}});
-
-  return SynthesisResult;
 }
 
 souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_,
