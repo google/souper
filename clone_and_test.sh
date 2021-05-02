@@ -14,8 +14,8 @@ echo "TRAVIS_EVENT_TYPE set to push";
 fi
 
 if [ -z ${TRAVIS_BRANCH} ]; then
-TRAVIS_BRANCH="master";
-echo "TRAVIS_BRANCH set to master";
+TRAVIS_BRANCH="main";
+echo "TRAVIS_BRANCH set to main";
 fi
 
 # check if this is a pull request or a push
