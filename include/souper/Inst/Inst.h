@@ -269,6 +269,7 @@ public:
                 llvm::APInt DemandedBits, bool Available);
 
   std::vector<Inst *> getVariables() const;
+  std::vector<Inst *> getVariablesFor(Inst *Root) const;
 };
 
 struct SynthesisContext {
@@ -283,6 +284,7 @@ struct SynthesisContext {
 };
 
 int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
+int backendCost(Inst *I, bool IgnoreDepsWithExternalUses = false);
 int countHelper(Inst *I, std::set<Inst *> &Visited);
 int instCount(Inst *I);
 int benefit(Inst *LHS, Inst *RHS);

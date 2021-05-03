@@ -10,10 +10,10 @@ result %4
 ; CHECK: ; ModuleID = 'souper.ll'
 ; CHECK-NEXT: source_filename = "souper.ll"
 
-; CHECK: define i8 @fun(i16 %0, i4 %1) {
+; CHECK: define i8 @fun(i4 %0, i16 %1) {
 ; CHECK-NEXT: entry:
-; CHECK-NEXT:   %2 = zext i4 %1 to i8
-; CHECK-NEXT:   %3 = trunc i16 %0 to i8
+; CHECK-NEXT:   %2 = zext i4 %0 to i8
+; CHECK-NEXT:   %3 = trunc i16 %1 to i8
 ; CHECK-NEXT:   %4 = and i8 %2, %3
 ; CHECK-NEXT:   ret i8 %4
 ; CHECK-NEXT: }
