@@ -41,29 +41,6 @@ static cl::opt<std::string> OutputFilename(
     "o", cl::desc("<output destination for textual LLVM IR (default=stdout)>"),
     cl::init("-"));
 
-static std::vector<llvm::Type *>
-GetInputArgumentTypes(const InstContext &IC, llvm::LLVMContext &Context) {
-  const std::vector<Inst *> AllVariables = IC.getVariables();
-
-  std::vector<llvm::Type *> ArgTypes;
-  ArgTypes.reserve(AllVariables.size());
-  for (const Inst *const Var : AllVariables)
-    ArgTypes.emplace_back(Type::getIntNTy(Context, Var->Width));
-
-  return ArgTypes;
-}
-
-static std::map<Inst *, Value *> GetArgsMapping(const InstContext &IC,
-                                                Function *F) {
-  std::map<Inst *, Value *> Args;
-
-  const std::vector<Inst *> AllVariables = IC.getVariables();
-  for (auto zz : llvm::zip(AllVariables, F->args()))
-    Args[std::get<0>(zz)] = &(std::get<1>(zz));
-
-  return Args;
-};
-
 int Work(const MemoryBufferRef &MB) {
   InstContext IC;
   ReplacementContext RC;
@@ -79,31 +56,7 @@ int Work(const MemoryBufferRef &MB) {
 
   llvm::LLVMContext Context;
   llvm::Module Module("souper.ll", Context);
-
-  const std::vector<llvm::Type *> ArgTypes = GetInputArgumentTypes(IC, Context);
-  const auto FT = llvm::FunctionType::get(
-      /*Result=*/Codegen::GetInstReturnType(Context, RepRHS.Mapping.RHS),
-      /*Params=*/ArgTypes, /*isVarArg=*/false);
-
-  Function *F = Function::Create(FT, Function::ExternalLinkage, "fun", &Module);
-
-  const std::map<Inst *, Value *> Args = GetArgsMapping(IC, F);
-
-  BasicBlock *BB = BasicBlock::Create(Context, "entry", F);
-
-  llvm::IRBuilder<> Builder(Context);
-  Builder.SetInsertPoint(BB);
-
-  Value *RetVal = Codegen(Context, &Module, Builder, /*DT*/ nullptr,
-                          /*ReplacedInst*/ nullptr, Args)
-                      .getValue(RepRHS.Mapping.RHS);
-
-  Builder.CreateRet(RetVal);
-
-  // Validate the generated code, checking for consistency.
-  if (verifyFunction(*F, &llvm::errs()))
-    return 1;
-  if (verifyModule(Module, &llvm::errs()))
+  if (genModule(IC, RepRHS.Mapping.RHS, Module))
     return 1;
 
   std::error_code EC;
