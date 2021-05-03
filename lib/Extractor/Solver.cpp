@@ -21,6 +21,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
+#include "souper/Codegen/Codegen.h"
 #include "souper/Extractor/Solver.h"
 #include "souper/Infer/AliveDriver.h"
 #include "souper/Infer/ConstantSynthesis.h"
@@ -376,10 +377,10 @@ public:
     return std::error_code();
   }
 
-  std::error_code infer(const BlockPCs &BPCs,
-                        const std::vector<InstMapping> &PCs,
-                        Inst *LHS, std::vector<Inst *> &RHSs,
-                        bool AllowMultipleRHSs, InstContext &IC) override {
+  std::error_code inferHelper(const BlockPCs &BPCs,
+                              const std::vector<InstMapping> &PCs,
+                              Inst *LHS, std::vector<Inst *> &RHSs,
+                              bool AllowMultipleRHSs, InstContext &IC) {
     std::error_code EC;
 
     // FIXME -- it's a bit messy to have this custom logic here
@@ -439,6 +440,23 @@ public:
                                 std::vector<llvm::APInt> *Models,
                                 unsigned Timeout = 0) override {
     return SMTSolver->isSatisfiable(Query, Result, NumModels, Models, Timeout);
+  }
+
+  std::error_code infer(const BlockPCs &BPCs,
+                        const std::vector<InstMapping> &PCs,
+                        Inst *LHS, std::vector<Inst *> &RHSs,
+                        bool AllowMultipleRHSs, InstContext &IC) override {
+    auto EC = inferHelper(BPCs, PCs, LHS, RHSs, AllowMultipleRHSs, IC);
+    if (RHSs.size() <= 1)
+      return EC;
+
+    for (auto &RHS : RHSs) {
+      BackendCost BC;
+      getBackendCost(IC, RHS, BC);
+      // FIXME sort the list
+    }
+
+    return EC;
   }
 
   std::error_code isValid(InstContext &IC, const BlockPCs &BPCs,

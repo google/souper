@@ -321,4 +321,62 @@ llvm::Value *Codegen::getValue(Inst *I) {
                      Inst::getKindName(I->K) + " in Codegen::getValue()");
 }
 
+static std::vector<llvm::Type *>
+GetInputArgumentTypes(const InstContext &IC, llvm::LLVMContext &Context, Inst *Root) {
+  const std::vector<Inst *> AllVariables = IC.getVariablesFor(Root);
+
+  std::vector<llvm::Type *> ArgTypes;
+  ArgTypes.reserve(AllVariables.size());
+  for (const Inst *const Var : AllVariables) {
+    llvm::errs() << "arg with width " << Var->Width << " and number " << Var->Number << "\n";
+    ArgTypes.emplace_back(Type::getIntNTy(Context, Var->Width));
+  }
+
+  return ArgTypes;
+}
+
+static std::map<Inst *, Value *> GetArgsMapping(const InstContext &IC,
+                                                Function *F, Inst *Root) {
+  std::map<Inst *, Value *> Args;
+
+  const std::vector<Inst *> AllVariables = IC.getVariablesFor(Root);
+  for (auto zz : llvm::zip(AllVariables, F->args()))
+    Args[std::get<0>(zz)] = &(std::get<1>(zz));
+
+  return Args;
+};
+
+/// If there are no errors, the function returns false. If an error is found,
+/// a message describing the error is written to OS (if non-null) and true is
+/// returned.
+bool genModule(InstContext &IC, souper::Inst *I, llvm::Module &Module) {
+  llvm::LLVMContext &Context = Module.getContext();
+  const std::vector<llvm::Type *> ArgTypes = GetInputArgumentTypes(IC, Context, I);
+  const auto FT = llvm::FunctionType::get(
+      /*Result=*/Codegen::GetInstReturnType(Context, I),
+      /*Params=*/ArgTypes, /*isVarArg=*/false);
+
+  Function *F = Function::Create(FT, Function::ExternalLinkage, "fun", &Module);
+
+  const std::map<Inst *, Value *> Args = GetArgsMapping(IC, F, I);
+
+  BasicBlock *BB = BasicBlock::Create(Context, "entry", F);
+
+  llvm::IRBuilder<> Builder(Context);
+  Builder.SetInsertPoint(BB);
+
+  Value *RetVal = Codegen(Context, &Module, Builder, /*DT*/ nullptr,
+                          /*ReplacedInst*/ nullptr, Args)
+                      .getValue(I);
+
+  Builder.CreateRet(RetVal);
+
+  // Validate the generated code, checking for consistency.
+  if (verifyFunction(*F, &llvm::errs()))
+    return true;
+  if (verifyModule(Module, &llvm::errs()))
+    return true;
+  return false;
+}
+
 } // namespace souper

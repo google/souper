@@ -645,9 +645,9 @@ std::error_code synthesizeWithAlive(SynthesisContext &SC, std::vector<Inst *> &R
     }
     assert (RHS);
     RHSs.emplace_back(RHS);
-    if (!SC.CheckAllGuesses) {
+    if (!SC.CheckAllGuesses)
       return EC;
-    }
+
     if (DebugLevel > 3) {
       llvm::outs() << "; result " << RHSs.size() << ":\n";
       ReplacementContext RC;
