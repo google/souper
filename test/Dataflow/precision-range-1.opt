@@ -1,5 +1,5 @@
 
-; RUN: %souper-check -infer-range %s | %FileCheck %s
+; RUN: %souper-check -infer-range -souper-max-constant-synthesis-tries=60 %s | %FileCheck %s
 
 ; CHECK: range from souper: [1,0)
 
