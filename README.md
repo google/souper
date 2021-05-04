@@ -13,11 +13,6 @@ http://llvm.org/docs/GettingStarted.html#getting-a-modern-host-c-toolchain
 
 You will also need CMake to build Souper and its dependencies.
 
-If you have Go installed, you will also need the Redigo Redis client:
-```
-$ go get github.com/gomodule/redigo/redis
-```
-
 # Building Souper
 
 1. Download and build dependencies:

@@ -32,7 +32,6 @@ else
     ln -s /usr/src/souper/third_party;
 fi
 
-export GOPATH=/usr/src/go
 Z3=/usr/bin/z3
 SRCDIR="$PWD"
 

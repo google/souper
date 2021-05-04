@@ -473,21 +473,6 @@ add_custom_target(check
 # we want assertions even in release mode!
 string(REPLACE "-DNDEBUG" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
-find_program(GO_EXECUTABLE NAMES go DOC "go executable")
-if(NOT GO_EXECUTABLE STREQUAL "GO_EXECUTABLE-NOTFOUND")
-  add_executable(souperweb-backend
-    tools/souperweb-backend.cpp
-  )
-  set_target_properties(souperweb-backend
-    PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
-  target_include_directories(souperweb-backend PRIVATE "${LLVM_INCLUDEDIR}")
-
-  target_link_libraries(souperweb-backend souperTool souperExtractor souperPass souperKVStore souperSMTLIB2 souperParser souperInst ${HIREDIS_LIBRARY})
-
-  add_custom_target(souperweb ALL COMMAND ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/souperweb ${CMAKE_SOURCE_DIR}/tools/souperweb.go
-                                  COMMENT "Building souperweb")
-endif()
-
 add_library(profileRuntime STATIC
   runtime/souperPassProfile.c)
 
