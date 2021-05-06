@@ -62,7 +62,8 @@ static std::unique_ptr<SMTLIBSolver> GetUnderlyingSolver() {
 
 static std::unique_ptr<Solver> GetSolver(KVStore *&KV) {
   std::unique_ptr<SMTLIBSolver> US = GetUnderlyingSolver();
-  if (!US) return NULL;
+  if (!US)
+    return NULL;
   std::unique_ptr<Solver> S = createBaseSolver (std::move(US), SolverTimeout);
   if (ExternalCache) {
     KV = new KVStore;
