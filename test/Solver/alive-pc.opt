@@ -1,0 +1,13 @@
+; RUN: %souper-check -souper-use-alive %s > %t 2>&1
+; RUN: %FileCheck %s < %t
+
+%0:i64 = var
+%1:i64 = udiv 6148914691236517204:i64, %0
+%2:i64 = var
+%3:i1 = ule %1, %2
+pc %3 0:i1
+%4:i64 = udiv %2, 2:i64
+infer %4
+%5:i64 = ashr %2, 1:i64
+result %5
+;CHECK: LGTM
