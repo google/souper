@@ -1022,7 +1022,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       In->HarvestFrom = nullptr;
       EB.markExternalUses(In);
       BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
-      assert(EB.get(&I)->hasOrigin(&I));
+      assert(EB.get(&I)->K == Inst::Const || EB.get(&I)->hasOrigin(&I));
     }
     if (!BCS->Replacements.empty()) {
       std::unordered_set<Block *> VisitedBlocks;
