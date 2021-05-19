@@ -21,8 +21,8 @@ fi
 
 ncpus=$(command nproc 2>/dev/null || command sysctl -n hw.ncpu 2>/dev/null || echo 8)
 
-# hiredis version 0.14.0
-hiredis_commit=685030652cd98c5414ce554ff5b356dfe8437870
+# hiredis latest as of May 7 2021
+hiredis_commit=667dbf536524ba3f28c1d964793db1055c5a64f2
 llvm_repo=https://github.com/regehr/llvm-project.git
 # llvm_commit specifies the git branch or hash to checkout to
 llvm_commit=disable-peepholes-v05
