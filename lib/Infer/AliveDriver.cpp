@@ -284,6 +284,7 @@ synthesizeConstantUsingSolver(tools::Transform &t,
 souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_,
                                  std::vector<Inst *> ExtraInputs)
     : LHS(LHS_), PreCondition(PreCondition_), IC(IC_) {
+  smt::set_query_timeout(std::to_string(60000)); // milliseconds
   IsLHS = true;
   InstNumbers = 101;
   //FIXME: Magic number. 101 is chosen arbitrarily.
