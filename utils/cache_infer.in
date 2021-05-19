@@ -33,8 +33,10 @@ my $RAM_LIMIT = 4 * 1024 * 1024 * 1024;
 sub usage() {
     print <<"END";
 Options:
-  -n           number of CPUs to use (default=$NPROCS)
-  -tag         add this tag to cache entries, and skip entries with it
+  -n                        number of CPUs to use (default=$NPROCS)
+  -tag                      add this tag to cache entries, and skip entries with it
+  -separate-files           put each souper invocation's output into its own output file
+  -souper-debug-level       pass this integer debug level to Souper
   -verbose
 END
     exit -1;
@@ -42,18 +44,26 @@ END
 
 my $tag = "x";
 my $VERBOSE = 0;
+my $SAVE_TEMPS;
+my $SOUPER_DEBUG = -1;
 
 GetOptions(
     "n=i" => \$NPROCS,
     "tag=s" => \$tag,
     "verbose" => \$VERBOSE,
+    "separate-files" => \$SAVE_TEMPS,
+    "souper-debug-level=i" => \$SOUPER_DEBUG,
     ) or usage();
 
 my $OPTS = "";
 
+$OPTS .= "-souper-external-cache ";
 $OPTS .= "-souper-double-check ";
 $OPTS .= "-souper-dataflow-pruning ";
 $OPTS .= "-souper-enumerative-synthesis-max-instructions=1 ";
+if ($SOUPER_DEBUG != -1) {
+    $OPTS .= "-souper-debug-level=${SOUPER_DEBUG} ";
+}
 
 my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15";
 
@@ -70,11 +80,22 @@ sub infer($) {
     print STDERR "$cmd\n";
     $fh->flush();
     open(my $foo, '>>', 'fail.txt');
-    open INF, "$cmd < $tmpfn |" or print $foo "$k\n";;
+    my $INF;
+    my $OFN = "tmp_$$.log";
+    if ($SAVE_TEMPS) {
+        system "$cmd < $tmpfn > $OFN 2>&1";
+        open my $OF, ">>$OFN" or die;
+        print $OF "\n\n$cmd\n\n";
+        print $OF "$k\n\n";
+        close $OF;
+        open $INF, "<$OFN" or die;
+    } else {
+        open $INF, "$cmd < $tmpfn |" or print $foo "$k\n";
+    }
     my $ok = 0;
     my $failed = 0;
     my $output = "";
-    while (my $line = <INF>) {
+    while (my $line = <$INF>) {
         if ($line =~ /Failed/) {
             $failed = 1;
             next;
@@ -85,7 +106,7 @@ sub infer($) {
         }
         $output .= $line;
     }
-    close INF;
+    close $INF;
     close $fh;
     unlink $tmpfn;
     # exit 1 unless $ok || $failed;
@@ -93,7 +114,10 @@ sub infer($) {
     $red->ping || die "no server?";
     $red->hset($k, "cache-infer-tag" => $tag);
     exit 1 unless $ok;
+
+    ## FIXME -- we should have souper-check do this
     $red->hset($k, "result" => $output);
+
     exit 0;
 }
 
@@ -127,7 +151,7 @@ sub reset_status($) {
 sub status() {
     print ".";
     $status_cnt++;
-    my $pct = int(100.0*$status_cnt/$status_total);
+    my $pct = int(100.0 * $status_cnt/$status_total);
     if ($pct > $status_opct) {
         $status_opct = $pct;
         print "$pct %\n";

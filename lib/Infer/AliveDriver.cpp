@@ -438,15 +438,16 @@ bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
     return false;
 
   if (auto errs = tv.verify()) {
-    if (DebugLevel >= 1) {
+    if (DebugLevel >= 2) {
       std::ostringstream os;
       os << errs << "\n";
       llvm::errs() << os.str();
+      llvm::errs() << "RHS rejected by Alive2\n";
     }
     return false; // TODO: Encode errs into ErrorCode
   } else {
-    if (DebugLevel > 2)
-      llvm::errs() << "RHS proved valid.\n";
+    if (DebugLevel >= 2)
+      llvm::errs() << "RHS verified by Alive2\n";
     return true;
   }
 }
