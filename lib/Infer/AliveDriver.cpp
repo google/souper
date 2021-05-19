@@ -463,9 +463,7 @@ bool souper::AliveDriver::translateRoot(const souper::Inst *I, const Inst *PC,
 
   FunctionBuilder Builder(F);
   if (PC) {
-    auto Zero = Builder.val(getType(I->Width), llvm::APInt(I->Width, 0));
-    ExprCache[I] = Builder.select(getType(I->Width), "%ifpc",
-                   ExprCache[PC], ExprCache[I], Zero);
+    Builder.assume(ExprCache[PC]);
   }
   Builder.ret(getType(I->Width), ExprCache[I]);
   F.setType(getType(I->Width));
