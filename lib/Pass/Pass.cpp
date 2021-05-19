@@ -305,7 +305,7 @@ public:
       Cand.Mapping.RHS = RHSs.front();
 
       Instruction *I = Cand.Origin;
-      assert(Cand.Mapping.LHS->hasOrigin(I));
+      assert(Cand.Mapping.LHS->K == Inst::Const || Cand.Mapping.LHS->hasOrigin(I));
       IRBuilder<> Builder(I);
 
       Value *NewVal = getValue(Cand.Mapping.RHS, I, EBC, DT,
