@@ -100,6 +100,9 @@ namespace {
   static cl::opt<bool> OnlyInferIN("souper-only-infer-iN",
     cl::desc("Only infer integer constants (default=false)"),
     cl::init(false));
+  static cl::opt<bool> TryShrinkConsts("souper-shrink-consts",
+    cl::desc("Try to shrink constants (defaults=false)"),
+    cl::init(false));
 }
 
 // TODO
@@ -747,22 +750,23 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
         RHS = nullptr;
       }
     }
-
-    // FIXME shrink constants properly, this is a placeholder where we
-    // just see if we can replace every constant with zero
-    if (RHS && !ResultConstMap.empty() && DoubleCheckWithAlive) {
-      std::map <Inst *, llvm::APInt> ZeroConstMap;
-      for (auto it : ResultConstMap) {
-        auto I = it.first;
-        ZeroConstMap[I] = llvm::APInt(I->Width, 0);
+    if (TryShrinkConsts) {
+      // FIXME shrink constants properly, this is a placeholder where we
+      // just see if we can replace every constant with zero
+      // TODO(manasij) : Implement binary search, involve alive only when we find a solution
+      if (RHS && !ResultConstMap.empty() && DoubleCheckWithAlive) {
+        std::map <Inst *, llvm::APInt> ZeroConstMap;
+        for (auto it : ResultConstMap) {
+          auto I = it.first;
+          ZeroConstMap[I] = llvm::APInt(I->Width, 0);
+        }
+        std::map<Inst *, Inst *> InstCache;
+        std::map<Block *, Block *> BlockCache;
+        auto newRHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ZeroConstMap, false, false);
+        if (isTransformationValid(SC.LHS, newRHS, SC.PCs, SC.BPCs, SC.IC))
+          RHS = newRHS;
       }
-      std::map<Inst *, Inst *> InstCache;
-      std::map<Block *, Block *> BlockCache;
-      auto newRHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ZeroConstMap, false, false);
-      if (isTransformationValid(SC.LHS, newRHS, SC.PCs, SC.BPCs, SC.IC))
-        RHS = newRHS;
     }
-    
     if (RHS) {
       RHSs.emplace_back(RHS);
       if (!SC.CheckAllGuesses)
