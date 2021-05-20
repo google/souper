@@ -115,5 +115,5 @@ mkdir -p $hiredis_installdir/include/hiredis
 mkdir -p $hiredis_installdir/lib
 
 (cd $hiredis_srcdir && git checkout $hiredis_commit && make libhiredis.a &&
- cp -r hiredis.h async.h read.h sds.h adapters ${hiredis_installdir}/include/hiredis &&
+ cp -r alloc.h hiredis.h async.h read.h sds.h adapters ${hiredis_installdir}/include/hiredis &&
  cp libhiredis.a ${hiredis_installdir}/lib)
