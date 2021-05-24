@@ -25,7 +25,6 @@
 #include <set>
 
 static const unsigned MaxTries = 30;
-static const unsigned MaxInputSpecializationTries = 2;
 
 bool UseAlive;
 extern unsigned DebugLevel;
@@ -92,8 +91,8 @@ namespace {
     cl::desc("Ignore cost of RHSes -- just generate them. (default=false)"),
     cl::init(false));
   static cl::opt<unsigned> MaxLHSCands("souper-max-lhs-cands",
-    cl::desc("Gather at most this many values from a LHS to use as synthesis inputs (default=8)"),
-    cl::init(8));
+    cl::desc("Gather at most this many values from a LHS to use as synthesis inputs (default=10)"),
+    cl::init(10));
   static cl::opt<bool> OnlyInferI1("souper-only-infer-i1",
     cl::desc("Only infer integer constants with width 1 (default=false)"),
     cl::init(false));
@@ -492,8 +491,9 @@ bool getGuesses(const std::vector<Inst *> &Inputs,
       }
     }
   }
+
+  // FIXME: This is a bit heavy-handed. Find a way to eliminate this sorting.
   sortGuesses(PartialGuesses);
-  //FIXME: This is a bit heavy-handed. Find a way to eliminate this sorting.
 
   for (auto I : PartialGuesses) {
     Inst *JoinedGuess;

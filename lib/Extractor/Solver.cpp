@@ -827,7 +827,7 @@ public:
     if (LHSStr.length() > MaxLHSSize)
       return std::make_error_code(std::errc::value_too_large);
     std::string S;
-    if (KV->hGet(LHSStr, "result", S)) {
+    if (KV->hGet(LHSStr, "rhs", S)) {
       ++ExternalHits;
       if (S == "") {
         RHSs.clear();
@@ -843,7 +843,7 @@ public:
       ++ExternalMisses;
       if (NoInfer) {
         RHSs.clear();
-        KV->hSet(LHSStr, "result", "");
+        KV->hSet(LHSStr, "noinfer", "");
         return std::error_code();
       }
       std::error_code EC = UnderlyingSolver->infer(BPCs, PCs, LHS, RHSs,
@@ -853,7 +853,7 @@ public:
         // TODO: support multi RHSs caching
         RHSStr = GetReplacementRHSString(RHSs.front(), Context);
       }
-      KV->hSet(LHSStr, "result", RHSStr);
+      KV->hSet(LHSStr, "rhs", RHSStr);
       return EC;
     }
   }

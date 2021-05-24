@@ -125,7 +125,7 @@ if ($RAW) {
         foreach my $kk (sort keys %h) {
             print "  <$kk> <$h{$kk}>\n";
         }
-        my $result = $h{"result"};
+        my $result = $h{"rhs"};
         print "------------------------------------------------------\n\n";
     }
     exit 0;
@@ -321,7 +321,7 @@ my $untagged = 0;
 foreach my $opt (@all_keys) {
     # last if $xcnt++ > 2500;
     my %h = $r->hgetall($opt);
-    my $result = $h{"result"};
+    my $result = $h{"rhs"};
     if (defined $h{"cache-infer-tag"}) {
 	$tagged++;
     } else {

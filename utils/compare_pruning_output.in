@@ -1,0 +1,21 @@
+#!/usr/bin/env perl
+
+use strict;
+use autodie;
+use warnings;
+
+my @files = glob "*.log";
+
+foreach my $f1 (@files) {
+    next unless $f1 =~ /^tmp_([0-9]+)\.log$/;
+    my $pid = $1;
+    my $f2 = "tmp_${pid}_2.log";
+    if (-f $f2) {
+        my $res = system "diff $f1 $f2";
+        if ($res != 0) {
+            print "\n$f1 $f2\n----------------------------------\n\n";
+        }
+    } else {
+        print "oops: $f1 was found, but not $f2\n";
+    }
+}
