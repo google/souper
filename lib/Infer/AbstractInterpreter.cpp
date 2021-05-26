@@ -613,27 +613,7 @@ namespace souper {
       Result = KB0.trunc(I->Width);
       break;
     case Inst::Eq: {
-      // Below implementation, because it contains isReservedConst, is
-      // difficult to put inside BinaryTransferFunctionsKB but it's able to
-      // prune more stuff; so, let's keep both
-      Inst *Constant = nullptr;
-      llvm::KnownBits Other;
-      // Synthesized constant cannot be zero.
-      if (isReservedConst(I->Ops[0])) {
-        Constant = I->Ops[0];
-        Other = KB1;
-      } else if (isReservedConst(I->Ops[1])) {
-        Constant = I->Ops[1];
-        Other = KB0;
-      }
-
-      // Constants are never equal to 0
-      if (Constant != nullptr && Other.Zero.isAllOnesValue()) {
-        Result.Zero.setBit(0);
-      }
-
-      // Fallback to our tested implmentation
-      Result = getMostPreciseKnownBits(Result, BinaryTransferFunctionsKB::eq(KB0, KB1));
+      Result = BinaryTransferFunctionsKB::eq(KB0, KB1);
       break;
     }
     case Inst::Ne:
