@@ -163,7 +163,7 @@ sub add_dprofile($$) {
 my $xcnt = 0;
 foreach my $opt (@all_keys) {
     my %h = $r->hgetall($opt);
-    my $result = $h{"result"};
+    my $result = $h{"rhs"};
     my $known = $h{"known"};
     my $sprofile = 0;
     my $dprofile = 0;

@@ -37,15 +37,13 @@ public:
 
 KVStore::KVImpl::KVImpl() {
   const char *hostname = "127.0.0.1";
-  struct timeval Timeout = { 1, 500000 }; // 1.5 seconds
+  struct timeval Timeout = { 10, 0 }; // 10.0 seconds
   Ctx = redisConnectWithTimeout(hostname, RedisPort, Timeout);
-  if (!Ctx) {
+  if (!Ctx)
     llvm::report_fatal_error("Can't allocate redis context\n");
-  }
-  if (Ctx->err) {
+  if (Ctx->err)
     llvm::report_fatal_error((llvm::StringRef)"Redis connection error: " +
                              Ctx->errstr + "\n");
-  }
 }
 
 KVStore::KVImpl::~KVImpl() {

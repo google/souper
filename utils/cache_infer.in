@@ -37,7 +37,10 @@ Options:
   -tag                      add this tag to cache entries, and skip entries with it
   -separate-files           put each souper invocation's output into its own output file
   -souper-debug-level       pass this integer debug level to Souper
-  -verbose
+  -max-insns                max instructions for enumerative synthesis (default=1)
+  -verbose                  print extra output
+  -test-pruning             compare synthesis results with and without dataflow pruning
+  -prune                    enable dataflow pruning
 END
     exit -1;
 }
@@ -46,26 +49,40 @@ my $tag = "x";
 my $VERBOSE = 0;
 my $SAVE_TEMPS;
 my $SOUPER_DEBUG = -1;
+my $MAX_INSNS = 1;
+my $TEST_PRUNING = 0;
+my $PRUNE = 0;
 
 GetOptions(
     "n=i" => \$NPROCS,
     "tag=s" => \$tag,
     "verbose" => \$VERBOSE,
+    "prune" => \$PRUNE,
+    "test-pruning" => \$TEST_PRUNING,
     "separate-files" => \$SAVE_TEMPS,
     "souper-debug-level=i" => \$SOUPER_DEBUG,
+    "max-insns=i" => \$MAX_INSNS,
     ) or usage();
 
 my $OPTS = "";
 
-$OPTS .= "-souper-external-cache ";
+if ($TEST_PRUNING) {
+    die "please don't use both -prune and -test-pruning together" if $PRUNE;
+    $SAVE_TEMPS = 1;
+    # we don't turn on external caching, that makes debugging not work
+} else {
+    $OPTS .= "-souper-external-cache ";
+}
 $OPTS .= "-souper-double-check ";
-$OPTS .= "-souper-dataflow-pruning ";
-$OPTS .= "-souper-enumerative-synthesis-max-instructions=1 ";
+if ($PRUNE) {
+    $OPTS .= "-souper-dataflow-pruning ";
+}
+$OPTS .= "-souper-enumerative-synthesis-max-instructions=${MAX_INSNS} ";
 if ($SOUPER_DEBUG != -1) {
     $OPTS .= "-souper-debug-level=${SOUPER_DEBUG} ";
 }
 
-my $check = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15";
+my $SOUPER_CHECK = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15";
 
 my $r = Redis->new();
 $r->ping || die "no server?";
@@ -75,26 +92,41 @@ sub infer($) {
     (my $k) = @_;
     (my $fh, my $tmpfn) = File::Temp::tempfile();
     print $fh $k;
-    my $cmd = "${check} -infer-rhs $OPTS";
+    my $cmd = "${SOUPER_CHECK} -infer-rhs $OPTS";
     print STDERR "\n$k\n\n";
     print STDERR "$cmd\n";
     $fh->flush();
     open(my $foo, '>>', 'fail.txt');
+
+    my $pid = $$;
     my $INF;
-    my $OFN = "tmp_$$.log";
     if ($SAVE_TEMPS) {
-        system "$cmd < $tmpfn > $OFN 2>&1";
-        open my $OF, ">>$OFN" or die;
-        print $OF "\n\n$cmd\n\n";
-        print $OF "$k\n\n";
-        close $OF;
+        my $OFN;
+        if (1) {
+            $OFN = "tmp_${pid}.log";
+            system "$cmd < $tmpfn > $OFN 2>&1";
+            open my $OF, ">>$OFN" or die;
+            print $OF "\n\n$cmd\n\n";
+            print $OF "$k\n\n";
+            close $OF;
+        }
+
+        if ($TEST_PRUNING) {
+            my $OFN2 = "tmp_${pid}_2.log";
+            system "$cmd -souper-dataflow-pruning < $tmpfn > $OFN2 2>&1";
+            open my $OF, ">>$OFN2" or die;
+            print $OF "\n\n$cmd\n\n";
+            print $OF "$k\n\n";
+            close $OF;
+        }
+
         open $INF, "<$OFN" or die;
     } else {
         open $INF, "$cmd < $tmpfn |" or print $foo "$k\n";
     }
+
     my $ok = 0;
     my $failed = 0;
-    my $output = "";
     while (my $line = <$INF>) {
         if ($line =~ /Failed/) {
             $failed = 1;
@@ -104,21 +136,20 @@ sub infer($) {
             $ok = 1;
             next;
         }
-        $output .= $line;
     }
     close $INF;
     close $fh;
     unlink $tmpfn;
-    # exit 1 unless $ok || $failed;
+
     my $red = Redis->new();
     $red->ping || die "no server?";
     $red->hset($k, "cache-infer-tag" => $tag);
-    exit 1 unless $ok;
 
-    ## FIXME -- we should have souper-check do this
-    $red->hset($k, "result" => $output);
-
-    exit 0;
+    if ($ok) {
+        exit 0;
+    } else {
+        exit 1;
+    }
 }
 
 my $num_running = 0;
@@ -220,7 +251,10 @@ foreach my $k (sort byrank @keys) {
     my $pid = fork();
     die unless $pid >= 0;
     if ($pid == 0) {
-	die "setrlimit CPU" unless setrlimit(RLIMIT_CPU, $CPU_LIMIT, $CPU_LIMIT);
+        # let's avoid this kind of timeout when testing pruning...
+        if (!$TEST_PRUNING) {
+            die "setrlimit CPU" unless setrlimit(RLIMIT_CPU, $CPU_LIMIT, $CPU_LIMIT);
+        }
 	die "setrlimit RSS" unless setrlimit(RLIMIT_RSS, $RAM_LIMIT, $RAM_LIMIT);
 	die "setrlimit VMEM" unless setrlimit(RLIMIT_VMEM, $RAM_LIMIT, $RAM_LIMIT);
 	infer ($k);
