@@ -16,3 +16,13 @@
 infer %7 (demandedBits=00000000000000001111111100000000)
 %8:i32 = trunc %5
 result %8
+
+; CHECK: Pruning failed
+
+%0:i32 = var (range=[0,-2147483648))
+%1:i8 = trunc %0
+%2:i32 = zext %1
+infer %2
+%3:i32 = reservedconst
+%4:i32 = and %3, %0
+result %4

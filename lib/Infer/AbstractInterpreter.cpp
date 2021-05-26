@@ -1304,11 +1304,6 @@ s.push(); s.add(ForAll(z, y != (x < z))); print("slt", s.check()); s.pop()
             Other.One.setBit(i);
           }
         }
-        if (R.Zero[i]) {
-          if (Op.Zero[i]) {
-            Other.Zero.setBit(i);
-          }
-        }
       }
       return Other;
     }
