@@ -36,14 +36,16 @@ public:
 };
 
 KVStore::KVImpl::KVImpl() {
+  // TODO: support connecting to other machines
   const char *hostname = "127.0.0.1";
-  struct timeval Timeout = { 10, 0 }; // 10.0 seconds
-  Ctx = redisConnectWithTimeout(hostname, RedisPort, Timeout);
+  Ctx = redisConnect(hostname, RedisPort);
   if (!Ctx)
     llvm::report_fatal_error("Can't allocate redis context\n");
   if (Ctx->err)
     llvm::report_fatal_error((llvm::StringRef)"Redis connection error: " +
                              Ctx->errstr + "\n");
+  if (redisEnableKeepAlive(Ctx) != REDIS_OK)
+    llvm::report_fatal_error("Can't enable redis keepalive\n");
 }
 
 KVStore::KVImpl::~KVImpl() {
