@@ -73,3 +73,20 @@ infer %5
 result %2
 
 ; CHECK: Invalid
+
+%0:i32 = var
+%1 = block 2
+%2 = block 2
+%3 = block 2
+%4:i32 = var
+%5:i32 = or %0, %4
+%6:i32 = phi %3, %5, 0:i32
+%7:i32 = or %0, %6
+%8:i32 = phi %2, %7, 0:i32
+%9:i32 = or %0, %8
+%10:i32 = phi %1, %9, 0:i32
+%11:i32 = or %0, %10
+infer %11
+result %9
+
+; CHECK: Invalid

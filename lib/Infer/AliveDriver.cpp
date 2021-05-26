@@ -803,6 +803,7 @@ struct RefinementProblem {
   RefinementProblem ReplacePhi(souper::InstContext &IC, std::map<Block *, size_t> &Change) {
     std::map<souper::Block *, std::set<souper::Inst *>> Phis;
     collectPhis(LHS, Phis);
+    collectPhis(RHS, Phis);
     collectPhis(Pre, Phis);
     for (auto &BPC : BPCs) {
       collectPhis(BPC.PC.LHS, Phis);
