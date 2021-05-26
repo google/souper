@@ -854,14 +854,18 @@ namespace souper {
     case Inst::Phi:
       Result = CR0.unionWith(CR1);
       break;
-    case Inst::Select:
-      if (getSetSize(CR0) == 1) {
-        if (CR0.contains(APInt(1, 1)))
-          Result = CR1;
-        else if (CR0.contains(APInt(1, 0)))
-          Result = CR2;
-      } else {
-        Result = CR1.unionWith(CR2);
+    case Inst::Select: {
+        auto TVal = CR1, FVal = CR2;
+        if (isReservedConst(I->Ops[1])) TVal = llvm::ConstantRange(I->Width, /*isFullSet=*/true);
+        if (isReservedConst(I->Ops[2])) FVal = llvm::ConstantRange(I->Width, /*isFullSet=*/true);
+        if (getSetSize(CR0) == 1) {
+          if (CR0.contains(APInt(1, 1)))
+            Result = TVal;
+          else if (CR0.contains(APInt(1, 0)))
+            Result = FVal;
+        } else {
+          Result = TVal.unionWith(FVal);
+        }
       }
       break;
       //     case Inst::SDiv: {
