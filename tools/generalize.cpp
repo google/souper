@@ -47,21 +47,20 @@ static llvm::cl::opt<bool> SymbolizeNoDFP("symbolize-no-dataflow",
     llvm::cl::desc("Do not generate optimizations with dataflow preconditions."),
     llvm::cl::init(false));
 
-=======
->>>>>>> 04440f0 (Generalization tool)
 static llvm::cl::opt<bool> FixIt("fixit",
     llvm::cl::desc("Given an invalid optimization, generate a valid one."
                    "(default=false)"),
     llvm::cl::init(false));
 
-<<<<<<< HEAD
+static llvm::cl::opt<bool> GeneralizeWidth("generalize-width",
+    llvm::cl::desc("Given a valid optimization, generalize bitwidth."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
 static cl::opt<size_t> NumResults("generalization-num-results",
     cl::desc("Number of Generalization Results"),
     cl::init(5));
 
-
-=======
->>>>>>> 04440f0 (Generalization tool)
 void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
   bool FoundWP = false;
   std::vector<std::map<Inst *, llvm::KnownBits>> Results;
@@ -231,15 +230,61 @@ void SymbolizeAndGeneralize(InstContext &IC,
   }
 }
 
-// TODO: Return modified instructions instead of just printing out
-void RemoveLeafAndGeneralize(InstContext &IC,
-                               Solver *S, ParsedReplacement Input) {
-=======
-// TODO: Return modified instructions instead of just printing out
-void RemoveLeafAndGeneralize(InstContext &IC,
-                               Solver *S, ParsedReplacement Input) {
+size_t InferWidth(Inst::Kind K, const std::vector<Inst *> &Ops) {
+  switch (K) {
+    case Inst::And:
+    case Inst::Or:
+    case Inst::Xor:
+    case Inst::Sub:
+    case Inst::Mul:
+    case Inst::Add: return Ops[0]->Width;
+    case Inst::Slt:
+    case Inst::Sle:
+    case Inst::Ult:
+    case Inst::Ule: return 1;
+    default: llvm_unreachable((std::string("Unimplemented ") + Inst::getKindName(K)).c_str());
+  }
+}
 
->>>>>>> 04440f0 (Generalization tool)
+Inst *CloneInst(InstContext &IC, Inst *I, std::map<Inst *, size_t> &WidthMap) {
+  if (I->K == Inst::Var) {
+    return IC.createVar(WidthMap[I], I->Name); // TODO other attributes
+  } else if (I->K == Inst::Const) {
+    llvm_unreachable("Const");
+  } else {
+    std::vector<Inst *> Ops;
+    for (auto Op : I->Ops) {
+      Ops.push_back(CloneInst(IC, Op, WidthMap));
+    }
+    return IC.getInst(I->K, InferWidth(I->K, Ops), Ops);
+  }
+}
+
+void GeneralizeBitWidth(InstContext &IC, Solver *S,
+                     ParsedReplacement Input) {
+  auto Vars = IC.getVariablesFor(Input.Mapping.LHS);
+
+  assert(Vars.size() == 1 && "Multiple variables unimplemented.");
+
+  std::map<Inst *, size_t> WidthMap;
+
+  for (int i = 1; i < 64; ++i) {
+    WidthMap[Vars[0]] = i;
+    auto LHS = CloneInst(IC, Input.Mapping.LHS, WidthMap);
+    auto RHS = CloneInst(IC, Input.Mapping.RHS, WidthMap);
+
+    ReplacementContext RC;
+    auto str = RC.printInst(LHS, llvm::outs(), true);
+    llvm::outs() << "infer " << str << "\n";
+    str = RC.printInst(RHS, llvm::outs(), true);
+    llvm::outs() << "result " << str << "\n\n";
+  }
+
+}
+
+// TODO: Return modified instructions instead of just printing out
+void RemoveLeafAndGeneralize(InstContext &IC,
+                               Solver *S, ParsedReplacement Input) {
   if (DebugLevel > 1) {
   llvm::errs() << "Attempting to generalize by removing leaf.\n";
   }
@@ -336,15 +381,13 @@ int main(int argc, char **argv) {
     if (RemoveLeaf) {
       RemoveLeafAndGeneralize(IC, S.get(), Input);
     }
-    // if (EviscerateRoot) {...}
-<<<<<<< HEAD
     if (SymbolizeConstant) {
       SymbolizeAndGeneralize(IC, S.get(), Input);
     }
-=======
-    // if (SymbolizeConstant) {...}
->>>>>>> 04440f0 (Generalization tool)
-    // if (LiberateWidth) {...}
+
+    if (GeneralizeWidth) {
+      GeneralizeBitWidth(IC, S.get(), Input);
+    }
   }
 
   return 0;
