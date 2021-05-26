@@ -414,7 +414,12 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
         } else {
           auto RHSV = ConcreteInterpreters[I].evaluateInst(RHS);
           if (RHSV.hasValue()) {
-            if (Val != RHSV.getValue()) {
+            auto RVal = RHSV.getValue();
+            if (SC.LHS->DemandedBits != 0) {
+              Val &= SC.LHS->DemandedBits;
+              RVal &= SC.LHS->DemandedBits;
+            }
+            if (Val != RVal) {
               if (StatsLevel > 2) {
                 llvm::errs() << "  RHS value = " << RHSV.getValue() << "\n";
                 llvm::errs() << "  pruned using concrete interpreter!\n";
