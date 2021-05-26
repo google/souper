@@ -851,8 +851,12 @@ namespace souper {
       Result = llvm::ConstantRange(llvm::APInt(I->Width, isReservedConst(I->Ops[0]) ? 1 : 0),
                                    llvm::APInt(I->Width, I->Ops[0]->Width + 1));
       break;
-    case Inst::Phi:
-      Result = CR0.unionWith(CR1);
+    case Inst::Phi: {
+        auto Result = CR0;
+        for (size_t i = 1; i < I->Ops.size(); ++i) {
+          Result = Result.unionWith(findConstantRange(I->Ops[i], CI, UsePartialEval));
+        }
+      }
       break;
     case Inst::Select: {
         auto TVal = CR1, FVal = CR2;
