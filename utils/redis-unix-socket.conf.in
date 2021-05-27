@@ -1,0 +1,7 @@
+# start the redis server with this config file if you want Souper to
+# talk to it using UNIX domain sockets, instead of TCP
+
+port 0
+unixsocket @CMAKE_BINARY_DIR@/cache.sock
+unixsocketperm 700
+timeout 0

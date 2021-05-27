@@ -1,0 +1,29 @@
+// Copyright 2014 The Souper Authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef SOUPER_KVSTORE_KVSOCKET_H
+#define SOUPER_KVSTORE_KVSOCKET_H
+
+#include "souper/KVStore/KVStore.h"
+#include <string>
+
+namespace souper {
+
+static constexpr const char *SocketPath = "@CMAKE_BINARY_DIR@/cache.sock";
+static_assert(SocketPath[0] != 0 && SocketPath[0] != '@',
+              "CMake does not seem to have rewritten the socket path correctly");
+
+}
+
+#endif  // SOUPER_KVSTORE_KVSOCKET_H

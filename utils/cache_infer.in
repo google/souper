@@ -41,6 +41,7 @@ Options:
   -verbose                  print extra output
   -test-pruning             compare synthesis results with and without dataflow pruning
   -prune                    enable dataflow pruning
+  -unix			    talk to Redis using UNIX domain sockets
 END
     exit -1;
 }
@@ -52,17 +53,21 @@ my $SOUPER_DEBUG = -1;
 my $MAX_INSNS = 1;
 my $TEST_PRUNING = 0;
 my $PRUNE = 0;
+my $UNIX = 0;
 
 GetOptions(
     "n=i" => \$NPROCS,
     "tag=s" => \$tag,
     "verbose" => \$VERBOSE,
     "prune" => \$PRUNE,
+    "unix" => \$UNIX,
     "test-pruning" => \$TEST_PRUNING,
     "separate-files" => \$SAVE_TEMPS,
     "souper-debug-level=i" => \$SOUPER_DEBUG,
     "max-insns=i" => \$MAX_INSNS,
     ) or usage();
+
+my $REDISPORT = 6379;
 
 my $OPTS = "";
 
@@ -77,6 +82,9 @@ $OPTS .= "-souper-double-check ";
 if ($PRUNE) {
     $OPTS .= "-souper-dataflow-pruning ";
 }
+if ($UNIX) {
+    $OPTS .= "-souper-external-cache-unix ";
+}
 $OPTS .= "-souper-enumerative-synthesis-max-instructions=${MAX_INSNS} ";
 if ($SOUPER_DEBUG != -1) {
     $OPTS .= "-souper-debug-level=${SOUPER_DEBUG} ";
@@ -84,7 +92,12 @@ if ($SOUPER_DEBUG != -1) {
 
 my $SOUPER_CHECK = "@CMAKE_BINARY_DIR@/souper-check -solver-timeout=15";
 
-my $r = Redis->new();
+my $r;
+if ($UNIX) {
+    $r = Redis->new(sock => "@CMAKE_BINARY_DIR@/cache.sock");
+} else {
+    $r = Redis->new(server => "localhost:" . $REDISPORT);
+}
 $r->ping || die "no server?";
 my @keys = $r->keys('*');
 
@@ -141,7 +154,12 @@ sub infer($) {
     close $fh;
     unlink $tmpfn;
 
-    my $red = Redis->new();
+    my $red;
+    if ($UNIX) {
+	$red = Redis->new(sock => "@CMAKE_BINARY_DIR@/cache.sock");
+    } else {
+	$red = Redis->new(server => "localhost:" . $REDISPORT);
+    }
     $red->ping || die "no server?";
     $red->hset($k, "cache-infer-tag" => $tag);
 

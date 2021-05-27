@@ -53,6 +53,7 @@ Options:
   -raw          Dump all keys and values and exit, ignoring all other options
   -reduce       Attempt to reduce the size of each optimization
   -triage       Attempt to avoid reporting optimizations that LLVM can do
+  -unix		talk to Redis using UNIX domain sockets
   -weaken       Weaken dataflow facts
   -verbose
   -verify       Verify each optimization
@@ -78,6 +79,8 @@ my $TRIAGE = 0;
 my $WEAKEN = 0;
 my $VERBOSE = 0;
 my $VERIFY = 0;
+my $UNIX = 0;
+
 GetOptions(
     "merge" => \$MERGE,
     "noopts" => \$NOOPTS,
@@ -94,6 +97,7 @@ GetOptions(
     "raw"  => \$RAW,
     "reduce" => \$REDUCE,
     "triage" => \$TRIAGE,
+    "unix" => \$UNIX,
     "weaken" => \$WEAKEN,
     "verbose" => \$VERBOSE,
     "verify" => \$VERIFY,
@@ -109,7 +113,12 @@ my %sprofile_locs;
 my %dprofile_locs;
 my %toprint;
 
-my $r = Redis->new(server => "localhost:" . $REDISPORT);
+my $r;
+if ($UNIX) {
+    $r = Redis->new(sock => "@CMAKE_BINARY_DIR@/cache.sock");
+} else {
+    $r = Redis->new(server => "localhost:" . $REDISPORT);
+}
 $r->ping || die "no server?";
 my @all_keys = $r->keys('*');
 
