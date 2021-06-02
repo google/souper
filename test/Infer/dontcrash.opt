@@ -1,0 +1,11 @@
+; REQUIRES: synthesis
+
+; RUN: %souper-check -solver-timeout=15 -infer-rhs -souper-double-check  -souper-enumerative-synthesis-max-instructions=1 %s > %t1
+; RUN: %FileCheck %s < %t1
+
+; CHECK: ; Failed to infer RHS
+
+%0:i64 = var
+%1:i65 = sadd.with.overflow %0, 7:i64 (hasExternalUses)
+%2:i1 = extractvalue %1, 1:i32
+infer %2
