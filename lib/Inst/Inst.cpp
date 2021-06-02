@@ -1100,7 +1100,10 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
           continue;
         if (I->K == Inst::SAddWithOverflow || I->K == Inst::UAddWithOverflow ||
             I->K == Inst::SSubWithOverflow || I->K == Inst::USubWithOverflow ||
-            I->K == Inst::SMulWithOverflow || I->K == Inst::UMulWithOverflow)
+            I->K == Inst::SMulWithOverflow || I->K == Inst::UMulWithOverflow ||
+            I->K == Inst::SAddO || I->K == Inst::UAddO ||
+            I->K == Inst::SSubO || I->K == Inst::USubO ||
+            I->K == Inst::SMulO || I->K == Inst::UMulO)
           continue;
         Guesses.emplace_back(I);
         if (Guesses.size() >= Max)
