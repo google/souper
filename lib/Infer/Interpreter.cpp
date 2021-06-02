@@ -149,7 +149,7 @@ namespace souper {
     if (Inst->K != Inst::Select && Inst->K != Inst::Phi && Inst->K != Inst::Freeze) {
       for (auto &A : Args)
         if (A.K == EvalValue::ValueKind::Poison)
-          return EvalValue::poison(A.BitWidth);
+          return EvalValue::poison(Inst->Width);
     }
 
     for (auto &A : Args)
