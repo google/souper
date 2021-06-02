@@ -487,6 +487,8 @@ configure_file(${CMAKE_SOURCE_DIR}/utils/cache_import.in ${CMAKE_BINARY_DIR}/cac
 configure_file(${CMAKE_SOURCE_DIR}/utils/cache_infer.in ${CMAKE_BINARY_DIR}/cache_infer @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/utils/py_souper2llvm.in ${CMAKE_BINARY_DIR}/py_souper2llvm @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/include/souper/Tool/GetSolver.h.in ${CMAKE_BINARY_DIR}/include/souper/Tool/GetSolver.h @ONLY)
+configure_file(${CMAKE_SOURCE_DIR}/include/souper/KVStore/KVSocket.h.in ${CMAKE_BINARY_DIR}/include/souper/KVStore/KVSocket.h @ONLY)
+configure_file(${CMAKE_SOURCE_DIR}/utils/redis-unix-socket.conf.in ${CMAKE_BINARY_DIR}/redis-unix-socket.conf @ONLY)
 
 if (BUILD_CLANG_TOOL)
   configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang @ONLY)

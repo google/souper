@@ -81,6 +81,8 @@ when EnumerativeSynthesis is enabled.
 
 SOUPER_REDIS_PORT -- Mention the port to use the redis-server on.
 
+SOUPER_CACHE_UNIX -- Connect to Redis using a UNIX domain socket.
+
 SOUPER_NO_EXTERNAL_CACHE -- Don't ask the running Redis instance for
 cached inferences.
 
@@ -201,6 +203,10 @@ if (getenv("SOUPER_EXPLOIT_BLOCKPCS") && $souper) {
 
 if (!getenv("SOUPER_NO_EXTERNAL_CACHE") && $souper) {
     push @ARGV, ("-mllvm", "-souper-external-cache");
+}
+
+if (getenv("SOUPER_CACHE_UNIX") && $souper) {
+    push @ARGV, ("-mllvm", "-souper-external-cache-unix");
 }
 
 if (getenv("SOUPER_NO_INFER") && $souper) {
