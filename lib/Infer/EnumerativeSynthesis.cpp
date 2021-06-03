@@ -93,6 +93,9 @@ namespace {
   static cl::opt<unsigned> MaxLHSCands("souper-max-lhs-cands",
     cl::desc("Gather at most this many values from a LHS to use as synthesis inputs (default=10)"),
     cl::init(10));
+  static cl::opt<unsigned> CostFudge("souper-enumerative-synthesis-cost-fudge",
+    cl::desc("Generate guesses costing LHS + N (default=0)"),
+    cl::init(0));
   static cl::opt<bool> OnlyInferI1("souper-only-infer-i1",
     cl::desc("Only infer integer constants with width 1 (default=false)"),
     cl::init(false));
@@ -812,7 +815,7 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   if (DebugLevel > 1)
     llvm::errs() << "got " << Cands.size() << " candidates from LHS\n";
 
-  int LHSCost = souper::cost(SC.LHS, /*IgnoreDepsWithExternalUses=*/true);
+  int LHSCost = souper::cost(SC.LHS, /*IgnoreDepsWithExternalUses=*/true) + CostFudge;
 
   int TooExpensive = 0;
 
