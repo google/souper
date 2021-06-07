@@ -1,0 +1,42 @@
+; REQUIRES: synthesis
+; RUN: %opt -load %pass -souper -simplifycfg -souper-exploit-blockpcs -souper-enumerative-synthesis-max-instructions=1 -souper-enumerative-synthesis-ignore-cost -S -o - %s | %FileCheck %s
+; CHECK: call i8 @llvm.usub.sat.i8(i8 1, i8 %0)
+
+define i8 @src(i8 %0) {
+entry:
+    switch i8 %0, label %default [
+        i8 0, label %bb_0
+        i8 1, label %bb_1
+        i8 2, label %bb_2
+        i8 3, label %bb_3
+        i8 4, label %bb_4
+        i8 5, label %bb_5
+        i8 6, label %bb_6
+        i8 7, label %bb_7
+        i8 8, label %bb_8
+        i8 9, label %bb_9
+    ]
+bb_0:
+    br label %default
+bb_1:
+    br label %default
+bb_2:
+    br label %default
+bb_3:
+    br label %default
+bb_4:
+    br label %default
+bb_5:
+    br label %default
+bb_6:
+    br label %default
+bb_7:
+    br label %default
+bb_8:
+    br label %default
+bb_9:
+    br label %default
+default:
+    %1 = phi i8 [ 0, %entry ], [ 0, %bb_9 ], [ 0, %bb_8 ], [ 0, %bb_7 ], [ 0, %bb_6 ], [ 0, %bb_5 ], [ 0, %bb_4 ], [ 0, %bb_3 ], [ 0, %bb_2 ], [ 0, %bb_1 ], [ 1, %bb_0 ]
+    ret i8 %1
+}

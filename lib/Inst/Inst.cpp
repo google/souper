@@ -1080,7 +1080,7 @@ std::string souper::GetReplacementRHSString(Inst *RHS,
   return SS.str();
 }
 
-void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
+void souper::findCands(Inst *Root, std::set<Inst *> &Guesses,
                bool WidthMustMatch, bool FilterVars, int Max) {
   // breadth-first search
   std::set<Inst *> Visited;
@@ -1105,7 +1105,7 @@ void souper::findCands(Inst *Root, std::vector<Inst *> &Guesses,
             I->K == Inst::SSubO || I->K == Inst::USubO ||
             I->K == Inst::SMulO || I->K == Inst::UMulO)
           continue;
-        Guesses.emplace_back(I);
+        Guesses.insert(I);
         if (Guesses.size() >= Max)
           return;
       }
