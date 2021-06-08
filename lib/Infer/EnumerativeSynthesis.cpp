@@ -186,7 +186,7 @@ void sortGuesses(Container &Guesses) {
 
 using CallbackType = std::function<bool(Inst *)>;
 
-bool getGuesses(const std::vector<Inst *> &Inputs,
+bool getGuesses(const std::set<Inst *> &Inputs,
                 int Width, int LHSCost,
                 InstContext &IC, Inst *PrevInst, Inst *PrevSlot,
                 int &TooExpensive,
@@ -810,8 +810,14 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
   SynthesisContext SC{IC, SMTSolver, LHS, getUBInstCondition(SC.IC, SC.LHS),
       PCs, BPCs, CheckAllGuesses, Timeout};
   std::error_code EC;
-  std::vector<Inst *> Cands;
+  std::set<Inst *> Cands;
   findCands(SC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+  for (auto BPC : SC.BPCs)
+    findCands(BPC.PC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+  for (auto PC : SC.PCs)
+    findCands(PC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
+  // do not use LHS itself as a candidate
+  Cands.erase(SC.LHS);
   if (DebugLevel > 1)
     llvm::errs() << "got " << Cands.size() << " candidates from LHS\n";
 

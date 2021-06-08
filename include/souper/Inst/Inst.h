@@ -310,7 +310,7 @@ void PrintReplacementRHS(llvm::raw_ostream &Out, Inst *RHS,
 std::string GetReplacementRHSString(Inst *RHS, ReplacementContext &Context,
                                     bool printNames = false);
 
-void findCands(Inst *Root, std::vector<Inst *> &Guesses,
+void findCands(Inst *Root, std::set<Inst *> &Guesses,
                bool WidthMustMatch, bool FilterVars, int Max);
 
 Inst *getInstCopy(Inst *I, InstContext &IC,
