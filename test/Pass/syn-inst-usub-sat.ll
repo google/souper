@@ -1,6 +1,6 @@
 
 
-; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-infer-inst -souper-synthesis-comps=usub.sat -S -o - | %FileCheck %s
+; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-use-cegis -souper-synthesis-comps=usub.sat -S -o - | %FileCheck %s
 
 define i8 @usub_saturating(i8 %x, i8 %y) {
 ; CHECK: define i8 @usub_saturating(i8 %x, i8 %y) {

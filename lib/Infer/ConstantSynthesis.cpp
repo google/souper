@@ -449,7 +449,7 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       return EC;
     } else {
       if (DebugLevel > 3) {
-        llvm::errs() << I << " th attempt: " << "second query is SAT-- constant doesn't work\n";
+        llvm::errs() << "attempt " << I << ": second query is SAT-- constant doesn't work\n";
       }
 
       std::map<Inst *, llvm::APInt> SubstConstMap;

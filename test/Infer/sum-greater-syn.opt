@@ -1,6 +1,6 @@
 
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,slt -souper-synthesis-wiring-iterations=20 %s > %t1
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-comps=const,slt -souper-synthesis-wiring-iterations=20 %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; return b > 0

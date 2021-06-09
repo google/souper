@@ -1,5 +1,5 @@
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-comps=add,const %s > %t1
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-comps=add,const %s > %t1
 ; RUN: %FileCheck %s < %t1
 ; CHECK: Failed to infer RHS
 

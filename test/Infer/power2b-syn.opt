@@ -3,7 +3,7 @@
 ; Enumerative search does not support this test, since the result contains
 ; multiple instructions
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=eq,const,ctpop %s > %t1
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-ignore-cost -souper-synthesis-comps=eq,const,ctpop %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK:      %6:i16 = ctpop %0

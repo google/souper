@@ -88,7 +88,7 @@ namespace {
     cl::desc("Skip refinement check after generating guesses (default=false)"),
     cl::init(false));
   static cl::opt<bool> IgnoreCost("souper-enumerative-synthesis-ignore-cost",
-    cl::desc("Ignore cost of RHSes -- just generate them. (default=false)"),
+    cl::desc("Ignore cost of RHSs -- just generate them (default=false)"),
     cl::init(false));
   static cl::opt<unsigned> MaxLHSCands("souper-max-lhs-cands",
     cl::desc("Gather at most this many values from a LHS to use as synthesis inputs (default=10)"),
@@ -138,8 +138,8 @@ namespace {
 // experiment with synthesizing at reduced bitwidth, then expanding the result
 // aggressively avoid calling into the solver
 
-void addGuess(Inst *RHS, unsigned TargetWidth, InstContext &IC, int MaxCost, std::vector<Inst *> &Guesses,
-              int &TooExpensive) {
+void addGuess(Inst *RHS, unsigned TargetWidth, InstContext &IC, int MaxCost,
+              std::vector<Inst *> &Guesses, int &TooExpensive) {
   if (TargetWidth > RHS->Width) {
     auto NSExt = IC.getInst(Inst::SExt, TargetWidth, { RHS });
     auto NZExt = IC.getInst(Inst::ZExt, TargetWidth, { RHS });
@@ -159,11 +159,9 @@ void addGuess(Inst *RHS, unsigned TargetWidth, InstContext &IC, int MaxCost, std
 // Does a short-circuiting AND operation
 PruneFunc MkPruneFunc(std::vector<PruneFunc> Funcs) {
   return [Funcs](Inst *I, std::vector<Inst *> &RI) {
-    for (auto F : Funcs) {
-      if (!F(I, RI)) {
+    for (auto F : Funcs)
+      if (!F(I, RI))
         return false;
-      }
-    }
     return true;
   };
 }
@@ -211,16 +209,12 @@ bool getGuesses(const std::set<Inst *> &Inputs,
     unaryExclList.push_back(Inst::Freeze);
 
   std::vector<Inst *> PartialGuesses;
-
   std::vector<Inst *> Comps(Inputs.begin(), Inputs.end());
 
   // Conversion Operators
-  for (auto Comp : Comps) {
-    if (Comp->Width == Width)
-      continue;
-
-    addGuess(Comp, Width, IC, LHSCost, PartialGuesses, TooExpensive);
-  }
+  for (auto Comp : Comps)
+    if (Comp->Width != Width)
+      addGuess(Comp, Width, IC, LHSCost, PartialGuesses, TooExpensive);
 
   Inst *I1 = IC.getReservedInst();
   Comps.push_back(I1);
@@ -553,9 +547,8 @@ Inst *findConst(souper::Inst *I,
     for (auto &&Op : I->Ops) {
       if (Visited.find(Op) == Visited.end()) {
         auto Ret = findConst(Op, Visited);
-        if (Ret) {
+        if (Ret)
           return Ret;
-        }
       }
     }
     Visited.insert(I);
@@ -569,9 +562,8 @@ bool exceeds64Bits(const Inst *I, std::set<const Inst *> &Visited) {
   } else {
     for (auto &&Op : I->Ops) {
       if (Visited.find(Op) == Visited.end()) {
-        if (exceeds64Bits(Op, Visited)) {
+        if (exceeds64Bits(Op, Visited))
           return true;
-        }
       }
     }
     Visited.insert(I);
@@ -683,17 +675,19 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
   int GuessIndex = -1;
 
   if (DebugLevel > 2) {
-    llvm::errs() << "\n-------------------------------------------------\n";
+    llvm::errs() << "\n--------------------- synthesizeWithKLEE ---------------------------\n";
     ReplacementContext Context;
     auto S = GetReplacementLHSString(SC.BPCs, SC.PCs,
                                      SC.LHS, Context);
     llvm::errs() << S << "\n";
+    llvm::errs() << "there are " << Guesses.size() << " guesses to check\n";
   }
 
   for (auto I : Guesses) {
     GuessIndex++;
     if (DebugLevel > 2) {
-      llvm::errs() << "\n--------------------------------\nguess " << GuessIndex << "\n\n";
+      llvm::errs() << "\n--------------------------------\n";
+      llvm::errs() << "guess " << GuessIndex << "\n\n";
       ReplacementContext RC;
       RC.printInst(I, llvm::errs(), /*printNames=*/true);
       llvm::errs() << "\n";
@@ -709,15 +703,18 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       bool IsSAT;
 
       EC = isConcreteCandidateSat(SC, I, IsSAT);
-      if (EC)
-        return EC;
+      if (EC) {
+        if (DebugLevel > 0)
+          llvm::errs() << "OOPS: error from isConcreteCanddiateSat()\n";
+        continue;
+      }
       if (IsSAT) {
         if (DebugLevel > 3)
-          llvm::errs() << "second query is SAT-- constant doesn't work\n";
+          llvm::errs() << "this guess doesn't work\n";
         continue;
       } else {
         if (DebugLevel > 3)
-          llvm::errs() << "second query is UNSAT\n";
+          llvm::errs() << "query is UNSAT, guess works\n";
         RHS = I;
       }
     } else {
@@ -726,13 +723,11 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       EC = CS.synthesize(SC.SMTSolver, SC.BPCs, SC.PCs, InstMapping (SC.LHS, I), ConstSet,
                          ResultConstMap, SC.IC, /*MaxTries=*/MaxTries, SC.Timeout,
                          /*AvoidNops=*/true);
-      if (!ResultConstMap.empty()) {
-        std::map<Inst *, Inst *> InstCache;
-        std::map<Block *, Block *> BlockCache;
-        RHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ResultConstMap, false, false);
-      } else {
+      if (ResultConstMap.empty())
         continue;
-      }
+      std::map<Inst *, Inst *> InstCache;
+      std::map<Block *, Block *> BlockCache;
+      RHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ResultConstMap, false, false);
     }
 
     assert(RHS);
@@ -754,6 +749,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
         RHS = nullptr;
       }
     }
+
     if (TryShrinkConsts) {
       // FIXME shrink constants properly, this is a placeholder where we
       // just see if we can replace every constant with zero
@@ -771,10 +767,14 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
           RHS = newRHS;
       }
     }
+
     if (RHS) {
       RHSs.emplace_back(RHS);
-      if (!SC.CheckAllGuesses)
+      if (!SC.CheckAllGuesses) {
+        if (DebugLevel > 2)
+          llvm::errs() << "\n------ normal exit of synthesizeWithKLEE with 1 result ------\n";
         return EC;
+      }
       if (DebugLevel > 3) {
         llvm::outs() << "; result " << RHSs.size() << ":\n";
         ReplacementContext RC;
@@ -783,6 +783,9 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       }
     }
   }
+
+  if (DebugLevel > 2)
+    llvm::errs() << "\n------ normal exit of synthesizeWithKLEE ----------------\n";
   return EC;
 }
 
@@ -812,18 +815,21 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       PCs, BPCs, CheckAllGuesses, Timeout};
   std::error_code EC;
   std::set<Inst *> Cands;
-  findCands(SC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
-  for (auto BPC : SC.BPCs)
-    findCands(BPC.PC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
-  for (auto PC : SC.PCs)
-    findCands(PC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, MaxLHSCands);
-  // do not use LHS itself as a candidate
-  Cands.erase(SC.LHS);
+  findCands(SC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, 1 + MaxLHSCands);
   if (DebugLevel > 1)
     llvm::errs() << "got " << Cands.size() << " candidates from LHS\n";
+  for (auto PC : SC.PCs)
+    findCands(PC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, 1 + MaxLHSCands);
+  if (DebugLevel > 1)
+    llvm::errs() << "got " << Cands.size() << " candidates from LHS + PCs\n";
+  for (auto BPC : SC.BPCs)
+    findCands(BPC.PC.LHS, Cands, /*WidthMustMatch=*/false, /*FilterVars=*/false, 1 + MaxLHSCands);
+  if (DebugLevel > 1)
+    llvm::errs() << "got " << Cands.size() << " candidates from LHS + PCs + BPCs\n";
+  // do not use LHS itself as a candidate
+  Cands.erase(SC.LHS);
 
   int LHSCost = souper::cost(SC.LHS, /*IgnoreDepsWithExternalUses=*/true) + CostFudge;
-
   int TooExpensive = 0;
 
   std::vector<Inst *> Inputs;
@@ -868,18 +874,22 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     }
   }
 
+  if (DebugLevel > 1)
+    llvm::errs() << "There are " << Guesses.size() << " guesses before enumeration\n";
+
   if (MaxNumInstructions > 0)
     getGuesses(Cands, SC.LHS->Width,
                LHSCost, SC.IC, nullptr, nullptr, TooExpensive, PruneCallback, Generate);
 
+  if (DebugLevel > 1) {
+    DataflowPruning.printStats(llvm::errs());
+    llvm::errs() << "There are " << Guesses.size() << " total guesses\n";
+    llvm::errs() << "(" << TooExpensive << " guesses were too expensive)\n";
+  }
+
   if (!Guesses.empty() && !SkipSolver) {
     sortGuesses(Guesses);
     EC = verify(SC, RHSs, Guesses);
-  }
-
-  if (DebugLevel > 1) {
-    DataflowPruning.printStats(llvm::errs());
-    llvm::errs() << "There are " << Guesses.size() << " Guesses\n";
   }
 
   // RHSs count, before duplication

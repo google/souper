@@ -1,7 +1,7 @@
 ; REQUIRES: synthesis
 ; mark this case UNSUPPORTED until blockpc is supported by EnumerativeSynthesis. InstSynthesis passes the case correctly.
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-comps=const,sub %s > %t1 2>&1
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-comps=const,sub %s > %t1 2>&1
 ; RUN: %FileCheck %s -check-prefix=InstSynthesis < %t1
 
 ; RUN: %souper-check -infer-rhs -souper-enumerative-synthesis-max-instructions=1 %s > %t2 2>&1

@@ -70,7 +70,7 @@ optimization found in the current compilation unit and only perform
 those that fall within the range [SOUPER_FIRST_OPT
 .. SOUPER_LAST_OPT], inclusive. Used for debugging Souper
 
-SOUPER_INFER_INST -- Try to synthesis instructions with InstSynthesis
+SOUPER_USE_CEGIS -- Try to synthesize instructions using a CEGIS-based
 synthesizer.
 
 SOUPER_ENUMERATIVE_SYNTHESIS_MAX_INSTS -- Number of instructions for
@@ -110,7 +110,7 @@ was performed.
 
 SOUPER_USE_ALIVE -- Send queries to Alive2
 
-SOUPER_DOUBLE_CHECK -- Only verify results with Alive2
+SOUPER_NO_DOUBLE_CHECK -- Don't use Alive2 to verify optimizations
 
 SOUPER_DISABLE_LLVM_PEEPHOLES -- Disable the invocation of llvm peephole
 transformations in compilation.
@@ -234,12 +234,15 @@ if (getenv("SOUPER_USE_ALIVE") && $souper) {
     push @ARGV, ("-mllvm", "-souper-use-alive");
 }
 
-if (getenv("SOUPER_DOUBLE_CHECK") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-double-check");
+if (getenv("SOUPER_NO_DOUBLE_CHECK")) {
+} else {
+    if ($souper) {
+        push @ARGV, ("-mllvm", "-souper-double-check");
+    }
 }
 
-if (getenv("SOUPER_INFER_INST") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-infer-inst");
+if (getenv("SOUPER_USE_CEGIS") && $souper) {
+    push @ARGV, ("-mllvm", "-souper-use-cegis");
 }
 
 if (getenv("SOUPER_ENUMERATIVE_SYNTHESIS_MAX_INSTS") && $souper) {

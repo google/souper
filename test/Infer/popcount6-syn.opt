@@ -1,6 +1,6 @@
 
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-comps=ctpop %s > %t1
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-comps=ctpop %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK:      %21:i32 = ctpop %0

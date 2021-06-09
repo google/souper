@@ -1,6 +1,6 @@
 
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-wiring-iterations=25 -souper-synthesis-comps=const,slt,xor %s > %t1
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-wiring-iterations=25 -souper-synthesis-comps=const,slt,xor %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK:      %9:i32 = xor %0, %2

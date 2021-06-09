@@ -1,6 +1,6 @@
 
 
-; RUN: %llvm-as %s -o - | %souper -souper-infer-inst -souper-synthesis-comps=and,lshr,const | %FileCheck %s
+; RUN: %llvm-as %s -o - | %souper -souper-use-cegis -souper-synthesis-comps=and,lshr,const | %FileCheck %s
 
 declare i64 @llvm.fshr.i64(i64, i64, i64) nounwind readnone
 

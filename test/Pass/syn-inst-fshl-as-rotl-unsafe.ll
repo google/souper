@@ -1,6 +1,6 @@
 
 
-; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-infer-inst -souper-synthesis-comps=fshl -S -o - | %FileCheck %s
+; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-use-cegis -souper-synthesis-comps=fshl -S -o - | %FileCheck %s
 
 ; FIXME: do we really want to synthesize fshl here?
 

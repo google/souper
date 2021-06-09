@@ -1,7 +1,7 @@
 
 
 ; RUN: %llvm-as -o %t1 %s
-; RUN: %souper -souper-infer-inst -souper-synthesis-comps=const %t1 > %t2
+; RUN: %souper -souper-use-cegis -souper-synthesis-comps=const %t1 > %t2
 ; RUN: %FileCheck %s -check-prefix=SUCCESS < %t2
 
 ; SUCCESS: cand %0 742962133:i32

@@ -57,7 +57,7 @@ unsigned DebugLevel;
 
 namespace {
 std::unique_ptr<Solver> S;
-unsigned ReplacementIdx, ReplacementsDone;
+  unsigned ReplacementIdx, ReplacementsDone, LHSNum;
 KVStore *KV;
 
 static cl::opt<unsigned, /*ExternalStorage=*/true>
@@ -68,7 +68,7 @@ DebugFlagParser("souper-debug-level",
      cl::location(DebugLevel), cl::init(1));
 
 static cl::opt<bool> Verify("souper-verify", cl::init(false),
-    cl::desc("Verify the module before and after Souper (default=false)"));
+    cl::desc("Verify functions before Souper processes them (default=false)"));
 
 static cl::opt<bool> DynamicProfile("souper-dynamic-profile", cl::init(false),
     cl::desc("Dynamic profiling of Souper optimizations (default=false)"));
@@ -201,6 +201,9 @@ public:
   }
 
   bool runOnFunction(Function *F) {
+    if (Verify && verifyFunction(*F))
+      llvm::report_fatal_error("function " + F->getName() + " broken before Souper");
+
     std::string FunctionName;
     if (F->hasLocalLinkage()) {
       FunctionName =
@@ -253,22 +256,23 @@ public:
       errs() << "; extracted candidates\n";
 
     CandidateMap CandMap;
-    for (auto &B : CS.Blocks) {
-      for (auto &R : B->Replacements) {
-        if (DebugLevel > 4) {
-          errs() << "\n; *****";
-          errs() << "\n; For LLVM instruction:\n;";
-          R.Origin->print(errs());
-          errs() << "\n; Looking for a replacement for:\n";
-          ReplacementContext Context;
-          PrintReplacementLHS(errs(), R.BPCs, R.PCs, R.Mapping.LHS, Context);
-        }
+    for (auto &B : CS.Blocks)
+      for (auto &R : B->Replacements)
         AddToCandidateMap(CandMap, R);
-      }
-    }
 
     for (auto &Cand : CandMap) {
 
+      if (DebugLevel > 1)
+        errs() << "\n================= LHS number " << ++LHSNum << " ====================\n\n";
+
+      if (DebugLevel > 3) {
+        errs() << "\n; For LLVM instruction:\n;";
+        Cand.Origin->print(errs());
+        errs() << "\n; Looking for a replacement for:\n";
+        ReplacementContext Context;
+        PrintReplacementLHS(errs(), Cand.BPCs, Cand.PCs, Cand.Mapping.LHS, Context);
+      }
+      
       if (StaticProfile) {
         std::string Str;
         llvm::raw_string_ostream Loc(Str);
@@ -289,9 +293,12 @@ public:
                    RHSs, /*AllowMultipleRHSs=*/false, IC)) {
         if (EC == std::errc::timed_out ||
             EC == std::errc::value_too_large) {
+          if (DebugLevel > 1)
+            errs() << "query error for LHS number " << LHSNum << "\n";
           continue;
         } else {
           llvm::errs() << "[FIXME: Crash commented out]\nUnable to query solver: " + EC.message() + "\n";
+          errs() << "query error for LHS number " << LHSNum << "\n";
           continue;
           // TODO: This is a temporary workaround to suppress a protocol error which is encountered
           // once in SPEC 2017. This workaround does not have a negative effect other than maybe
@@ -299,8 +306,11 @@ public:
           //report_fatal_error("Unable to query solver: " + EC.message() + "\n");
         }
       }
-      if (RHSs.empty())
+      if (RHSs.empty()) {
+        if (DebugLevel > 1)
+          errs() << "no solutions for LHS number " << LHSNum << "\n";
         continue;
+      }
 
       Cand.Mapping.RHS = RHSs.front();
 
@@ -318,14 +328,11 @@ public:
       // TODO can we assert that getValue() succeeds?
       if (!NewVal) {
         if (DebugLevel > 1)
-          errs() << "\"\n; replacement failed\n";
+          errs() << "\"\n; replacement failed for LHS number " << LHSNum << ", getValue() returned null\n";
         continue;
       }
 
       // here we finally commit to having a viable replacement
-
-      if (DebugLevel > 1)
-        errs() << "#########################################################\n";
 
       if (ReplacementIdx < FirstReplace || ReplacementIdx > LastReplace) {
         if (DebugLevel > 1)
@@ -396,45 +403,41 @@ public:
         errs() << "\n";
       }
 
-      if (DebugLevel > 1) {
-        errs() << "#########################################################\n";
-        errs() << "; exiting Souper's runOnFunction() for " << FunctionName << "()\n";
-      }
-
+      if (DebugLevel > 1)
+        errs() << "done with LHS number " << LHSNum << " after doing a replacement\n";
+      
       return true;
     }
 
-    if (DebugLevel > 1) {
-      errs() << "#########################################################\n";
-      errs() << "; exiting Souper's runOnFunction() for " << FunctionName << "()\n";
-    }
     return false;
   }
 
   bool runOnModule(Module &M) {
     if (DebugLevel > 3)
       errs() << "\nEntering the Souper pass's runOnModule()\n\n";
-    if (Verify && verifyModule(M, &errs()))
-      llvm::report_fatal_error("module broken before Souper");
+
+    // we have to construct this list first, since dynamic profiling
+    // adds functions as it goes
+    std::vector<Function *> FuncList;
+    for (auto &F : M)
+      if (!F.isDeclaration())
+        FuncList.push_back(&F);
+
     bool Changed = false;
-    // get the list first since the dynamic profiling adds functions as it goes
-    std::vector<Function *> FL;
-    for (auto &I : M)
-      FL.push_back((Function *)&I);
-    for (auto *F : FL) {
-      if (F->isDeclaration())
-        continue;
+    for (auto *F : FuncList) {
       while (runOnFunction(F)) {
         Changed = true;
+        if (verifyFunction(*F))
+          llvm::report_fatal_error("function broken after Souper changed it");
         if (DebugLevel > 2)
           errs() << "rescanning function after transformation was applied\n";
       }
     }
-    if (Verify && verifyModule(M, &errs()))
-      llvm::report_fatal_error("module broken after (and probably by) Souper");
+
     if (DebugLevel > 1)
       errs() << "\nExiting the Souper pass's runOnModule() with "
              << ReplacementsDone << " replacements\n";
+
     return Changed;
   }
 
