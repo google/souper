@@ -1,7 +1,5 @@
-
-
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper -check -souper-only-infer-i1 %t
+; RUN: %souper -check -solver-timeout=60 -souper-only-infer-i1 %t
 
 declare i32 @llvm.ctpop.i32(i32) nounwind readnone
 declare void @sink(i1) nounwind readnone

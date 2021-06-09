@@ -1,7 +1,7 @@
 
 
-; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-infer-inst -souper-synthesis-comps=fshr,const -S -o - | %FileCheck %s --check-prefix=COSTMODEL
-; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=fshr,const -S -o - | %FileCheck %s --check-prefix=NOCOSTMODEL
+; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-use-cegis -souper-synthesis-comps=fshr,const -S -o - | %FileCheck %s --check-prefix=COSTMODEL
+; RUN: %llvm-as %s -o - | %opt -load %pass -souper -dce -souper-use-cegis -souper-synthesis-ignore-cost -souper-synthesis-comps=fshr,const -S -o - | %FileCheck %s --check-prefix=NOCOSTMODEL
 
 define i32 @normal(i32 %a, i32 %b) {
 ; COSTMODEL: define i32 @normal(i32 %a, i32 %b) {

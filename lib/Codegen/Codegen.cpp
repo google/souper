@@ -102,10 +102,9 @@ llvm::Value *Codegen::getValue(Inst *I) {
   // PHI nodes must be the first instructions in a basic block. If we're
   // replacing a PHI node with another instruction, make sure it comes after the
   // other PHI nodes.
-  if (ReplacedInst &&
-      isa<PHINode>(ReplacedInst->getNextNode())) {
+  if (ReplacedInst) {
     Instruction *InsertPoint = ReplacedInst;
-    while (isa<PHINode>(InsertPoint))
+    while (isa<PHINode>(InsertPoint->getNextNode()))
       InsertPoint = InsertPoint->getNextNode();
     Builder.SetInsertPoint(InsertPoint->getNextNode());
   }

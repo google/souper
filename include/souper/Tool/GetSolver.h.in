@@ -45,8 +45,8 @@ static llvm::cl::opt<bool> ExternalCache(
 
 static llvm::cl::opt<int> SolverTimeout(
   "solver-timeout",
-  llvm::cl::desc("Solver timeout in seconds (default=no timeout)"),
-  llvm::cl::init(0));
+  llvm::cl::desc("Solver timeout in seconds (default=15)"),
+  llvm::cl::init(15));
 
 static bool exists_and_executable(const char *fn) {
   return access(fn, X_OK) != -1;

@@ -1,6 +1,6 @@
 ; REQUIRES: synthesis
 
-; RUN: %souper-check -reinfer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,and,sub,or %s > %t1
+; RUN: %souper-check -reinfer-rhs -souper-use-cegis -souper-synthesis-ignore-cost -souper-synthesis-comps=const,and,sub,or %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK: no cost regression

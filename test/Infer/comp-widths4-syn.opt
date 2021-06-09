@@ -3,7 +3,7 @@
 ; Enumerative search does not support this test, the result is too expensive
 ; under the cost model
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,const,select %s > %t1
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-ignore-cost -souper-synthesis-comps=const,const,select %s > %t1
 ; RUN: %FileCheck %s < %t1
 
 ; CHECK: result %1

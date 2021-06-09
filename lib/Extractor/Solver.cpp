@@ -49,7 +49,7 @@ namespace {
 static cl::opt<bool> NoInfer("souper-no-infer",
     cl::desc("Populate the external cache, but don't infer replacements (default=false)"),
     cl::init(false));
-static cl::opt<bool> InferInsts("souper-infer-inst",
+static cl::opt<bool> UseCegis("souper-use-cegis",
     cl::desc("Infer instructions (default=false)"),
     cl::init(false));
 static cl::opt<int> MaxLHSSize("souper-max-lhs-size",
@@ -443,7 +443,7 @@ public:
       return EC;
     }
 
-    if (InferInsts) {
+    if (UseCegis) {
       InstSynthesis IS;
       Inst *RHS;
       EC = IS.synthesize(SMTSolver.get(), BPCs, PCs, LHS, RHS, IC, Timeout);
@@ -828,6 +828,8 @@ public:
       return std::make_error_code(std::errc::value_too_large);
     std::string S;
     if (KV->hGet(LHSStr, "rhs", S)) {
+      if (DebugLevel > 3)
+        llvm::errs() << "(external cache hit)\n";
       ++ExternalHits;
       if (S == "") {
         RHSs.clear();
@@ -841,6 +843,8 @@ public:
       return std::error_code();
     } else {
       ++ExternalMisses;
+      if (DebugLevel > 3)
+        llvm::errs() << "(external cache miss)\n";
       if (NoInfer) {
         RHSs.clear();
         KV->hSet(LHSStr, "noinfer", "");

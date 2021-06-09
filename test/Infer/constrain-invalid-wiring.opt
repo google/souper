@@ -1,6 +1,6 @@
 
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-wiring-iterations=100 -souper-synthesis-comps=const,shl,lshr,ashr,and,or,xor,add,sub  %s > %t1
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-wiring-iterations=100 -souper-synthesis-comps=const,shl,lshr,ashr,and,or,xor,add,sub  %s > %t1
 ; RUN: %souper-check -infer-rhs  %s > %t2
 ; RUN: %FileCheck %s < %t1
 ; RUN: %FileCheck %s < %t2

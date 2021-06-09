@@ -1080,9 +1080,9 @@ std::string souper::GetReplacementRHSString(Inst *RHS,
   return SS.str();
 }
 
+// breadth-first search
 void souper::findCands(Inst *Root, std::set<Inst *> &Guesses,
-               bool WidthMustMatch, bool FilterVars, int Max) {
-  // breadth-first search
+		       bool WidthMustMatch, bool FilterVars,int Max) {
   std::set<Inst *> Visited;
   std::queue<Inst *> Q;
   Q.push(Root);
@@ -1105,9 +1105,8 @@ void souper::findCands(Inst *Root, std::set<Inst *> &Guesses,
             I->K == Inst::SSubO || I->K == Inst::USubO ||
             I->K == Inst::SMulO || I->K == Inst::UMulO)
           continue;
-        Guesses.insert(I);
-        if (Guesses.size() >= Max)
-          return;
+        if (Guesses.size() < Max)
+	  Guesses.insert(I);
       }
     }
   }

@@ -1,6 +1,6 @@
 ; REQUIRES: synthesis
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-ignore-cost -souper-synthesis-comps=const,or,add %s > %t1
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-ignore-cost -souper-synthesis-comps=const,or,add %s > %t1
 ; RUN: %FileCheck %s -check-prefix=SUCCESS < %t1
 
 ; SUCCESS: result %2

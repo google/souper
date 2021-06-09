@@ -1,7 +1,5 @@
-
-
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper -check %t
+; RUN: %souper -check -solver-timeout=120 %t
 
 define i1 @fermat(i20 %a, i20 %b, i20 %c) #0 {
 entry:

@@ -1,7 +1,7 @@
 
 
-; RUN: %souper-check -infer-rhs -souper-infer-inst -souper-synthesis-comps=const %s > %t1
-; RUN: %souper-check -infer-rhs -souper-infer-inst %s > %t2
+; RUN: %souper-check -infer-rhs -souper-use-cegis -souper-synthesis-comps=const %s > %t1
+; RUN: %souper-check -infer-rhs -souper-use-cegis %s > %t2
 ; RUN: %FileCheck %s < %t1
 ; RUN: %FileCheck %s < %t2
 

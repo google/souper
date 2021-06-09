@@ -1,7 +1,7 @@
 
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper -dce -souper-infer-inst -souper-synthesis-comps=and,or,ne,xor,const,add,sub,ashr -S -o - %s | %FileCheck %s
+; RUN: %opt -load %pass -souper -dce -souper-use-cegis -souper-synthesis-comps=and,or,ne,xor,const,add,sub,ashr -S -o - %s | %FileCheck %s
 ;XFAIL: *
 
 define i64 @alive0_f0(i64) local_unnamed_addr #0 {
