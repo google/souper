@@ -323,6 +323,7 @@ bool getGuesses(const std::set<Inst *> &Inputs,
 
           if ((*I)->Width == 0 && (*J)->Width == 0) {
             // TODO: support (cmp hole, hole);
+            // TODO: support (cmp hole, c) and (cmp c, hole)
             continue;
           }
 
