@@ -24,6 +24,7 @@
 #include "souper/Codegen/Codegen.h"
 #include "souper/Extractor/Solver.h"
 #include "souper/Infer/AliveDriver.h"
+#include "souper/Infer/Z3Driver.h"
 #include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/InstSynthesis.h"
@@ -49,6 +50,10 @@ namespace {
 static cl::opt<bool> NoInfer("souper-no-infer",
     cl::desc("Populate the external cache, but don't infer replacements (default=false)"),
     cl::init(false));
+static cl::opt<bool> UseZ3Driver("souper-in-process-z3",
+    cl::desc("Use Z3 C++ api instead of smtlib2 (default=false)"),
+    cl::init(false));
+
 static cl::opt<bool> UseCegis("souper-use-cegis",
     cl::desc("Infer instructions (default=false)"),
     cl::init(false));
@@ -486,6 +491,9 @@ public:
   override {
     if (UseAlive) {
       IsValid = isTransformationValid(Mapping.LHS, Mapping.RHS, PCs, BPCs, IC);
+      return std::error_code();
+    } else if (UseZ3Driver) {
+      IsValid = isTransformationValidZ3(Mapping.LHS, Mapping.RHS, PCs, BPCs, IC, Timeout);
       return std::error_code();
     }
     std::string Query;
