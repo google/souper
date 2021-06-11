@@ -218,6 +218,12 @@ set(SOUPER_INFER_FILES
   include/souper/Infer/Interpreter.h
   lib/Infer/Preconditions.cpp
   include/souper/Infer/Preconditions.h
+  lib/Infer/Z3Expr.cpp
+  include/souper/Infer/Z3Expr.h
+  lib/Infer/Z3Driver.cpp
+  include/souper/Infer/Z3Driver.h
+  lib/Infer/Verification.cpp
+  include/souper/Infer/Verification.h
 )
 
 add_library(souperInfer STATIC
