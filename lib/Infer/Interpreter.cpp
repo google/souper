@@ -174,7 +174,7 @@ namespace souper {
       // operands. If we ever want to deterministically interpret an LHS
       // containing a phi, this needs to start returning a list, or there needs
       // to be enough information in BlockPCs to interpret ARG0
-      if (Inst->B->ConcretePred == -1) {
+      if (!Inst->B || Inst->B->ConcretePred == -1) {
         if (EvalPhiFirstBranch) {
           return Args[0];
         }

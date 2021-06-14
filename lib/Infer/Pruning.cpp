@@ -560,6 +560,7 @@ void PruningManager::init() {
 
   for (auto &&Input : InputVals) {
     ConcreteInterpreters.emplace_back(SC.LHS, Input);
+    ConcreteInterpreters.back().setEvalPhiFirstBranch();
   }
 
   if (hasGivenInst(SC.LHS, [](Inst *I){ return I->K == Inst::Phi;})) {
