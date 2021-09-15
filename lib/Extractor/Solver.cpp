@@ -435,13 +435,6 @@ public:
     return EC;
   }
 
-  std::error_code isSatisfiable(llvm::StringRef Query, bool &Result,
-                                unsigned NumModels,
-                                std::vector<llvm::APInt> *Models,
-                                unsigned Timeout = 0) override {
-    return SMTSolver->isSatisfiable(Query, Result, NumModels, Models, Timeout);
-  }
-
   std::error_code infer(const BlockPCs &BPCs,
                         const std::vector<InstMapping> &PCs,
                         Inst *LHS, std::vector<Inst *> &RHSs,

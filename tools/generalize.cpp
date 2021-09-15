@@ -32,7 +32,6 @@ static llvm::cl::opt<bool> RemoveLeaf("remove-leaf",
                    "(default=false)"),
     llvm::cl::init(false));
 
-<<<<<<< HEAD
 static llvm::cl::opt<bool> SymbolizeConstant("symbolize",
     llvm::cl::desc("Try to replace a concrete constant with a symbolic constant."
                    "(default=false)"),
@@ -79,7 +78,7 @@ void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
   }
 }
 
-<<<<<<< HEAD
+
 void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
                             std::vector<Inst *> LHSConsts,
                             std::vector<Inst *> RHSConsts,
