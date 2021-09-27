@@ -149,9 +149,10 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
 
     std::vector<std::map<Inst *, llvm::KnownBits>> Results;
     bool FoundWP = false;
-    InstMapping Mapping(LHS, RHS);
-    S->abstractPrecondition(Input.BPCs, Input.PCs, Mapping, IC, FoundWP, Results);
-
+    if (!SymbolizeNoDFP) {
+      InstMapping Mapping(LHS, RHS);
+      S->abstractPrecondition(Input.BPCs, Input.PCs, Mapping, IC, FoundWP, Results);
+    }
     Preconditions.push_back(Results);
     if (!FoundWP) {
       Guess = nullptr; // TODO: Better failure indicator
@@ -191,17 +192,17 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
     }
   }
 
-  if (!SymbolizeNoDFP) {
-    for (size_t i = 0; i < std::min(Idx.size(), NumResults.getValue()); ++i) {
-      for (auto Computed : Preconditions[Idx[i]]) {
-        for (auto Pair : Computed) {
-          Pair.first->KnownOnes = Pair.second.One;
-          Pair.first->KnownZeros = Pair.second.Zero;
-        }
-        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, Guesses[Idx[i]])));
-      }
-    }
-  }
+  // if (!SymbolizeNoDFP) {
+  //   for (size_t i = 0; i < std::min(Idx.size(), NumResults.getValue()); ++i) {
+  //     for (auto Computed : Preconditions[Idx[i]]) {
+  //       for (auto Pair : Computed) {
+  //         Pair.first->KnownOnes = Pair.second.One;
+  //         Pair.first->KnownZeros = Pair.second.Zero;
+  //       }
+  //       Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, Guesses[Idx[i]])));
+  //     }
+  //   }
+  // }
 }
 
 void SymbolizeAndGeneralize(InstContext &IC,
