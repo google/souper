@@ -26,9 +26,13 @@ static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input souper optimization>"),
               cl::init("-"));
 
-static llvm::cl::opt<bool> RemoveLeaf("remove-leaf",
-    llvm::cl::desc("Try to generalize a valid optimization by replacing"
-                   "the use of a once-used variable with a new variable"
+static llvm::cl::opt<bool> Reduce("reduce",
+    llvm::cl::desc("Try to reduce the number of instructions by replacing instructions with variables."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> ReducePrintAll("reduce-all-results",
+    llvm::cl::desc("Print all reduced results."
                    "(default=false)"),
     llvm::cl::init(false));
 
@@ -291,57 +295,68 @@ void GeneralizeBitWidth(InstContext &IC, Solver *S,
 
 }
 
-// TODO: Return modified instructions instead of just printing out
-void RemoveLeafAndGeneralize(InstContext &IC,
-                               Solver *S, ParsedReplacement Input) {
-  if (DebugLevel > 1) {
-  llvm::errs() << "Attempting to generalize by removing leaf.\n";
-  }
-  // TODO: Do not generalize by removing leaf if LHS has one inst.
-
-  std::map<Inst *, std::set<Inst *>> Uses;
-
-  std::vector<Inst *> Stack{Input.Mapping.LHS, Input.Mapping.RHS};
-  // TODO: Find uses in PCs/BPCs
-
-  std::set<Inst *> Visited;
+void collectInsts(Inst *I, std::unordered_set<Inst *> &Results) {
+  std::vector<Inst *> Stack{I};
   while (!Stack.empty()) {
-   auto Current = Stack.back();
-   Stack.pop_back();
-   Visited.insert(Current);
+    auto Current = Stack.back();
+    Stack.pop_back();
 
-   for (auto Op : Current->Ops) {
-     if (Op->K == Inst::Var) {
-       Uses[Op].insert(Current);
-       // Intentionally skips root
-     }
-     if (Visited.find(Op) == Visited.end()) {
-       Stack.push_back(Op);
-     }
-   }
-  }
+    Results.insert(Current);
 
-  // Find a variable with one use;
-  Inst *UsedOnce = nullptr;
-  for (auto P : Uses) {
-    if (P.second.size() == 1) {
-      UsedOnce = P.first;
-      break;
+    for (auto Child : Current->Ops) {
+      if (Results.find(Child) == Results.end()) {
+        Stack.push_back(Child);
+      }
     }
   }
-
-  if (!UsedOnce) {
-    llvm::outs() << "Failed. No var with one use.";
+}
+void ReduceRec(InstContext &IC,
+     Solver *S, ParsedReplacement Input_, std::vector<ParsedReplacement> &Results, std::unordered_set<std::string> &DNR) {
+  auto Str = Input_.getString(false);
+  if (DNR.find(Str) != DNR.end()) {
     return;
   } else {
-    Inst *User = *Uses[UsedOnce].begin();
-    Inst *NewVar = IC.createVar(User->Width, "newvar");
+    DNR.insert(Str);
+  }
+
+  static int varnum = 0; // persistent state, maybe 'oop' away at some point.
+
+  std::unordered_set<Inst *> Insts;
+  collectInsts(Input_.Mapping.LHS, Insts);
+  collectInsts(Input_.Mapping.RHS, Insts);
+
+  for (auto &&PC : Input_.PCs) {
+    collectInsts(PC.LHS, Insts);
+    collectInsts(PC.RHS, Insts);
+  }
+
+  for (auto &&BPC : Input_.BPCs) {
+    collectInsts(BPC.PC.LHS, Insts);
+    collectInsts(BPC.PC.RHS, Insts);
+  }
+
+  if (Insts.size() <= 1) {
+    return; // Base case
+  }
+
+  // Remove at least one instruction and call recursively for valid opts
+  for (auto I : Insts) {
+    ParsedReplacement Input = Input_;
+
+    if (I == Input.Mapping.LHS || I == Input.Mapping.RHS || I->K == Inst::Var || I->K == Inst::Const) {
+      continue;
+    }
+
+    // Try to replace I with a new Var.
+    Inst *NewVar = IC.createVar(I->Width, "newvar" + std::to_string(varnum++));
 
     std::map<Inst *, Inst *> ICache;
-    ICache[User] = NewVar;
+    ICache[I] = NewVar;
 
     std::map<Block *, Block *> BCache;
     std::map<Inst *, llvm::APInt> CMap;
+
+    ParsedReplacement NewInst = Input;
 
     Input.Mapping.LHS = getInstCopy(Input.Mapping.LHS, IC, ICache,
                                     BCache, &CMap, false);
@@ -349,10 +364,75 @@ void RemoveLeafAndGeneralize(InstContext &IC,
     Input.Mapping.RHS = getInstCopy(Input.Mapping.RHS, IC, ICache,
                                     BCache, &CMap, false);
 
-    // TODO: Replace PCs/BPCs
+    for (auto &M : Input.PCs) {
+      M.LHS = getInstCopy(M.LHS, IC, ICache, BCache, &CMap, false);
+      M.RHS = getInstCopy(M.RHS, IC, ICache, BCache, &CMap, false);
+    }
+    for (auto &BPC : Input.BPCs) {
+      BPC.PC.LHS = getInstCopy(BPC.PC.LHS, IC, ICache, BCache, &CMap, false);
+      BPC.PC.RHS = getInstCopy(BPC.PC.RHS, IC, ICache, BCache, &CMap, false);
+    }
+
+    std::vector<std::pair<Inst *, APInt>> Models;
+    bool Valid;
+    if (std::error_code EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, Valid, &Models)) {
+      llvm::errs() << EC.message() << '\n';
+    }
+
+    if (Valid) {
+      Results.push_back(Input);
+      ReduceRec(IC, S, Input, Results, DNR);
+    } else {
+      if (DebugLevel >= 2) {
+        llvm::outs() << "Invalid attempt.\n";
+        Input.print(llvm::outs(), true);
+      }
+    }
+  }
+}
+
+void ReduceAndGeneralize(InstContext &IC,
+                               Solver *S, ParsedReplacement Input) {
+  std::vector<std::pair<Inst *, APInt>> Models;
+  bool Valid;
+  if (std::error_code EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, Valid, &Models)) {
+    llvm::errs() << EC.message() << '\n';
+  }
+  if (!Valid) {
+    llvm::errs() << "Invalid Input.\n";
+    return;
   }
 
-  Generalize(IC, S, Input);
+  std::vector<ParsedReplacement> Results;
+  std::unordered_set<std::string> DoNotRepeat;
+  ReduceRec(IC, S, Input, Results, DoNotRepeat);
+
+  if (!Results.empty()) {
+    std::set<std::string> DedupedResults;
+    for (auto &&Result : Results) {
+      DedupedResults.insert(Result.getString(false));
+    }
+
+    std::vector<std::string> SortedResults(DedupedResults.begin(), DedupedResults.end());
+    std::sort(SortedResults.begin(), SortedResults.end(), [](auto a, auto b){return a.length() < b.length();});
+
+    for (auto &&S : SortedResults) {
+      if (DebugLevel > 2) {
+        llvm::outs() << "\n\nResult:\n";
+      }
+      llvm::outs() << S << '\n';
+      if (!ReducePrintAll) {
+        break;
+      }
+    }
+  } else {
+    if (DebugLevel > 2) {
+      llvm::errs() << "Failed to Generalize.\n";
+    }
+  }
+  if (DebugLevel > 2) {
+    llvm::outs() << "Number of Results: " << Results.size() << ".\n";
+  }
 }
 
 int main(int argc, char **argv) {
@@ -387,8 +467,8 @@ int main(int argc, char **argv) {
       // TODO: Verify that inputs are valid optimizations
       Generalize(IC, S.get(), Input);
     }
-    if (RemoveLeaf) {
-      RemoveLeafAndGeneralize(IC, S.get(), Input);
+    if (Reduce) {
+      ReduceAndGeneralize(IC, S.get(), Input);
     }
     if (SymbolizeConstant) {
       SymbolizeAndGeneralize(IC, S.get(), Input);
