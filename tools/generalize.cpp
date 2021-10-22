@@ -62,16 +62,24 @@ static cl::opt<size_t> NumResults("generalization-num-results",
 
 void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
   bool FoundWP = false;
-  std::vector<std::map<Inst *, llvm::KnownBits>> Results;
-  S->abstractPrecondition(Input.BPCs, Input.PCs, Input.Mapping, IC, FoundWP, Results);
+  std::vector<std::map<Inst *, llvm::KnownBits>> KBResults;
+  std::vector<std::map<Inst *, llvm::ConstantRange>> CRResults;
+  S->abstractPrecondition(Input.BPCs, Input.PCs, Input.Mapping, IC, FoundWP, KBResults, CRResults);
 
-  if (FoundWP && Results.empty()) {
+  if (FoundWP && KBResults.empty() && CRResults.empty()) {
     Input.print(llvm::outs(), true);
-  } else {
-    for (auto &&Result : Results) { // Each result is a disjunction
-      for (auto Pair: Result) {
+  } else if (!KBResults.empty()) {
+    for (auto &&Result : KBResults) { // Each result is a disjunction
+      for (auto &Pair: Result) {
         Pair.first->KnownOnes = Pair.second.One;
         Pair.first->KnownZeros = Pair.second.Zero;
+      }
+      Input.print(llvm::outs(), true);
+    }
+  } else if (!CRResults.empty()) {
+    for (auto &&Result : CRResults) { // Each result is a disjunction
+      for (auto &Pair: Result) {
+        Pair.first->Range = Pair.second;
       }
       Input.print(llvm::outs(), true);
     }
@@ -147,13 +155,14 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
     auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
                            BlockCache, &ConstMap, false);
 
-    std::vector<std::map<Inst *, llvm::KnownBits>> Results;
+    std::vector<std::map<Inst *, llvm::KnownBits>> KBResults;
+    std::vector<std::map<Inst *, llvm::ConstantRange>> CRResults;
     bool FoundWP = false;
     if (!SymbolizeNoDFP) {
       InstMapping Mapping(LHS, RHS);
-      S->abstractPrecondition(Input.BPCs, Input.PCs, Mapping, IC, FoundWP, Results);
+      S->abstractPrecondition(Input.BPCs, Input.PCs, Mapping, IC, FoundWP, KBResults, CRResults);
     }
-    Preconditions.push_back(Results);
+    Preconditions.push_back(KBResults);
     if (!FoundWP) {
       Guess = nullptr; // TODO: Better failure indicator
     } else {

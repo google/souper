@@ -97,7 +97,8 @@ public:
   std::error_code abstractPrecondition(const BlockPCs &BPCs,
                   const std::vector<InstMapping> &PCs,
                   InstMapping &Mapping, InstContext &IC, bool &FoundWeakest,
-                  std::vector<std::map<Inst *, llvm::KnownBits>> &Results) = 0;
+                  std::vector<std::map<Inst *, llvm::KnownBits>> &KBResults,
+                  std::vector<std::map<Inst *, llvm::ConstantRange>> &CRResults) = 0;
 };
 
 std::unique_ptr<Solver> createBaseSolver(

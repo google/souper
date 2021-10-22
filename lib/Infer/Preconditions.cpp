@@ -9,7 +9,37 @@ static llvm::cl::opt<bool> FixItNoVar("fixit-no-restrict-vars",
                    "(default=false)"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> GenCR("gencr",
+    llvm::cl::desc("Generate a CR precondition."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> GenKB("genkb",
+    llvm::cl::desc("Generate a KB precondition."
+                   "(default=true)"),
+llvm::cl::init(true));
+
+
 namespace souper {
+
+std::pair<std::vector<std::map<Inst *, llvm::KnownBits>>,
+std::vector<std::map<Inst *, llvm::ConstantRange>>>
+inferAbstractPreconditions(SynthesisContext &SC, Inst *RHS,
+                               Solver *S, bool &FoundWeakest) {
+
+  std::vector<std::map<Inst *, llvm::ConstantRange>> CRResults;
+  std::vector<std::map<Inst *, llvm::KnownBits>> KBResults;
+  if (GenKB) KBResults = inferAbstractKBPreconditions(SC, RHS, S, FoundWeakest);
+  if (GenCR) CRResults = inferAbstractCRPreconditions(SC, RHS, S, FoundWeakest);
+  return std::make_pair(KBResults, CRResults);
+}
+
+std::vector<std::map<Inst *, llvm::ConstantRange>>
+  inferAbstractCRPreconditions(SynthesisContext &SC, Inst *RHS,
+                               Solver *S, bool &FoundWeakest) {
+  return {};
+}
+
 std::vector<std::map<Inst *, llvm::KnownBits>>
   inferAbstractKBPreconditions(SynthesisContext &SC, Inst *RHS,
                                Solver *S, bool &FoundWeakest) {

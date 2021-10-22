@@ -267,11 +267,13 @@ public:
   std::error_code abstractPrecondition(const BlockPCs &BPCs,
                   const std::vector<InstMapping> &PCs,
                   InstMapping &Mapping, InstContext &IC, bool &FoundWeakest,
-                  std::vector<std::map<Inst *, llvm::KnownBits>> &Results) override {
+                  std::vector<std::map<Inst *, llvm::KnownBits>> &KBResults,
+                  std::vector<std::map<Inst *, llvm::ConstantRange>> &CRResults) override {
     SynthesisContext SC{IC, SMTSolver.get(), Mapping.LHS, /*LHSUB*/nullptr, PCs,
                       BPCs, /*CheckAllGuesses=*/false, Timeout};
 
-    Results = inferAbstractKBPreconditions(SC, Mapping.RHS, this, FoundWeakest);
+    std::tie(KBResults, CRResults) =
+      inferAbstractPreconditions(SC, Mapping.RHS, this, FoundWeakest);
     return {};
   }
 
@@ -750,8 +752,10 @@ public:
   std::error_code abstractPrecondition(const BlockPCs &BPCs,
                   const std::vector<InstMapping> &PCs,
                   InstMapping &Mapping, InstContext &IC, bool &FoundWeakest,
-                  std::vector<std::map<Inst *, llvm::KnownBits>> &Results) override {
-    return UnderlyingSolver->abstractPrecondition(BPCs, PCs, Mapping, IC, FoundWeakest, Results);
+                  std::vector<std::map<Inst *, llvm::KnownBits>> &KBResults,
+                  std::vector<std::map<Inst *, llvm::ConstantRange>> &CRResults) override {
+    return UnderlyingSolver->abstractPrecondition(BPCs, PCs, Mapping, IC, FoundWeakest,
+      KBResults, CRResults);
   }
 
   std::error_code knownBits(const BlockPCs &BPCs,
@@ -897,8 +901,10 @@ public:
   std::error_code abstractPrecondition(const BlockPCs &BPCs,
                   const std::vector<InstMapping> &PCs,
                   InstMapping &Mapping, InstContext &IC, bool &FoundWeakest,
-                  std::vector<std::map<Inst *, llvm::KnownBits>> &Results) override {
-    return UnderlyingSolver->abstractPrecondition(BPCs, PCs, Mapping, IC, FoundWeakest, Results);
+                  std::vector<std::map<Inst *, llvm::KnownBits>> &KBResults,
+                  std::vector<std::map<Inst *, llvm::ConstantRange>> &CRResults) override {
+    return UnderlyingSolver->abstractPrecondition(BPCs, PCs, Mapping, IC, FoundWeakest,
+      KBResults, CRResults);
   }
 
   std::error_code knownBits(const BlockPCs &BPCs,
