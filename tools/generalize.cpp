@@ -426,6 +426,7 @@ void ReduceAndGeneralize(InstContext &IC,
       }
     }
   } else {
+    Input.print(llvm::outs(), true);
     if (DebugLevel > 2) {
       llvm::errs() << "Failed to Generalize.\n";
     }
