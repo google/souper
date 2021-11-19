@@ -310,9 +310,27 @@ void collectInsts(Inst *I, std::unordered_set<Inst *> &Results) {
     }
   }
 }
+
 void ReduceRec(InstContext &IC,
      Solver *S, ParsedReplacement Input_, std::vector<ParsedReplacement> &Results, std::unordered_set<std::string> &DNR) {
-  auto Str = Input_.getString(false);
+
+  ReplacementContext RC;
+  std::string Str;
+  llvm::raw_string_ostream SStr(Str);
+  RC.printInst(Input_.Mapping.LHS, SStr, false);
+
+  Inst *Ante = IC.getConst(llvm::APInt(1, true));
+  for (auto PC : Input_.PCs ) {
+    Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+  }
+
+  RC.printInst(Ante, SStr, false);
+  SStr.flush();
+
+//  llvm::errs() << Str << "\n";
+
+//  auto Str = Input_.getString(false);
   if (DNR.find(Str) != DNR.end()) {
     return;
   } else {
@@ -320,20 +338,21 @@ void ReduceRec(InstContext &IC,
   }
 
   static int varnum = 0; // persistent state, maybe 'oop' away at some point.
+  static int numSolverCalls = 0;
 
   std::unordered_set<Inst *> Insts;
   collectInsts(Input_.Mapping.LHS, Insts);
   collectInsts(Input_.Mapping.RHS, Insts);
 
-  for (auto &&PC : Input_.PCs) {
-    collectInsts(PC.LHS, Insts);
-    collectInsts(PC.RHS, Insts);
-  }
+//  for (auto &&PC : Input_.PCs) {
+//    collectInsts(PC.LHS, Insts);
+//    collectInsts(PC.RHS, Insts);
+//  }
 
-  for (auto &&BPC : Input_.BPCs) {
-    collectInsts(BPC.PC.LHS, Insts);
-    collectInsts(BPC.PC.RHS, Insts);
-  }
+//  for (auto &&BPC : Input_.BPCs) {
+//    collectInsts(BPC.PC.LHS, Insts);
+//    collectInsts(BPC.PC.RHS, Insts);
+//  }
 
   if (Insts.size() <= 1) {
     return; // Base case
@@ -343,7 +362,13 @@ void ReduceRec(InstContext &IC,
   for (auto I : Insts) {
     ParsedReplacement Input = Input_;
 
-    if (I == Input.Mapping.LHS || I == Input.Mapping.RHS || I->K == Inst::Var || I->K == Inst::Const) {
+    if (I == Input.Mapping.LHS || I == Input.Mapping.RHS || I->K == Inst::Var || I->K == Inst::Const ||
+        I->K == Inst::UMulWithOverflow || I->K == Inst::UMulO ||
+        I->K == Inst::SMulWithOverflow || I->K == Inst::SMulO ||
+        I->K == Inst::UAddWithOverflow || I->K == Inst::UAddO ||
+        I->K == Inst::SAddWithOverflow || I->K == Inst::SAddO ||
+        I->K == Inst::USubWithOverflow || I->K == Inst::USubO ||
+        I->K == Inst::SSubWithOverflow || I->K == Inst::SSubO) {
       continue;
     }
 
@@ -378,6 +403,8 @@ void ReduceRec(InstContext &IC,
     if (std::error_code EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, Valid, &Models)) {
       llvm::errs() << EC.message() << '\n';
     }
+    numSolverCalls++;
+    llvm::errs() << "Solver Calls: " << numSolverCalls << "\n";
 
     if (Valid) {
       Results.push_back(Input);
@@ -389,6 +416,41 @@ void ReduceRec(InstContext &IC,
       }
     }
   }
+}
+
+// Assumes Input is valid
+ParsedReplacement ReducePCs(InstContext &IC,
+                Solver *S, ParsedReplacement Input) {
+
+  std::set<size_t> UnnecessaryPCs;
+  for (size_t i =0; i < Input.PCs.size(); ++i) {
+    std::vector<InstMapping> PCsExceptOne;
+    for (size_t j = 0; j < Input.PCs.size(); ++j) {
+      if (i != j) {
+        PCsExceptOne.push_back(Input.PCs[i]);
+      }
+    }
+
+    std::vector<std::pair<Inst *, APInt>> Models;
+    bool Valid;
+    if (std::error_code EC = S->isValid(IC, Input.BPCs, PCsExceptOne, Input.Mapping, Valid, &Models)) {
+      llvm::errs() << EC.message() << '\n';
+    }
+    if (Valid) {
+      UnnecessaryPCs.insert(i);
+    }
+  }
+
+  std::vector<InstMapping> NecessaryPCs;
+  for (size_t i =0; i < Input.PCs.size(); ++i) {
+    if (UnnecessaryPCs.find(i) == UnnecessaryPCs.end()) {
+      NecessaryPCs.push_back(Input.PCs[i]);
+    }
+  }
+
+  auto Result = Input;
+  Result.PCs = NecessaryPCs;
+  return Result;
 }
 
 void ReduceAndGeneralize(InstContext &IC,
@@ -405,6 +467,7 @@ void ReduceAndGeneralize(InstContext &IC,
 
   std::vector<ParsedReplacement> Results;
   std::unordered_set<std::string> DoNotRepeat;
+  Input = ReducePCs(IC, S, Input);
   ReduceRec(IC, S, Input, Results, DoNotRepeat);
 
   if (!Results.empty()) {
