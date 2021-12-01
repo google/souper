@@ -161,8 +161,6 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
       }
 //      llvm::errs() << "Succ:" << Success << "\n";
 
-
-
       if (!Success) {
         FakeConsts[0]->NonZero = true;
         Success = TryConstSynth(Guess, ConstSet);
@@ -298,14 +296,14 @@ void SymbolizeAndGeneralize(InstContext &IC,
 
   CandidateMap Results;
 
-  // One at a time
+//  // One at a time
   for (auto LHSConst : LHSConsts) {
     SymbolizeAndGeneralize(IC, S, Input, {LHSConst}, RHSConsts, Results);
   }
   // TODO: Two at a time, etc. Is this replaceable by DFP?
 
-  // All at once
-//  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
+//   All at once
+  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
 
   // TODO: Move sorting here
   for (auto &&Result : Results) {
@@ -603,7 +601,9 @@ void ReduceAndGeneralize(InstContext &IC,
 //  Results.push_back(Input);
 
   R.ReduceRec(Input, Results);
-  R.Stats();
+  if (DebugLevel > 3) {
+    R.Stats();
+  }
   if (!Results.empty()) {
     std::set<std::string> DedupedResults;
     for (auto &&Result : Results) {
