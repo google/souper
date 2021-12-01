@@ -119,33 +119,72 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
 
   std::vector<Inst *> WithoutConsts;
 
+  auto TryConstSynth = [&](Inst *Guess, std::set<Inst *> &ConstSet) {
+    std::map <Inst *, llvm::APInt> ResultConstMap;
+    std::map<Inst *, Inst *> InstCacheCopy/* = InstCache*/;
+    InstCacheCopy[RHSConsts[0]] = Guess;
+    auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
+                           BlockCache, &ConstMap, false);
+    ConstantSynthesis CS;
+    auto SMTSolver = GetUnderlyingSolver();
+    auto EC = CS.synthesize(SMTSolver.get(), Input.BPCs, Input.PCs,
+                         InstMapping (LHS, RHS), ConstSet,
+                         ResultConstMap, IC, /*MaxTries=*/30, 10,
+                         /*AvoidNops=*/true);
+    if (!ResultConstMap.empty()) {
+      std::map<Inst *, Inst *> InstCache;
+      std::map<Block *, Block *> BlockCache;
+      auto LHSCopy = getInstCopy(LHS, IC, InstCache, BlockCache, &ResultConstMap, true);
+      RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ResultConstMap, true);
+
+      Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHSCopy, RHS)));
+      return true;
+    } else {
+      if (DebugLevel > 2) {
+        llvm::errs() << "Constant Synthesis ((no Dataflow Preconditions)) failed. \n";
+      }
+    }
+    return false;
+  };
+
+
   for (auto &Guess : Guesses) {
     std::set<Inst *> ConstSet;
-    std::map <Inst *, llvm::APInt> ResultConstMap;
     souper::getConstants(Guess, ConstSet);
     if (!ConstSet.empty()) {
-      std::map<Inst *, Inst *> InstCacheCopy = InstCache;
-      InstCacheCopy[RHSConsts[0]] = Guess;
-      auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
-                             BlockCache, &ConstMap, false);
-      ConstantSynthesis CS;
-      auto SMTSolver = GetUnderlyingSolver();
-      auto EC = CS.synthesize(SMTSolver.get(), Input.BPCs, Input.PCs,
-                           InstMapping (LHS, RHS), ConstSet,
-                           ResultConstMap, IC, /*MaxTries=*/30, 10,
-                           /*AvoidNops=*/true);
-      if (!ResultConstMap.empty()) {
-        std::map<Inst *, Inst *> InstCache;
-        std::map<Block *, Block *> BlockCache;
-        RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ResultConstMap, false);
-
-        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, RHS)));
-
-      } else {
-        if (DebugLevel > 2) {
-          llvm::errs() << "Costant Synthesis ((no Dataflow Preconditions)) failed. \n";
-        }
+      bool Success = TryConstSynth(Guess, ConstSet);
+//      llvm::errs() << "Succ:" << Success << "\n";
+      if (!Success) {
+        FakeConsts[0]->PowOfTwo = true;
+        Success = TryConstSynth(Guess, ConstSet);
+        FakeConsts[0]->PowOfTwo = false;
       }
+//      llvm::errs() << "Succ:" << Success << "\n";
+
+
+
+      if (!Success) {
+        FakeConsts[0]->NonZero = true;
+        Success = TryConstSynth(Guess, ConstSet);
+        FakeConsts[0]->NonZero = false;
+      }
+//      llvm::errs() << "Succ:" << Success << "\n";
+
+      if (!Success) {
+        FakeConsts[0]->NonNegative = true;
+        Success = TryConstSynth(Guess, ConstSet);
+        FakeConsts[0]->NonNegative = false;
+      }
+//      llvm::errs() << "Succ:" << Success << "\n";
+
+      if (!Success) {
+        FakeConsts[0]->Negative = true;
+        Success = TryConstSynth(Guess, ConstSet);
+        FakeConsts[0]->Negative = false;
+      }
+//      llvm::errs() << "Succ:" << Success << "\n";
+      (void)Success;
+
     } else {
       WithoutConsts.push_back(Guess);
     }
@@ -153,57 +192,89 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
   std::swap(WithoutConsts, Guesses);
 
   for (auto &Guess : Guesses) {
-    std::map<Inst *, Inst *> InstCacheCopy = InstCache;
+    std::map<Inst *, Inst *> InstCacheCopy/* = InstCache*/;
     InstCacheCopy[RHSConsts[0]] = Guess;
+
+//    {
+//    llvm::errs() << "GUESS:\n";
+//    ReplacementContext RC;
+//    RC.printInst(Guess, llvm::errs(), true);
+//    }
 
     auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
                            BlockCache, &ConstMap, false);
 
-    std::vector<std::map<Inst *, llvm::KnownBits>> KBResults;
-    std::vector<std::map<Inst *, llvm::ConstantRange>> CRResults;
-    bool FoundWP = false;
-    if (!SymbolizeNoDFP) {
-      InstMapping Mapping(LHS, RHS);
-      S->abstractPrecondition(Input.BPCs, Input.PCs, Mapping, IC, FoundWP, KBResults, CRResults);
-    }
-    Preconditions.push_back(KBResults);
-    if (!FoundWP) {
-      Guess = nullptr; // TODO: Better failure indicator
-    } else {
-      Guess = RHS;
-    }
-  }
+//    {
+//    llvm::errs() << "JoinedGUESS:\n";
+//    ReplacementContext RC;
+//    RC.printInst(RHS, llvm::errs(), true);
+//    }
 
-  std::vector<size_t> Idx;
-  std::vector<int> Utility;
-  for (size_t i = 0; i < Guesses.size(); ++i) {
-    Idx.push_back(i);
-  }
-  for (size_t i = 0; i < Preconditions.size(); ++i) {
-    Utility.push_back(0);
-    if (!Guesses[i]) continue;
-    if (Preconditions[i].empty()) {
-      Utility[i] = 1000; // High magic number
-    }
-
-    for (auto V : Preconditions[i]) {
-      for (auto P : V) {
-        auto W = P.second.getBitWidth();
-        Utility[i] += (W - P.second.Zero.countPopulation());
-        Utility[i] += (W - P.second.One.countPopulation());
+    InstMapping Mapping(LHS, RHS);
+    if (SymbolizeNoDFP) {
+      bool IsValid;
+      auto CheckAndSave = [&](){
+        std::vector<std::pair<Inst *, APInt>> Models;
+        if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Mapping, IsValid, &Models)) {
+          llvm::errs() << EC.message() << '\n';
+        }
+        if (IsValid) {
+          Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Mapping));
+        }
+      };
+      CheckAndSave();
+      if (!IsValid) {
+        FakeConsts[0]->PowOfTwo = true;
+        CheckAndSave();
+        FakeConsts[0]->PowOfTwo = false;
       }
+
+
+
+    } else {
+//      std::vector<std::map<Inst *, llvm::KnownBits>> KBResults;
+//      std::vector<std::map<Inst *, llvm::ConstantRange>> CRResults;
+//      bool FoundWP = false;
+//      S->abstractPrecondition(Input.BPCs, Input.PCs, Mapping, IC, FoundWP, KBResults, CRResults);
+//      Preconditions.push_back(KBResults);
+//      if (!FoundWP) {
+//        Guess = nullptr; // TODO: Better failure indicator
+//      } else {
+//        Guess = RHS;
+//      }
     }
   }
 
-  std::sort(Idx.begin(), Idx.end(), [&Utility](size_t a, size_t b) {
-    return Utility[a] > Utility[b];
-  });
+//  std::vector<size_t> Idx;
+//  std::vector<int> Utility;
+//  for (size_t i = 0; i < Guesses.size(); ++i) {
+//    Idx.push_back(i);
+//  }
+//  for (size_t i = 0; i < Preconditions.size(); ++i) {
+//    Utility.push_back(0);
+//    if (!Guesses[i]) continue;
+//    if (Preconditions[i].empty()) {
+//      Utility[i] = 1000; // High magic number
+//    }
 
-  for (size_t i = 0; i < Idx.size(); ++i) {
-    if (Preconditions[Idx[i]].empty() && Guesses[Idx[i]]) {
-      Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, Guesses[Idx[i]])));
-    }
-  }
+//    for (auto V : Preconditions[i]) {
+//      for (auto P : V) {
+//        auto W = P.second.getBitWidth();
+//        Utility[i] += (W - P.second.Zero.countPopulation());
+//        Utility[i] += (W - P.second.One.countPopulation());
+//      }
+//    }
+//  }
+
+//  std::sort(Idx.begin(), Idx.end(), [&Utility](size_t a, size_t b) {
+//    return Utility[a] > Utility[b];
+//  });
+
+//  for (size_t i = 0; i < Idx.size(); ++i) {
+//    if (Preconditions[Idx[i]].empty() && Guesses[Idx[i]]) {
+//      Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, Guesses[Idx[i]])));
+//    }
+//  }
 
   // if (!SymbolizeNoDFP) {
   //   for (size_t i = 0; i < std::min(Idx.size(), NumResults.getValue()); ++i) {
@@ -234,7 +305,7 @@ void SymbolizeAndGeneralize(InstContext &IC,
   // TODO: Two at a time, etc. Is this replaceable by DFP?
 
   // All at once
-  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
+//  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
 
   // TODO: Move sorting here
   for (auto &&Result : Results) {
@@ -295,7 +366,7 @@ void GeneralizeBitWidth(InstContext &IC, Solver *S,
 
 }
 
-void collectInsts(Inst *I, std::unordered_set<Inst *> &Results) {
+void collectInsts(Inst *I, std::set<Inst *> &Results) {
   std::vector<Inst *> Stack{I};
   while (!Stack.empty()) {
     auto Current = Stack.back();
@@ -311,57 +382,89 @@ void collectInsts(Inst *I, std::unordered_set<Inst *> &Results) {
   }
 }
 
-void ReduceRec(InstContext &IC,
-     Solver *S, ParsedReplacement Input_, std::vector<ParsedReplacement> &Results, std::unordered_set<std::string> &DNR) {
+class Reducer {
+public:
+  Reducer(InstContext &IC_, Solver *S_) : IC(IC_), S(S_), varnum(0), numSolverCalls(0) {}
 
-  ReplacementContext RC;
-  std::string Str;
-  llvm::raw_string_ostream SStr(Str);
-  RC.printInst(Input_.Mapping.LHS, SStr, false);
-
-  Inst *Ante = IC.getConst(llvm::APInt(1, true));
-  for (auto PC : Input_.PCs ) {
-    Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
-    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+  ParsedReplacement ReduceGreedy(ParsedReplacement Input) {
+    std::set<Inst *> Insts;
+    collectInsts(Input.Mapping.LHS, Insts);
+    // TODO: topological sort, to reduce number of solver calls
+    // Try to remove one instruction at a time
+    int failcount = 0;
+    std::set<Inst *> Visited;
+    do {
+      auto It = Insts.begin();
+      auto I = *It;
+      Insts.erase(It);
+      if (Visited.find(I) != Visited.end()) {
+        continue;
+      }
+      Visited.insert(I);
+      if (!safeToRemove(I, Input)) {
+        continue;
+      }
+      auto Copy = Input;
+      Eliminate(Input, I);
+      if (!Verify(Input)) {
+        Input = Copy;
+        failcount++;
+        if (failcount >= Insts.size()) {
+          break;
+        }
+        continue;
+      }
+      Insts.clear();
+      collectInsts(Input.Mapping.LHS, Insts);
+    } while (!Insts.empty());
+    return Input;
   }
 
-  RC.printInst(Ante, SStr, false);
-  SStr.flush();
+  // Assumes Input is valid
+  ParsedReplacement ReducePCs(ParsedReplacement Input) {
 
-//  llvm::errs() << Str << "\n";
+    std::set<size_t> UnnecessaryPCs;
+    for (size_t i =0; i < Input.PCs.size(); ++i) {
+      std::vector<InstMapping> PCsExceptOne;
+      for (size_t j = 0; j < Input.PCs.size(); ++j) {
+        if (i != j) {
+          PCsExceptOne.push_back(Input.PCs[i]);
+        }
+      }
 
-//  auto Str = Input_.getString(false);
-  if (DNR.find(Str) != DNR.end()) {
-    return;
-  } else {
-    DNR.insert(Str);
+      std::vector<std::pair<Inst *, APInt>> Models;
+      bool Valid;
+      if (std::error_code EC = S->isValid(IC, Input.BPCs, PCsExceptOne, Input.Mapping, Valid, &Models)) {
+        llvm::errs() << EC.message() << '\n';
+      }
+      if (Valid) {
+        UnnecessaryPCs.insert(i);
+      }
+    }
+
+    std::vector<InstMapping> NecessaryPCs;
+    for (size_t i =0; i < Input.PCs.size(); ++i) {
+      if (UnnecessaryPCs.find(i) == UnnecessaryPCs.end()) {
+        NecessaryPCs.push_back(Input.PCs[i]);
+      }
+    }
+
+    auto Result = Input;
+    Result.PCs = NecessaryPCs;
+    return Result;
   }
 
-  static int varnum = 0; // persistent state, maybe 'oop' away at some point.
-  static int numSolverCalls = 0;
-
-  std::unordered_set<Inst *> Insts;
-  collectInsts(Input_.Mapping.LHS, Insts);
-  collectInsts(Input_.Mapping.RHS, Insts);
-
-//  for (auto &&PC : Input_.PCs) {
-//    collectInsts(PC.LHS, Insts);
-//    collectInsts(PC.RHS, Insts);
-//  }
-
-//  for (auto &&BPC : Input_.BPCs) {
-//    collectInsts(BPC.PC.LHS, Insts);
-//    collectInsts(BPC.PC.RHS, Insts);
-//  }
-
-  if (Insts.size() <= 1) {
-    return; // Base case
+  bool Verify(ParsedReplacement &Input) {
+    std::vector<std::pair<Inst *, APInt>> Models;
+    bool Valid;
+    if (std::error_code EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, Valid, &Models)) {
+      llvm::errs() << EC.message() << '\n';
+    }
+    numSolverCalls++;
+    return Valid;
   }
 
-  // Remove at least one instruction and call recursively for valid opts
-  for (auto I : Insts) {
-    ParsedReplacement Input = Input_;
-
+  bool safeToRemove(Inst *I, ParsedReplacement &Input) {
     if (I == Input.Mapping.LHS || I == Input.Mapping.RHS || I->K == Inst::Var || I->K == Inst::Const ||
         I->K == Inst::UMulWithOverflow || I->K == Inst::UMulO ||
         I->K == Inst::SMulWithOverflow || I->K == Inst::SMulO ||
@@ -369,9 +472,12 @@ void ReduceRec(InstContext &IC,
         I->K == Inst::SAddWithOverflow || I->K == Inst::SAddO ||
         I->K == Inst::USubWithOverflow || I->K == Inst::USubO ||
         I->K == Inst::SSubWithOverflow || I->K == Inst::SSubO) {
-      continue;
+      return false;
     }
+    return true;
+  }
 
+  void Eliminate(ParsedReplacement &Input, Inst *I) {
     // Try to replace I with a new Var.
     Inst *NewVar = IC.createVar(I->Width, "newvar" + std::to_string(varnum++));
 
@@ -397,61 +503,83 @@ void ReduceRec(InstContext &IC,
       BPC.PC.LHS = getInstCopy(BPC.PC.LHS, IC, ICache, BCache, &CMap, false);
       BPC.PC.RHS = getInstCopy(BPC.PC.RHS, IC, ICache, BCache, &CMap, false);
     }
+  }
 
-    std::vector<std::pair<Inst *, APInt>> Models;
-    bool Valid;
-    if (std::error_code EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, Valid, &Models)) {
-      llvm::errs() << EC.message() << '\n';
+  void ReduceRec(ParsedReplacement Input_, std::vector<ParsedReplacement> &Results) {
+
+    // Try to remove subsets of instructions recursively, and store all valid results
+    ReplacementContext RC;
+    std::string Str;
+    llvm::raw_string_ostream SStr(Str);
+    RC.printInst(Input_.Mapping.LHS, SStr, false);
+
+    Inst *Ante = IC.getConst(llvm::APInt(1, true));
+    for (auto PC : Input_.PCs ) {
+      Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+      Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
     }
-    numSolverCalls++;
-    llvm::errs() << "Solver Calls: " << numSolverCalls << "\n";
 
-    if (Valid) {
-      Results.push_back(Input);
-      ReduceRec(IC, S, Input, Results, DNR);
+    RC.printInst(Ante, SStr, false);
+    SStr.flush();
+
+  //  llvm::errs() << Str << "\n";
+
+  //  auto Str = Input_.getString(false);
+    if (DNR.find(Str) != DNR.end()) {
+      return;
     } else {
-      if (DebugLevel >= 2) {
-        llvm::outs() << "Invalid attempt.\n";
-        Input.print(llvm::outs(), true);
+      DNR.insert(Str);
+    }
+
+    std::set<Inst *> Insts;
+    collectInsts(Input_.Mapping.LHS, Insts);
+    collectInsts(Input_.Mapping.RHS, Insts);
+
+  //  for (auto &&PC : Input_.PCs) {
+  //    collectInsts(PC.LHS, Insts);
+  //    collectInsts(PC.RHS, Insts);
+  //  }
+
+  //  for (auto &&BPC : Input_.BPCs) {
+  //    collectInsts(BPC.PC.LHS, Insts);
+  //    collectInsts(BPC.PC.RHS, Insts);
+  //  }
+
+    if (Insts.size() <= 1) {
+      return; // Base case
+    }
+
+    // Remove at least one instruction and call recursively for valid opts
+    for (auto I : Insts) {
+      ParsedReplacement Input = Input_;
+
+      if (!safeToRemove(I, Input)) {
+        continue;
+      }
+
+      Eliminate(Input, I);
+
+      if (Verify(Input)) {
+        Results.push_back(Input);
+        ReduceRec(Input, Results);
+      } else {
+        if (DebugLevel >= 2) {
+          llvm::outs() << "Invalid attempt.\n";
+          Input.print(llvm::outs(), true);
+        }
       }
     }
   }
-}
-
-// Assumes Input is valid
-ParsedReplacement ReducePCs(InstContext &IC,
-                Solver *S, ParsedReplacement Input) {
-
-  std::set<size_t> UnnecessaryPCs;
-  for (size_t i =0; i < Input.PCs.size(); ++i) {
-    std::vector<InstMapping> PCsExceptOne;
-    for (size_t j = 0; j < Input.PCs.size(); ++j) {
-      if (i != j) {
-        PCsExceptOne.push_back(Input.PCs[i]);
-      }
-    }
-
-    std::vector<std::pair<Inst *, APInt>> Models;
-    bool Valid;
-    if (std::error_code EC = S->isValid(IC, Input.BPCs, PCsExceptOne, Input.Mapping, Valid, &Models)) {
-      llvm::errs() << EC.message() << '\n';
-    }
-    if (Valid) {
-      UnnecessaryPCs.insert(i);
-    }
+  void Stats() {
+    llvm::outs() << "Solver Calls: " << numSolverCalls << "\n";
   }
-
-  std::vector<InstMapping> NecessaryPCs;
-  for (size_t i =0; i < Input.PCs.size(); ++i) {
-    if (UnnecessaryPCs.find(i) == UnnecessaryPCs.end()) {
-      NecessaryPCs.push_back(Input.PCs[i]);
-    }
-  }
-
-  auto Result = Input;
-  Result.PCs = NecessaryPCs;
-  return Result;
-}
+private:
+  InstContext &IC;
+  Solver *S;
+  int varnum;
+  int numSolverCalls;
+  std::unordered_set<std::string> DNR;
+};
 
 void ReduceAndGeneralize(InstContext &IC,
                                Solver *S, ParsedReplacement Input) {
@@ -465,11 +593,17 @@ void ReduceAndGeneralize(InstContext &IC,
     return;
   }
 
-  std::vector<ParsedReplacement> Results;
-  std::unordered_set<std::string> DoNotRepeat;
-  Input = ReducePCs(IC, S, Input);
-  ReduceRec(IC, S, Input, Results, DoNotRepeat);
+  Reducer R(IC, S);
 
+  std::vector<ParsedReplacement> Results;
+  Input = R.ReducePCs(Input);
+  Input = R.ReduceGreedy(Input);
+
+
+//  Results.push_back(Input);
+
+  R.ReduceRec(Input, Results);
+  R.Stats();
   if (!Results.empty()) {
     std::set<std::string> DedupedResults;
     for (auto &&Result : Results) {
