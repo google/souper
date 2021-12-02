@@ -168,7 +168,12 @@ std::string ReplacementContext::printInstImpl(Inst *I, llvm::raw_ostream &Out,
     }
   }
 
-  std::string InstName = std::to_string(InstNames.size() + BlockNames.size());
+  std::string InstName;
+  if (printNames && !I->Name.empty()) {
+    InstName = I->Name;
+  } else {
+    InstName = std::to_string(InstNames.size() + BlockNames.size());
+  }
   assert(InstNames.find(I) == InstNames.end());
   assert(NameToBlock.find(InstName) == NameToBlock.end());
   setInst(InstName, I);
