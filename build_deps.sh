@@ -25,14 +25,13 @@ ncpus=$(command nproc 2>/dev/null || command sysctl -n hw.ncpu 2>/dev/null || ec
 hiredis_commit=667dbf536524ba3f28c1d964793db1055c5a64f2
 llvm_repo=https://github.com/regehr/llvm-project.git
 # llvm_commit specifies the git branch or hash to checkout to
-llvm_commit=disable-peepholes-llvm12-v03
-klee_repo=https://github.com/rsas/klee
-klee_branch=pure-bv-qf-llvm-7.0
-alive_commit=v2
+llvm_commit=disable-peepholes-llvm15-1
+klee_repo=https://github.com/regehr/klee
+klee_branch=klee-for-souper-13
+alive_commit=v4
 alive_repo=https://github.com/manasij7479/alive2.git
 z3_repo=https://github.com/Z3Prover/z3.git
-# latest as of May 25 2021
-z3_commit=322531e95cb7da59b4596000ffbc92d792433f17
+z3_commit=z3-4.11.2
 
 llvm_build_type=Release
 if [ -n "$1" ] ; then
@@ -76,7 +75,7 @@ mkdir -p $llvm_srcdir
 
 mkdir -p $llvm_builddir
 
-cmake_flags="-DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_FORCE_ENABLE_STATS=ON -DCMAKE_BUILD_TYPE=$llvm_build_type -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_PROJECTS=\'llvm;clang;openmp;compiler-rt\'"
+cmake_flags="-DCMAKE_INSTALL_PREFIX=$llvm_installdir -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_FORCE_ENABLE_STATS=ON -DCMAKE_BUILD_TYPE=$llvm_build_type -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_TARGETS_TO_BUILD=X86;AArch64 -DLLVM_ENABLE_PROJECTS=clang;compiler-rt"
 
 if [ -n "`which ninja`" ] ; then
   (cd $llvm_builddir && cmake ${llvm_srcdir}/llvm -G Ninja $cmake_flags -DCMAKE_CXX_FLAGS="-DDISABLE_WRONG_OPTIMIZATIONS_DEFAULT_VALUE=true -DDISABLE_PEEPHOLES_DEFAULT_VALUE=false" "$@")
@@ -91,8 +90,8 @@ fi
 # we want these but they don't get installed by default
 cp $llvm_builddir/bin/llvm-lit $llvm_installdir/bin
 cp $llvm_builddir/bin/FileCheck $llvm_installdir/bin
-cp $llvm_builddir/lib/libgtest_main.a $llvm_installdir/lib
-cp $llvm_builddir/lib/libgtest.a $llvm_installdir/lib
+cp $llvm_builddir/lib/libllvm_gtest_main.a $llvm_installdir/lib
+cp $llvm_builddir/lib/libllvm_gtest.a $llvm_installdir/lib
 
 kleedir=$(pwd)/third_party/klee
 

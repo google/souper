@@ -1,5 +1,3 @@
-
-
 ; RUN: %llvm-as -o %t1 %s
 ; RUN: %souper -souper-enumerative-synthesis-max-instructions=0 -souper-double-check %t1 | %FileCheck %s
 

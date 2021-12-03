@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#define DEBUG_TYPE "souper"
-
 #include "souper/Codegen/Codegen.h"
 #include "souper/Inst/Inst.h"
 #include "llvm/ADT/Statistic.h"
@@ -24,6 +22,7 @@
 #include "llvm/IR/Value.h"
 #include <map>
 
+#define DEBUG_TYPE "souper"
 STATISTIC(InstructionReplaced,
           "Number of instructions replaced by another instruction");
 STATISTIC(DominanceCheckFailed,
@@ -316,8 +315,8 @@ llvm::Value *Codegen::getValue(Inst *I) {
   // FIXME: [US]{Add,Sub,Mul}O
   // FIXME: PHI
 
-  report_fatal_error((std::string) "Unhandled Souper instruction " +
-                     Inst::getKindName(I->K) + " in Codegen::getValue()");
+  report_fatal_error(((std::string) "Unhandled Souper instruction " +
+                      Inst::getKindName(I->K) + " in Codegen::getValue()").c_str());
 }
 
 static std::vector<llvm::Type *>

@@ -1,5 +1,3 @@
-
-
 ; RUN: %llvm-as -o %t1 %s
 ; RUN: %souper -souper-only-infer-iN %t1 > %t2
 ; RUN: %FileCheck %s -implicit-check-not=FIRST < %t2

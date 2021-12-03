@@ -177,104 +177,97 @@ $souper = 0 if getenv("SOUPER_NO_SOUPER");
 $souper = 0 unless compiling();
 
 if ($souper) {
-    push @ARGV, (
-        "-Xclang", "-load",
-        "-mllvm", "-solver-timeout=15",
-        );
-}
-
-if (getenv("SOUPER_DYNAMIC_PROFILE_ALL")) {
-    if ($souper) {
+    if (getenv("SOUPER_DYNAMIC_PROFILE_ALL")) {
+        die(); ## not supported right now
         push @ARGV, ("-Xclang", "@SOUPER_PASS_PROFILE_ALL@");
+    } else {
+        # the first one is necessary to make plugin command line args work
+        push @ARGV, ("-Xclang", "-load", "-Xclang", "@SOUPER_PASS@");
+        push @ARGV, ("-fpass-plugin=@SOUPER_PASS@");
     }
-} else {
-    if ($souper) {
-        push @ARGV, ("-Xclang", "@SOUPER_PASS@");
-    }
-}
+    push @ARGV, ("-fplugin-arg-souper-solver-timeout=15");
 
-if (getenv("SOUPER_DEBUG") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-debug-level=".getenv("SOUPER_DEBUG"));
-}
-
-if (getenv("SOUPER_EXPLOIT_BLOCKPCS") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-exploit-blockpcs");
-}
-
-if (!getenv("SOUPER_NO_EXTERNAL_CACHE") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-external-cache");
-}
-
-if (getenv("SOUPER_CACHE_UNIX") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-external-cache-unix");
-}
-
-if (getenv("SOUPER_NO_INFER") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-no-infer");
-}
-
-if (getenv("SOUPER_FIRST_OPT") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-first-opt=".$ENV{"SOUPER_FIRST_OPT"});
-}
-
-if (getenv("SOUPER_LAST_OPT") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-last-opt=".$ENV{"SOUPER_LAST_OPT"});
-}
-
-if (getenv("SOUPER_STATIC_PROFILE") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-static-profile");
-}
-
-if (getenv("SOUPER_DYNAMIC_PROFILE") ||
-    getenv("SOUPER_DYNAMIC_PROFILE_ALL") && $souper) {
-    push @ARGV, ("-g", "-mllvm", "-souper-dynamic-profile");
-}
-
-if (getenv("SOUPER_USE_ALIVE") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-use-alive");
-}
-
-if (getenv("SOUPER_NO_DOUBLE_CHECK")) {
-} else {
-    if ($souper) {
+    if (!getenv("SOUPER_NO_DOUBLE_CHECK")) {
         push @ARGV, ("-mllvm", "-souper-double-check");
     }
-}
 
-if (getenv("SOUPER_USE_CEGIS") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-use-cegis");
-}
+    if (getenv("SOUPER_DEBUG")) {
+        push @ARGV, ("-mllvm", "-souper-debug-level=".getenv("SOUPER_DEBUG"));
+    }
 
-if (getenv("SOUPER_ENUMERATIVE_SYNTHESIS_MAX_INSTS") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-enumerative-synthesis-max-instructions=".$ENV{"SOUPER_ENUMERATIVE_SYNTHESIS_MAX_INSTS"});
-}
+    if (getenv("SOUPER_EXPLOIT_BLOCKPCS")) {
+        push @ARGV, ("-mllvm", "-souper-exploit-blockpcs");
+    }
+    
+    if (!getenv("SOUPER_NO_EXTERNAL_CACHE")) {
+        push @ARGV, ("-mllvm", "-souper-external-cache");
+    }
+    
+    if (getenv("SOUPER_CACHE_UNIX")) {
+        push @ARGV, ("-mllvm", "-souper-external-cache-unix");
+    }
+    
+    if (getenv("SOUPER_NO_INFER")) {
+        push @ARGV, ("-mllvm", "-souper-no-infer");
+    }
 
-if (getenv("SOUPER_DATAFLOW_PRUNING") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-dataflow-pruning");
-}
+    if (getenv("SOUPER_FIRST_OPT")) {
+        push @ARGV, ("-mllvm", "-souper-first-opt=".$ENV{"SOUPER_FIRST_OPT"});
+    }
 
-if (getenv("SOUPER_REDIS_PORT") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-redis-port=".$ENV{"SOUPER_REDIS_PORT"});
-}
+    if (getenv("SOUPER_LAST_OPT")) {
+        push @ARGV, ("-mllvm", "-souper-last-opt=".$ENV{"SOUPER_LAST_OPT"});
+    }
 
-if (getenv("SOUPER_STATS") && $souper) {
-    push @ARGV, ("-mllvm", "-stats");
-}
+    if (getenv("SOUPER_STATIC_PROFILE")) {
+        push @ARGV, ("-mllvm", "-souper-static-profile");
+    }
 
-if (getenv("SOUPER_TIME_REPORT") && $souper) {
-    push @ARGV, ("-ftime-report");
-}
+    if (getenv("SOUPER_DYNAMIC_PROFILE") ||
+        getenv("SOUPER_DYNAMIC_PROFILE_ALL")) {
+        push @ARGV, ("-g", "-mllvm", "-souper-dynamic-profile");
+    }
 
-if (getenv("SOUPER_VERIFY") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-verify");
-}
+    if (getenv("SOUPER_USE_ALIVE")) {
+        push @ARGV, ("-mllvm", "-souper-use-alive");
+    }
 
-if (getenv("SOUPER_NO_HARVEST_DATAFLOW_FACTS") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-harvest-dataflow-facts=false");
-}
+    if (getenv("SOUPER_USE_CEGIS")) {
+        push @ARGV, ("-mllvm", "-souper-use-cegis");
+    }
 
-if (getenv("SOUPER_HARVEST_USES") && $souper) {
-    push @ARGV, ("-mllvm", "-souper-harvest-uses");
+    if (getenv("SOUPER_ENUMERATIVE_SYNTHESIS_MAX_INSTS")) {
+        push @ARGV, ("-mllvm", "-souper-enumerative-synthesis-max-instructions=".$ENV{"SOUPER_ENUMERATIVE_SYNTHESIS_MAX_INSTS"});
+    }
+
+    if (getenv("SOUPER_DATAFLOW_PRUNING")) {
+        push @ARGV, ("-mllvm", "-souper-dataflow-pruning");
+    }
+
+    if (getenv("SOUPER_REDIS_PORT")) {
+        push @ARGV, ("-mllvm", "-souper-redis-port=".$ENV{"SOUPER_REDIS_PORT"});
+    }
+    
+    if (getenv("SOUPER_STATS")) {
+        push @ARGV, ("-mllvm", "-stats");
+    }
+
+    if (getenv("SOUPER_TIME_REPORT")) {
+        push @ARGV, ("-ftime-report");
+    }
+
+    if (getenv("SOUPER_VERIFY")) {
+        push @ARGV, ("-mllvm", "-souper-verify");
+    }
+    
+    if (getenv("SOUPER_NO_HARVEST_DATAFLOW_FACTS")) {
+        push @ARGV, ("-mllvm", "-souper-harvest-dataflow-facts=false");
+    }
+
+    if (getenv("SOUPER_HARVEST_USES")) {
+        push @ARGV, ("-mllvm", "-souper-harvest-uses");
+    }
+
 }
 
 if (getenv("SOUPER_DISABLE_LLVM_PEEPHOLES")) {

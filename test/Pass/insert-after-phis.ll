@@ -1,4 +1,4 @@
-; RUN: %opt -load %pass -souper -S -stats -o - %s 2>&1 | %FileCheck %s
+; RUN: %opt -load-pass-plugin %pass -passes='function(souper)'  -S -stats -o - %s 2>&1 | %FileCheck %s
 
 ; The main thing being tested here is just that the verifier doesn't error
 ; because a PHI node comes after another instruction.

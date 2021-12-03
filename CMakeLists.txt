@@ -70,19 +70,14 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-set(CLANG_CXXFLAGS "")
-set(CLANG_INCLUDEDIR "${LLVM_SRC}/../clang/include" "${LLVM_BUILD}/tools/clang/include")
-
 set(ALIVE_SRCDIR "${CMAKE_SOURCE_DIR}/third_party/alive2")
 set(ALIVE_BUILDDIR "${CMAKE_SOURCE_DIR}/third_party/alive2-build")
 include_directories("${CMAKE_SOURCE_DIR}/third_party")
 include_directories("${ALIVE_SRCDIR}")
 
-set(CLANG_LIBS "-lclangCodeGen -lclangTooling -lclangRewrite -lclangFrontend -lclangAnalysis -lclangParse -lclangSerialization -lclangSema -lclangEdit -lclangAnalysis -lclangAST -lclangDriver -lclangLex -lclangBasic -lclangASTMatchers")
-
 set(GTEST_CXXFLAGS "-DGTEST_HAS_RTTI=0")
 set(GTEST_INCLUDEDIR "${LLVM_SRC}/utils/unittest/googletest/include")
-set(GTEST_LIBS "-lgtest_main -lgtest")
+set(GTEST_LIBS "-lllvm_gtest_main -lllvm_gtest")
 
 set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++20")
 
@@ -170,15 +165,6 @@ endif()
 
 set(ALIVE_LIBRARY ${ALIVE_IR} ${ALIVE_SMT} ${ALIVE_TOOLS} ${ALIVE_UTIL} ${Z3_LIBRARY})
 
-set(SOUPER_CLANG_TOOL_FILES
-  lib/ClangTool/Actions.cpp
-  include/souper/ClangTool/Actions.h
-)
-
-add_library(souperClangTool STATIC
-  ${SOUPER_CLANG_TOOL_FILES}
-)
-
 set(SOUPER_EXTRACTOR_FILES
   lib/Extractor/Candidates.cpp
   lib/Extractor/ExprBuilder.cpp
@@ -264,7 +250,7 @@ add_library(souperTool STATIC
 
 set(SOUPER_CODEGEN_FILES
   lib/Codegen/Codegen.cpp
-  lib/Codegen/MachineCost.cpp
+  # lib/Codegen/MachineCost.cpp
   include/souper/Codegen/Codegen.h
 )
 
@@ -295,10 +281,6 @@ add_library(souperPassProfileAll SHARED
 )
 
 target_compile_definitions(souperPassProfileAll PRIVATE DYNAMIC_PROFILE_ALL=1)
-
-add_executable(clang-souper
-  tools/clang-souper.cpp
-)
 
 add_executable(souper
   tools/souper.cpp
@@ -398,10 +380,6 @@ foreach(target souper internal-solver-test lexer-test parser-test souper-check c
   set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
   target_include_directories(${target} PRIVATE "${LLVM_INCLUDEDIR}")
 endforeach()
-foreach(target souperClangTool clang-souper)
-  set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${CLANG_CXXFLAGS} ${LLVM_CXXFLAGS}")
-  target_include_directories(${target} PRIVATE "${LLVM_INCLUDEDIR}" ${CLANG_INCLUDEDIR})
-endforeach()
 foreach(target extractor_tests inst_tests parser_tests interpreter_tests bulk_tests codegen_tests)
   set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${GTEST_CXXFLAGS} ${LLVM_CXXFLAGS}")
   target_include_directories(${target} PRIVATE "${LLVM_INCLUDEDIR}" "${GTEST_INCLUDEDIR}")
@@ -409,7 +387,6 @@ endforeach()
 
 # static
 target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
-target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperExtractor souperParser souperKVStore souperInfer souperInst kleeExpr souperCodegen)
 target_link_libraries(souperInfer souperExtractor ${LLVM_LIBS} ${LLVM_LDFLAGS} ${Z3_LIBRARY})
 target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
@@ -431,7 +408,6 @@ target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
 target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(souper-interpret souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
-target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(count-insts souperParser)
 target_link_libraries(souper2llvm souperParser souperCodegen)
 target_link_libraries(extractor_tests souperExtractor souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
@@ -440,12 +416,6 @@ target_link_libraries(parser_tests souperParser ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(codegen_tests souperCodegen souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(interpreter_tests souperInfer souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY})
 target_link_libraries(bulk_tests souperInfer souperInst ${GTEST_LIBS} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
-
-SET(BUILD_CLANG_TOOL 1 CACHE BOOL "Build the Souper Clang tool")
-if (NOT BUILD_CLANG_TOOL)
-  message(STATUS "Excluding Clang tool from build")
-  set_target_properties(souperClangTool clang-souper PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
-endif()
 
 set(TEST_SYNTHESIS "ON" CACHE STRING "Enable additional, computationally intensive synthesis tests")
 set(TEST_LONG_DURATION_SYNTHESIS "" CACHE STRING "Enable long duration (> 10 min) synthesis tests")
@@ -490,9 +460,7 @@ configure_file(${CMAKE_SOURCE_DIR}/include/souper/Tool/GetSolver.h.in ${CMAKE_BI
 configure_file(${CMAKE_SOURCE_DIR}/include/souper/KVStore/KVSocket.h.in ${CMAKE_BINARY_DIR}/include/souper/KVStore/KVSocket.h @ONLY)
 configure_file(${CMAKE_SOURCE_DIR}/utils/redis-unix-socket.conf.in ${CMAKE_BINARY_DIR}/redis-unix-socket.conf @ONLY)
 
-if (BUILD_CLANG_TOOL)
-  configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang @ONLY)
-  configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang++ @ONLY)
-endif()
+configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang @ONLY)
+configure_file(${CMAKE_SOURCE_DIR}/utils/sclang.in ${CMAKE_BINARY_DIR}/sclang++ @ONLY)
 
 add_subdirectory(docs)

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "llvm/ADT/SmallString.h"
 #include "llvm/Support/CommandLine.h"
 #include "souper/Infer/AbstractInterpreter.h"
 #include "souper/Infer/Pruning.h"
@@ -178,7 +179,10 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       if (StatsLevel > 2) {
         llvm::errs() << "  pruned using restricted bits analysis.\n";
         llvm::errs() << "  LHSKB : " << KnownBitsAnalysis::knownBitsString(LHSKnownBitsNoSpec) << "\n";
-        llvm::errs() << "  RB    : " << RestrictedBits.toString(2, false) << "\n";
+        llvm::SmallString<64> S;
+        RestrictedBits.toString(S, 2, false);
+        std::string Str(S);
+        llvm::errs() << "  RB    : " << Str << "\n";
       }
       return true;
     }
@@ -217,8 +221,12 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
         // This input is must demanded in LHS and DontCare in RHS.
         if (StatsLevel > 2) {
           llvm::errs() << "Var : " << Pair.first->Name << " : ";
-          llvm::errs() << Pair.second.toString(2, false) << "\t"
-                       << DontCareBits[Pair.first].toString(2, false) << "\n";
+          llvm::SmallString<64> S1;
+          Pair.second.toString(S1, 2, false);
+          llvm::SmallString<64> S2;
+          DontCareBits[Pair.first].toString(S2, 2, false);
+          llvm::errs() << S1 << "\t"
+                       << S2 << "\n";
           llvm::errs() << "  pruned using demanded bits analysis.\n";
         }
         return true;
@@ -379,7 +387,10 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
               KNOTB.One = ConstantKnownNotOne[C];
               if (KNOTB.hasConflict()) {
                 if (StatsLevel > 2) {
-                  llvm::errs() << KNOTB.Zero.toString(2, false) << "\n" << KNOTB.One.toString(2, false) << "\n";
+                  llvm::SmallString<64> S1, S2;
+                  KNOTB.Zero.toString(S1, 2, false);
+                  KNOTB.One.toString(S2, 2, false);
+                  llvm::errs() << S1 << "\n" << S2 << "\n";
                   llvm::errs() << "  pruned using KB refinement! ";
                   llvm::errs() << "Inst had a symbolic const.";
                   llvm::errs() << "\n";

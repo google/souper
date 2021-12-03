@@ -244,7 +244,7 @@ Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
     return IC.getConst(llvm::APInt(1, true));
 
   default:
-    llvm::report_fatal_error("unmatched: " + (std::string)Inst::getKindName(K));
+    llvm::report_fatal_error(("unmatched: " + (std::string)Inst::getKindName(K)).c_str());
   }
 }
 

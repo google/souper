@@ -1,7 +1,7 @@
 
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper -dce -souper-use-cegis -S -o - %s | %FileCheck %s
+; RUN: %opt -load-pass-plugin %pass -passes='function(souper),dce' -souper-use-cegis -S -o - %s | %FileCheck %s
 
 define i8 @foo(i1 %x) {
 entry:

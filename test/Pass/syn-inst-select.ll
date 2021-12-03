@@ -1,7 +1,5 @@
-
-
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper -souper-enumerative-synthesis-max-instructions=1 -S -o - %s | %FileCheck %s
+; RUN: %opt -load-pass-plugin %pass -passes='function(souper)' -souper-enumerative-synthesis-max-instructions=1 -S -o - %s | %FileCheck %s
 
 
 define i32 @foo(i32 %x, i1 %y) {
