@@ -294,6 +294,11 @@ void SymbolizeAndGeneralize(InstContext &IC,
   findInsts(Input.Mapping.LHS, LHSConsts, Pred);
   findInsts(Input.Mapping.RHS, RHSConsts, Pred);
 
+  if (RHSConsts.empty()) {
+    return;
+    // TODO: Possible to just generalize LHS consts with preconditions?
+  }
+
   CandidateMap Results;
 
 //  // One at a time
