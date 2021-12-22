@@ -26,8 +26,8 @@ static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input souper optimization>"),
               cl::init("-"));
 
-static llvm::cl::opt<bool> Reduce("reduce",
-    llvm::cl::desc("Try to reduce the number of instructions by replacing instructions with variables."
+static llvm::cl::opt<bool> IgnorePCs("ignore-pcs",
+    llvm::cl::desc("Ignore inputs which have souper path conditions."
                    "(default=false)"),
     llvm::cl::init(false));
 
@@ -100,6 +100,7 @@ static const std::map<Inst::Kind, std::string> PredNames = {
 struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
   std::vector<std::pair<std::string, std::string>> Eqs;
   std::map<Inst *, std::string> Preds;
+  std::vector<Inst *> Vars;
 
   void RegisterPred(Inst *I) {
     if (PredNames.find(I->K) == PredNames.end()) {
@@ -155,6 +156,42 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
   template <typename Stream>
   void PrintEqPost(Stream &Out) {
     if (Eqs.empty()) {
+      return;
+    }
+    Out << "}\n";
+  }
+
+  template <typename Stream>
+  void PrintWidthPre(Inst *LHS, Stream &Out) {
+    findVars(LHS, Vars);
+    if (Vars.empty()) {
+      return;
+    }
+    Out << "if (util::check_width({";
+    bool first = true;
+    for (auto V : Vars) {
+      if (first) {
+        first = false;
+      } else {
+        Out << ", ";
+      }
+      Out << this->at(V)[0];
+    }
+    Out << "}, {";
+    first = true;
+    for (auto V : Vars) {
+      if (first) {
+        first = false;
+      } else {
+        Out << ", ";
+      }
+      Out << V->Width;
+    }
+    Out << "})) {\n";
+  }
+  template <typename Stream>
+  void PrintWidthPost(Stream &Out) {
+    if (Vars.empty()) {
       return;
     }
     Out << "\n}\n";
@@ -232,6 +269,21 @@ bool GenRHSCreator(Inst *I, Stream &Out, SymbolTable &Syms) {
   return true;
 }
 
+template <typename Stream, typename Container>
+void printPath(Stream &Out, const Container& C) {
+  Out << "{";
+  bool first = true;
+  for (auto c : C) {
+    if (first) {
+      first = false;
+    } else {
+      Out << ", ";
+    }
+    Out << c;
+  }
+  Out << "}";
+}
+
 template <typename Stream>
 bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
   std::map<Inst *, std::vector<int>> Paths;
@@ -306,13 +358,19 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
         || LHSRefs.find(P.first) == LHSRefs.end()) {
       continue;
     }
-    std::string Name = "I";
-    for (auto idx : P.second) {
-      auto NewName = "y" + std::to_string(varnum++);
-      Out << "auto " << NewName << " = cast<Instruction>(" << Name;
-      Out << ")->getOperand(" << idx << ");\n";
-      std::swap(Name, NewName);
-    }
+//    std::string Name = "I";
+//    for (auto idx : P.second) {
+//      auto NewName = "y" + std::to_string(varnum++);
+//      Out << "auto " << NewName << " = cast<Instruction>(" << Name;
+//      Out << ")->getOperand(" << idx << ");\n";
+//      std::swap(Name, NewName);
+//    }
+//    Syms[P.first].push_back(Name);
+
+    auto Name = "y" + std::to_string(varnum++);
+    Out << "auto " << Name << " = util::node(I, ";
+    printPath(Out, P.second);
+    Out << ");\n";
     Syms[P.first].push_back(Name);
   }
   Syms[Root].push_back("I");
@@ -323,9 +381,9 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
       continue;
     }
     auto Name = "C" + std::to_string(varnum++);
-    Out << "auto " << Name << " = ConstantInt::get(TheContext, APInt("
+    Out << "auto " << Name << " = C("
         << C->Val.getBitWidth() <<", "
-        << C->Val << "));\n";
+        << C->Val << ");\n";
     Syms[C].push_back(Name);
   }
   Syms.PrintPreds(Out);
@@ -351,6 +409,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out) {
 
   Syms.GenVarEqConstraints();
   Syms.PrintEqPre(Out);
+  Syms.PrintWidthPre(Input.Mapping.LHS, Out);
 
   if (Syms.find(Input.Mapping.RHS) != Syms.end()) {
     Out << "  return " << Syms[Input.Mapping.RHS][0] << ";";
@@ -366,8 +425,9 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out) {
     }
     Out << ";";
   }
-  Out << "\n}\n}\n";
+  Out << "\n}\n}";
 
+  Syms.PrintWidthPost(Out);
   Syms.PrintEqPost(Out);
 
   return true;
@@ -400,15 +460,19 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  size_t optnumber = 0;
   for (auto &&Input: Inputs) {
-    // ignores PCs for now.
-
-    if (DebugLevel > 3) {
-      Input.print(llvm::outs(), true);
+    if (IgnorePCs && !Input.PCs.empty()) {
+      continue;
     }
+
     std::string Str;
     llvm::raw_string_ostream Out(Str);
     if (GenMatcher(Input, Out)) {
+      auto current = optnumber++;
+      llvm::outs() << "/* Opt : " << current << "\n";
+      Input.print(llvm::outs(), true);
+      llvm::outs() << "*/\n";
       llvm::outs() << Str << "\n";
       llvm::outs().flush();
     } else {

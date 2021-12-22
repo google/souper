@@ -15,7 +15,23 @@ using namespace llvm;
 using namespace llvm::PatternMatch;
 
 namespace {
-
+namespace util {
+  Value *node(Instruction *I, const std::vector<size_t> &Path) {
+    Value *Current = I;
+    for (auto &&P : Path) {
+      Current = cast<Instruction>(Current)->getOperand(P);
+    }
+    return Current;
+  }
+  bool check_width(std::vector<llvm::Value *> V, std::vector<size_t> W) {
+    for (size_t i = 0; i < V.size(); ++i) {
+      if (V[i]->getType()->getScalarSizeInBits() != W[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
 struct SouperCombine : public FunctionPass {
   static char ID;
   SouperCombine() : FunctionPass(ID), Builder(TheContext) {
@@ -51,6 +67,10 @@ struct SouperCombine : public FunctionPass {
     return Changed;
   }
 
+  Value *C(size_t Width, size_t Value) {
+    return ConstantInt::get(TheContext, APInt(Width, Value));
+  }
+  
   Value *getReplacement(llvm::Instruction *I, llvm::IRBuilder<> *B) {
   //  Generate one block like the following for each
   //  optimization derived by souper
