@@ -391,7 +391,7 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
 }
 
 template <typename Stream>
-bool GenMatcher(ParsedReplacement Input, Stream &Out) {
+bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
   SymbolTable Syms;
   Out << "{\n";
 
@@ -410,7 +410,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out) {
   Syms.GenVarEqConstraints();
   Syms.PrintEqPre(Out);
   Syms.PrintWidthPre(Input.Mapping.LHS, Out);
-
+  Out << "  St.hit(" << OptID << ");\n";
   if (Syms.find(Input.Mapping.RHS) != Syms.end()) {
     Out << "  return " << Syms[Input.Mapping.RHS][0] << ";";
   } else if (Input.Mapping.RHS->K == Inst::Const) {
@@ -468,7 +468,7 @@ int main(int argc, char **argv) {
 
     std::string Str;
     llvm::raw_string_ostream Out(Str);
-    if (GenMatcher(Input, Out)) {
+    if (GenMatcher(Input, Out, optnumber)) {
       auto current = optnumber++;
       llvm::outs() << "/* Opt : " << current << "\n";
       Input.print(llvm::outs(), true);
