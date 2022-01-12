@@ -22,7 +22,15 @@ namespace util {
   Value *node(Instruction *I, const std::vector<size_t> &Path) {
     Value *Current = I;
     for (auto &&P : Path) {
-      Current = cast<Instruction>(Current)->getOperand(P);
+      if (Instruction *CI = dyn_cast<Instruction>(Current)) {
+        if (CI->getNumOperands() > P) {
+          Current = CI->getOperand(P);
+        } else {
+          return nullptr;
+        }
+      } else {
+        return nullptr;
+      }
     }
     return Current;
   }
