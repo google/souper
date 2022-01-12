@@ -264,6 +264,9 @@ bool GenRHSCreator(Inst *I, Stream &Out, SymbolTable &Syms) {
     }
 
   }
+  if (I->K == Inst::Trunc || I->K == Inst::SExt || I->K == Inst::ZExt) {
+    Out << ", T(" << I->Width << ")";
+  }
   Out << ")";
 
   return true;

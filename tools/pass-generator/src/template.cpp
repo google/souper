@@ -9,6 +9,9 @@
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/InitializePasses.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
 
 using namespace llvm;
@@ -99,6 +102,10 @@ struct SouperCombine : public FunctionPass {
     return nullptr;
   }
   
+  llvm::Type *T(size_t W) {
+    return llvm::Type::getIntNTy(TheContext, W);
+  }
+
   InstCombineWorklist W;
   util::Stats St;
   LLVMContext TheContext;
@@ -107,6 +114,32 @@ struct SouperCombine : public FunctionPass {
 }
 
 char SouperCombine::ID = 0;
-static RegisterPass<SouperCombine> X("souper-combine", "Souper Combine",
-                             false /* Only looks at CFG */,
-                             false /* Analysis Pass */);
+namespace llvm {
+void initializeSouperCombinePass(llvm::PassRegistry &);
+}
+
+INITIALIZE_PASS_BEGIN(SouperCombine, "souper", "Souper super-optimizer pass",
+                      false, false)
+INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(LazyValueInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
+INITIALIZE_PASS_END(SouperCombine, "souper-combine", "Souper super-optimizer pass", false,
+                    false)
+
+static struct Register {
+  Register() {
+    initializeSouperCombinePass(*llvm::PassRegistry::getPassRegistry());
+  }
+} X;
+
+static void registerSouperCombine(
+    const llvm::PassManagerBuilder &Builder, llvm::legacy::PassManagerBase &PM) {
+  PM.add(new SouperCombine);
+}
+
+static llvm::RegisterStandardPasses
+RegisterSouperOptimizer(llvm::PassManagerBuilder::EP_Peephole,
+                        registerSouperCombine);
