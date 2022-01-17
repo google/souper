@@ -457,6 +457,99 @@ public:
     return Result;
   }
 
+  // Assumes Input is valid
+  ParsedReplacement WeakenKB(ParsedReplacement Input) {
+    std::vector<Inst *> Vars;
+    findVars(Input.Mapping.LHS, Vars);
+    for (auto &&V : Vars) {
+      auto OriZero = V->KnownZeros;
+      auto OriOne = V->KnownOnes;
+      if (OriZero == 0 && OriOne == 0) {
+        continue; // this var doesn't have a knownbits condition
+      }
+      if (OriZero.getBitWidth() != V->Width  || OriOne.getBitWidth() != V->Width) {
+        continue; // this var doesn't have a well formed knownbits condition
+      }
+
+      // Try to remove KB
+      V->KnownOnes = llvm::APInt(V->Width, 0);
+      V->KnownZeros = llvm::APInt(V->Width, 0);
+      if (Verify(Input)) {
+        continue; // Removed KB from this var
+      }
+      V->KnownOnes = OriOne;
+      V->KnownZeros = OriZero;
+
+      // Try resetting bitwise KB
+
+      for (size_t i = 0; i < V->Width; ++i) {
+        auto Ones = V->KnownOnes;
+        if (Ones[i]) {
+          V->KnownOnes.setBitVal(i, false);
+          if (!Verify(Input)) {
+            V->KnownOnes = Ones;
+          }
+        }
+        auto Zeros = V->KnownZeros;
+        if (Zeros[i]) {
+          V->KnownZeros.setBitVal(i, false);
+          if (!Verify(Input)) {
+            V->KnownZeros = Zeros;
+          }
+        }
+      }
+    }
+    return Input;
+  }
+
+  // Assumes Input is valid
+  ParsedReplacement WeakenCR(ParsedReplacement Input) {
+    // Just try to remove CR for now.
+    std::vector<Inst *> Vars;
+    findVars(Input.Mapping.LHS, Vars);
+
+    for (auto &&V : Vars) {
+      auto Ori = V->Range;
+      if (V->Range.isFullSet()) {
+        continue;
+      }
+      V->Range = llvm::ConstantRange(V->Width, true);
+      if (!Verify(Input)) {
+        V->Range = Ori;
+      }
+      // TODO: Try Widening Range
+    }
+
+    return Input;
+  }
+
+  // Assumes Input is valid
+  ParsedReplacement WeakenDB(ParsedReplacement Input) {
+    auto Ori = Input.Mapping.LHS->DemandedBits;
+    auto Width = Input.Mapping.LHS->Width;
+    if (Ori.getBitWidth() != Width || Ori.isAllOnesValue()) {
+      return Input;
+    }
+    // Try replacing with all ones.
+    Input.Mapping.LHS->DemandedBits.setAllBits();
+    if (Verify(Input)) {
+      return Input;
+    }
+    Input.Mapping.LHS->DemandedBits = Ori;
+
+    for (size_t i = 0; i < Width; ++i) {
+      auto Last = Input.Mapping.LHS->DemandedBits;
+      if (!Last[i]) {
+        Input.Mapping.LHS->DemandedBits.setBitVal(i, true);
+        if (!Verify(Input)) {
+          Input.Mapping.LHS->DemandedBits = Last;
+        }
+      }
+    }
+
+    return Input;
+  }
+
   bool Verify(ParsedReplacement &Input) {
     std::vector<std::pair<Inst *, APInt>> Models;
     bool Valid;
@@ -601,7 +694,9 @@ void ReduceAndGeneralize(InstContext &IC,
   std::vector<ParsedReplacement> Results;
   Input = R.ReducePCs(Input);
   Input = R.ReduceGreedy(Input);
-
+  Input = R.WeakenKB(Input);
+  Input = R.WeakenCR(Input);
+  Input = R.WeakenDB(Input);
 
 //  Results.push_back(Input);
 
