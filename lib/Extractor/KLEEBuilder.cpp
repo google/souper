@@ -340,6 +340,20 @@ private:
       return SubExpr::create(klee::ConstantExpr::create(Width, Width),
                              countOnes(Val));
     }
+    case Inst::LogB: {
+      ref<Expr> L = get(Ops[0]);
+      unsigned Width = L->getWidth();
+      ref<Expr> Val = L;
+      for (unsigned i=0, j=0; j<Width/2; i++) {
+        j = 1<<i;
+        Val = OrExpr::create(Val, LShrExpr::create(Val,
+                             klee::ConstantExpr::create(j, Width)));
+      }
+      auto W = klee::ConstantExpr::create(Width, Width);
+      auto One = klee::ConstantExpr::create(1, Width);
+      auto Ctlz = SubExpr::create(W, countOnes(Val));
+      return SubExpr::create(SubExpr::create(W, Ctlz), One);
+    }
     case Inst::FShl:
     case Inst::FShr: {
       unsigned IWidth = I->Width;

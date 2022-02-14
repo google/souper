@@ -94,6 +94,9 @@ namespace {
   static cl::opt<bool> SynFreeze("souper-synthesize-freeze",
     cl::desc("Generate Freeze (default=true)"),
     cl::init(true));
+  static cl::opt<bool> SynLog("souper-synthesize-log",
+    cl::desc("Generate LogB (default=false)"),
+    cl::init(false));
   static cl::opt<unsigned> MaxLHSCands("souper-max-lhs-cands",
     cl::desc("Gather at most this many values from a LHS to use as synthesis inputs (default=8)"),
     cl::init(8));
@@ -892,6 +895,9 @@ EnumerativeSynthesis::synthesize(SMTLIBSolver *SMTSolver,
 EnumerativeSynthesis::EnumerativeSynthesis() {
   if (SynFreeze) {
     UnaryOperators.push_back(Inst::Freeze);
+  }
+  if (SynLog) {
+    UnaryOperators.push_back(Inst::LogB);
   }
 }
 

@@ -100,6 +100,7 @@ struct Inst : llvm::FoldingSetNode {
     BSwap,
     Cttz,
     Ctlz,
+    LogB,
     BitReverse,
     FShl,
     FShr,
