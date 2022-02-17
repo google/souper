@@ -34,7 +34,7 @@ static llvm::cl::opt<bool> Reduce("reduce",
 static llvm::cl::opt<bool> ReduceKBIFY("reduce-kbify",
     llvm::cl::desc("Try to reduce the number of instructions by introducing known bits constraints."
                    "(default=false)"),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 
 static llvm::cl::opt<bool> ReducePrintAll("reduce-all-results",
@@ -54,6 +54,14 @@ static llvm::cl::opt<size_t> SymbolizeNumInsts("symbolize-num-insts",
 
 static llvm::cl::opt<bool> SymbolizeNoDFP("symbolize-no-dataflow",
     llvm::cl::desc("Do not generate optimizations with dataflow preconditions."),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> SymbolizeSimpleDF("symbolize-simple-dataflow",
+    llvm::cl::desc("Generate simple dataflow facts supported by LLVM."),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> SymbolizeConstSynthesis("symbolize-constant-synthesis",
+    llvm::cl::desc("Allow concrete constants in the generated code."),
     llvm::cl::init(false));
 
 static llvm::cl::opt<bool> FixIt("fixit",
@@ -158,41 +166,42 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
     std::set<Inst *> ConstSet;
     souper::getConstants(Guess, ConstSet);
     if (!ConstSet.empty()) {
-//      bool Success = TryConstSynth(Guess, ConstSet);
-////      llvm::errs() << "Succ:" << Success << "\n";
-//      if (!Success) {
-//        FakeConsts[0]->PowOfTwo = true;
-//        Success = TryConstSynth(Guess, ConstSet);
-//        FakeConsts[0]->PowOfTwo = false;
-//      }
-////      llvm::errs() << "Succ:" << Success << "\n";
+      if (SymbolizeConstSynthesis) {
+        bool Success = TryConstSynth(Guess, ConstSet);
+  //      llvm::errs() << "Succ:" << Success << "\n";
+        if (SymbolizeSimpleDF) {
+          if (!Success) {
+            FakeConsts[0]->PowOfTwo = true;
+            Success = TryConstSynth(Guess, ConstSet);
+            FakeConsts[0]->PowOfTwo = false;
+          }
+    //      llvm::errs() << "Succ:" << Success << "\n";
 
-//      if (!Success) {
-//        FakeConsts[0]->NonZero = true;
-//        Success = TryConstSynth(Guess, ConstSet);
-//        FakeConsts[0]->NonZero = false;
-//      }
-////      llvm::errs() << "Succ:" << Success << "\n";
+          if (!Success) {
+            FakeConsts[0]->NonZero = true;
+            Success = TryConstSynth(Guess, ConstSet);
+            FakeConsts[0]->NonZero = false;
+          }
+    //      llvm::errs() << "Succ:" << Success << "\n";
 
-//      if (!Success) {
-//        FakeConsts[0]->NonNegative = true;
-//        Success = TryConstSynth(Guess, ConstSet);
-//        FakeConsts[0]->NonNegative = false;
-//      }
-////      llvm::errs() << "Succ:" << Success << "\n";
+          if (!Success) {
+            FakeConsts[0]->NonNegative = true;
+            Success = TryConstSynth(Guess, ConstSet);
+            FakeConsts[0]->NonNegative = false;
+          }
+    //      llvm::errs() << "Succ:" << Success << "\n";
 
-//      if (!Success) {
-//        FakeConsts[0]->Negative = true;
-//        Success = TryConstSynth(Guess, ConstSet);
-//        FakeConsts[0]->Negative = false;
-//      }
-////      llvm::errs() << "Succ:" << Success << "\n";
-//      (void)Success;
+          if (!Success) {
+            FakeConsts[0]->Negative = true;
+            Success = TryConstSynth(Guess, ConstSet);
+            FakeConsts[0]->Negative = false;
+          }
+    //      llvm::errs() << "Succ:" << Success << "\n";
+          (void)Success;
+        }
+      }
 
     } else {
-//      llvm::errs() << "P\n";
-//      ReplacementContext RC;
-//      RC.printInst(Guess, llvm::errs(), true);
       WithoutConsts.push_back(Guess);
     }
   }
@@ -202,22 +211,24 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
     std::map<Inst *, Inst *> InstCacheCopy/* = InstCache*/;
     InstCacheCopy[RHSConsts[0]] = Guess;
 
-//    {
-//    llvm::errs() << "GUESS:\n";
-//    ReplacementContext RC;
-//    RC.printInst(Guess, llvm::errs(), true);
-//    }
+
 
     auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
                            BlockCache, &ConstMap, false);
 
 
-
-//    {
-//    llvm::errs() << "JoinedGUESS:\n";
-//    ReplacementContext RC;
-//    RC.printInst(RHS, llvm::errs(), true);
-//    }
+    if (DebugLevel > 4) {
+      {
+      llvm::errs() << "GUESS:\n";
+      ReplacementContext RC;
+      RC.printInst(Guess, llvm::errs(), true);
+      }
+      {
+      llvm::errs() << "JoinedGUESS:\n";
+      ReplacementContext RC;
+      RC.printInst(RHS, llvm::errs(), true);
+      }
+    }
 
     InstMapping Mapping(LHS, RHS);
     if (true /*remove when the other branch exists*/ || SymbolizeNoDFP) {
@@ -238,10 +249,27 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
         }
       };
       CheckAndSave();
-      if (!IsValid) {
-        FakeConsts[0]->PowOfTwo = true;
-        CheckAndSave();
-        FakeConsts[0]->PowOfTwo = false;
+      if (SymbolizeSimpleDF) {
+        if (!IsValid) {
+          FakeConsts[0]->PowOfTwo = true;
+          CheckAndSave();
+          FakeConsts[0]->PowOfTwo = false;
+        }
+        if (!IsValid) {
+          FakeConsts[0]->NonZero = true;
+          CheckAndSave();
+          FakeConsts[0]->NonZero = false;
+        }
+        if (!IsValid) {
+          FakeConsts[0]->NonNegative = true;
+          CheckAndSave();
+          FakeConsts[0]->NonNegative = false;
+        }
+        if (!IsValid) {
+          FakeConsts[0]->Negative = true;
+          CheckAndSave();
+          FakeConsts[0]->Negative = false;
+        }
       }
 
     } else {
@@ -317,13 +345,15 @@ void SymbolizeAndGeneralize(InstContext &IC,
   CandidateMap Results;
 
 //  // One at a time
-  for (auto LHSConst : LHSConsts) {
-    SymbolizeAndGeneralize(IC, S, Input, {LHSConst}, RHSConsts, Results);
-  }
-  // TODO: Two at a time, etc. Is this replaceable by DFP?
+//  for (auto LHSConst : LHSConsts) {
+//    SymbolizeAndGeneralize(IC, S, Input, {LHSConst}, RHSConsts, Results);
+//  }
+
+  // TODO: Why does one at a time get solutions that all at once doesn't?
+
 
 //   All at once
-//  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
+  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
 
   // TODO: Move sorting here
   for (auto &&Result : Results) {
@@ -438,7 +468,6 @@ public:
     return Input;
   }
 
-
   ParsedReplacement ReduceGreedyKBIFY(ParsedReplacement Input) {
     std::set<Inst *> Insts;
     collectInsts(Input.Mapping.LHS, Insts);
@@ -454,18 +483,78 @@ public:
         continue;
       }
       Visited.insert(I);
-      if (!safeToRemove(I, Input)) {
+      if (!safeToRemove(I, Input) || I->Width == 1 /*1 bit KB doesn't make sense*/) {
         continue;
       }
       auto Copy = Input;
-      Eliminate(Input, I);
-      if (!Verify(Input)) {
+      auto NewVar = Eliminate(Input, I);
+
+      // Input won't verify because ReduceGreedy has been called before this.
+
+      // Try to replace NewVar with a symbolic constant and do constant synthesis.
+      Inst *C = IC.createSynthesisConstant(NewVar->Width, 0);
+      std::map<Inst *, Inst *> InstCache = {{NewVar, C}};
+      std::map<Block *, Block *> BlockCache;
+      std::map<Inst *, llvm::APInt> ConstMap;
+
+      InstMapping Rep;
+      Rep.LHS = getInstCopy(Input.Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, false, false);
+      Rep.RHS = getInstCopy(Input.Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, false, false);
+
+      ConstantSynthesis CS;
+      std::set<Inst *> ConstSet{C};
+
+//      llvm::errs() << "Constant synthesis problem: \n";
+//      Input.print(llvm::errs(), true);
+//      llvm::errs() << "....end.... \n";
+
+      if (auto EC = CS.synthesize(S->getSMTLIBSolver(), Input.BPCs, Input.PCs,
+                                  Rep, ConstSet, ConstMap, IC, 30, 60, false)) {
+        llvm::errs() << "Constant Synthesis internal error : " <<  EC.message();
+      }
+
+      if (ConstMap.empty()) {
+//        if (DebugLevel > 3) {
+          llvm::errs() << "Constant Synthesis failed, moving on.\n";
+//        }
         Input = Copy;
         failcount++;
         if (failcount >= Insts.size()) {
           break;
         }
-        continue;
+      } else {
+        InstCache.clear();
+        InstCache[C] = NewVar;
+
+        NewVar->KnownOnes = ConstMap[C];
+        NewVar->KnownZeros = ~ConstMap[C];
+
+        // Give up if can't be weakened 'too much'
+        const size_t WeakeningThreshold = NewVar->Width/2;
+        size_t BitsWeakened = 0;
+
+        for (size_t i = 0; i < NewVar->Width; ++i) {
+          auto SaveZero = NewVar->KnownZeros;
+          auto SaveOne = NewVar->KnownOnes;
+
+          NewVar->KnownZeros.clearBit(i);
+          NewVar->KnownOnes.clearBit(i);
+
+          if (!Verify(Input)) {
+            NewVar->KnownZeros = SaveZero;
+            NewVar->KnownOnes = SaveOne;
+          } else {
+            BitsWeakened++;
+          }
+        }
+        if (BitsWeakened < WeakeningThreshold) {
+          Input = Copy;
+          failcount++;
+          if (failcount >= Insts.size()) {
+            break;
+          }
+        }
+
       }
       Insts.clear();
       collectInsts(Input.Mapping.LHS, Insts);
@@ -624,7 +713,7 @@ public:
     return true;
   }
 
-  void Eliminate(ParsedReplacement &Input, Inst *I) {
+  Inst *Eliminate(ParsedReplacement &Input, Inst *I) {
     // Try to replace I with a new Var.
     Inst *NewVar = IC.createVar(I->Width, "newvar" + std::to_string(varnum++));
 
@@ -650,6 +739,7 @@ public:
       BPC.PC.LHS = getInstCopy(BPC.PC.LHS, IC, ICache, BCache, &CMap, false);
       BPC.PC.RHS = getInstCopy(BPC.PC.RHS, IC, ICache, BCache, &CMap, false);
     }
+    return NewVar;
   }
 
   void ReduceRec(ParsedReplacement Input_, std::vector<ParsedReplacement> &Results) {
@@ -749,9 +839,9 @@ void ReduceAndGeneralize(InstContext &IC,
   Input = R.WeakenCR(Input);
   Input = R.WeakenDB(Input);
 
-//  if (ReduceKBIFY) {
-//    Input = R.ReduceKBIFY(Input);
-//  }
+  if (ReduceKBIFY) {
+    Input = R.ReduceGreedyKBIFY(Input);
+  }
 
 //  Results.push_back(Input);
 

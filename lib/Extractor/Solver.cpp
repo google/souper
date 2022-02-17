@@ -453,6 +453,11 @@ public:
 
     return EC;
   }
+
+  SMTLIBSolver *getSMTLIBSolver() override {
+    return SMTSolver.get();
+  }
+
   std::error_code isSatisfiable(llvm::StringRef Query, bool &Result,
                                 unsigned NumModels,
                                 std::vector<llvm::APInt> *Models,
@@ -511,13 +516,12 @@ public:
     // case LHS to evaluate to UB
     std::vector<Inst *> Inputs;
     findVars(LHS, Inputs);
-    PruningManager Pruner(SC, Inputs, DebugLevel);
-    Pruner.init();
-    ConstantSynthesis CS{&Pruner};
+//    PruningManager Pruner(SC, Inputs, DebugLevel);
+//    Pruner.init();
+    ConstantSynthesis CS{nullptr};
     std::error_code EC = CS.synthesize(SMTSolver.get(), BPCs, PCs, InstMapping(LHS, RHS),
                                        ConstSet, ResultMap, IC, MaxConstantSynthesisTries,
                                        Timeout, /*AvoidNops=*/false);
-
     if (EC || ResultMap.empty())
       return EC;
 
@@ -676,6 +680,11 @@ public:
       return ent->second.first;
     }
   }
+
+  SMTLIBSolver *getSMTLIBSolver() override {
+    return UnderlyingSolver->getSMTLIBSolver();
+  }
+
   std::error_code inferConst(const BlockPCs &BPCs,
                              const std::vector<InstMapping> &PCs,
                              Inst *LHS, Inst *&RHS,
@@ -846,6 +855,10 @@ public:
       KV->hSet(LHSStr, "result", RHSStr);
       return EC;
     }
+  }
+
+  SMTLIBSolver *getSMTLIBSolver() override {
+    return UnderlyingSolver->getSMTLIBSolver();
   }
 
   llvm::ConstantRange constantRange(const BlockPCs &BPCs,

@@ -289,6 +289,7 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
 
       std::set<Inst *> ConstSet;
       souper::getConstants(Rep.Mapping.RHS, ConstSet);
+      souper::getConstants(Rep.Mapping.LHS, ConstSet);
       if (ConstSet.empty()) {
         llvm::outs() << "; No reservedconst found in RHS\n";
       } else {
@@ -301,13 +302,17 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
         }
 
         if (!ResultConstMap.empty()) {
-          ReplacementContext Context;
-          llvm::outs() << "; RHS inferred successfully\n";
-          PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, Context);
+          std::map<Inst *, Inst *> InstCache;
+          std::map<Block *, Block *> BlockCache;
+          Rep.Mapping.LHS =
+              getInstCopy(Rep.Mapping.LHS, IC, InstCache, BlockCache, &ResultConstMap, false, false);
+          Rep.Mapping.RHS =
+              getInstCopy(Rep.Mapping.RHS, IC, InstCache, BlockCache, &ResultConstMap, false, false);
+          Rep.print(llvm::outs(), true);
           ++Success;
         } else {
           ++Fail;
-          llvm::outs() << "; Failed to infer RHS\n";
+          llvm::outs() << "; Failed to synthesize constant(s)\n";
         }
       }
     } else if (TryDataflowPruning) {

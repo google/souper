@@ -50,6 +50,8 @@ public:
                 std::vector<llvm::APInt> *Models,
                 unsigned Timeout = 0) = 0;
 
+  virtual SMTLIBSolver *getSMTLIBSolver() = 0;
+
   virtual std::string getName() = 0;
 
   virtual
