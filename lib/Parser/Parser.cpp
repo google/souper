@@ -591,6 +591,7 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   case Inst::Cttz:
   case Inst::Ctlz:
   case Inst::LogB:
+  case Inst::BitWidth:
   case Inst::Freeze:
     MaxOps = MinOps = 1;
     break;

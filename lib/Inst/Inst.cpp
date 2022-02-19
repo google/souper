@@ -425,6 +425,8 @@ const char *Inst::getKindName(Kind K) {
     return "ctlz";
   case LogB:
     return "logb";
+  case BitWidth:
+    return "width";
   case FShl:
     return "fshl";
   case FShr:
@@ -520,6 +522,7 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("cttz", Inst::Cttz)
                    .Case("ctlz", Inst::Ctlz)
                    .Case("logb", Inst::LogB)
+                   .Case("width", Inst::BitWidth)
                    .Case("fshl", Inst::FShl)
                    .Case("fshr", Inst::FShr)
                    .Case("sadd.with.overflow", Inst::SAddWithOverflow)

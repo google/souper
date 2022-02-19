@@ -354,6 +354,11 @@ private:
       auto Ctlz = SubExpr::create(W, countOnes(Val));
       return SubExpr::create(SubExpr::create(W, Ctlz), One);
     }
+    case Inst::BitWidth: {
+      ref<Expr> L = get(Ops[0]);
+      unsigned Width = L->getWidth();
+      return klee::ConstantExpr::create(Width, Width);
+    }
     case Inst::FShl:
     case Inst::FShr: {
       unsigned IWidth = I->Width;
