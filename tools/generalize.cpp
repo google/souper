@@ -47,6 +47,11 @@ static llvm::cl::opt<bool> SymbolizeConstant("symbolize",
                    "(default=false)"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> SymbolizeWidth("symbolize-width",
+    llvm::cl::desc("Try to replace a concrete constant with a function of bitwidth."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
 static llvm::cl::opt<size_t> SymbolizeNumInsts("symbolize-num-insts",
     llvm::cl::desc("Number of instructions to synthesize"
                    "(default=1)"),
@@ -117,10 +122,24 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
     InstCache[LHSConsts[i]] = FakeConsts[i];
   }
 
+  auto Components = FakeConsts;
   // Does it makes sense for the expression to depend on other variables?
   // If yes, expand the third argument to include inputs
+  if (SymbolizeWidth) {
+    std::vector<Inst *> Vars;
+    findVars(Input.Mapping.LHS, Vars);
+    for (auto &&V : Vars) {
+      auto Width = IC.getInst(Inst::BitWidth, FakeConsts[0]->Width, {V});
+      Components.push_back(Width);
+      Components.push_back(IC.getInst(Inst::LogB, FakeConsts[0]->Width, {Width}));
+      // auto IntMax = 1 << Width - 1
+      // TODO other comps, like INT_MAX
+      // Dedup widths which can not be different
+    }
+  }
+
   EnumerativeSynthesis ES;
-  auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, FakeConsts,
+  auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
                                   RHSConsts[0]->Width);
 
   std::vector<std::vector<std::map<Inst *, llvm::KnownBits>>>
