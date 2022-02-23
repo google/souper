@@ -118,7 +118,7 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
   std::vector<Inst *> FakeConsts;
   for (size_t i = 0; i < LHSConsts.size(); ++i) {
     FakeConsts.push_back(
-          IC.createVar(LHSConsts[i]->Width, "fakeconst_" + std::to_string(i)));
+          IC.createVar(LHSConsts[i]->Width, "symconst_" + std::to_string(i)));
     InstCache[LHSConsts[i]] = FakeConsts[i];
   }
 
@@ -364,9 +364,9 @@ void SymbolizeAndGeneralize(InstContext &IC,
   CandidateMap Results;
 
 //  // One at a time
-//  for (auto LHSConst : LHSConsts) {
-//    SymbolizeAndGeneralize(IC, S, Input, {LHSConst}, RHSConsts, Results);
-//  }
+ for (auto LHSConst : LHSConsts) {
+   SymbolizeAndGeneralize(IC, S, Input, {LHSConst}, RHSConsts, Results);
+ }
 
   // TODO: Why does one at a time get solutions that all at once doesn't?
 
@@ -375,9 +375,18 @@ void SymbolizeAndGeneralize(InstContext &IC,
   SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
 
   // TODO: Move sorting here
+  std::set<std::string> ResultStrs;
   for (auto &&Result : Results) {
-    Result.print(llvm::outs(), true);
-    llvm::outs() << "\n";
+    std::string str;
+    llvm::raw_string_ostream ostr(str);
+    Result.print(ostr, true);
+    ResultStrs.insert(str);
+  }
+  for (auto &&Str : ResultStrs) {
+    llvm::outs() << Str << "\n";
+  }
+  if (Results.empty()) {
+    Input.print(llvm::outs(), true);
   }
 }
 

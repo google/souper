@@ -116,6 +116,9 @@ std::string ReplacementContext::printInst(Inst *I, llvm::raw_ostream &Out,
 std::string ReplacementContext::printInstImpl(Inst *I, llvm::raw_ostream &Out,
                                               bool printNames, Inst *OrigI) {
 
+  if (printNames && I->Name.length() != 0 && std::isdigit(I->Name[0])) {
+    I->Name = "v" + I->Name;
+  }
   std::string Str;
   llvm::raw_string_ostream SS(Str);
 
