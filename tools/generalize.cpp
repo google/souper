@@ -374,6 +374,10 @@ void SymbolizeAndGeneralize(InstContext &IC,
 //   All at once
   SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
 
+  llvm::outs() << "Input:\n";
+  Input.print(llvm::outs(), true);
+  llvm::outs() << "\nResults:\n";
+
   // TODO: Move sorting here
   std::set<std::string> ResultStrs;
   for (auto &&Result : Results) {
@@ -382,11 +386,9 @@ void SymbolizeAndGeneralize(InstContext &IC,
     Result.print(ostr, true);
     ResultStrs.insert(str);
   }
+
   for (auto &&Str : ResultStrs) {
     llvm::outs() << Str << "\n";
-  }
-  if (Results.empty()) {
-    Input.print(llvm::outs(), true);
   }
 }
 
