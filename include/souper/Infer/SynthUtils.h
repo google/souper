@@ -21,7 +21,7 @@ public:
     return Builder(IC->getInst(Inst::K, L->Width, {L, R}), IC);  \
   }                                                              \
 
-  BINOP(Add) BINOP(Sub)
+  BINOP(Add) BINOP(Sub) BINOP(And)
 #undef BINOP
 
 #define BINOPW(K)                                                \
@@ -29,7 +29,7 @@ public:
     auto L = I; auto R = i(t, *this);                            \
     return Builder(IC->getInst(Inst::K, 1, {L, R}), IC);         \
   }                                                              \
-  BINOPW(Slt) BINOPW(Ult)
+  BINOPW(Slt) BINOPW(Ult) BINOPW(Eq)
 #undef BINOPW
 
 private:
