@@ -5,6 +5,7 @@
 #include "souper/Infer/Preconditions.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/ConstantSynthesis.h"
+#include "souper/Infer/SynthUtils.h"
 #include "souper/Inst/InstGraph.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/GetSolver.h"
@@ -114,6 +115,7 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
                             std::vector<Inst *> LHSConsts,
                             std::vector<Inst *> RHSConsts,
                             CandidateMap &Results) {
+
   std::map<Inst *, Inst *> InstCache;
   std::vector<Inst *> FakeConsts;
   for (size_t i = 0; i < LHSConsts.size(); ++i) {
