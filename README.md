@@ -19,9 +19,9 @@ You will also need CMake to build Souper and its dependencies.
 ```
 $ ./build_deps.sh $buildtype $extra_cmake_flags
 ```
-   $buildtype is optional; it defaults to Release and may be set to any LLVM
+   `$buildtype` is optional; it defaults to 'Release' and may be set to any LLVM
    build type.
-   $extra_cmake_flags is optional. It is passed to CMake.
+   `$extra_cmake_flags` is optional. It is passed to CMake.
 
 2. Run CMake from a build directory:
 ```
