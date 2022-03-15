@@ -75,8 +75,18 @@ static llvm::cl::opt<bool> FixIt("fixit",
                    "(default=false)"),
     llvm::cl::init(false));
 
-static llvm::cl::opt<bool> GeneralizeWidth("generalize-width",
-    llvm::cl::desc("Given a valid optimization, generalize bitwidth."
+static llvm::cl::opt<bool> GeneralizeWidth("all-widths",
+    llvm::cl::desc("Given a valid optimization, output all bitwidths."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> GeneralizeWidthVerify("all-widths-verify",
+    llvm::cl::desc("Verify for all bitwidths"
+                   "(default=false)"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> MinimizeWidth("minimize-width",
+    llvm::cl::desc("Find valid version with minimal width"
                    "(default=false)"),
     llvm::cl::init(false));
 
@@ -396,6 +406,8 @@ void SymbolizeAndGeneralize(InstContext &IC,
 
 size_t InferWidth(Inst::Kind K, const std::vector<Inst *> &Ops) {
   switch (K) {
+    case Inst::LShr:
+    case Inst::Shl:
     case Inst::And:
     case Inst::Or:
     case Inst::Xor:
@@ -410,15 +422,18 @@ size_t InferWidth(Inst::Kind K, const std::vector<Inst *> &Ops) {
   }
 }
 
-Inst *CloneInst(InstContext &IC, Inst *I, std::map<Inst *, size_t> &WidthMap) {
+Inst *CloneInst(InstContext &IC, Inst *I, std::map<Inst *, Inst *> &Vars) {
   if (I->K == Inst::Var) {
-    return IC.createVar(WidthMap[I], I->Name); // TODO other attributes
+    return Vars[I];
   } else if (I->K == Inst::Const) {
-    llvm_unreachable("Const");
+    // llvm_unreachable("Const");
+    auto Goal = Vars.begin()->second->Width; // TODO Infer.
+    auto NewVal = I->Val.isSignBitSet() ? I->Val.sextOrTrunc(Goal) : I->Val.zextOrTrunc(Goal);
+    return IC.getConst(NewVal);
   } else {
     std::vector<Inst *> Ops;
     for (auto Op : I->Ops) {
-      Ops.push_back(CloneInst(IC, Op, WidthMap));
+      Ops.push_back(CloneInst(IC, Op, Vars));
     }
     return IC.getInst(I->K, InferWidth(I->K, Ops), Ops);
   }
@@ -430,18 +445,44 @@ void GeneralizeBitWidth(InstContext &IC, Solver *S,
 
   assert(Vars.size() == 1 && "Multiple variables unimplemented.");
 
-  std::map<Inst *, size_t> WidthMap;
+  for (int i = 1; i <= 64; ++i) {
+    std::map<Inst *, Inst *> Reps;
+    Reps[Vars[0]] = IC.createVar(i, Vars[0]->Name);
 
-  for (int i = 1; i < 64; ++i) {
-    WidthMap[Vars[0]] = i;
-    auto LHS = CloneInst(IC, Input.Mapping.LHS, WidthMap);
-    auto RHS = CloneInst(IC, Input.Mapping.RHS, WidthMap);
+    auto LHS = CloneInst(IC, Input.Mapping.LHS, Reps);
+    auto RHS = CloneInst(IC, Input.Mapping.RHS, Reps);
 
-    ReplacementContext RC;
-    auto str = RC.printInst(LHS, llvm::outs(), true);
-    llvm::outs() << "infer " << str << "\n";
-    str = RC.printInst(RHS, llvm::outs(), true);
-    llvm::outs() << "result " << str << "\n\n";
+    if (!GeneralizeWidthVerify && !MinimizeWidth) {
+      ReplacementContext RC;
+      auto str = RC.printInst(LHS, llvm::outs(), true);
+      llvm::outs() << "infer " << str << "\n";
+      str = RC.printInst(RHS, llvm::outs(), true);
+      llvm::outs() << "result " << str << "\n\n";
+    } else {
+      bool Valid;
+      InstMapping M(LHS, RHS);
+      std::vector<std::pair<Inst *, APInt>> Models;
+      if (std::error_code EC = S->isValid(IC, {}, {}, M, Valid, &Models)) {
+        llvm::errs() << EC.message() << '\n';
+      }
+
+      if (Valid) {
+        if (MinimizeWidth) {
+          ReplacementContext RC;
+          auto str = RC.printInst(LHS, llvm::outs(), true);
+          llvm::outs() << "infer " << str << "\n";
+          str = RC.printInst(RHS, llvm::outs(), true);
+          llvm::outs() << "result " << str << "\n\n";
+          break;
+        }
+        llvm::outs () << "valid " << i << "\n";
+      } else {
+        if (!MinimizeWidth) {
+          llvm::outs () << "invalid " << i << "\n";
+        }
+      }
+
+    }
   }
 
 }
@@ -784,8 +825,9 @@ public:
 
     Inst *Ante = IC.getConst(llvm::APInt(1, true));
     for (auto PC : Input_.PCs ) {
-      Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
-      Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+      // Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+      // Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+      Ante = Builder(PC.LHS, IC).Eq(PC.RHS).And(Ante)();
     }
 
     RC.printInst(Ante, SStr, false);

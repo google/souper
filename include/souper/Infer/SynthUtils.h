@@ -8,7 +8,7 @@ namespace souper {
 
 class Builder {
 public:
-  Builder(Inst *I_, InstContext *IC_) : I(I_), IC(IC_) {}
+  Builder(Inst *I_, InstContext &IC_) : I(I_), IC(IC_) {}
 
   Inst *operator()() {
     assert(I);
@@ -18,8 +18,8 @@ public:
 #define BINOP(K)                                                 \
   template<typename T> Builder K(T t) {                          \
     auto L = I; auto R = i(t, *this);                            \
-    return Builder(IC->getInst(Inst::K, L->Width, {L, R}), IC);  \
-  }                                                              \
+    return Builder(IC.getInst(Inst::K, L->Width, {L, R}), IC);   \
+  }
 
   BINOP(Add) BINOP(Sub) BINOP(And)
 #undef BINOP
@@ -27,14 +27,14 @@ public:
 #define BINOPW(K)                                                \
   template<typename T> Builder K(T t) {                          \
     auto L = I; auto R = i(t, *this);                            \
-    return Builder(IC->getInst(Inst::K, 1, {L, R}), IC);         \
-  }                                                              \
+    return Builder(IC.getInst(Inst::K, 1, {L, R}), IC);          \
+  }
   BINOPW(Slt) BINOPW(Ult) BINOPW(Eq)
 #undef BINOPW
 
 private:
   Inst *I = nullptr;
-  InstContext *IC = nullptr;
+  InstContext &IC;
 
   Inst *i(Builder A, Inst *I) {
     assert(A.I);
@@ -43,7 +43,7 @@ private:
 
   template<typename N>
   Inst *i(N Number, Builder B) {
-    return B.IC->getConst(llvm::APInt(B.I->Width, Number));
+    return B.IC.getConst(llvm::APInt(B.I->Width, Number));
   }
 
   template<>
@@ -60,12 +60,12 @@ private:
 
   template<>
   Inst *i<std::string>(std::string Number, Builder B) {
-    return B.IC->getConst(llvm::APInt(B.I->Width, Number, 10));
+    return B.IC.getConst(llvm::APInt(B.I->Width, Number, 10));
   }
 
   template<>
   Inst *i<llvm::APInt>(llvm::APInt Number, Builder B) {
-    return B.IC->getConst(Number);
+    return B.IC.getConst(Number);
   }
 };
 
