@@ -66,6 +66,10 @@ static llvm::cl::opt<bool> SymbolizeSimpleDF("symbolize-simple-dataflow",
     llvm::cl::desc("Generate simple dataflow facts supported by LLVM."),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> SymbolizeKBDF("symbolize-infer-kb",
+    llvm::cl::desc("Generate KB constraints for symbolic constants."),
+    llvm::cl::init(false));
+
 static llvm::cl::opt<bool> SymbolizeConstSynthesis("symbolize-constant-synthesis",
     llvm::cl::desc("Allow concrete constants in the generated code."),
     llvm::cl::init(false));
@@ -301,6 +305,9 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
           CheckAndSave();
           FakeConsts[0]->Negative = false;
         }
+      }
+      if (SymbolizeKBDF) {
+
       }
 
     } else {
@@ -541,6 +548,91 @@ public:
     return Input;
   }
 
+  // Eventually replace the functions in Preconditions{.h/.cpp} with this.
+  // Does not produce exhaustive result. TODO Have an option to wrap in a cegis loop.
+  std::map<Inst *, llvm::KnownBits> inferKBPrecondition(ParsedReplacement Input, std::vector<Inst *> Targets) {
+    assert(Targets.size() == 1 && "Multiple targets unimplemented");
+    std::map<Inst *, KnownBits> Result;
+    std::set<Inst *> SymConsts;
+    std::map<Inst *, Inst *> InstCache;
+    std::map<Block *, Block *> BlockCache;
+    std::map<Inst *, llvm::APInt> ConstMap;
+    size_t ConstID = 0;
+    for (auto V : Targets) {
+      auto C = IC.createSynthesisConstant(V->Width, ConstID++);
+      InstCache[V] = C;
+      SymConsts.insert(C);
+    }
+    auto Copy = Input;
+    InstMapping Rep;
+    Rep.LHS = getInstCopy(Input.Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, false, false);
+    Rep.RHS = getInstCopy(Input.Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, false, false);
+
+    ConstantSynthesis CS;
+
+//      llvm::errs() << "Constant synthesis problem: \n";
+//      Input.print(llvm::errs(), true);
+//      llvm::errs() << "....end.... \n";
+
+    if (auto EC = CS.synthesize(S->getSMTLIBSolver(), Input.BPCs, Input.PCs,
+                                Rep, SymConsts, ConstMap, IC, 30, 60, false)) {
+      llvm::errs() << "Constant Synthesis internal error : " <<  EC.message();
+    }
+
+    if (ConstMap.empty()) {
+//        if (DebugLevel > 3) {
+        llvm::errs() << "Constant Synthesis failed, moving on.\n";
+//        }
+      Input = Copy;
+//      failcount++;
+//      if (failcount >= Insts.size()) {
+//        break;
+//      }
+    } else {
+      InstCache.clear();
+
+      // TODO: Generalize before allowing multiple targets
+      auto NewVar = Targets[0];
+      auto C = InstCache[NewVar];
+
+      InstCache[C] = NewVar;
+
+      NewVar->KnownOnes = ConstMap[C];
+      NewVar->KnownZeros = ~ConstMap[C];
+
+      // Give up if can't be weakened 'too much'
+      const size_t WeakeningThreshold = NewVar->Width/2;
+      size_t BitsWeakened = 0;
+
+      for (size_t i = 0; i < NewVar->Width; ++i) {
+        auto SaveZero = NewVar->KnownZeros;
+        auto SaveOne = NewVar->KnownOnes;
+
+        NewVar->KnownZeros.clearBit(i);
+        NewVar->KnownOnes.clearBit(i);
+
+        if (!Verify(Input)) {
+          NewVar->KnownZeros = SaveZero;
+          NewVar->KnownOnes = SaveOne;
+        } else {
+          BitsWeakened++;
+        }
+      }
+      if (BitsWeakened < WeakeningThreshold) {
+        Input = Copy;
+//        failcount++;
+//        if (failcount >= Insts.size()) {
+//          break;
+//        }
+      }
+
+    }
+
+    // CONT FROM HERE. DUMP RESULTS INTO MAP
+
+    return Result;
+  }
+
   ParsedReplacement ReduceGreedyKBIFY(ParsedReplacement Input) {
     std::set<Inst *> Insts;
     collectInsts(Input.Mapping.LHS, Insts);
@@ -631,6 +723,7 @@ public:
       }
       Insts.clear();
       collectInsts(Input.Mapping.LHS, Insts);
+      // ^ Can this be skipped?
     } while (!Insts.empty());
     return Input;
   }
