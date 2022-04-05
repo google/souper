@@ -5,6 +5,7 @@
 #include "souper/Infer/Preconditions.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/ConstantSynthesis.h"
+#include "souper/Infer/Interpreter.h"
 #include "souper/Infer/SynthUtils.h"
 #include "souper/Inst/InstGraph.h"
 #include "souper/Parser/Parser.h"
@@ -124,10 +125,158 @@ void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
   }
 }
 
+
+// This can probably be done more efficiently, but likely not the bottleneck anywhere
+std::vector<std::vector<int>> GetCombinations(std::vector<int> Counts) {
+  if (Counts.size() == 1) {
+    std::vector<std::vector<int>> Result;
+    for (int i = 0; i < Counts[0]; ++i) {
+      Result.push_back({i});
+    }
+    return Result;
+  }
+
+  auto Last = Counts.back();
+  Counts.pop_back();
+  auto Partial = GetCombinations(Counts);
+
+  std::vector<std::vector<int>> Result;
+  for (int i = 0; i < Last; ++i) {
+    for (auto Copy : Partial) {
+      Copy.push_back(i);
+      Result.push_back(Copy);
+    }
+  }
+  return Result;
+}
+
+// TODO separate function for bitwidth
+// why?
+
+// TODO Document options
 void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement Input,
                             std::vector<Inst *> LHSConsts,
                             std::vector<Inst *> RHSConsts,
                             CandidateMap &Results) {
+
+  llvm::outs() << "HERE\n";
+
+  // The goal of this function is to convert concrete constants into expressions
+  // And synthesize preconditions when appropriate
+
+  // std::vector<Inst *> Vars;
+  // findVars(Input.Mapping.LHS, Vars);
+
+  std::vector<Inst *> Components;
+
+  std::map<Inst *, Inst *> InstCache;
+  ValueCache VC;
+  // Create a symbolic const for each LHS const
+  for (size_t i = 0; i < LHSConsts.size(); ++i) {
+    auto C = IC.createVar(LHSConsts[i]->Width, "symconst_" + std::to_string(i));
+    Components.push_back(C);
+    InstCache[LHSConsts[i]] = C;
+    VC[C] = EvalValue(LHSConsts[i]->Val);
+  }
+
+  if (!SymbolizeConstSynthesis) {
+    std::set<Inst *> ConcreteConsts; // for deduplication
+    for (auto C : LHSConsts) {
+      ConcreteConsts.insert(C);
+      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 0)));
+      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 1)));
+      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, -1)));
+      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 2)));
+    }
+    for (auto C : RHSConsts) {
+      ConcreteConsts.insert(C);
+    }
+    for (auto C : ConcreteConsts) {
+      Components.push_back(C);
+    }
+  }
+
+  // TODO Derive relations between LHSConsts and use them as preconditions
+
+  // Must consider all targets at once
+  // Test phase before verification
+  // Is it possible to pre-generate the set of all possible constants? No.
+  // Some? definitely.
+
+  std::vector<std::vector<Inst *>> Candidates;
+
+  ConcreteInterpreter CI(VC);
+  for (auto &&Target : RHSConsts) {
+    Candidates.push_back({});
+    EnumerativeSynthesis ES;
+    auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
+                                    Target->Width);
+    // TODO : Memoize expressions by width
+
+    for (auto &&Guess : Guesses) {
+      std::set<Inst *> ConstSet;
+      souper::getConstants(Guess, ConstSet);
+      if (!ConstSet.empty()) {
+        continue;
+        // TODO: Fake constant synthesis based on algebra
+        // We have ConcreteLHS = f(ConcreteRHS, SymbolicConst)
+        // Solve equation to find SymbolicConst
+        // TODO: Proper constant synthesis
+      }
+      auto Val = CI.evaluateInst(Guess);
+      if (Val.hasValue() && Val.getValue() == Target->Val) {
+        Candidates.back().push_back(Guess);
+      }
+    }
+  }
+
+
+  std::vector<int> Counts;
+  for (auto &&Cand : Candidates) {
+    Counts.push_back(Cand.size());
+  }
+
+  // Generate all combination of candidates
+  std::vector<std::vector<int>> Combinations = GetCombinations(Counts);
+
+  for (auto &&Comb : Combinations) {
+    auto InstCacheCopy = InstCache;
+    for (int i = 0; i < RHSConsts.size(); ++i) {
+      InstCacheCopy[RHSConsts[i]] = Candidates[i][Comb[i]];
+    }
+
+    std::map<Block *, Block *> BlockCache;
+    std::map<Inst *, APInt> ConstMap;
+    auto LHS = getInstCopy(Input.Mapping.LHS, IC, InstCacheCopy,
+                           BlockCache, &ConstMap, false);
+    auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
+                           BlockCache, &ConstMap, false);
+
+    InstMapping Mapping(LHS, RHS);
+
+    bool IsValid = false;
+    auto CheckAndSave = [&](){
+      std::vector<std::pair<Inst *, APInt>> Models;
+      if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Mapping, IsValid, &Models)) {
+        llvm::errs() << EC.message() << '\n';
+      }
+      if (IsValid) {
+        InstMapping Clone;
+        std::map<Inst *, Inst *> InstCache;
+        std::map<Block *, Block *> BlockCache;
+        std::map<Inst *, llvm::APInt> ConstMap;
+        Clone.LHS = getInstCopy(Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, true, false);
+        Clone.RHS = getInstCopy(Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, true, false);
+        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Clone));
+      }
+    };
+
+    CheckAndSave();
+
+    // TODO With preconditions
+
+  }
+
 
 }
 
@@ -404,14 +553,14 @@ void SymbolizeAndGeneralize(InstContext &IC,
 
 //  // One at a time
  for (auto LHSConst : LHSConsts) {
-   SymbolizeAndGeneralize(IC, S, Input, {LHSConst}, RHSConsts, Results);
+   SymbolizeAndGeneralizeRewrite(IC, S, Input, {LHSConst}, RHSConsts, Results);
  }
 
   // TODO: Why does one at a time get solutions that all at once doesn't?
 
 
 //   All at once
-  SymbolizeAndGeneralize(IC, S, Input, LHSConsts, RHSConsts, Results);
+  SymbolizeAndGeneralizeRewrite(IC, S, Input, LHSConsts, RHSConsts, Results);
 
   llvm::outs() << "Input:\n";
   Input.print(llvm::outs(), true);
