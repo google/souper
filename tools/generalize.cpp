@@ -158,11 +158,6 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
                             std::vector<Inst *> LHSConsts,
                             std::vector<Inst *> RHSConsts,
                             CandidateMap &Results) {
-  // The goal of this function is to convert concrete constants into expressions
-  // And synthesize preconditions when appropriate
-
-  // std::vector<Inst *> Vars;
-  // findVars(Input.Mapping.LHS, Vars);
 
   std::vector<Inst *> SymCS;
 
@@ -196,7 +191,6 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
   for (auto SymC : SymCS) {
     Components.push_back(SymC);
   }
-
 
   // TODO Derive relations between LHSConsts and use them as preconditions
 
@@ -249,7 +243,6 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
     }
   }
 
-
   std::vector<int> Counts;
   for (auto &&Cand : Candidates) {
     Counts.push_back(Cand.size());
@@ -268,40 +261,14 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
     auto RHS = Replace(Input.Mapping.RHS, IC, InstCacheCopy);
 
     InstMapping Mapping(LHS, RHS);
-
+    auto Copy = Input;
+    Copy.Mapping = Mapping;
     bool IsValid = false;
-    auto CheckAndSave = [&]() {
 
-      std::set<Inst *> ConstSet;
-      souper::getConstants(Mapping.RHS, ConstSet);
-      if (!ConstSet.empty()) {
-        std::map <Inst *, llvm::APInt> ResultConstMap;
-        ConstantSynthesis CS;
-        auto SMTSolver = GetUnderlyingSolver();
-        auto EC = CS.synthesize(SMTSolver.get(), Input.BPCs, Input.PCs,
-                             InstMapping (LHS, RHS), ConstSet,
-                             ResultConstMap, IC, /*MaxTries=*/30, 10,
-                             /*AvoidNops=*/true);
-        if (!ResultConstMap.empty()) {
-          std::map<Inst *, Inst *> InstCache;
-          std::map<Block *, Block *> BlockCache;
-          auto LHSCopy = getInstCopy(LHS, IC, InstCache, BlockCache, &ResultConstMap, true);
-          RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ResultConstMap, true);
-
-          Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHSCopy, RHS)));
-        } else {
-          if (DebugLevel > 2) {
-            llvm::errs() << "Constant Synthesis ((no Dataflow Preconditions)) failed. \n";
-          }
-        }
-        return;
-      }
-      std::vector<std::pair<Inst *, APInt>> Models;
-      if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Mapping, IsValid, &Models)) {
-        llvm::errs() << EC.message() << '\n';
-      }
-      if (IsValid) {
-        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Clone(Mapping, IC)));
+    auto CheckAndSave = [&] () {
+      auto Result = Verify(Copy, IC, S);
+      if (Result.LHS && Result.RHS) {
+        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Result));
       }
     };
 
@@ -330,7 +297,8 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
         Components[0]->Negative = false;
       }
     }
-    // Is there a better way of doing this?
+    // TODO Is there a better way of doing this?
+    // TODO Other kinds of preconditions?
 
   }
 

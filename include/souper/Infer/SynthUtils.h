@@ -3,6 +3,9 @@
 
 #include "souper/Inst/Inst.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
+#include "souper/Infer/ConstantSynthesis.h"
+#include "souper/Parser/Parser.h"
+#include "souper/Tool/GetSolver.h"
 
 namespace souper {
 
@@ -92,7 +95,45 @@ InstMapping Clone(InstMapping In, InstContext &IC) {
   return Out;
 }
 
-
+// Also Synthesizes given constants
+// Returns clone if verified, nullptrs if not
+InstMapping Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
+  std::set<Inst *> ConstSet;
+  souper::getConstants(Input.Mapping.RHS, ConstSet);
+  if (!ConstSet.empty()) {
+    std::map <Inst *, llvm::APInt> ResultConstMap;
+    ConstantSynthesis CS;
+    auto SMTSolver = GetUnderlyingSolver();
+    auto EC = CS.synthesize(SMTSolver.get(), Input.BPCs, Input.PCs,
+                         Input.Mapping, ConstSet,
+                         ResultConstMap, IC, /*MaxTries=*/30, 10,
+                         /*AvoidNops=*/true);
+    if (!ResultConstMap.empty()) {
+      std::map<Inst *, Inst *> InstCache;
+      std::map<Block *, Block *> BlockCache;
+      auto LHSCopy = getInstCopy(Input.Mapping.LHS, IC, InstCache, BlockCache, &ResultConstMap, true);
+      auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCache, BlockCache, &ResultConstMap, true);
+      return InstMapping(LHSCopy, RHS);
+//      Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHSCopy, RHS)));
+    } else {
+      if (DebugLevel > 2) {
+        llvm::errs() << "Constant Synthesis ((no Dataflow Preconditions)) failed. \n";
+      }
+    }
+    return InstMapping(nullptr, nullptr);
+  }
+  std::vector<std::pair<Inst *, llvm::APInt>> Models;
+  bool IsValid;
+  if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, IsValid, &Models)) {
+    llvm::errs() << EC.message() << '\n';
+  }
+  if (IsValid) {
+//    Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Clone(Mapping, IC)));
+    return Clone(Input.Mapping, IC);
+  } else {
+    return InstMapping(nullptr, nullptr);
+  }
+}
 
 }
 #endif
