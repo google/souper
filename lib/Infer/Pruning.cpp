@@ -37,7 +37,7 @@ namespace {
 
   static llvm::cl::opt<bool> EnableFB("souper-dataflow-pruning-fb",
     llvm::cl::desc("Prune with forced-bits analysis (default=true)"),
-    llvm::cl::init(true));
+    llvm::cl::init(false));
 
   static llvm::cl::opt<bool> EnableRB("souper-dataflow-pruning-rb",
     llvm::cl::desc("Prune with required-bits analysis (default=true)"),
@@ -45,7 +45,7 @@ namespace {
 
   static llvm::cl::opt<bool> EnableBB("souper-dataflow-pruning-bb",
     llvm::cl::desc("Prune with bivalent-bits analysis (default=true)"),
-    llvm::cl::init(true));
+    llvm::cl::init(false));
 }
 
 namespace souper {

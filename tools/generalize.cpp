@@ -5,7 +5,7 @@
 #include "souper/Infer/Preconditions.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/ConstantSynthesis.h"
-#include "souper/Infer/Interpreter.h"
+#include "souper/Infer/Pruning.h"
 #include "souper/Infer/SynthUtils.h"
 #include "souper/Inst/InstGraph.h"
 #include "souper/Parser/Parser.h"
@@ -158,32 +158,29 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
                             std::vector<Inst *> LHSConsts,
                             std::vector<Inst *> RHSConsts,
                             CandidateMap &Results) {
-
-  llvm::outs() << "HERE\n";
-
   // The goal of this function is to convert concrete constants into expressions
   // And synthesize preconditions when appropriate
 
   // std::vector<Inst *> Vars;
   // findVars(Input.Mapping.LHS, Vars);
 
-  std::vector<Inst *> Components;
+  std::vector<Inst *> SymCS;
 
   std::map<Inst *, Inst *> InstCache;
   ValueCache VC;
   // Create a symbolic const for each LHS const
   for (size_t i = 0; i < LHSConsts.size(); ++i) {
     auto C = IC.createVar(LHSConsts[i]->Width, "symconst_" + std::to_string(i));
-    Components.push_back(C);
+    SymCS.push_back(C);
     InstCache[LHSConsts[i]] = C;
     VC[C] = EvalValue(LHSConsts[i]->Val);
   }
 
+  std::vector<Inst *> Components;
   if (!SymbolizeConstSynthesis) {
     std::set<Inst *> ConcreteConsts; // for deduplication
     for (auto C : LHSConsts) {
       ConcreteConsts.insert(C);
-      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 0)));
       ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 1)));
       ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, -1)));
       ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 2)));
@@ -195,6 +192,11 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
       Components.push_back(C);
     }
   }
+
+  for (auto SymC : SymCS) {
+    Components.push_back(SymC);
+  }
+
 
   // TODO Derive relations between LHSConsts and use them as preconditions
 
@@ -217,15 +219,32 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
       std::set<Inst *> ConstSet;
       souper::getConstants(Guess, ConstSet);
       if (!ConstSet.empty()) {
-        continue;
+        if (SymbolizeConstSynthesis) {
+          auto SMTLIBSolver = GetUnderlyingSolver();
+          SynthesisContext SC{IC, SMTLIBSolver.get(), Target, nullptr, {}, {}, false, 10};
+          PruningManager Pruner(SC, SymCS, DebugLevel);
+          Pruner.init();
+          if (!Pruner.isInfeasible(Guess, DebugLevel)) {
+            Candidates.back().push_back(Guess);
+//            llvm::errs() << "NOT PRUNED\n";
+          }
+//          else {
+//            ReplacementContext RC;
+//            RC.printInst(Guess, llvm::errs(), true);
+//            llvm::errs() << "\n PRUNED\n";
+//          }
+        }
+//        continue;
+//        Candidates.back().push_back(Guess);
         // TODO: Fake constant synthesis based on algebra
         // We have ConcreteLHS = f(ConcreteRHS, SymbolicConst)
         // Solve equation to find SymbolicConst
         // TODO: Proper constant synthesis
-      }
-      auto Val = CI.evaluateInst(Guess);
-      if (Val.hasValue() && Val.getValue() == Target->Val) {
-        Candidates.back().push_back(Guess);
+      } else {
+        auto Val = CI.evaluateInst(Guess);
+        if (Val.hasValue() && Val.getValue() == Target->Val) {
+          Candidates.back().push_back(Guess);
+        }
       }
     }
   }
@@ -245,35 +264,73 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
       InstCacheCopy[RHSConsts[i]] = Candidates[i][Comb[i]];
     }
 
-    std::map<Block *, Block *> BlockCache;
-    std::map<Inst *, APInt> ConstMap;
-    auto LHS = getInstCopy(Input.Mapping.LHS, IC, InstCacheCopy,
-                           BlockCache, &ConstMap, false);
-    auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
-                           BlockCache, &ConstMap, false);
+    auto LHS = Replace(Input.Mapping.LHS, IC, InstCacheCopy);
+    auto RHS = Replace(Input.Mapping.RHS, IC, InstCacheCopy);
 
     InstMapping Mapping(LHS, RHS);
 
     bool IsValid = false;
-    auto CheckAndSave = [&](){
+    auto CheckAndSave = [&]() {
+
+      std::set<Inst *> ConstSet;
+      souper::getConstants(Mapping.RHS, ConstSet);
+      if (!ConstSet.empty()) {
+        std::map <Inst *, llvm::APInt> ResultConstMap;
+        ConstantSynthesis CS;
+        auto SMTSolver = GetUnderlyingSolver();
+        auto EC = CS.synthesize(SMTSolver.get(), Input.BPCs, Input.PCs,
+                             InstMapping (LHS, RHS), ConstSet,
+                             ResultConstMap, IC, /*MaxTries=*/30, 10,
+                             /*AvoidNops=*/true);
+        if (!ResultConstMap.empty()) {
+          std::map<Inst *, Inst *> InstCache;
+          std::map<Block *, Block *> BlockCache;
+          auto LHSCopy = getInstCopy(LHS, IC, InstCache, BlockCache, &ResultConstMap, true);
+          RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ResultConstMap, true);
+
+          Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHSCopy, RHS)));
+        } else {
+          if (DebugLevel > 2) {
+            llvm::errs() << "Constant Synthesis ((no Dataflow Preconditions)) failed. \n";
+          }
+        }
+        return;
+      }
       std::vector<std::pair<Inst *, APInt>> Models;
       if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Mapping, IsValid, &Models)) {
         llvm::errs() << EC.message() << '\n';
       }
       if (IsValid) {
-        InstMapping Clone;
-        std::map<Inst *, Inst *> InstCache;
-        std::map<Block *, Block *> BlockCache;
-        std::map<Inst *, llvm::APInt> ConstMap;
-        Clone.LHS = getInstCopy(Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, true, false);
-        Clone.RHS = getInstCopy(Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, true, false);
-        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Clone));
+        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Clone(Mapping, IC)));
       }
     };
 
     CheckAndSave();
 
-    // TODO With preconditions
+    // TODO Make preconditions consistent
+    if (SymbolizeSimpleDF) {
+      if (!IsValid) {
+        Components[0]->PowOfTwo = true;
+        CheckAndSave();
+        Components[0]->PowOfTwo = false;
+      }
+      if (!IsValid) {
+        Components[0]->NonZero = true;
+        CheckAndSave();
+        Components[0]->NonZero = false;
+      }
+      if (!IsValid) {
+        Components[0]->NonNegative = true;
+        CheckAndSave();
+        Components[0]->NonNegative = false;
+      }
+      if (!IsValid) {
+        Components[0]->Negative = true;
+        CheckAndSave();
+        Components[0]->Negative = false;
+      }
+    }
+    // Is there a better way of doing this?
 
   }
 
@@ -324,7 +381,6 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
   }
 
   for (auto T : Targets) {
-
     EnumerativeSynthesis ES;
     auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
                                     T->Width);
@@ -439,7 +495,7 @@ void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
       InstMapping Mapping(LHS, RHS);
       if (true /*remove when the other branch exists*/ || SymbolizeNoDFP) {
         bool IsValid;
-        auto CheckAndSave = [&](){
+        auto CheckAndSave = [&]() {
           std::vector<std::pair<Inst *, APInt>> Models;
           if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Mapping, IsValid, &Models)) {
             llvm::errs() << EC.message() << '\n';
@@ -551,15 +607,15 @@ void SymbolizeAndGeneralize(InstContext &IC,
 
   CandidateMap Results;
 
-//  // One at a time
+ // One at a time
  for (auto LHSConst : LHSConsts) {
    SymbolizeAndGeneralizeRewrite(IC, S, Input, {LHSConst}, RHSConsts, Results);
  }
 
-  // TODO: Why does one at a time get solutions that all at once doesn't?
+  // All subsets?
+  // TODO: Is it possible to encode this logically.
 
-
-//   All at once
+  // All at once
   SymbolizeAndGeneralizeRewrite(IC, S, Input, LHSConsts, RHSConsts, Results);
 
   llvm::outs() << "Input:\n";

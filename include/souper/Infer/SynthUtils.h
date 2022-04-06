@@ -69,5 +69,30 @@ private:
   }
 };
 
+Inst *Replace(Inst *R, InstContext &IC, std::map<Inst *, Inst *> &M) {
+  std::map<Block *, Block *> BlockCache;
+  std::map<Inst *, llvm::APInt> ConstMap;
+  return getInstCopy(R, IC, M, BlockCache, &ConstMap, false);
+}
+
+Inst *Clone(Inst *R, InstContext &IC) {
+  std::map<Block *, Block *> BlockCache;
+  std::map<Inst *, llvm::APInt> ConstMap;
+  std::map<Inst *, Inst *> InstCache;
+  return getInstCopy(R, IC, InstCache, BlockCache, &ConstMap, true, false);
+}
+
+InstMapping Clone(InstMapping In, InstContext &IC) {
+  std::map<Block *, Block *> BlockCache;
+  std::map<Inst *, llvm::APInt> ConstMap;
+  std::map<Inst *, Inst *> InstCache;
+  InstMapping Out;
+  Out.LHS = getInstCopy(In.LHS, IC, InstCache, BlockCache, &ConstMap, true, false);
+  Out.RHS = getInstCopy(In.RHS, IC, InstCache, BlockCache, &ConstMap, true, false);
+  return Out;
+}
+
+
+
 }
 #endif
