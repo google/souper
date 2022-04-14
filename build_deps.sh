@@ -91,8 +91,15 @@ fi
 # we want these but they don't get installed by default
 cp $llvm_builddir/bin/llvm-lit $llvm_installdir/bin
 cp $llvm_builddir/bin/FileCheck $llvm_installdir/bin
-cp $llvm_builddir/lib/libgtest_main.a $llvm_installdir/lib
-cp $llvm_builddir/lib/libgtest.a $llvm_installdir/lib
+# try to handle both build of static and dynamic libraries
+if [ -f $llvm_builddir/lib/libgtest_main.a ] ; then
+    cp $llvm_builddir/lib/libgtest_main.a $llvm_installdir/lib
+    cp $llvm_builddir/lib/libgtest.a $llvm_installdir/lib
+fi
+if [ -f $llvm_builddir/lib/libgtest_main.so ] ; then
+    cp $llvm_builddir/lib/libgtest_main.so $llvm_installdir/lib
+    cp $llvm_builddir/lib/libgtest.so $llvm_installdir/lib
+fi
 
 kleedir=$(pwd)/third_party/klee
 

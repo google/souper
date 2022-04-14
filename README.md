@@ -27,7 +27,7 @@ $ ./build_deps.sh $buildtype $extra_cmake_flags
 ```
 $ mkdir /path/to/souper-build
 $ cd /path/to/souper-build
-$ cmake -DCMAKE_BUILD_TYPE=$buildtype /path/to/souper
+$ CXX=clang++ cmake -DCMAKE_BUILD_TYPE=$buildtype /path/to/souper
 ```
    Again, the build type is optional and defaults to Release. In any case it
    must match the build type used when compiling the dependencies.
@@ -98,6 +98,52 @@ speedup for large compilations. This behavior may be disabled by setting the
 SOUPER_NO_EXTERNAL_CACHE environment variable. Souper's Redis cache does not yet
 have any support for versioning; you should stop Redis and delete its dump file
 any time Souper is upgraded.
+
+# Using Souper with Rust/Cargo
+
+To use souper with Cargo, you need to build your own Rust compiler, specially
+configured to use souper's LLVM toolchain. ANd when building souper, we need to
+enable dynamic linking both of libLLVM and all the other LLVM libraries:
+```
+$ ./build_deps.sh Release -DLLVM_BUILD_LLVM_DYLIB=ON -DBUILD_SHARED_LIBS=ON
+```
+
+By default, rustc is statically linked with its own fork of LLVM. To change this,
+after you've cloned from https://github.com/rust-lang/rust, copy
+`config.toml.example` to `config.toml` (or run `./x.py setup`) and set
+```
+[target.x86_64-unknown-linux-gnu] # Or whatever your host is
+llvm-config = "/path/to/souper/third_party/llvm-Release-install/bin/llvm-config"
+```
+and
+```
+[llvm]
+link-shared = true
+```
+Then build Rust with
+```
+$ LD_LIBRARY_PATH=/path/to/souper/third_party/llvm-Release-install/lib/ ./x.py build
+```
+Once it is built, you can create a souper-powered rustup toolchain with
+```
+$ rustup toolchain link souper build/x86_64-unknown-linux-gnu/stage1
+```
+
+Passing souper's command line arguments via the `RUSTFLAGS` environment variable
+or `cargo rustc` is difficult/impossible because `-Cllvm-args` is
+space-delimited. Instead of fighting with a shell, you can place a
+`.cargo/config` file, probably in your home directory or in the root of whatever
+crate you want to use souper with, which contains this:
+```
+[build]
+rustflags = ["-Z", "llvm-plugins=/path/to/souper-build/libsouperPass.so",
+    "-C", "llvm-args=-souper-static-profile=true -souper-external-cache=true"]
+```
+
+Then you should be able to build a Rust project with souper by:
+```
+$ LD_LIBRARY_PATH=/path/to/souper/third_party/llvm-Release-install/lib/ cargo +souper build --release
+```
 
 # Disclaimer
 
