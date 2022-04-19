@@ -444,6 +444,10 @@ namespace souper {
       return Args[0];
     }
 
+    case Inst::LogB: {
+      return {llvm::APInt(Inst->Width, ARG0.logBase2())};
+    }
+
     default:
       llvm::report_fatal_error("unimplemented instruction kind " +
                                std::string(Inst::getKindName(Inst->K)) +

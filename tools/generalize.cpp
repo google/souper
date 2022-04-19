@@ -75,6 +75,10 @@ static llvm::cl::opt<bool> SymbolizeConstSynthesis("symbolize-constant-synthesis
     llvm::cl::desc("Allow concrete constants in the generated code."),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> SymbolizeHackersDelight("symbolize-bit-hacks",
+    llvm::cl::desc("Include bit hacks in the components."),
+    llvm::cl::init(true));
+
 static llvm::cl::opt<bool> FixIt("fixit",
     llvm::cl::desc("Given an invalid optimization, generate a valid one."
                    "(default=false)"),
@@ -188,6 +192,26 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
     }
   }
 
+  if (true) {
+    for (auto C : SymCS) {
+      // // Minus One
+      // Components.push_back(IC.getInst(Inst::Sub,
+      //   C->Width, {C, IC.getConst(llvm::APInt(C->Width, 1))}));
+      // // Flip bits
+      // Components.push_back(IC.getInst(Inst::Xor,
+      //   C->Width, {C, IC.getConst(llvm::APInt(C->Width, -1))}));
+
+      // Custom test
+      // auto M1 = IC.getConst(llvm::APInt(C->Width, -1));
+      // auto Test = Builder(C, IC).Add(M1).Xor(M1).And(M1);
+      // Components.push_back(Test());
+      auto M0 = IC.getConst(llvm::APInt(C->Width, 0));
+      auto Test = Builder(M0, IC).Sub(C);
+      Components.push_back(Test());
+    }
+
+  }
+
   for (auto SymC : SymCS) {
     Components.push_back(SymC);
   }
@@ -204,9 +228,12 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
   ConcreteInterpreter CI(VC);
   for (auto &&Target : RHSConsts) {
     Candidates.push_back({});
-    EnumerativeSynthesis ES;
-    auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
-                                    Target->Width);
+    // EnumerativeSynthesis ES;
+    // auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
+    //                                 Target->Width);
+
+    auto Guesses = Components;
+
     // TODO : Memoize expressions by width
 
     for (auto &&Guess : Guesses) {
@@ -235,10 +262,24 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
         // Solve equation to find SymbolicConst
         // TODO: Proper constant synthesis
       } else {
-        auto Val = CI.evaluateInst(Guess);
-        if (Val.hasValue() && Val.getValue() == Target->Val) {
+        // Candidates.back().push_back(Guess);
+        // auto Val = CI.evaluateInst(Guess);
+        // if (!Val.hasValue()) {
           Candidates.back().push_back(Guess);
-        }
+          // llvm::outs() << "CI Fail\n";
+          // Somehow interpreter failed, full verification desirable
+        // } else {
+        //   if (Val.hasValue() && Val.getValue() == Target->Val) {
+        //     Candidates.back().push_back(Guess);
+        //   } else {
+        //     if (DebugLevel > 4) {
+        //       llvm::outs() << "\nDiscarded by ConcreteInterpreter:\n";
+        //       llvm::outs() << Val.getValue() << '\t' << Target->Val << '\n';
+        //       ReplacementContext RC;
+        //       RC.printInst(Guess, llvm::errs(), true);
+        //     }
+        //   }
+        // }
       }
     }
   }
@@ -253,8 +294,10 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
 
   for (auto &&Comb : Combinations) {
     auto InstCacheCopy = InstCache;
+    int SymExprCount = 0;
     for (int i = 0; i < RHSConsts.size(); ++i) {
       InstCacheCopy[RHSConsts[i]] = Candidates[i][Comb[i]];
+      Candidates[i][Comb[i]]->Name = std::string("constexpr_") + std::to_string(SymExprCount++);
     }
 
     auto LHS = Replace(Input.Mapping.LHS, IC, InstCacheCopy);
@@ -276,25 +319,27 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
 
     // TODO Make preconditions consistent
     if (SymbolizeSimpleDF) {
-      if (!IsValid) {
-        Components[0]->PowOfTwo = true;
-        CheckAndSave();
-        Components[0]->PowOfTwo = false;
-      }
-      if (!IsValid) {
-        Components[0]->NonZero = true;
-        CheckAndSave();
-        Components[0]->NonZero = false;
-      }
-      if (!IsValid) {
-        Components[0]->NonNegative = true;
-        CheckAndSave();
-        Components[0]->NonNegative = false;
-      }
-      if (!IsValid) {
-        Components[0]->Negative = true;
-        CheckAndSave();
-        Components[0]->Negative = false;
+      for (auto &&C : SymCS) {
+        if (!IsValid) {
+          C->PowOfTwo = true;
+          CheckAndSave();
+          C->PowOfTwo = false;
+        }
+        // if (!IsValid) {
+        //   C->NonZero = true;
+        //   CheckAndSave();
+        //   C->NonZero = false;
+        // }
+        // if (!IsValid) {
+        //   C->NonNegative = true;
+        //   CheckAndSave();
+        //   C->NonNegative = false;
+        // }
+        // if (!IsValid) {
+        //   C->Negative = true;
+        //   CheckAndSave();
+        //   C->Negative = false;
+        // }
       }
     }
     // TODO Is there a better way of doing this?

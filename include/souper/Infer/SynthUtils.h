@@ -24,7 +24,7 @@ public:
     return Builder(IC.getInst(Inst::K, L->Width, {L, R}), IC);   \
   }
 
-  BINOP(Add) BINOP(Sub) BINOP(And)
+  BINOP(Add) BINOP(Sub) BINOP(And) BINOP(Xor)
 #undef BINOP
 
 #define BINOPW(K)                                                \
@@ -46,7 +46,7 @@ private:
 
   template<typename N>
   Inst *i(N Number, Builder B) {
-    return B.IC.getConst(llvm::APInt(B.I->Width, Number));
+    return B.IC.getConst(llvm::APInt(B.I->Width, Number, false));
   }
 
   template<>

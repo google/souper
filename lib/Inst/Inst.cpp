@@ -1225,12 +1225,13 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
       }
     }
     if (!Copy) {
-      if (CloneVars && I->SynthesisConstID == 0)
+      if (CloneVars && I->SynthesisConstID == 0) {
         Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
                             I->KnownOnes, I->NonZero, I->NonNegative,
                             I->PowOfTwo, I->Negative, I->NumSignBits,
                             I->DemandedBits,
                             I->SynthesisConstID);
+      }
       else {
         Copy = I;
       }
@@ -1254,6 +1255,7 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
   }
   assert(Copy);
   InstCache[I] = Copy;
+  Copy->Name = I->Name;
   return Copy;
 }
 
