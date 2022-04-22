@@ -103,6 +103,10 @@ static cl::opt<size_t> NumResults("generalization-num-results",
     cl::desc("Number of Generalization Results"),
     cl::init(5));
 
+static cl::opt<bool> Everything("everything",
+    cl::desc("Run everything, output one result."),
+    cl::init(false));
+
 void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
   bool FoundWP = false;
   std::vector<std::map<Inst *, llvm::KnownBits>> KBResults;
@@ -152,6 +156,80 @@ std::vector<std::vector<int>> GetCombinations(std::vector<int> Counts) {
     }
   }
   return Result;
+}
+
+void SymbolizeWidthNew(InstContext &IC, Solver *S, ParsedReplacement Input,
+                       CandidateMap &Results) {
+  std::vector<Inst *> Consts;
+  std::vector<Inst *> Vars;
+  findVars(Input.Mapping.LHS, Vars);
+
+  auto Pred = [](Inst *I) {return I->K == Inst::Const;};
+  findInsts(Input.Mapping.LHS, Consts, Pred);
+  findInsts(Input.Mapping.RHS, Consts, Pred);
+
+  for (auto &&C : Consts) {
+    std::vector<Inst *> Components;
+    Components.push_back(IC.getInst(Inst::BitWidth, C->Width, {Vars[0]}));
+
+    EnumerativeSynthesis ES;
+    auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
+                                    C->Width);
+
+    for (auto &&G : Guesses) {
+      std::map<Inst *, Inst *> InstCache;
+      InstCache[C] = G;
+      int SymExprCount = 0;
+
+
+      auto LHS = Replace(Input.Mapping.LHS, IC, InstCache);
+      auto RHS = Replace(Input.Mapping.RHS, IC, InstCache);
+
+      InstMapping Mapping(LHS, RHS);
+      auto Copy = Input;
+      Copy.Mapping = Mapping;
+      bool IsValid = false;
+
+      auto CheckAndSave = [&] () {
+        auto Result = Verify(Copy, IC, S);
+        if (Result.LHS && Result.RHS) {
+          Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Result));
+        }
+      };
+
+      CheckAndSave();
+
+      // TODO Make preconditions consistent
+      // if (SymbolizeSimpleDF) {
+      //   for (auto &&C : SymCS) {
+      //     if (!IsValid) {
+      //       C->PowOfTwo = true;
+      //       CheckAndSave();
+      //       C->PowOfTwo = false;
+      //     }
+          // if (!IsValid) {
+          //   C->NonZero = true;
+          //   CheckAndSave();
+          //   C->NonZero = false;
+          // }
+          // if (!IsValid) {
+          //   C->NonNegative = true;
+          //   CheckAndSave();
+          //   C->NonNegative = false;
+          // }
+          // if (!IsValid) {
+          //   C->Negative = true;
+          //   CheckAndSave();
+          //   C->Negative = false;
+          // }
+      //   }
+      // }
+      // TODO Is there a better way of doing this?
+      // TODO Other kinds of preconditions?
+
+    }
+
+  }
 }
 
 // TODO separate function for bitwidth
@@ -228,11 +306,11 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
   ConcreteInterpreter CI(VC);
   for (auto &&Target : RHSConsts) {
     Candidates.push_back({});
-    // EnumerativeSynthesis ES;
-    // auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
-    //                                 Target->Width);
+    EnumerativeSynthesis ES;
+    auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
+                                    Target->Width);
 
-    auto Guesses = Components;
+    // auto Guesses = Components;
 
     // TODO : Memoize expressions by width
 
@@ -818,9 +896,9 @@ public:
     }
 
     if (ConstMap.empty()) {
-//        if (DebugLevel > 3) {
+      if (DebugLevel > 3) {
         llvm::errs() << "Constant Synthesis failed, moving on.\n";
-//        }
+      }
       Input = Copy;
 //      failcount++;
 //      if (failcount >= Insts.size()) {
@@ -917,9 +995,9 @@ public:
       }
 
       if (ConstMap.empty()) {
-//        if (DebugLevel > 3) {
+        if (DebugLevel > 3) {
           llvm::errs() << "Constant Synthesis failed, moving on.\n";
-//        }
+        }
         Input = Copy;
         failcount++;
         if (failcount >= Insts.size()) {
@@ -1223,7 +1301,7 @@ private:
   std::unordered_set<std::string> DNR;
 };
 
-void ReduceAndGeneralize(InstContext &IC,
+std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
                                Solver *S, ParsedReplacement Input) {
   std::vector<std::pair<Inst *, APInt>> Models;
   bool Valid;
@@ -1232,7 +1310,7 @@ void ReduceAndGeneralize(InstContext &IC,
   }
   if (!Valid) {
     llvm::errs() << "Invalid Input.\n";
-    return;
+    return {};
   }
 
   Reducer R(IC, S);
@@ -1263,23 +1341,29 @@ void ReduceAndGeneralize(InstContext &IC,
     std::vector<std::string> SortedResults(DedupedResults.begin(), DedupedResults.end());
     std::sort(SortedResults.begin(), SortedResults.end(), [](auto a, auto b){return a.length() < b.length();});
 
-    for (auto &&S : SortedResults) {
+    if (!Everything) {
+      for (auto &&S : SortedResults) {
+        if (DebugLevel > 2) {
+          llvm::outs() << "\n\nResult:\n";
+        }
+        llvm::outs() << S << '\n';
+        if (!ReducePrintAll) {
+          break;
+        }
+      }
       if (DebugLevel > 2) {
-        llvm::outs() << "\n\nResult:\n";
-      }
-      llvm::outs() << S << '\n';
-      if (!ReducePrintAll) {
-        break;
+        llvm::outs() << "Number of Results: " <<SortedResults.size() << ".\n";
       }
     }
+    return SortedResults;
   } else {
-    Input.print(llvm::outs(), true);
-    if (DebugLevel > 2) {
-      llvm::errs() << "Failed to Generalize.\n";
+    if (!Everything) {
+      Input.print(llvm::outs(), true);
+      if (DebugLevel > 2) {
+        llvm::errs() << "Failed to Generalize.\n";
+      }
     }
-  }
-  if (DebugLevel > 2) {
-    llvm::outs() << "Number of Results: " << Results.size() << ".\n";
+    return {};
   }
 }
 
@@ -1311,6 +1395,22 @@ int main(int argc, char **argv) {
   // TODO: Write default action which chooses what to do based on input structure
 
   for (auto &&Input: Inputs) {
+    if (Everything) {
+      auto Reduced = ReduceAndGeneralize(IC, S.get(), Input);
+
+      ParsedReplacement Rep;
+
+      if (Reduced.empty()) {
+        Rep = Input;
+      } else {
+        auto MB = llvm::MemoryBuffer::getMemBuffer(Reduced[0]);
+        Rep =  ParseReplacements(IC, MB->getMemBufferRef().getBufferIdentifier(),
+                                  Data.getBuffer(), ErrStr)[0];
+      }
+
+      Rep.print(llvm::outs(), true);
+
+    }
     if (FixIt) {
       // TODO: Verify that inputs are valid optimizations
       Generalize(IC, S.get(), Input);
@@ -1322,8 +1422,14 @@ int main(int argc, char **argv) {
       SymbolizeAndGeneralize(IC, S.get(), Input);
     }
 
-    if (GeneralizeWidth) {
-      GeneralizeBitWidth(IC, S.get(), Input);
+    if (SymbolizeWidth) {
+      CandidateMap Results;
+      SymbolizeWidthNew(IC, S.get(), Input, Results);
+
+      for (auto Result : Results) {
+        Result.print(llvm::outs());
+        llvm::outs() << "\n";
+      }
     }
   }
 
