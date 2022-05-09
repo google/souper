@@ -225,50 +225,52 @@ std::map<souper::Inst *, llvm::APInt>
 performCegisFirstQuery(tools::Transform &t,
                        std::map<std::string, souper::Inst *> &SouperConsts,
                        smt::expr &TriedExpr) {
-  IR::State SrcState(t.src, true);
-  IR::State TgtState(t.tgt, false);
-  util::sym_exec(SrcState);
-  util::sym_exec(TgtState);
-
-  auto &&Sv = SrcState.returnVal();
-  auto &&Tv = TgtState.returnVal();
-
-  std::map<souper::Inst *, llvm::APInt> SynthesisResult;
-  SynthesisResult.clear();
-
-  std::set<smt::expr> Vars;
-  std::map<std::string, smt::expr> SMTConsts;
-  for (auto &[Var, Val] : TgtState.getValues()) {
-    auto &Name = Var->getName();
-    if (startsWith("%reservedconst", Name)) {
-      SMTConsts[Name] = Val.first.value;
-    }
-  }
-
-  if (SkipAliveSolver)
-    return SynthesisResult;
-
-  auto R = smt::check_expr((Sv.first.value == Tv.first.value) && (TriedExpr));
-  // no more guesses, stop immediately
-  if (R.isUnsat()) {
-    if (DebugLevel > 3)
-      llvm::errs()<<"No more new possible guesses\n";
+    llvm::errs() << "Constant synthesis through alive unimplemented.";
     return {};
-  } else if (R.isSat()) {
-    auto &&Model = R.getModel();
-    smt::expr TriedAnte(false);
+//  IR::State SrcState(t.src, true);
+//  IR::State TgtState(t.tgt, false);
+//  util::sym_exec(SrcState);
+//  util::sym_exec(TgtState);
+//
+//  auto &&Sv = SrcState.returnVal();
+//  auto &&Tv = TgtState.returnVal();
 
-    for (auto &[name, expr] : SMTConsts) {
-      TriedAnte |= (expr != smt::expr::mkUInt(Model.getInt(expr), expr.bits()));
-    }
-    TriedExpr &= TriedAnte;
-
-    for (auto &[name, expr] : SMTConsts) {
-      auto *I = SouperConsts[name];
-      SynthesisResult[I] = llvm::APInt(I->Width, Model.getInt(expr));
-    }
-  }
-  return SynthesisResult;
+//  std::map<souper::Inst *, llvm::APInt> SynthesisResult;
+//  SynthesisResult.clear();
+//
+//  std::set<smt::expr> Vars;
+//  std::map<std::string, smt::expr> SMTConsts;
+//  for (auto &[Var, Val] : TgtState.getValues()) {
+//    auto &Name = Var->getName();
+//    if (startsWith("%reservedconst", Name)) {
+//      SMTConsts[Name] = Val.first.value;
+//    }
+//  }
+//
+//  if (SkipAliveSolver)
+//    return SynthesisResult;
+//
+//  auto R = smt::check_expr((Sv.first.value == Tv.first.value) && (TriedExpr));
+//  // no more guesses, stop immediately
+//  if (R.isUnsat()) {
+//    if (DebugLevel > 3)
+//      llvm::errs()<<"No more new possible guesses\n";
+//    return {};
+//  } else if (R.isSat()) {
+//    auto &&Model = R.getModel();
+//    smt::expr TriedAnte(false);
+//
+//    for (auto &[name, expr] : SMTConsts) {
+//      TriedAnte |= (expr != smt::expr::mkUInt(Model.getInt(expr), expr.bits()));
+//    }
+//    TriedExpr &= TriedAnte;
+//
+//    for (auto &[name, expr] : SMTConsts) {
+//      auto *I = SouperConsts[name];
+//      SynthesisResult[I] = llvm::APInt(I->Width, Model.getInt(expr));
+//    }
+//  }
+//  return SynthesisResult;
 }
 
 std::map<souper::Inst *, llvm::APInt>

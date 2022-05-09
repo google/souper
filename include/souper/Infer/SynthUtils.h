@@ -95,9 +95,22 @@ InstMapping Clone(InstMapping In, InstContext &IC) {
   return Out;
 }
 
+ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
+  std::map<Block *, Block *> BlockCache;
+  std::map<Inst *, llvm::APInt> ConstMap;
+  std::map<Inst *, Inst *> InstCache;
+  In.Mapping.LHS = getInstCopy(In.Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, true, false);
+  In.Mapping.RHS = getInstCopy(In.Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, true, false);
+  for (auto &PC : In.PCs) {
+    PC.LHS = getInstCopy(PC.LHS, IC, InstCache, BlockCache, &ConstMap, false, false);
+    PC.RHS = getInstCopy(PC.RHS, IC, InstCache, BlockCache, &ConstMap, false, false);
+  }
+  return In;
+}
+
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
-InstMapping Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
+ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
   std::set<Inst *> ConstSet;
   souper::getConstants(Input.Mapping.RHS, ConstSet);
   if (!ConstSet.empty()) {
@@ -113,14 +126,19 @@ InstMapping Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
       std::map<Block *, Block *> BlockCache;
       auto LHSCopy = getInstCopy(Input.Mapping.LHS, IC, InstCache, BlockCache, &ResultConstMap, true);
       auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCache, BlockCache, &ResultConstMap, true);
-      return InstMapping(LHSCopy, RHS);
-//      Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHSCopy, RHS)));
+      Input.Mapping = InstMapping(LHSCopy, RHS);
+      for (auto &PC : Input.PCs) {
+        PC.LHS = getInstCopy(PC.LHS, IC, InstCache, BlockCache, &ResultConstMap, true);
+        PC.RHS = getInstCopy(PC.RHS, IC, InstCache, BlockCache, &ResultConstMap, true);
+      }
+      return Input;
     } else {
       if (DebugLevel > 2) {
         llvm::errs() << "Constant Synthesis ((no Dataflow Preconditions)) failed. \n";
       }
     }
-    return InstMapping(nullptr, nullptr);
+    Input.Mapping = InstMapping(nullptr, nullptr);
+    return Input;
   }
   std::vector<std::pair<Inst *, llvm::APInt>> Models;
   bool IsValid;
@@ -129,9 +147,11 @@ InstMapping Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
   }
   if (IsValid) {
 //    Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Clone(Mapping, IC)));
-    return Clone(Input.Mapping, IC);
+    Input = Clone(Input, IC);
+    return Input;
   } else {
-    return InstMapping(nullptr, nullptr);
+    Input.Mapping = InstMapping(nullptr, nullptr);
+    return Input;
   }
 }
 

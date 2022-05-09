@@ -192,8 +192,10 @@ void SymbolizeWidthNew(InstContext &IC, Solver *S, ParsedReplacement Input,
 
       auto CheckAndSave = [&] () {
         auto Result = Verify(Copy, IC, S);
-        if (Result.LHS && Result.RHS) {
-          Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Result));
+        if (Result.Mapping.LHS && Result.Mapping.RHS) {
+          CandidateReplacement Rep(nullptr, Result.Mapping);
+          Rep.PCs = Result.PCs;
+          Results.push_back(Rep);
         }
       };
 
@@ -273,19 +275,19 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
   if (true) {
     for (auto C : SymCS) {
       // // Minus One
-      // Components.push_back(IC.getInst(Inst::Sub,
-      //   C->Width, {C, IC.getConst(llvm::APInt(C->Width, 1))}));
-      // // Flip bits
-      // Components.push_back(IC.getInst(Inst::Xor,
-      //   C->Width, {C, IC.getConst(llvm::APInt(C->Width, -1))}));
+       Components.push_back(IC.getInst(Inst::Sub,
+         C->Width, {C, IC.getConst(llvm::APInt(C->Width, 1))}));
+       // Flip bits
+       Components.push_back(IC.getInst(Inst::Xor,
+         C->Width, {C, IC.getConst(llvm::APInt(C->Width, -1))}));
 
       // Custom test
       // auto M1 = IC.getConst(llvm::APInt(C->Width, -1));
       // auto Test = Builder(C, IC).Add(M1).Xor(M1).And(M1);
       // Components.push_back(Test());
-      auto M0 = IC.getConst(llvm::APInt(C->Width, 0));
-      auto Test = Builder(M0, IC).Sub(C);
-      Components.push_back(Test());
+//      auto M0 = IC.getConst(llvm::APInt(C->Width, 0));
+//      auto Test = Builder(M0, IC).Sub(C);
+//      Components.push_back(Test());
     }
 
   }
@@ -370,12 +372,14 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
   // Generate all combination of candidates
   std::vector<std::vector<int>> Combinations = GetCombinations(Counts);
 
+  int SymExprCount = 0;
   for (auto &&Comb : Combinations) {
     auto InstCacheCopy = InstCache;
-    int SymExprCount = 0;
     for (int i = 0; i < RHSConsts.size(); ++i) {
       InstCacheCopy[RHSConsts[i]] = Candidates[i][Comb[i]];
-      Candidates[i][Comb[i]]->Name = std::string("constexpr_") + std::to_string(SymExprCount++);
+      if (Candidates[i][Comb[i]]->K != Inst::Var) {
+        Candidates[i][Comb[i]]->Name = std::string("constexpr_") + std::to_string(SymExprCount++);
+      }
     }
 
     auto LHS = Replace(Input.Mapping.LHS, IC, InstCacheCopy);
@@ -388,8 +392,11 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
 
     auto CheckAndSave = [&] () {
       auto Result = Verify(Copy, IC, S);
-      if (Result.LHS && Result.RHS) {
-        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Result));
+      
+      if (Result.Mapping.LHS && Result.Mapping.RHS) {
+        CandidateReplacement Rep(nullptr, Result.Mapping);
+        Rep.PCs = Result.PCs;
+        Results.push_back(Rep);
       }
     };
 
