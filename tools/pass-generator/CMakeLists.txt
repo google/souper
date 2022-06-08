@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.7)
 project(souper-combine)
 
-find_package(LLVM 12.0 REQUIRED CONFIG)
+find_package(LLVM 13.0 REQUIRED CONFIG)
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 include(HandleLLVMOptions)
 include(AddLLVM)

@@ -53,14 +53,17 @@ namespace util {
       std::copy(Hits.begin(), Hits.end(), Copy.begin());
       std::sort(Copy.begin(), Copy.end(),
                 [](auto &A, auto &B) {return A.second > B.second;});
-      llvm::outs() << "Hits begin:\n";
+      llvm::errs() << "Hits begin:\n";
       for (auto &&P : Copy) {
-        llvm::outs() << "OptID " << P.first << " matched " << P.second << " time(s).\n";
+        llvm::errs() << "OptID " << P.first << " matched " << P.second << " time(s).\n";
       }
-      llvm::outs() << "Hits end.\n";
+      llvm::errs() << "Hits end.\n";
     }
   };
-
+  bool nc(llvm::Value *a, llvm::Value *b) {
+    if (llvm::isa<llvm::Constant>(a) || llvm::isa<llvm::Constant>(b)) return false;
+    return true;
+  }
 }
 struct SouperCombine : public FunctionPass {
   static char ID;

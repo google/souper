@@ -32,14 +32,14 @@ static llvm::cl::opt<bool> IgnorePCs("ignore-pcs",
     llvm::cl::init(false));
 
 static const std::map<Inst::Kind, std::string> MatchOps = {
-  {Inst::Add, "m_Add("}, {Inst::Sub, "m_Sub("},
-  {Inst::Mul, "m_Mul("},
+  {Inst::Add, "m_c_Add("}, {Inst::Sub, "m_c_Sub("},
+  {Inst::Mul, "m_c_Mul("},
 
   {Inst::Shl, "m_Shl("}, {Inst::LShr, "m_LShr("},
   {Inst::AShr, "m_AShr("},
 
-  {Inst::AddNSW, "m_NSWAdd("}, {Inst::SubNSW, "m_NSWSub("},
-  {Inst::MulNSW, "m_NSWMul("}, {Inst::ShlNSW, "m_NSWShl("},
+  {Inst::AddNSW, "m_NSWAdd("}, {Inst::SubNSW, "m_NSWSub("}, // add _c_ too?
+  {Inst::MulNSW, "m_NSWMul("}, {Inst::ShlNSW, "m_NSWShl("}, // Also, figure out what to do about NW.
 
   {Inst::AddNUW, "m_NUWAdd("}, {Inst::SubNUW, "m_NUWSub("},
   {Inst::MulNUW, "m_NUWMul("}, {Inst::ShlNUW, "m_NUWShl("},
@@ -48,8 +48,8 @@ static const std::map<Inst::Kind, std::string> MatchOps = {
   {Inst::SRem, "m_SRem("}, {Inst::URem, "m_URem("},
 
 
-  {Inst::And, "m_And("}, {Inst::Or, "m_Or("},
-  {Inst::Xor, "m_Xor("},
+  {Inst::And, "m_c_And("}, {Inst::Or, "m_c_Or("},
+  {Inst::Xor, "m_c_Xor("},
 
   {Inst::Eq, "m_Cmp("},
   {Inst::Ne, "m_Cmp("},
@@ -149,7 +149,8 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
       } else {
         Out << " && ";
       }
-      Out << P.first << " == " << P.second;
+      Out << "(!util::nc(" << P.first << ',' << P.second << " ) "
+          << "|| " << P.first << " == " << P.second << ")";
     }
     Out << ") {\n";
   }
@@ -223,7 +224,8 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
       Out << ", ";
     }
     if (Child->K == Inst::Const) {
-      Out << "m_SpecificInt(" << Child->Val << ")";
+      auto Str = Child->Val.toString(10, false);
+      Out << "m_SpecificInt(" << Str << ")";
     } else if (Child->K == Inst::Var) {
       Out << "m_Value(" << Syms[Child].back() << ")";
       Syms[Child].pop_back();
