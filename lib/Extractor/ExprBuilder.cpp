@@ -344,6 +344,21 @@ Inst *ExprBuilder::getDataflowConditions(Inst *I) {
     Inst *OneBits = LIC->getInst(Inst::Eq, 1, {VarAndOnes, Ones});
     Result = LIC->getInst(Inst::And, 1, {Result, OneBits});
   }
+  
+  if (I->SymKnownZeros) {
+    Inst *AllOnes = LIC->getConst(llvm::APInt::getAllOnesValue(Width));
+    Inst *NotZeros = LIC->getInst(Inst::Xor, Width,
+                                  {I->SymKnownZeros, AllOnes});
+    Inst *VarNotZero = LIC->getInst(Inst::Or, Width, {I, NotZeros});
+    Inst *ZeroBits = LIC->getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
+    Result = LIC->getInst(Inst::And, 1, {Result, ZeroBits});
+  }
+  if (I->SymKnownOnes) {
+    Inst *VarAndOnes = LIC->getInst(Inst::And, Width, {I, I->SymKnownOnes});
+    Inst *OneBits = LIC->getInst(Inst::Eq, 1, {VarAndOnes, I->SymKnownOnes});
+    Result = LIC->getInst(Inst::And, 1, {Result, OneBits});
+  }
+  
   if (I->NonZero) {
     Inst *NonZeroBits = LIC->getInst(Inst::Ne, 1, {I, Zero});
     Result = LIC->getInst(Inst::And, 1, {Result, NonZeroBits});

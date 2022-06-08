@@ -1,3 +1,5 @@
+#define _LIBCPP_DISABLE_DEPRECATION_WARNINGS
+
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/GraphWriter.h"
 #include "llvm/Support/KnownBits.h"
@@ -105,6 +107,10 @@ static cl::opt<size_t> NumResults("generalization-num-results",
 
 static cl::opt<bool> Everything("everything",
     cl::desc("Run everything, output one result."),
+    cl::init(false));
+
+static cl::opt<bool> SymbolicDF("symbolic-df",
+    cl::desc("Generalize with symbolic dataflow facts."),
     cl::init(false));
 
 void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
@@ -234,16 +240,37 @@ void SymbolizeWidthNew(InstContext &IC, Solver *S, ParsedReplacement Input,
   }
 }
 
-// TODO separate function for bitwidth
-// why?
+void ReplaceConstsSimple(InstContext &IC, Solver *S,
+                         ParsedReplacement Input,
+                         std::vector<Inst *> LHSConsts,
+                         std::vector<Inst *> RHSConsts,
+                         CandidateMap &Results) {
+  // FIXME Start from here
+  // Try replacing each constant with a width independent
+  // expr or a kb expr
+}
+
+// FIXME Other interesting things to try
+// Symbolic KB in preconditions
+// Symbolic KB with extra constraints.
+// Simple relational conditions for symcs
+// Relations between symcs
 
 // TODO Document options
 void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement Input,
                             std::vector<Inst *> LHSConsts,
                             std::vector<Inst *> RHSConsts,
                             CandidateMap &Results) {
+  
+  if (RHSConsts.empty()) {
+    // FIXME: Support generalizing LHS Consts too.
+    return;
+  }
 
   std::vector<Inst *> SymCS;
+  std::vector<Inst *> Vars;
+  std::vector<Inst *> SymDFVars;
+  findVars(Input.Mapping.LHS, Vars);
 
   std::map<Inst *, Inst *> InstCache;
   ValueCache VC;
@@ -271,8 +298,23 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
       Components.push_back(C);
     }
   }
-
+  
   if (true) {
+    for (size_t i = 0; i < Vars.size(); ++i) {
+      SymDFVars.push_back(IC.createVar(Vars[i]->Width, "symk_one_" + std::to_string(i)));
+      SymDFVars.back()->SymOneOf = Vars[i];
+//      Vars[i]->SymKnownOnes = SymDFVars.back();
+      Components.push_back(SymDFVars.back());
+
+      SymDFVars.push_back(IC.createVar(Vars[i]->Width, "symk_zero_" + std::to_string(i)));
+      SymDFVars.back()->SymZeroOf = Vars[i];
+//      Vars[i]->SymKnownZeros = SymDFVars.back();
+      Components.push_back(SymDFVars.back());
+    }
+  }
+
+
+  if (SymbolizeConstant) {
     for (auto C : SymCS) {
       // // Minus One
        Components.push_back(IC.getInst(Inst::Sub,
@@ -323,12 +365,12 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
         if (SymbolizeConstSynthesis) {
           auto SMTLIBSolver = GetUnderlyingSolver();
           SynthesisContext SC{IC, SMTLIBSolver.get(), Target, nullptr, {}, {}, false, 10};
-          PruningManager Pruner(SC, SymCS, DebugLevel);
-          Pruner.init();
-          if (!Pruner.isInfeasible(Guess, DebugLevel)) {
+//          PruningManager Pruner(SC, SymCS, DebugLevel);
+//          Pruner.init();
+//          if (!Pruner.isInfeasible(Guess, DebugLevel)) {
             Candidates.back().push_back(Guess);
 //            llvm::errs() << "NOT PRUNED\n";
-          }
+//          }
 //          else {
 //            ReplacementContext RC;
 //            RC.printInst(Guess, llvm::errs(), true);
@@ -372,8 +414,8 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
   // Generate all combination of candidates
   std::vector<std::vector<int>> Combinations = GetCombinations(Counts);
 
-  int SymExprCount = 0;
   for (auto &&Comb : Combinations) {
+    int SymExprCount = 0;
     auto InstCacheCopy = InstCache;
     for (int i = 0; i < RHSConsts.size(); ++i) {
       InstCacheCopy[RHSConsts[i]] = Candidates[i][Comb[i]];
@@ -716,9 +758,9 @@ void SymbolizeAndGeneralize(InstContext &IC,
   // All at once
   SymbolizeAndGeneralizeRewrite(IC, S, Input, LHSConsts, RHSConsts, Results);
 
-  llvm::outs() << "Input:\n";
+  llvm::outs() << ";Input:\n";
   Input.print(llvm::outs(), true);
-  llvm::outs() << "\nResults:\n";
+  llvm::outs() << "\n;Results:\n";
 
   // TODO: Move sorting here
   std::set<std::string> ResultStrs;

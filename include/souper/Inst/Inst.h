@@ -174,6 +174,8 @@ struct Inst : llvm::FoldingSetNode {
   static int getCost(Kind K);
   llvm::APInt KnownZeros;
   llvm::APInt KnownOnes;
+  Inst *SymKnownZeros = nullptr, *SymKnownOnes = nullptr;
+  Inst *SymZeroOf = nullptr, *SymOneOf = nullptr;
   bool NonZero;
   bool NonNegative;
   bool PowOfTwo;

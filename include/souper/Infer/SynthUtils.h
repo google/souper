@@ -99,18 +99,33 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
   std::map<Block *, Block *> BlockCache;
   std::map<Inst *, llvm::APInt> ConstMap;
   std::map<Inst *, Inst *> InstCache;
+  std::vector<Inst *> RHSVars;
+  findVars(In.Mapping.RHS, RHSVars);
   In.Mapping.LHS = getInstCopy(In.Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, true, false);
   In.Mapping.RHS = getInstCopy(In.Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, true, false);
   for (auto &PC : In.PCs) {
     PC.LHS = getInstCopy(PC.LHS, IC, InstCache, BlockCache, &ConstMap, false, false);
     PC.RHS = getInstCopy(PC.RHS, IC, InstCache, BlockCache, &ConstMap, false, false);
   }
+
+  for (auto &V : RHSVars) {
+    if (V->SymOneOf) {
+      InstCache[V->SymOneOf]->SymKnownOnes = InstCache[V];
+    }
+    if (V->SymZeroOf) {
+      InstCache[V->SymZeroOf]->SymKnownZeros = InstCache[V];
+    }
+  }
+  
   return In;
 }
+
+
 
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
 ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
+  Input = Clone(Input, IC);
   std::set<Inst *> ConstSet;
   souper::getConstants(Input.Mapping.RHS, ConstSet);
   if (!ConstSet.empty()) {
@@ -146,12 +161,11 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
     llvm::errs() << EC.message() << '\n';
   }
   if (IsValid) {
-//    Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Clone(Mapping, IC)));
-    Input = Clone(Input, IC);
     return Input;
   } else {
     Input.Mapping = InstMapping(nullptr, nullptr);
     return Input;
+    // TODO: Better vailure indication?
   }
 }
 
