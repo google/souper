@@ -31,8 +31,13 @@ static llvm::cl::opt<bool> IgnorePCs("ignore-pcs",
                    "(default=false)"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> IgnoreDF("ignore-df",
+    llvm::cl::desc("Ignore inputs with dataflow constraints."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
 static const std::map<Inst::Kind, std::string> MatchOps = {
-  {Inst::Add, "m_c_Add("}, {Inst::Sub, "m_c_Sub("},
+  {Inst::Add, "m_c_Add("}, {Inst::Sub, "m_Sub("},
   {Inst::Mul, "m_c_Mul("},
 
   {Inst::Shl, "m_Shl("}, {Inst::LShr, "m_LShr("},
@@ -71,6 +76,9 @@ static const std::map<Inst::Kind, std::string> CreateOps = {
   {Inst::URem, "CreateURem("},
   {Inst::Or, "CreateOr("}, {Inst::And, "CreateAnd("}, {Inst::Xor, "CreateXor("},
 
+  // FakeOps
+  {Inst::LogB, "CreateLogB("},
+
   {Inst::Eq, "CreateCmp(ICmpInst::ICMP_EQ, "},
   {Inst::Ne, "CreateCmp(ICmpInst::ICMP_NE, "},
   {Inst::Ule, "CreateCmp(ICmpInst::ICMP_ULE, "},
@@ -97,8 +105,53 @@ static const std::map<Inst::Kind, std::string> PredNames = {
   {Inst::Slt, "ICmpInst::ICMP_SLT"},
 };
 
+struct Constraint {
+  virtual std::string print() = 0;
+};
+
+struct VarEq : public Constraint {
+  VarEq(std::string LHS_, std::string RHS_) : LHS(LHS_), RHS(RHS_) {}
+  std::string LHS;
+  std::string RHS;
+  std::string print() override {
+    return LHS + " == " + RHS;
+  }
+};
+
+struct PredEq : public Constraint {
+  PredEq(std::string P_, std::string K_) : P(P_), K(K_) {}
+  std::string P;
+  std::string K;
+  std::string print() override {
+    return P + " == " + K;
+  }
+};
+
+struct WidthEq : public Constraint {
+  WidthEq(std::string Name_, size_t W_) : Name(Name_) , W(W_){}
+  std::string Name;
+  size_t W;
+  std::string print() override {
+    return "util::check_width(" + Name + ',' + std::to_string(W) + ")";
+  }
+};
+
+// Enforce that `Name` is a constant and a power of 2
+struct CPow2 : public Constraint {
+  CPow2(std::string Name_) : Name(Name_)  {}
+  std::string print() override {
+    return "util::cpow2(" + Name + ")";
+  }
+  std::string Name;
+};
+
+//struct VarKB : public Constraint {
+
+//};
+
 struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
-  std::vector<std::pair<std::string, std::string>> Eqs;
+  std::vector<Constraint *> Constraints;
+
   std::map<Inst *, std::string> Preds;
   std::vector<Inst *> Vars;
 
@@ -108,7 +161,7 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     }
     auto Name = "P" + std::to_string(Preds.size());
     Preds[I] = Name;
-    Eqs.push_back(std::make_pair(Name, PredNames.at(I->K)));
+    Constraints.push_back(new PredEq(Name, PredNames.at(I->K)));
   }
   template<typename Stream>
   void PrintPreds(Stream &Out) {
@@ -131,76 +184,53 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     for (auto &&S : *this) {
       if (S.second.size() > 1) {
         for (int i = 1; i < S.second.size(); ++i) {
-          Eqs.push_back(std::make_pair(S.second[0], S.second[i]));
+          Constraints.push_back(new VarEq(S.second[0], S.second[i]));
         }
       }
     }
   }
+
+  void GenVarPropConstraints(Inst *LHS) {
+    std::vector<Inst *> Vars;
+    findVars(LHS, Vars);
+
+    for (auto V : Vars) {
+      auto Name = this->at(V)[0];
+      Constraints.push_back(new WidthEq(Name, V->Width));
+      if (V->Name.starts_with("symconst_")) {
+        if (V->PowOfTwo) {
+          Constraints.push_back(new CPow2(Name));
+        }
+      }
+    }
+  }
+
   template <typename Stream>
-  void PrintEqPre(Stream &Out) {
-    if (Eqs.empty()) {
+  void PrintConstraintsPre(Stream &Out) {
+    if (Constraints.empty()) {
       return;
     }
     Out << "if (";
     bool first = true;
-    for (auto &&P : Eqs) {
+    for (auto &&C : Constraints) {
       if (first) {
         first = false;
       } else {
         Out << " && ";
       }
-      Out << "(!util::nc(" << P.first << ',' << P.second << " ) "
-          << "|| " << P.first << " == " << P.second << ")";
+      Out << C->print();
     }
     Out << ") {\n";
   }
   template <typename Stream>
-  void PrintEqPost(Stream &Out) {
-    if (Eqs.empty()) {
+  void PrintConstraintsPost(Stream &Out) {
+    if (Constraints.empty()) {
       return;
     }
     Out << "}\n";
   }
-
-  template <typename Stream>
-  void PrintWidthPre(Inst *LHS, Stream &Out) {
-    findVars(LHS, Vars);
-    if (Vars.empty()) {
-      return;
-    }
-    Out << "if (util::check_width({";
-    bool first = true;
-    for (auto V : Vars) {
-      if (first) {
-        first = false;
-      } else {
-        Out << ", ";
-      }
-      Out << this->at(V)[0];
-    }
-    Out << "}, {";
-    first = true;
-    for (auto V : Vars) {
-      if (first) {
-        first = false;
-      } else {
-        Out << ", ";
-      }
-      Out << V->Width;
-    }
-    Out << "})) {\n";
-  }
-  template <typename Stream>
-  void PrintWidthPost(Stream &Out) {
-    if (Vars.empty()) {
-      return;
-    }
-    Out << "\n}\n";
-  }
 };
 
-
-//TODO: Enforce bitwidth
 template <typename Stream>
 bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
   auto It = MatchOps.find(I->K);
@@ -249,7 +279,7 @@ bool GenRHSCreator(Inst *I, Stream &Out, SymbolTable &Syms) {
   }
   auto Op = It->second;
 
-  Out << Op;
+  Out << "B->" << Op;
   bool first = true;
   for (auto Child : I->Ops) {
     if (first) {
@@ -388,7 +418,7 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
     auto Name = "C" + std::to_string(varnum++);
     Out << "auto " << Name << " = C("
         << C->Val.getBitWidth() <<", "
-        << C->Val << ");\n";
+        << C->Val << ", B);\n";
     Syms[C].push_back(Name);
   }
   Syms.PrintPreds(Out);
@@ -413,8 +443,8 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
   Out << ")) {\n";
 
   Syms.GenVarEqConstraints();
-  Syms.PrintEqPre(Out);
-  Syms.PrintWidthPre(Input.Mapping.LHS, Out);
+  Syms.GenVarPropConstraints(Input.Mapping.LHS);
+  Syms.PrintConstraintsPre(Out);
   Out << "  St.hit(" << OptID << ");\n";
   if (Syms.find(Input.Mapping.RHS) != Syms.end()) {
     Out << "  return " << Syms[Input.Mapping.RHS][0] << ";";
@@ -424,7 +454,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
         << Input.Mapping.RHS->Val << ");\n";
     Out << "  return ConstantInt::get(TheContext, Result);";
   } else {
-    Out << "  return B->";
+    Out << "  return ";
     if (!GenRHSCreator(Input.Mapping.RHS, Out, Syms)) {
       return false;
     }
@@ -432,8 +462,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
   }
   Out << "\n}\n}";
 
-  Syms.PrintWidthPost(Out);
-  Syms.PrintEqPost(Out);
+  Syms.PrintConstraintsPost(Out);
 
   return true;
 }
@@ -469,6 +498,31 @@ int main(int argc, char **argv) {
   for (auto &&Input: Inputs) {
     if (IgnorePCs && !Input.PCs.empty()) {
       continue;
+    }
+    if (IgnoreDF) {
+      if (Input.Mapping.LHS->DemandedBits.getBitWidth()
+          == Input.Mapping.LHS->Width && !Input.Mapping.LHS->DemandedBits.isAllOnesValue()) {
+        continue;
+      }
+      std::vector<Inst *> Vars;
+      findVars(Input.Mapping.LHS, Vars);
+      findVars(Input.Mapping.RHS, Vars);
+      bool found = false;
+      for (auto V : Vars) {
+        if (V->KnownOnes.getBitWidth() == V->Width && V->KnownOnes != 0) {
+          found = true;
+          break;
+        }
+
+        if (V->KnownZeros.getBitWidth() == V->Width && V->KnownZeros != 0) {
+          found = true;
+          break;
+        }
+//        if (!V->Range.isFullSet() || !V->Range.isEmptySet()) {
+//          continue;
+//        }
+      }
+      if (found) continue;
     }
 
     std::string Str;
