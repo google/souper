@@ -20,11 +20,12 @@ using namespace llvm::PatternMatch;
 
 namespace {
 
+// Custom Creators
+
 class IRBuilder : public llvm::IRBuilder<NoFolder> {
 public:
   IRBuilder(llvm::LLVMContext &C) : llvm::IRBuilder<NoFolder>(C) {}
 
-  // Implement Souper instructions which do not have an LLVM counterpart.
   llvm::Value *CreateLogB(llvm::Value *V) {
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
       auto Result = Con->getValue().logBase2();
@@ -33,7 +34,38 @@ public:
       llvm_unreachable("Panic, has to be guarded in advance!");
     }
   }
+
+  // TODO Verify that these work, the mangling argument is weird
+  llvm::Value *CreateFShl(llvm::Value *A, llvm::Value *B, llvm::Value *C) {
+    return CreateIntrinsic(Intrinsic::fshl, {A->getType()}, {A, B, C});
+  }
+  llvm::Value *CreateFShr(llvm::Value *A, llvm::Value *B, llvm::Value *C) {
+    return CreateIntrinsic(Intrinsic::fshr, {A->getType()}, {A, B, C});
+  }
+  llvm::Value *CreateBSwap(llvm::Value *A) {
+    return CreateIntrinsic(Intrinsic::bswap, {A->getType()}, {A});
+  }
 };
+
+
+// Custom Matchers
+
+static constexpr auto NWFlag = OverflowingBinaryOperator::NoSignedWrap
+    | OverflowingBinaryOperator::NoUnsignedWrap;
+#define NWT(OP) OverflowingBinaryOp_match<LHS, RHS, Instruction::OP, NWFlag>
+#define NWM(OP) \
+template <typename LHS, typename RHS> NWT(OP) \
+m_NW##OP(const LHS &L, const RHS &R) { \
+  return NWT(OP)(L, R); \
+}
+
+NWM(Add)
+NWM(Sub)
+NWM(Mul)
+NWM(Shl)
+
+#undef NWM
+#undef NWT
 
 namespace util {
   Value *node(Instruction *I, const std::vector<size_t> &Path) {
@@ -137,6 +169,10 @@ struct SouperCombine : public FunctionPass {
   
   Value *C(size_t Width, size_t Value, IRBuilder *B) {
     return B->getIntN(Width, Value);
+  }
+
+  Type *T(size_t W, IRBuilder *B) {
+    return B->getIntNTy(W);
   }
 
   InstCombineWorklist W;

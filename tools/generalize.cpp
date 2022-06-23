@@ -1370,10 +1370,11 @@ std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
   Input = R.WeakenKB(Input);
   Input = R.WeakenCR(Input);
   Input = R.WeakenDB(Input);
-
   if (ReduceKBIFY) {
     Input = R.ReduceGreedyKBIFY(Input);
   }
+
+  Input = R.ReducePCs(Input);
 
 //  Results.push_back(Input);
 

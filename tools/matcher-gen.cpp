@@ -29,7 +29,7 @@ InputFilename(cl::Positional, cl::desc("<input souper optimization>"),
 static llvm::cl::opt<bool> IgnorePCs("ignore-pcs",
     llvm::cl::desc("Ignore inputs which have souper path conditions."
                    "(default=false)"),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 static llvm::cl::opt<bool> IgnoreDF("ignore-df",
     llvm::cl::desc("Ignore inputs with dataflow constraints."
@@ -44,10 +44,11 @@ static const std::map<Inst::Kind, std::string> MatchOps = {
   {Inst::AShr, "m_AShr("},
 
   {Inst::AddNSW, "m_NSWAdd("}, {Inst::SubNSW, "m_NSWSub("}, // add _c_ too?
-  {Inst::MulNSW, "m_NSWMul("}, {Inst::ShlNSW, "m_NSWShl("}, // Also, figure out what to do about NW.
-
+  {Inst::MulNSW, "m_NSWMul("}, {Inst::ShlNSW, "m_NSWShl("},
   {Inst::AddNUW, "m_NUWAdd("}, {Inst::SubNUW, "m_NUWSub("},
   {Inst::MulNUW, "m_NUWMul("}, {Inst::ShlNUW, "m_NUWShl("},
+  {Inst::AddNW, "m_NWAdd("}, {Inst::SubNW, "m_NWSub("},
+  {Inst::MulNW, "m_NWMul("}, {Inst::ShlNW, "m_NWShl("},
 
   {Inst::SDiv, "m_SDiv("}, {Inst::UDiv, "m_UDiv("},
   {Inst::SRem, "m_SRem("}, {Inst::URem, "m_URem("},
@@ -86,12 +87,15 @@ static const std::map<Inst::Kind, std::string> CreateOps = {
   {Inst::Sle, "CreateCmp(ICmpInst::ICMP_SLE, "},
   {Inst::Slt, "CreateCmp(ICmpInst::ICMP_SLT, "},
 
-//  {Inst::Trunc, "CreateTrunc("},
-//  {Inst::SExt, "CreateSExt("},
-//  {Inst::ZExt, "CreateZExt("},
-  // TODO have to create dest type
+  {Inst::Trunc, "CreateTrunc("},
+  {Inst::SExt, "CreateSExt("},
+  {Inst::ZExt, "CreateZExt("},
 
   {Inst::Select, "CreateSelect("},
+
+  {Inst::FShl, "CreateFShl("},
+  {Inst::FShr, "CreateFShr("},
+  {Inst::BSwap, "CreateBSwap("},
 
   {Inst::Const, "dummy"},
 };
@@ -157,7 +161,10 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
 
   void RegisterPred(Inst *I) {
     if (PredNames.find(I->K) == PredNames.end()) {
-      return;
+      return; // not a predicate
+    }
+    if (Preds.find(I) != Preds.end()) {
+      return; // already registered
     }
     auto Name = "P" + std::to_string(Preds.size());
     Preds[I] = Name;
@@ -297,7 +304,7 @@ bool GenRHSCreator(Inst *I, Stream &Out, SymbolTable &Syms) {
 
   }
   if (I->K == Inst::Trunc || I->K == Inst::SExt || I->K == Inst::ZExt) {
-    Out << ", T(" << I->Width << ")";
+    Out << ", T(" << I->Width << ", B)";
   }
   Out << ")";
 
