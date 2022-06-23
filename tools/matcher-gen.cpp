@@ -158,6 +158,7 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
 
   std::map<Inst *, std::string> Preds;
   std::vector<Inst *> Vars;
+  std::set<Inst *> Consts, ConstRefs;
 
   void RegisterPred(Inst *I) {
     if (PredNames.find(I->K) == PredNames.end()) {
@@ -235,6 +236,21 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
       return;
     }
     Out << "}\n";
+  }
+
+  template <typename Stream>
+  void PrintConstDecls(Stream &Out) {
+    size_t varnum = 0;
+    for (auto C : ConstRefs) {
+      if (Consts.find(C) != Consts.end()) {
+        continue;
+      }
+      auto Name = "C" + std::to_string(varnum++);
+      Out << "auto " << Name << " = C("
+          << C->Val.getBitWidth() <<", "
+          << C->Val << ", B);\n";
+      (*this)[C].push_back(Name);
+    }
   }
 };
 
@@ -364,7 +380,7 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
     Stack.pop_back();
     Visited.insert(I);
     if (I->K == Inst::Const) {
-      Consts.insert(I);
+//      Consts.insert(I);
       ConstRefs.insert(I);
     }
     if (Paths.find(I) != Paths.end()) {
@@ -417,18 +433,10 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
   }
   Syms[Root].push_back("I");
 
-  varnum = 0;
-  for (auto C : Consts) {
-    if (ConstRefs.find(C) == ConstRefs.end()) {
-      continue;
-    }
-    auto Name = "C" + std::to_string(varnum++);
-    Out << "auto " << Name << " = C("
-        << C->Val.getBitWidth() <<", "
-        << C->Val << ", B);\n";
-    Syms[C].push_back(Name);
-  }
   Syms.PrintPreds(Out);
+
+  Syms.Consts = Consts;
+  Syms.ConstRefs = ConstRefs;
   return true;
 }
 
@@ -452,7 +460,21 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
   Syms.GenVarEqConstraints();
   Syms.GenVarPropConstraints(Input.Mapping.LHS);
   Syms.PrintConstraintsPre(Out);
+  Syms.PrintConstDecls(Out);
   Out << "  St.hit(" << OptID << ");\n";
+
+//  size_t varnum = 0;
+//  for (auto C : SymsCopy.ConstRefs) {
+//    if (SymsCopy.Consts.find(C) != SymsCopy.Consts.end()) {
+//      continue;
+//    }
+//    auto Name = "C" + std::to_string(varnum++);
+//    Out << "auto " << Name << " = C("
+//        << C->Val.getBitWidth() <<", "
+//        << C->Val << ", B);\n";
+//    Syms[C].push_back(Name);
+//  }
+
   if (Syms.find(Input.Mapping.RHS) != Syms.end()) {
     Out << "  return " << Syms[Input.Mapping.RHS][0] << ";";
   } else if (Input.Mapping.RHS->K == Inst::Const) {
