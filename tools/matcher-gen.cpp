@@ -68,6 +68,7 @@ static const std::map<Inst::Kind, std::string> MatchOps = {
   {Inst::ZExt, "m_ZExt("},
   {Inst::Trunc, "m_Trunc("},
   {Inst::Select, "m_Select("},
+  {Inst::Phi, "m_Phi("},
 };
 
 static const std::map<Inst::Kind, std::string> CreateOps = {
@@ -191,7 +192,7 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
   void GenVarEqConstraints() {
     for (auto &&S : *this) {
       if (S.second.size() > 1) {
-        for (int i = 1; i < S.second.size(); ++i) {
+        for (size_t i = 1; i < S.second.size(); ++i) {
           Constraints.push_back(new VarEq(S.second[0], S.second[i]));
         }
       }
@@ -246,7 +247,7 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
         continue;
       }
       auto Name = "C" + std::to_string(varnum++);
-      Out << "auto " << Name << " = C("
+      Out << "  auto " << Name << " = C("
           << C->Val.getBitWidth() <<", "
           << C->Val << ", B);\n";
       (*this)[C].push_back(Name);

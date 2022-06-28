@@ -12,6 +12,7 @@
 #include "llvm/IR/NoFolder.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
 
@@ -67,6 +68,41 @@ NWM(Shl)
 #undef NWM
 #undef NWT
 
+template <typename ...Args>
+struct phi_match {
+  phi_match(Args... args) : Matchers{args...} {};
+  std::tuple<Args...> Matchers;
+
+  bool check(const Value *V) {
+    if (auto Phi = dyn_cast<PHINode>(V)) {
+      // Every Phi Argument has to match with at least one matcher
+      for (size_t i =0; i < Phi->getNumOperands(); ++i) {
+        bool Matched = false;
+        std::apply([&](auto &&... args){
+          ((Matched |= args.match(Phi->getOperand(i))), ...);
+        }, Matchers);
+
+        if (!Matched) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
+  template <typename I> bool match(I *V) {
+    return check(V);
+  }
+};
+
+// TODO Test semantics, it compiles and runs.
+template<typename ...Args>
+phi_match<Args...> m_Phi(Args... args) {
+  return phi_match<Args...>(args...);
+}
+
+
 namespace util {
   Value *node(Instruction *I, const std::vector<size_t> &Path) {
     Value *Current = I;
@@ -96,6 +132,26 @@ namespace util {
     }
     return false;
   }
+
+//  bool ckb(llvm::Value *V) {
+//    // TODO
+//    return false;
+//  }
+
+//  bool ccr(llvm::Value *V) {
+//    // TODO
+//    return false;
+//  }
+
+//  bool vkb(llvm::Value *V, IRBuilder *I) {
+//    I->getContext().get
+//    computeKnownBits()
+//  }
+
+//  bool vcr(llvm::Value *V) {
+
+//  }
+
 
   struct Stats {
     void hit(size_t opt) {

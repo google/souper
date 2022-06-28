@@ -899,6 +899,7 @@ public:
       }
       auto Copy = Input;
       Eliminate(Input, I);
+
       if (!Verify(Input)) {
         Input = Copy;
         failcount++;
