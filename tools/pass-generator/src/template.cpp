@@ -2,6 +2,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/IR/Constant.h"
+#include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
@@ -15,6 +16,7 @@
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
+#include "llvm/Support/KnownBits.h"
 
 using namespace llvm;
 using namespace llvm::PatternMatch;
@@ -133,24 +135,48 @@ namespace util {
     return false;
   }
 
-//  bool ckb(llvm::Value *V) {
-//    // TODO
-//    return false;
-//  }
+  bool IsKBSubset(KnownBits Small, KnownBits Big) {
+    // FIXME Think about this carefully.
+    // It can't just be conflict.
 
-//  bool ccr(llvm::Value *V) {
-//    // TODO
-//    return false;
-//  }
+    return false;
+  }
 
-//  bool vkb(llvm::Value *V, IRBuilder *I) {
-//    I->getContext().get
-//    computeKnownBits()
-//  }
+  bool IsCRSubset(ConstantRange Small, ConstantRange Big) {
+    return Big.contains(Small);
+  }
 
-//  bool vcr(llvm::Value *V) {
+    bool ckb(llvm::Value *V, llvm::KnownBits Overapprox) {
+      if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
+        auto Val = Con->getUniqueInteger();
+        llvm::KnownBits KB(V->getType()->getIntegerBitWidth());
+        KB.One = Val;
+        KB.Zero = ~Val;
+        return IsKBSubset(KB, Overapprox);
+      }
+      return false;
+    }
 
-//  }
+    bool ccr(llvm::Value *V,llvm::ConstantRange R) {
+      if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
+        return R.contains(Con->getUniqueInteger());
+      }
+      return false;
+    }
+
+  bool vkb(llvm::Value *V, llvm::KnownBits OverApprox) {
+    auto Analyzed = llvm::KnownBits(V->getType()->getIntegerBitWidth());
+    if (Instruction *I = llvm::dyn_cast<Instruction>(V)) {
+      DataLayout DL(I->getParent()->getParent()->getParent());
+      computeKnownBits(V, Analyzed, DL, 4);
+    }
+    return IsKBSubset(Analyzed, OverApprox);
+  }
+
+  bool vcr(llvm::Value *V, llvm::ConstantRange R) {
+    // FIXME obtain result from range analysis pass
+    return false;
+  }
 
 
   struct Stats {

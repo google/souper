@@ -283,6 +283,7 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
     } else if (Child->K == Inst::Var) {
 
       // FIXME What about Symbolic constants?
+      // How about matching const exprs?
 
       Out << "m_Value(" << Syms[Child].back() << ")";
       Syms[Child].pop_back();
