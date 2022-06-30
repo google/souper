@@ -1004,7 +1004,7 @@ public:
     collectInsts(Input.Mapping.LHS, Insts);
     // TODO: topological sort, to reduce number of solver calls
     // Try to remove one instruction at a time
-    int failcount = 0;
+    size_t failcount = 0;
     std::set<Inst *> Visited;
     do {
       auto It = Insts.begin();
@@ -1094,6 +1094,55 @@ public:
     return Input;
   }
 
+  ParsedReplacement ReduceRedundantPhis(ParsedReplacement Input) {
+    std::set<Inst *> Insts;
+    std::vector<Inst *> Phis;
+
+    auto Collect = [&] () {
+      Insts.clear();
+      Phis.clear();
+      collectInsts(Input.Mapping.LHS, Insts);
+      collectInsts(Input.Mapping.RHS, Insts);
+      for (auto &&I : Insts) {
+        if (I->K == Inst::Phi) {
+          Phis.push_back(I);
+        }
+      }
+    };
+    Collect();
+
+    size_t NumPhis = Phis.size();
+    while (NumPhis --) {
+      std::map<Inst *, Inst *> ICache;
+      for (auto &&I : Phis) {
+        if (I->Ops.size() == 1) {
+          ICache[I] = I->Ops[0];
+        } else if (I->Ops.size() > 1) {
+          bool allEq = true;
+          for (size_t i = 0; i < I->Ops.size(); ++i) {
+            if (I->Ops[i] != I->Ops[0]) {
+              allEq = false;
+              break;
+            }
+          }
+          if (allEq) {
+            ICache[I] = I->Ops[0];
+          }
+        }
+      }
+
+      Input.Mapping.LHS = Replace(Input.Mapping.LHS, IC, ICache);
+      Input.Mapping.RHS = Replace(Input.Mapping.RHS, IC, ICache);
+      for (auto &PC : Input.PCs) {
+        PC.LHS = Replace(PC.LHS, IC, ICache);
+        PC.RHS = Replace(PC.RHS, IC, ICache);
+      }
+      if (NumPhis) {
+        Collect();
+      }
+    }
+    return Input;
+  }
 
   // Assumes Input is valid
   ParsedReplacement ReducePCs(ParsedReplacement Input) {
@@ -1367,6 +1416,7 @@ std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
 
   std::vector<ParsedReplacement> Results;
   Input = R.ReducePCs(Input);
+  Input = R.ReduceRedundantPhis(Input);
   Input = R.ReduceGreedy(Input);
   Input = R.WeakenKB(Input);
   Input = R.WeakenCR(Input);
@@ -1374,12 +1424,9 @@ std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
   if (ReduceKBIFY) {
     Input = R.ReduceGreedyKBIFY(Input);
   }
-
   Input = R.ReducePCs(Input);
-
-//  Results.push_back(Input);
-
   R.ReduceRec(Input, Results);
+
   if (DebugLevel > 3) {
     R.Stats();
   }

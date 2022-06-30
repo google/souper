@@ -569,7 +569,9 @@ int main(int argc, char **argv) {
       llvm::outs() << Str << "\n";
       llvm::outs().flush();
     } else {
+      Input.print(llvm::errs(), true);
       llvm::errs() << "Failed to generate matcher.\n\n\n";
+
       llvm::errs().flush();
     }
   }
