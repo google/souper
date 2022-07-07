@@ -1,3 +1,5 @@
+#define DEBUG_TYPE ""
+
 #include "llvm/Pass.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/PatternMatch.h"
@@ -15,8 +17,11 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Transforms/Utils/InstructionWorklist.h"
 #include "llvm/Support/KnownBits.h"
+
+#include <map>
 
 using namespace llvm;
 using namespace llvm::PatternMatch;
@@ -104,7 +109,6 @@ phi_match<Args...> m_Phi(Args... args) {
   return phi_match<Args...>(args...);
 }
 
-
 namespace util {
   Value *node(Instruction *I, const std::vector<size_t> &Path) {
     Value *Current = I;
@@ -124,6 +128,11 @@ namespace util {
 
   bool check_width(llvm::Value *V, size_t W) {
    return V->getType()->getScalarSizeInBits() == W;
+  }
+
+  template<typename Out, typename FT, typename ...Args>
+  bool check_related(Out Result, FT F, Args... args) {
+    return Result == F(args...);
   }
 
   bool cpow2(llvm::Value *V) {
@@ -257,7 +266,7 @@ struct SouperCombine : public FunctionPass {
     return B->getIntNTy(W);
   }
 
-  InstCombineWorklist W;
+  InstructionWorklist W;
   util::Stats St;
 };
 }

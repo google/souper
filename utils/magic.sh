@@ -5,10 +5,10 @@
 mkdir -p /tmp/scratch/
 rm -f /tmp/scratch/*
 
-infile=${@: -1}
-cmd=${*%${!#}}
+infile=${@: -1} # Last argument
+cmd=${*%${!#}} # All but the last argument
 
-csplit --quiet --prefix=/tmp/scratch/opt --suffix-format=%02d.txt --suppress-matched $infile /^$/ {*}
+csplit --quiet --prefix=/tmp/scratch/opt --suffix-format=%02d.txt $infile '/^result/ +1' '/^cand/ +1' '{*}'
 
 for i in `ls -v /tmp/scratch/*`; do echo $cmd $i "&& echo";done > /tmp/cmdfile.txt
 parallel --will-cite -k < /tmp/cmdfile.txt
