@@ -283,37 +283,41 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
   }
 
   std::vector<Inst *> Components;
-  if (!SymbolizeConstSynthesis) {
-    std::set<Inst *> ConcreteConsts; // for deduplication
-    for (auto C : LHSConsts) {
-      ConcreteConsts.insert(C);
-      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 1)));
-      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, -1)));
-      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 2)));
-    }
-    for (auto C : RHSConsts) {
-      ConcreteConsts.insert(C);
-    }
-    for (auto C : ConcreteConsts) {
-      Components.push_back(C);
-    }
-  }
+//  if (!SymbolizeConstSynthesis) {
+//    std::set<Inst *> ConcreteConsts; // for deduplication
+
+//    for (auto C : LHSConsts) {
+//      ConcreteConsts.insert(C);
+//      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 1)));
+//      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, -1)));
+//      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 2)));
+//      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 31)));
+//    }
+//    for (auto C : RHSConsts) {
+//      ConcreteConsts.insert(C);
+//    }
+//    for (auto C : ConcreteConsts) {
+//      Components.push_back(C);
+//    }
+//  }
   
-  if (true) {
-    for (size_t i = 0; i < Vars.size(); ++i) {
-      SymDFVars.push_back(IC.createVar(Vars[i]->Width, "symk_one_" + std::to_string(i)));
-      SymDFVars.back()->SymOneOf = Vars[i];
-//      Vars[i]->SymKnownOnes = SymDFVars.back();
-      Components.push_back(SymDFVars.back());
+//  // Symbolic known bits
+//  if (false) {
+//    for (size_t i = 0; i < Vars.size(); ++i) {
+//      SymDFVars.push_back(IC.createVar(Vars[i]->Width, "symk_one_" + std::to_string(i)));
+//      SymDFVars.back()->SymOneOf = Vars[i];
+////      Vars[i]->SymKnownOnes = SymDFVars.back();
+//      Components.push_back(SymDFVars.back());
 
-      SymDFVars.push_back(IC.createVar(Vars[i]->Width, "symk_zero_" + std::to_string(i)));
-      SymDFVars.back()->SymZeroOf = Vars[i];
-//      Vars[i]->SymKnownZeros = SymDFVars.back();
-      Components.push_back(SymDFVars.back());
-    }
-  }
+//      SymDFVars.push_back(IC.createVar(Vars[i]->Width, "symk_zero_" + std::to_string(i)));
+//      SymDFVars.back()->SymZeroOf = Vars[i];
+////      Vars[i]->SymKnownZeros = SymDFVars.back();
+//      Components.push_back(SymDFVars.back());
+//    }
+//  }
 
 
+    // Put custom components here
   if (SymbolizeConstant) {
     for (auto C : SymCS) {
       // // Minus One
@@ -353,55 +357,15 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
     EnumerativeSynthesis ES;
     auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
                                     Target->Width);
-
-    // auto Guesses = Components;
-
-    // TODO : Memoize expressions by width
-
     for (auto &&Guess : Guesses) {
       std::set<Inst *> ConstSet;
       souper::getConstants(Guess, ConstSet);
       if (!ConstSet.empty()) {
         if (SymbolizeConstSynthesis) {
-          auto SMTLIBSolver = GetUnderlyingSolver();
-          SynthesisContext SC{IC, SMTLIBSolver.get(), Target, nullptr, {}, {}, false, 10};
-//          PruningManager Pruner(SC, SymCS, DebugLevel);
-//          Pruner.init();
-//          if (!Pruner.isInfeasible(Guess, DebugLevel)) {
             Candidates.back().push_back(Guess);
-//            llvm::errs() << "NOT PRUNED\n";
-//          }
-//          else {
-//            ReplacementContext RC;
-//            RC.printInst(Guess, llvm::errs(), true);
-//            llvm::errs() << "\n PRUNED\n";
-//          }
         }
-//        continue;
-//        Candidates.back().push_back(Guess);
-        // TODO: Fake constant synthesis based on algebra
-        // We have ConcreteLHS = f(ConcreteRHS, SymbolicConst)
-        // Solve equation to find SymbolicConst
-        // TODO: Proper constant synthesis
       } else {
-        // Candidates.back().push_back(Guess);
-        // auto Val = CI.evaluateInst(Guess);
-        // if (!Val.hasValue()) {
           Candidates.back().push_back(Guess);
-          // llvm::outs() << "CI Fail\n";
-          // Somehow interpreter failed, full verification desirable
-        // } else {
-        //   if (Val.hasValue() && Val.getValue() == Target->Val) {
-        //     Candidates.back().push_back(Guess);
-        //   } else {
-        //     if (DebugLevel > 4) {
-        //       llvm::outs() << "\nDiscarded by ConcreteInterpreter:\n";
-        //       llvm::outs() << Val.getValue() << '\t' << Target->Val << '\n';
-        //       ReplacementContext RC;
-        //       RC.printInst(Guess, llvm::errs(), true);
-        //     }
-        //   }
-        // }
       }
     }
   }
@@ -439,12 +403,15 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
         CandidateReplacement Rep(nullptr, Result.Mapping);
         Rep.PCs = Result.PCs;
         Results.push_back(Rep);
+        IsValid = true;
+      } else {
+        IsValid = false;
       }
     };
 
     CheckAndSave();
 
-    // TODO Make preconditions consistent
+    // TODO Make preconditions consistent with inputs
     if (SymbolizeSimpleDF) {
       for (auto &&C : SymCS) {
         if (!IsValid) {
@@ -469,268 +436,7 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
         // }
       }
     }
-    // TODO Is there a better way of doing this?
-    // TODO Other kinds of preconditions?
-
   }
-
-
-}
-
-void SymbolizeAndGeneralize(InstContext &IC, Solver *S, ParsedReplacement Input,
-                            std::vector<Inst *> LHSConsts,
-                            std::vector<Inst *> RHSConsts,
-                            CandidateMap &Results) {
-
-  // FIXME Very fragile. Maybe rewrite
-
-  std::vector<Inst *> Vars;
-  findVars(Input.Mapping.LHS, Vars);
-
-  std::map<Inst *, Inst *> InstCache;
-  std::vector<Inst *> FakeConsts;
-  for (size_t i = 0; i < LHSConsts.size(); ++i) {
-    FakeConsts.push_back(
-          IC.createVar(LHSConsts[i]->Width, "symconst_" + std::to_string(i)));
-    InstCache[LHSConsts[i]] = FakeConsts[i];
-    if (SymbolizeWidth) {
-      FakeConsts.push_back(IC.getInst(Inst::BitWidth, LHSConsts[i]->Width, {Vars[0]}));
-    }
-  }
-
-  auto Components = FakeConsts;
-  // Does it makes sense for the expression to depend on other variables?
-  // If yes, expand the third argument to include inputs
-  if (SymbolizeWidth) {
-    for (auto &&V : Vars) {
-      auto Width = IC.getInst(Inst::BitWidth, FakeConsts[0]->Width, {V});
-      Components.push_back(Width);
-      Components.push_back(IC.getInst(Inst::LogB, FakeConsts[0]->Width, {Width}));
-      // auto IntMax = 1 << Width - 1
-      // TODO other comps, like INT_MAX
-      // Dedup widths which can not be different
-    }
-  }
-
-  std::vector<Inst *> Targets;
-  for (auto C : LHSConsts) {
-    Targets.push_back(C);
-  }
-  for (auto C : RHSConsts) {
-    Targets.push_back(C);
-  }
-
-  for (auto T : Targets) {
-    EnumerativeSynthesis ES;
-    auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
-                                    T->Width);
-
-    std::vector<std::vector<std::map<Inst *, llvm::KnownBits>>>
-        Preconditions;
-
-    std::map<Block *, Block *> BlockCache;
-    std::map<Inst *, APInt> ConstMap;
-    auto LHS = getInstCopy(Input.Mapping.LHS, IC, InstCache,
-                           BlockCache, &ConstMap, false);
-
-    std::vector<Inst *> WithoutConsts;
-
-    auto TryConstSynth = [&](Inst *Guess, std::set<Inst *> &ConstSet) {
-      std::map <Inst *, llvm::APInt> ResultConstMap;
-      std::map<Inst *, Inst *> InstCacheCopy/* = InstCache*/;
-      InstCacheCopy[T] = Guess;
-      auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
-                             BlockCache, &ConstMap, false);
-      ConstantSynthesis CS;
-      auto SMTSolver = GetUnderlyingSolver();
-      auto EC = CS.synthesize(SMTSolver.get(), Input.BPCs, Input.PCs,
-                           InstMapping (LHS, RHS), ConstSet,
-                           ResultConstMap, IC, /*MaxTries=*/30, 10,
-                           /*AvoidNops=*/true);
-      if (!ResultConstMap.empty()) {
-        std::map<Inst *, Inst *> InstCache;
-        std::map<Block *, Block *> BlockCache;
-        auto LHSCopy = getInstCopy(LHS, IC, InstCache, BlockCache, &ResultConstMap, true);
-        RHS = getInstCopy(RHS, IC, InstCache, BlockCache, &ResultConstMap, true);
-
-        Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHSCopy, RHS)));
-        return true;
-      } else {
-        if (DebugLevel > 2) {
-          llvm::errs() << "Constant Synthesis ((no Dataflow Preconditions)) failed. \n";
-        }
-      }
-      return false;
-    };
-
-
-    for (auto &Guess : Guesses) {
-      std::set<Inst *> ConstSet;
-      souper::getConstants(Guess, ConstSet);
-      if (!ConstSet.empty()) {
-        if (SymbolizeConstSynthesis) {
-          bool Success = TryConstSynth(Guess, ConstSet);
-    //      llvm::errs() << "Succ:" << Success << "\n";
-          if (SymbolizeSimpleDF) {
-            if (!Success) {
-              FakeConsts[0]->PowOfTwo = true;
-              Success = TryConstSynth(Guess, ConstSet);
-              FakeConsts[0]->PowOfTwo = false;
-            }
-      //      llvm::errs() << "Succ:" << Success << "\n";
-
-            if (!Success) {
-              FakeConsts[0]->NonZero = true;
-              Success = TryConstSynth(Guess, ConstSet);
-              FakeConsts[0]->NonZero = false;
-            }
-      //      llvm::errs() << "Succ:" << Success << "\n";
-
-            if (!Success) {
-              FakeConsts[0]->NonNegative = true;
-              Success = TryConstSynth(Guess, ConstSet);
-              FakeConsts[0]->NonNegative = false;
-            }
-      //      llvm::errs() << "Succ:" << Success << "\n";
-
-            if (!Success) {
-              FakeConsts[0]->Negative = true;
-              Success = TryConstSynth(Guess, ConstSet);
-              FakeConsts[0]->Negative = false;
-            }
-      //      llvm::errs() << "Succ:" << Success << "\n";
-            (void)Success;
-          }
-        }
-
-      } else {
-        WithoutConsts.push_back(Guess);
-      }
-    }
-    std::swap(WithoutConsts, Guesses);
-
-    for (auto &Guess : Guesses) {
-      std::map<Inst *, Inst *> InstCacheCopy/* = InstCache*/;
-      InstCacheCopy[T] = Guess;
-
-
-
-      auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCacheCopy,
-                             BlockCache, &ConstMap, false);
-
-
-      if (DebugLevel > 4) {
-        {
-        llvm::errs() << "GUESS:\n";
-        ReplacementContext RC;
-        RC.printInst(Guess, llvm::errs(), true);
-        }
-        {
-        llvm::errs() << "JoinedGUESS:\n";
-        ReplacementContext RC;
-        RC.printInst(RHS, llvm::errs(), true);
-        }
-      }
-
-      InstMapping Mapping(LHS, RHS);
-      if (true /*remove when the other branch exists*/ || SymbolizeNoDFP) {
-        bool IsValid;
-        auto CheckAndSave = [&]() {
-          std::vector<std::pair<Inst *, APInt>> Models;
-          if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Mapping, IsValid, &Models)) {
-            llvm::errs() << EC.message() << '\n';
-          }
-          if (IsValid) {
-            InstMapping Clone;
-            std::map<Inst *, Inst *> InstCache;
-            std::map<Block *, Block *> BlockCache;
-            std::map<Inst *, llvm::APInt> ConstMap;
-            Clone.LHS = getInstCopy(Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, true, false);
-            Clone.RHS = getInstCopy(Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, true, false);
-            Results.push_back(CandidateReplacement(/*Origin=*/nullptr, Clone));
-          }
-        };
-        CheckAndSave();
-        if (SymbolizeSimpleDF) {
-          if (!IsValid) {
-            FakeConsts[0]->PowOfTwo = true;
-            CheckAndSave();
-            FakeConsts[0]->PowOfTwo = false;
-          }
-          if (!IsValid) {
-            FakeConsts[0]->NonZero = true;
-            CheckAndSave();
-            FakeConsts[0]->NonZero = false;
-          }
-          if (!IsValid) {
-            FakeConsts[0]->NonNegative = true;
-            CheckAndSave();
-            FakeConsts[0]->NonNegative = false;
-          }
-          if (!IsValid) {
-            FakeConsts[0]->Negative = true;
-            CheckAndSave();
-            FakeConsts[0]->Negative = false;
-          }
-        }
-
-      } else {
-  //      std::vector<std::map<Inst *, llvm::KnownBits>> KBResults;
-  //      std::vector<std::map<Inst *, llvm::ConstantRange>> CRResults;
-  //      bool FoundWP = false;
-  //      S->abstractPrecondition(Input.BPCs, Input.PCs, Mapping, IC, FoundWP, KBResults, CRResults);
-  //      Preconditions.push_back(KBResults);
-  //      if (!FoundWP) {
-  //        Guess = nullptr; // TODO: Better failure indicator
-  //      } else {
-  //        Guess = RHS;
-  //      }
-      }
-  }
-}
-
-//  std::vector<size_t> Idx;
-//  std::vector<int> Utility;
-//  for (size_t i = 0; i < Guesses.size(); ++i) {
-//    Idx.push_back(i);
-//  }
-//  for (size_t i = 0; i < Preconditions.size(); ++i) {
-//    Utility.push_back(0);
-//    if (!Guesses[i]) continue;
-//    if (Preconditions[i].empty()) {
-//      Utility[i] = 1000; // High magic number
-//    }
-
-//    for (auto V : Preconditions[i]) {
-//      for (auto P : V) {
-//        auto W = P.second.getBitWidth();
-//        Utility[i] += (W - P.second.Zero.countPopulation());
-//        Utility[i] += (W - P.second.One.countPopulation());
-//      }
-//    }
-//  }
-
-//  std::sort(Idx.begin(), Idx.end(), [&Utility](size_t a, size_t b) {
-//    return Utility[a] > Utility[b];
-//  });
-
-//  for (size_t i = 0; i < Idx.size(); ++i) {
-//    if (Preconditions[Idx[i]].empty() && Guesses[Idx[i]]) {
-//      Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, Guesses[Idx[i]])));
-//    }
-//  }
-
-  // if (!SymbolizeNoDFP) {
-  //   for (size_t i = 0; i < std::min(Idx.size(), NumResults.getValue()); ++i) {
-  //     for (auto Computed : Preconditions[Idx[i]]) {
-  //       for (auto Pair : Computed) {
-  //         Pair.first->KnownOnes = Pair.second.One;
-  //         Pair.first->KnownZeros = Pair.second.Zero;
-  //       }
-  //       Results.push_back(CandidateReplacement(/*Origin=*/nullptr, InstMapping(LHS, Guesses[Idx[i]])));
-  //     }
-  //   }
-  // }
 }
 
 void SymbolizeAndGeneralize(InstContext &IC,
@@ -762,8 +468,16 @@ void SymbolizeAndGeneralize(InstContext &IC,
   Input.print(llvm::outs(), true);
   llvm::outs() << "\n;Results:\n";
 
-  // TODO: Move sorting here
-  std::set<std::string> ResultStrs;
+  auto cmp = [](const std::string &a, const std::string &b) {
+    if (a.length() < b.length()) {
+      return true;
+    } else if (a.length() == b.length()) {
+      return a < b;
+    } else {
+      return false;
+    }
+  };
+  std::set<std::string, decltype(cmp)> ResultStrs(cmp);
   for (auto &&Result : Results) {
     std::string str;
     llvm::raw_string_ostream ostr(str);
@@ -771,7 +485,9 @@ void SymbolizeAndGeneralize(InstContext &IC,
     ResultStrs.insert(str);
   }
 
+  int n = 5;
   for (auto &&Str : ResultStrs) {
+    if (!n--) break;
     llvm::outs() << Str << "\n";
   }
 }
