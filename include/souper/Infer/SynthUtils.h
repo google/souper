@@ -120,8 +120,6 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
   return In;
 }
 
-
-
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
 ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
@@ -165,8 +163,17 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
   } else {
     Input.Mapping = InstMapping(nullptr, nullptr);
     return Input;
-    // TODO: Better vailure indication?
+    // TODO: Better failure indication?
   }
+}
+
+std::map<Inst *, llvm::APInt> findValidInput(ParsedReplacement Input, InstContext &IC,
+                 Solver *S, std::vector<std::map<Inst *, llvm::APInt>> &BlockList) {
+  // FIXME Continue from here
+}
+
+std::vector<std::map<Inst *, llvm::APInt>> findValidInputs(ParsedReplacement Input, InstContext &IC, Solver *S, size_t Count = 1) {
+  
 }
 
 }

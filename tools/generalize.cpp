@@ -250,6 +250,51 @@ void ReplaceConstsSimple(InstContext &IC, Solver *S,
   // expr or a kb expr
 }
 
+bool InferPreconditionsAndVerify(ParsedReplacement Input, CandidateMap &Results,
+                                 const std::vector<Inst *> &SymCS, InstContext &IC, Solver *S) {
+  
+  auto Result = Verify(Input, IC, S);
+  if (Result.Mapping.LHS && Result.Mapping.RHS) {
+    CandidateReplacement Rep(nullptr, Result.Mapping);
+    Rep.PCs = Result.PCs;
+    Results.push_back(Rep);
+    return true;
+  }
+  
+   if (SymbolizeSimpleDF) {
+     for (auto &&C : SymCS) {
+       C->PowOfTwo = true;
+       
+       // Abstract away the following logic
+       auto Result = Verify(Input, IC, S);
+       if (Result.Mapping.LHS && Result.Mapping.RHS) {
+         CandidateReplacement Rep(nullptr, Result.Mapping);
+         Rep.PCs = Result.PCs;
+         Results.push_back(Rep);
+         return true;
+       }
+       
+       C->PowOfTwo = false;
+
+//       C->NonZero = true;
+//       CheckAndSave();
+//       C->NonZero = false;
+//       C->NonNegative = true;
+//       CheckAndSave();
+//       C->NonNegative = false;
+//       C->Negative = true;
+//       CheckAndSave();
+//       C->Negative = false;
+     }
+   }
+  // TODO Is there a better way of doing this?
+  // TODO Other kinds of preconditions?
+
+  
+  return false;
+}
+
+
 // FIXME Other interesting things to try
 // Symbolic KB in preconditions
 // Symbolic KB with extra constraints.
@@ -257,7 +302,7 @@ void ReplaceConstsSimple(InstContext &IC, Solver *S,
 // Relations between symcs
 
 // TODO Document options
-void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement Input,
+void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement Input,
                             std::vector<Inst *> LHSConsts,
                             std::vector<Inst *> RHSConsts,
                             CandidateMap &Results) {
@@ -335,7 +380,6 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
 //      auto Test = Builder(M0, IC).Sub(C);
 //      Components.push_back(Test());
     }
-
   }
 
   for (auto SymC : SymCS) {
@@ -408,34 +452,36 @@ void SymbolizeAndGeneralizeRewrite(InstContext &IC, Solver *S, ParsedReplacement
         IsValid = false;
       }
     };
+    
+    InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
 
-    CheckAndSave();
-
-    // TODO Make preconditions consistent with inputs
-    if (SymbolizeSimpleDF) {
-      for (auto &&C : SymCS) {
-        if (!IsValid) {
-          C->PowOfTwo = true;
-          CheckAndSave();
-          C->PowOfTwo = false;
-        }
-        // if (!IsValid) {
-        //   C->NonZero = true;
-        //   CheckAndSave();
-        //   C->NonZero = false;
-        // }
-        // if (!IsValid) {
-        //   C->NonNegative = true;
-        //   CheckAndSave();
-        //   C->NonNegative = false;
-        // }
-        // if (!IsValid) {
-        //   C->Negative = true;
-        //   CheckAndSave();
-        //   C->Negative = false;
-        // }
-      }
-    }
+//    CheckAndSave();
+//
+//    // TODO Make preconditions consistent with inputs
+//    if (SymbolizeSimpleDF) {
+//      for (auto &&C : SymCS) {
+//        if (!IsValid) {
+//          C->PowOfTwo = true;
+//          CheckAndSave();
+//          C->PowOfTwo = false;
+//        }
+//        // if (!IsValid) {
+//        //   C->NonZero = true;
+//        //   CheckAndSave();
+//        //   C->NonZero = false;
+//        // }
+//        // if (!IsValid) {
+//        //   C->NonNegative = true;
+//        //   CheckAndSave();
+//        //   C->NonNegative = false;
+//        // }
+//        // if (!IsValid) {
+//        //   C->Negative = true;
+//        //   CheckAndSave();
+//        //   C->Negative = false;
+//        // }
+//      }
+//    }
   }
 }
 
@@ -455,14 +501,14 @@ void SymbolizeAndGeneralize(InstContext &IC,
 
  // One at a time
  for (auto LHSConst : LHSConsts) {
-   SymbolizeAndGeneralizeRewrite(IC, S, Input, {LHSConst}, RHSConsts, Results);
+   SymbolizeAndGeneralizeImpl(IC, S, Input, {LHSConst}, RHSConsts, Results);
  }
 
   // All subsets?
   // TODO: Is it possible to encode this logically.
 
   // All at once
-  SymbolizeAndGeneralizeRewrite(IC, S, Input, LHSConsts, RHSConsts, Results);
+  SymbolizeAndGeneralizeImpl(IC, S, Input, LHSConsts, RHSConsts, Results);
 
   llvm::outs() << ";Input:\n";
   Input.print(llvm::outs(), true);
