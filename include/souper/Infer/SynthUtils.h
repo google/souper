@@ -5,13 +5,21 @@
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Parser/Parser.h"
-#include "souper/Tool/GetSolver.h"
 
 namespace souper {
 
+// TODO: Lazy construction instead of eager.
+// eg: Instead of Builder(I, IC).Add(1)()
+// we could do Builder(I).Add(1)(IC)
 class Builder {
 public:
   Builder(Inst *I_, InstContext &IC_) : I(I_), IC(IC_) {}
+  Builder(InstContext &IC_, llvm::APInt Value) : IC(IC_) {
+    I = IC.getConst(Value);
+  }
+  Builder(Inst *I_, InstContext &IC_, uint64_t Value) : IC(IC_) {
+    I = IC.getConst(llvm::APInt(I_->Width, Value));
+  }
 
   Inst *operator()() {
     assert(I);
@@ -32,7 +40,7 @@ public:
     auto L = I; auto R = i(t, *this);                            \
     return Builder(IC.getInst(Inst::K, 1, {L, R}), IC);          \
   }
-  BINOPW(Slt) BINOPW(Ult) BINOPW(Eq)
+  BINOPW(Slt) BINOPW(Ult) BINOPW(Eq) BINOPW(Ne)
 #undef BINOPW
 
 private:
@@ -72,109 +80,24 @@ private:
   }
 };
 
-Inst *Replace(Inst *R, InstContext &IC, std::map<Inst *, Inst *> &M) {
-  std::map<Block *, Block *> BlockCache;
-  std::map<Inst *, llvm::APInt> ConstMap;
-  return getInstCopy(R, IC, M, BlockCache, &ConstMap, false);
-}
+Inst *Replace(Inst *R, InstContext &IC, std::map<Inst *, Inst *> &M);
+ParsedReplacement Replace(ParsedReplacement I, InstContext &IC,
+                          std::map<Inst *, Inst *> &M);
 
-Inst *Clone(Inst *R, InstContext &IC) {
-  std::map<Block *, Block *> BlockCache;
-  std::map<Inst *, llvm::APInt> ConstMap;
-  std::map<Inst *, Inst *> InstCache;
-  return getInstCopy(R, IC, InstCache, BlockCache, &ConstMap, true, false);
-}
+Inst *Clone(Inst *R, InstContext &IC);
 
-InstMapping Clone(InstMapping In, InstContext &IC) {
-  std::map<Block *, Block *> BlockCache;
-  std::map<Inst *, llvm::APInt> ConstMap;
-  std::map<Inst *, Inst *> InstCache;
-  InstMapping Out;
-  Out.LHS = getInstCopy(In.LHS, IC, InstCache, BlockCache, &ConstMap, true, false);
-  Out.RHS = getInstCopy(In.RHS, IC, InstCache, BlockCache, &ConstMap, true, false);
-  return Out;
-}
+InstMapping Clone(InstMapping In, InstContext &IC);
 
-ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
-  std::map<Block *, Block *> BlockCache;
-  std::map<Inst *, llvm::APInt> ConstMap;
-  std::map<Inst *, Inst *> InstCache;
-  std::vector<Inst *> RHSVars;
-  findVars(In.Mapping.RHS, RHSVars);
-  In.Mapping.LHS = getInstCopy(In.Mapping.LHS, IC, InstCache, BlockCache, &ConstMap, true, false);
-  In.Mapping.RHS = getInstCopy(In.Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, true, false);
-  for (auto &PC : In.PCs) {
-    PC.LHS = getInstCopy(PC.LHS, IC, InstCache, BlockCache, &ConstMap, false, false);
-    PC.RHS = getInstCopy(PC.RHS, IC, InstCache, BlockCache, &ConstMap, false, false);
-  }
-
-  for (auto &V : RHSVars) {
-    if (V->SymOneOf) {
-      InstCache[V->SymOneOf]->SymKnownOnes = InstCache[V];
-    }
-    if (V->SymZeroOf) {
-      InstCache[V->SymZeroOf]->SymKnownZeros = InstCache[V];
-    }
-  }
-  
-  return In;
-}
+ParsedReplacement Clone(ParsedReplacement In, InstContext &IC);
 
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
-ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
-  Input = Clone(Input, IC);
-  std::set<Inst *> ConstSet;
-  souper::getConstants(Input.Mapping.RHS, ConstSet);
-  if (!ConstSet.empty()) {
-    std::map <Inst *, llvm::APInt> ResultConstMap;
-    ConstantSynthesis CS;
-    auto SMTSolver = GetUnderlyingSolver();
-    auto EC = CS.synthesize(SMTSolver.get(), Input.BPCs, Input.PCs,
-                         Input.Mapping, ConstSet,
-                         ResultConstMap, IC, /*MaxTries=*/30, 10,
-                         /*AvoidNops=*/true);
-    if (!ResultConstMap.empty()) {
-      std::map<Inst *, Inst *> InstCache;
-      std::map<Block *, Block *> BlockCache;
-      auto LHSCopy = getInstCopy(Input.Mapping.LHS, IC, InstCache, BlockCache, &ResultConstMap, true);
-      auto RHS = getInstCopy(Input.Mapping.RHS, IC, InstCache, BlockCache, &ResultConstMap, true);
-      Input.Mapping = InstMapping(LHSCopy, RHS);
-      for (auto &PC : Input.PCs) {
-        PC.LHS = getInstCopy(PC.LHS, IC, InstCache, BlockCache, &ResultConstMap, true);
-        PC.RHS = getInstCopy(PC.RHS, IC, InstCache, BlockCache, &ResultConstMap, true);
-      }
-      return Input;
-    } else {
-      if (DebugLevel > 2) {
-        llvm::errs() << "Constant Synthesis ((no Dataflow Preconditions)) failed. \n";
-      }
-    }
-    Input.Mapping = InstMapping(nullptr, nullptr);
-    return Input;
-  }
-  std::vector<std::pair<Inst *, llvm::APInt>> Models;
-  bool IsValid;
-  if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, IsValid, &Models)) {
-    llvm::errs() << EC.message() << '\n';
-  }
-  if (IsValid) {
-    return Input;
-  } else {
-    Input.Mapping = InstMapping(nullptr, nullptr);
-    return Input;
-    // TODO: Better failure indication?
-  }
-}
+ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S);
 
-std::map<Inst *, llvm::APInt> findValidInput(ParsedReplacement Input, InstContext &IC,
-                 Solver *S, std::vector<std::map<Inst *, llvm::APInt>> &BlockList) {
-  // FIXME Continue from here
-}
 
-std::vector<std::map<Inst *, llvm::APInt>> findValidInputs(ParsedReplacement Input, InstContext &IC, Solver *S, size_t Count = 1) {
-  
-}
+std::map<Inst *, llvm::APInt> findOneConstSet(ParsedReplacement Input, const std::set<Inst *> &SymCS, InstContext &IC, Solver *S);
+
+std::vector<std::map<Inst *, llvm::APInt>> findValidConsts(ParsedReplacement Input, const std::set<Inst *> &Insts, InstContext &IC, Solver *S, size_t MaxCount);
 
 }
 #endif

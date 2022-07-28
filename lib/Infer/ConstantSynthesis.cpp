@@ -231,6 +231,8 @@ Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
           IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getSignedMinValue(C->Width)), C })
       });
 
+  case Inst::LogB:
+    case Inst::Freeze:
   case Inst::Eq:
   case Inst::Ne:
   case Inst::SAddO:
@@ -242,7 +244,6 @@ Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
   case Inst::Select: // handled elsewhere: 2nd and 3rd arguments can't be same constant
     // no constraint
     return IC.getConst(llvm::APInt(1, true));
-
   default:
     llvm::report_fatal_error("unmatched: " + (std::string)Inst::getKindName(K));
   }

@@ -218,10 +218,21 @@ set(SOUPER_INFER_FILES
   include/souper/Infer/Interpreter.h
   lib/Infer/Preconditions.cpp
   include/souper/Infer/Preconditions.h
+  lib/Infer/SynthUtils.cpp
+  include/souper/Infer/SynthUtils.h
 )
 
 add_library(souperInfer STATIC
   ${SOUPER_INFER_FILES}
+)
+
+set(SOUPER_GENERALIZE_FILES
+  lib/Generalize/Reducer.cpp
+  include/souper/Generalize/Reducer.h
+)
+
+add_library(souperGeneralize STATIC
+  ${SOUPER_GENERALIZE_FILES}
 )
 
 set(SOUPER_INST_FILES
@@ -280,6 +291,7 @@ set(SOUPER_SOURCES
   ${SOUPER_SMTLIB2_FILES}
   ${SOUPER_TOOL_FILES}
   ${SOUPER_INFER_FILES}
+  ${SOUPER_GENERALIZE_FILES}
   ${SOUPER_CODEGEN_FILES})
 
 add_library(souperPass SHARED
@@ -400,7 +412,7 @@ configure_file(
 
 foreach(target souper internal-solver-test lexer-test parser-test souper-check count-insts
                souper2llvm souper-interpret generalize matcher-gen 
-               souperExtractor souperInfer souperInst souperKVStore souperParser
+               souperExtractor souperInfer souperGeneralize souperInst souperKVStore souperParser
                souperSMTLIB2 souperTool souperPass souperPassProfileAll kleeExpr
                souperCodegen)
   set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${LLVM_CXXFLAGS}")
@@ -420,6 +432,7 @@ target_link_libraries(kleeExpr ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperClangTool souperExtractor souperTool ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperExtractor souperParser souperKVStore souperInfer souperInst kleeExpr souperCodegen)
 target_link_libraries(souperInfer souperExtractor ${LLVM_LIBS} ${LLVM_LDFLAGS} ${Z3_LIBRARY})
+target_link_libraries(souperGeneralize souperInfer ${LLVM_LIBS} ${LLVM_LDFLAGS} ${Z3_LIBRARY})
 target_link_libraries(souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperKVStore ${HIREDIS_LIBRARY} ${LLVM_LIBS} ${LLVM_LDFLAGS})
 target_link_libraries(souperParser souperInst ${LLVM_LIBS} ${LLVM_LDFLAGS} ${ALIVE_LIBRARY})
@@ -438,7 +451,7 @@ target_link_libraries(internal-solver-test souperSMTLIB2)
 target_link_libraries(lexer-test souperParser)
 target_link_libraries(parser-test souperParser)
 target_link_libraries(souper-check souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
-target_link_libraries(generalize souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
+target_link_libraries(generalize souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser souperInfer souperGeneralize ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(matcher-gen souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(souper-interpret souperTool souperExtractor souperKVStore souperSMTLIB2 souperParser ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
 target_link_libraries(clang-souper souperClangTool souperExtractor souperKVStore souperParser souperSMTLIB2 souperTool kleeExpr ${CLANG_LIBS} ${LLVM_LIBS} ${LLVM_LDFLAGS} ${HIREDIS_LIBRARY} ${ALIVE_LIBRARY} ${Z3_LIBRARY})
