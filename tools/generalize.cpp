@@ -68,15 +68,15 @@ static llvm::cl::opt<bool> SymbolizeNoDFP("symbolize-no-dataflow",
 
 static llvm::cl::opt<bool> SymbolizeSimpleDF("symbolize-simple-dataflow",
     llvm::cl::desc("Generate simple dataflow facts supported by LLVM."),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 static llvm::cl::opt<bool> SymbolizeKBDF("symbolize-infer-kb",
     llvm::cl::desc("Generate KB constraints for symbolic constants."),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 static llvm::cl::opt<bool> SymbolizeConstSynthesis("symbolize-constant-synthesis",
     llvm::cl::desc("Allow concrete constants in the generated code."),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 static llvm::cl::opt<bool> SymbolizeHackersDelight("symbolize-bit-hacks",
     llvm::cl::desc("Include bit hacks in the components."),
@@ -449,6 +449,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
                                     Target->Width);
     for (auto &&Guess : Guesses) {
+            llvm::errs() << "HERE.\n";
       std::set<Inst *> ConstSet;
       souper::getConstants(Guess, ConstSet);
       if (!ConstSet.empty()) {
@@ -546,10 +547,10 @@ void SymbolizeAndGeneralize(InstContext &IC,
 
   CandidateMap Results;
 
- // One at a time
- for (auto LHSConst : LHSConsts) {
-   SymbolizeAndGeneralizeImpl(IC, S, Input, {LHSConst}, RHSConsts, Results);
- }
+// // One at a time
+// for (auto LHSConst : LHSConsts) {
+//   SymbolizeAndGeneralizeImpl(IC, S, Input, {LHSConst}, RHSConsts, Results);
+// }
 
   // All subsets?
   // TODO: Is it possible to encode this logically.
@@ -560,6 +561,11 @@ void SymbolizeAndGeneralize(InstContext &IC,
   llvm::outs() << ";Input:\n";
   Input.print(llvm::outs(), true);
   llvm::outs() << "\n;Results:\n";
+
+  // TODO : Improve sorting.
+  // Here are some ideas
+  // Prioritize results with more symbolic constants
+  // If same number of symbolic constants - prefer lower number of runtime instructions
 
   auto cmp = [](const std::string &a, const std::string &b) {
     if (a.length() < b.length()) {
@@ -580,7 +586,7 @@ void SymbolizeAndGeneralize(InstContext &IC,
 
   int n = 5;
   for (auto &&Str : ResultStrs) {
-    if (!n--) break;
+//    if (!n--) break;
     llvm::outs() << Str << "\n";
   }
 }
