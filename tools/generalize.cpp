@@ -449,12 +449,11 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
                                     Target->Width);
     for (auto &&Guess : Guesses) {
-            llvm::errs() << "HERE.\n";
       std::set<Inst *> ConstSet;
       souper::getConstants(Guess, ConstSet);
       if (!ConstSet.empty()) {
         if (SymbolizeConstSynthesis) {
-            Candidates.back().push_back(Guess);
+          Candidates.back().push_back(Guess);
         }
       } else {
           Candidates.back().push_back(Guess);
@@ -472,64 +471,24 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
 
   for (auto &&Comb : Combinations) {
     int SymExprCount = 0;
-    auto InstCacheCopy = InstCache;
+    auto InstCacheRHS = InstCache;
     for (int i = 0; i < RHSConsts.size(); ++i) {
-      InstCacheCopy[RHSConsts[i]] = Candidates[i][Comb[i]];
+      InstCacheRHS[RHSConsts[i]] = Candidates[i][Comb[i]];
       if (Candidates[i][Comb[i]]->K != Inst::Var) {
         Candidates[i][Comb[i]]->Name = std::string("constexpr_") + std::to_string(SymExprCount++);
       }
     }
 
-    auto LHS = Replace(Input.Mapping.LHS, IC, InstCacheCopy);
-    auto RHS = Replace(Input.Mapping.RHS, IC, InstCacheCopy);
+    auto LHS = Replace(Input.Mapping.LHS, IC, InstCache);
+    auto RHS = Replace(Input.Mapping.RHS, IC, InstCacheRHS);
 
     InstMapping Mapping(LHS, RHS);
     auto Copy = Input;
     Copy.Mapping = Mapping;
     bool IsValid = false;
-
-    auto CheckAndSave = [&] () {
-      auto Result = Verify(Copy, IC, S);
-      
-      if (Result.Mapping.LHS && Result.Mapping.RHS) {
-        CandidateReplacement Rep(nullptr, Result.Mapping);
-        Rep.PCs = Result.PCs;
-        Results.push_back(Rep);
-        IsValid = true;
-      } else {
-        IsValid = false;
-      }
-    };
     
+    static int n = 0;
     InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
-
-//    CheckAndSave();
-//
-//    // TODO Make preconditions consistent with inputs
-//    if (SymbolizeSimpleDF) {
-//      for (auto &&C : SymCS) {
-//        if (!IsValid) {
-//          C->PowOfTwo = true;
-//          CheckAndSave();
-//          C->PowOfTwo = false;
-//        }
-//        // if (!IsValid) {
-//        //   C->NonZero = true;
-//        //   CheckAndSave();
-//        //   C->NonZero = false;
-//        // }
-//        // if (!IsValid) {
-//        //   C->NonNegative = true;
-//        //   CheckAndSave();
-//        //   C->NonNegative = false;
-//        // }
-//        // if (!IsValid) {
-//        //   C->Negative = true;
-//        //   CheckAndSave();
-//        //   C->Negative = false;
-//        // }
-//      }
-//    }
   }
 }
 
