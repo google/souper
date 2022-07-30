@@ -356,7 +356,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
                             CandidateMap &Results) {
   
   if (RHSConsts.empty()) {
-    // FIXME: Support generalizing LHS Consts too.
+    // Handled in another function
     return;
   }
 
@@ -367,6 +367,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
   
   std::map<Inst *, Inst *> InstCache;
   ValueCache VC;
+  
   // Create a symbolic const for each LHS const
   for (size_t i = 0; i < LHSConsts.size(); ++i) {
     auto C = IC.createVar(LHSConsts[i]->Width, "symconst_" + std::to_string(i));
@@ -433,13 +434,6 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     Components.push_back(SymC.first);
   }
 
-  // TODO Derive relations between LHSConsts and use them as preconditions
-
-  // Must consider all targets at once
-  // Test phase before verification
-  // Is it possible to pre-generate the set of all possible constants? No.
-  // Some? definitely.
-
   std::vector<std::vector<Inst *>> Candidates;
 
   ConcreteInterpreter CI(VC);
@@ -487,9 +481,45 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     Copy.Mapping = Mapping;
     bool IsValid = false;
     
-    static int n = 0;
     InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
   }
+}
+
+// This is a simpler version of
+void SymbolizeAndGeneralizeOnlyLHS(InstContext &IC,
+                                   Solver *S,
+                                   ParsedReplacement Input,
+                                   const std::vector<Inst *> &LHSConsts,
+                                   CandidateMap &Results) {
+  if (LHSConsts.empty()) {
+    return; // What are we even doing here?
+  }
+  
+  std::vector<std::pair<Inst *, llvm::APInt>> SymCS;
+  std::vector<Inst *> Vars;
+  std::vector<Inst *> SymDFVars;
+  findVars(Input.Mapping.LHS, Vars);
+  
+  std::map<Inst *, Inst *> InstCache;
+  ValueCache VC;
+  
+  // Create a symbolic const for each LHS const
+  for (size_t i = 0; i < LHSConsts.size(); ++i) {
+    auto C = IC.createVar(LHSConsts[i]->Width, "symconst_" + std::to_string(i));
+    SymCS.push_back({C, LHSConsts[i]->Val});
+    InstCache[LHSConsts[i]] = C;
+    VC[C] = EvalValue(LHSConsts[i]->Val);
+  }
+  
+  auto LHS = Replace(Input.Mapping.LHS, IC, InstCache);
+  auto RHS = Replace(Input.Mapping.RHS, IC, InstCache);
+  
+  InstMapping Mapping(LHS, RHS);
+  auto Copy = Input;
+  Copy.Mapping = Mapping;
+  bool IsValid = false;
+  
+  InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
 }
 
 void SymbolizeAndGeneralize(InstContext &IC,
@@ -499,17 +529,16 @@ void SymbolizeAndGeneralize(InstContext &IC,
   findInsts(Input.Mapping.LHS, LHSConsts, Pred);
   findInsts(Input.Mapping.RHS, RHSConsts, Pred);
 
-  // if (RHSConsts.empty()) {
-  //   return;
-  //   // TODO: Possible to just generalize LHS consts with preconditions?
-  // }
-
   CandidateMap Results;
+  
+  if (RHSConsts.empty()) {
+    return SymbolizeAndGeneralizeOnlyLHS(IC, S, Input, LHSConsts, Results);
+  }
 
-// // One at a time
-// for (auto LHSConst : LHSConsts) {
-//   SymbolizeAndGeneralizeImpl(IC, S, Input, {LHSConst}, RHSConsts, Results);
-// }
+ // One at a time
+ for (auto LHSConst : LHSConsts) {
+   SymbolizeAndGeneralizeImpl(IC, S, Input, {LHSConst}, RHSConsts, Results);
+ }
 
   // All subsets?
   // TODO: Is it possible to encode this logically.
@@ -779,6 +808,11 @@ int main(int argc, char **argv) {
       }
     }
   }
-
   return 0;
 }
+
+// TODO List
+// Derive relations between LHSConsts and use them as preconditions
+// Test phase before verification
+// Is it possible to pre-generate the set of all possible constants? No.
+// Some? definitely.
