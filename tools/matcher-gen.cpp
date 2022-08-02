@@ -281,11 +281,16 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
       auto Str = Child->Val.toString(10, false);
       Out << "m_SpecificInt(" << Str << ")";
     } else if (Child->K == Inst::Var) {
-
+      if (Child->Name.starts_with("symconst")) {
+        Out << "m_Constant()";
+      } else if (Child->Name.starts_with("constexpr")) {
+        llvm::errs() << "FOUND A CONSTEXPR\n";
+      } else {
       // FIXME What about Symbolic constants?
       // How about matching const exprs?
 
-      Out << "m_Value(" << Syms[Child].back() << ")";
+        Out << "m_Value(" << Syms[Child].back() << ")";
+      }
       Syms[Child].pop_back();
     } else {
       if (!GenLHSMatcher(Child, Out, Syms)) {

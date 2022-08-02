@@ -460,6 +460,13 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     Counts.push_back(Cand.size());
   }
 
+//  SynthesisContext SC{IC, S->getSMTLIBSolver(), Input.Mapping.LHS, nullptr, Input.PCs, Input.BPCs, false, 10};
+  auto LHS = Replace(Input.Mapping.LHS, IC, InstCache);
+//  std::vector<Inst *> NewVars;
+//  findVars(LHS, NewVars);
+
+//  PruningManager Pr(SC, Vars, 0);
+
   // Generate all combination of candidates
   std::vector<std::vector<int>> Combinations = GetCombinations(Counts);
 
@@ -473,7 +480,6 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
       }
     }
 
-    auto LHS = Replace(Input.Mapping.LHS, IC, InstCache);
     auto RHS = Replace(Input.Mapping.RHS, IC, InstCacheRHS);
 
     InstMapping Mapping(LHS, RHS);
@@ -481,7 +487,12 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     Copy.Mapping = Mapping;
     bool IsValid = false;
     
+    //if (Pr.isInfeasible(RHS, 0)) {
+//      llvm::errs() << "PRUNED\n"; // Figure out why this never succeeds :(
+    //} else {
+      //llvm::errs() << "NP";
     InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
+    //}
   }
 }
 

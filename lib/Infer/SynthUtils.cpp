@@ -1,4 +1,5 @@
 #include "souper/Infer/SynthUtils.h"
+#include "souper/Infer/Pruning.h"
 
 namespace souper {
 
@@ -70,7 +71,7 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
 
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
-ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
+ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {  
   Input = Clone(Input, IC);
   std::set<Inst *> ConstSet;
   souper::getConstants(Input.Mapping.RHS, ConstSet);
@@ -169,6 +170,5 @@ std::vector<std::map<Inst *, llvm::APInt>> findValidConsts(ParsedReplacement Inp
   
   return Results;
 }
-
 
 }
