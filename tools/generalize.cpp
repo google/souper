@@ -505,7 +505,6 @@ void SymbolizeAndGeneralizeOnlyLHS(InstContext &IC,
   if (LHSConsts.empty()) {
     return; // What are we even doing here?
   }
-  
   std::vector<std::pair<Inst *, llvm::APInt>> SymCS;
   std::vector<Inst *> Vars;
   std::vector<Inst *> SymDFVars;
@@ -529,7 +528,7 @@ void SymbolizeAndGeneralizeOnlyLHS(InstContext &IC,
   auto Copy = Input;
   Copy.Mapping = Mapping;
   bool IsValid = false;
-  
+
   InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
 }
 
@@ -543,20 +542,19 @@ void SymbolizeAndGeneralize(InstContext &IC,
   CandidateMap Results;
   
   if (RHSConsts.empty()) {
-    return SymbolizeAndGeneralizeOnlyLHS(IC, S, Input, LHSConsts, Results);
+    SymbolizeAndGeneralizeOnlyLHS(IC, S, Input, LHSConsts, Results);
+  } else {
+   // One at a time
+   for (auto LHSConst : LHSConsts) {
+     SymbolizeAndGeneralizeImpl(IC, S, Input, {LHSConst}, RHSConsts, Results);
+   }
+
+    // All subsets?
+    // TODO: Is it possible to encode this logically.
+
+    // All at once
+    SymbolizeAndGeneralizeImpl(IC, S, Input, LHSConsts, RHSConsts, Results);
   }
-
- // One at a time
- for (auto LHSConst : LHSConsts) {
-   SymbolizeAndGeneralizeImpl(IC, S, Input, {LHSConst}, RHSConsts, Results);
- }
-
-  // All subsets?
-  // TODO: Is it possible to encode this logically.
-
-  // All at once
-  SymbolizeAndGeneralizeImpl(IC, S, Input, LHSConsts, RHSConsts, Results);
-
   llvm::outs() << ";Input:\n";
   Input.print(llvm::outs(), true);
   llvm::outs() << "\n;Results:\n";
