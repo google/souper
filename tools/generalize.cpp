@@ -52,6 +52,11 @@ static llvm::cl::opt<bool> SymbolizeConstant("symbolize",
                    "(default=false)"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> FindConstantRelations("relational",
+    llvm::cl::desc("Find constant relations."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
 static llvm::cl::opt<bool> SymbolizeWidth("symbolize-width",
     llvm::cl::desc("Try to replace a concrete constant with a function of bitwidth."
                    "(default=false)"),
@@ -342,8 +347,13 @@ C->Fact = true; if (SOLVE()) return true; C->Fact = false;};
   return false;
 }
 
-std::vector<Inst *> InferPotentialRelations(const std::vector<std::pair<Inst *, llvm::APInt>> &CMap, InstContext &IC) {
+std::vector<Inst *> InferPotentialRelations(
+        const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
+        InstContext &IC, const ParsedReplacement &Input) {
   std::vector<Inst *> Results;
+  if (!FindConstantRelations) {
+    return Results;
+  }
   // Generate a set of pairwise relations
   for (auto &&[XI, XC] : CMap) {
     for (auto &&[YI, YC] : CMap) {
@@ -352,16 +362,24 @@ std::vector<Inst *> InferPotentialRelations(const std::vector<std::pair<Inst *, 
 //      auto Diff = XC - YC;
 //      Results.push_back(Builder(XI, IC).Sub(Diff).Eq(YI)());
       // Mul C
-      if (XC.urem(YC) == 0) {
+      if (YC!= 0 && XC.urem(YC) == 0) {
         auto Fact = XC.udiv(YC);
         Results.push_back(Builder(YI, IC).Mul(Fact).Eq(XI)());
       }
-      if (YC.urem(XC) == 0) {
+      if (XC != 0 && YC.urem(XC) == 0) {
         auto Fact = YC.udiv(XC);
         Results.push_back(Builder(XI, IC).Mul(Fact).Eq(YI)());
       }
 
-      // TODO LT/GT
+      // TODO CHeck if this is too slow
+      if (Input.Mapping.LHS->Width == 1) {
+        // need both signed and unsigned?
+        // What about s/t/e/ versions?
+        if (XC.slt(YC)) Results.push_back(Builder(XI, IC).Slt(YI)());
+        if (XC.ult(YC)) Results.push_back(Builder(XI, IC).Ult(YI)());
+        if (YC.slt(XC)) Results.push_back(Builder(YI, IC).Slt(XI)());
+        if (YC.ult(XC)) Results.push_back(Builder(YI, IC).Ult(XI)());
+      }
     }
   }
 
@@ -371,8 +389,6 @@ std::vector<Inst *> InferPotentialRelations(const std::vector<std::pair<Inst *, 
 // FIXME Other interesting things to try
 // Symbolic KB in preconditions
 // Symbolic KB with extra constraints.
-// Simple relational conditions for symcs
-// Relations between symcs
 
 // TODO Document options
 void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement Input,
@@ -401,8 +417,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     VC[C] = EvalValue(LHSConsts[i]->Val);
   }
 
-  auto Relations = InferPotentialRelations(SymCS, IC);
-
+  auto Relations = InferPotentialRelations(SymCS, IC, Input);
   std::vector<Inst *> Components;
   
 //  // Symbolic known bits
@@ -522,7 +537,6 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     InstMapping Mapping(LHS, RHS);
     auto Copy = Input;
     Copy.Mapping = Mapping;
-    bool IsValid = false;
     
     //if (Pr.isInfeasible(RHS, 0)) {
 //      llvm::errs() << "PRUNED\n"; // Figure out why this never succeeds :(
@@ -571,10 +585,9 @@ void SymbolizeAndGeneralizeOnlyLHS(InstContext &IC,
   InstMapping Mapping(LHS, RHS);
   auto Copy = Input;
   Copy.Mapping = Mapping;
-  bool IsValid = false;
 
   if (!InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S)) {
-    auto Relations = InferPotentialRelations(SymCS, IC);
+    auto Relations = InferPotentialRelations(SymCS, IC, Input);
     for (auto R : Relations) {
       Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
       InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
@@ -604,7 +617,7 @@ void SymbolizeAndGeneralize(InstContext &IC,
     // TODO: Is it possible to encode this logically.
 
     // All at once
-    SymbolizeAndGeneralizeImpl(IC, S, Input, LHSConsts, RHSConsts, Results);
+//    SymbolizeAndGeneralizeImpl(IC, S, Input, LHSConsts, RHSConsts, Results);
   }
   llvm::outs() << ";Input:\n";
   Input.print(llvm::outs(), true);

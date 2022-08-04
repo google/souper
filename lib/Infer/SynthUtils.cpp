@@ -111,6 +111,8 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
   if (IsValid) {
     return Input;
   } else {
+    static int C = 0;
+    llvm::errs() << "C " << C++ << '\n';
     Input.Mapping = InstMapping(nullptr, nullptr);
     return Input;
     // TODO: Better failure indication?

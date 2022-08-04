@@ -42,7 +42,8 @@ public:
     auto L = I; auto R = i(t, *this);                            \
     return Builder(IC.getInst(Inst::K, 1, {L, R}), IC);          \
   }
-  BINOPW(Slt) BINOPW(Ult) BINOPW(Eq) BINOPW(Ne)
+  BINOPW(Slt) BINOPW(Ult) BINOPW(Sle) BINOPW(Ule)
+  BINOPW(Eq) BINOPW(Ne)
 #undef BINOPW
 
 private:
