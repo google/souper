@@ -342,6 +342,31 @@ C->Fact = true; if (SOLVE()) return true; C->Fact = false;};
   return false;
 }
 
+std::vector<Inst *> InferPotentialRelations(const std::vector<std::pair<Inst *, llvm::APInt>> &CMap, InstContext &IC) {
+  std::vector<Inst *> Results;
+  // Generate a set of pairwise relations
+  for (auto &&[XI, XC] : CMap) {
+    for (auto &&[YI, YC] : CMap) {
+      if (XI == YI) continue;
+      // Add C
+//      auto Diff = XC - YC;
+//      Results.push_back(Builder(XI, IC).Sub(Diff).Eq(YI)());
+      // Mul C
+      if (XC.urem(YC) == 0) {
+        auto Fact = XC.udiv(YC);
+        Results.push_back(Builder(YI, IC).Mul(Fact).Eq(XI)());
+      }
+      if (YC.urem(XC) == 0) {
+        auto Fact = YC.udiv(XC);
+        Results.push_back(Builder(XI, IC).Mul(Fact).Eq(YI)());
+      }
+
+      // TODO LT/GT
+    }
+  }
+
+  return Results;
+};
 
 // FIXME Other interesting things to try
 // Symbolic KB in preconditions
@@ -376,25 +401,9 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     VC[C] = EvalValue(LHSConsts[i]->Val);
   }
 
-  std::vector<Inst *> Components;
-  
-//  if (!SymbolizeConstSynthesis) {
-//    std::set<Inst *> ConcreteConsts; // for deduplication
+  auto Relations = InferPotentialRelations(SymCS, IC);
 
-//    for (auto C : LHSConsts) {
-//      ConcreteConsts.insert(C);
-//      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 1)));
-//      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, -1)));
-//      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 2)));
-//      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 31)));
-//    }
-//    for (auto C : RHSConsts) {
-//      ConcreteConsts.insert(C);
-//    }
-//    for (auto C : ConcreteConsts) {
-//      Components.push_back(C);
-//    }
-//  }
+  std::vector<Inst *> Components;
   
 //  // Symbolic known bits
 //  if (false) {
@@ -414,11 +423,14 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
 
     // Put custom components here
   if (SymbolizeConstant) {
-    for (auto C : SymCS) {
+    for (auto &&C : SymCS) {
       // Minus One
-      Components.push_back(Builder(C.first, IC).Sub(1)());
+//      Components.push_back(Builder(C.first, IC).Sub(1)());
       // Flip bits
-      Components.push_back(Builder(C.first, IC).Xor(-1)());
+//      Components.push_back(Builder(C.first, IC).Xor(-1)());
+
+      // Shiftmask
+//      Components.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C.first->Width)).Shl(C.first)());
       
       // Custom test
       // auto M1 = IC.getConst(llvm::APInt(C->Width, -1));
@@ -430,7 +442,27 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     }
   }
 
-  for (auto SymC : SymCS) {
+  std::set<Inst *> ConcreteConsts; // for deduplication
+
+  if (!SymbolizeConstSynthesis) {
+    for (auto C : LHSConsts) {
+//      ConcreteConsts.insert(C);
+//      ConcreteConsts.insert(IC.getConst(llvm::APInt(C->Width, 1)));
+      ConcreteConsts.insert(IC.getConst(llvm::APInt::getAllOnesValue(C->Width)));
+    }
+//    for (auto C : RHSConsts) {
+//      ConcreteConsts.insert(C);
+//    }
+//    for (auto C : ConcreteConsts) {
+//      Components.push_back(C);
+//    }
+  }
+
+  for (auto &&ConC : ConcreteConsts) {
+    Components.push_back(ConC);
+  }
+
+  for (auto &&SymC : SymCS) {
     Components.push_back(SymC.first);
   }
 
@@ -443,6 +475,11 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
                                     Target->Width);
     for (auto &&Guess : Guesses) {
+
+      if (ConcreteConsts.find(Guess) != ConcreteConsts.end()) {
+        continue;
+      }
+
       std::set<Inst *> ConstSet;
       souper::getConstants(Guess, ConstSet);
       if (!ConstSet.empty()) {
@@ -471,7 +508,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
   std::vector<std::vector<int>> Combinations = GetCombinations(Counts);
 
   for (auto &&Comb : Combinations) {
-    int SymExprCount = 0;
+    static int SymExprCount = 0;
     auto InstCacheRHS = InstCache;
     for (int i = 0; i < RHSConsts.size(); ++i) {
       InstCacheRHS[RHSConsts[i]] = Candidates[i][Comb[i]];
@@ -491,7 +528,14 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
 //      llvm::errs() << "PRUNED\n"; // Figure out why this never succeeds :(
     //} else {
       //llvm::errs() << "NP";
-    InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
+    if (!InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S)) {
+      for (auto R : Relations) {
+        Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+        InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
+        Copy.PCs.pop_back();
+      }
+    }
+
     //}
   }
 }
@@ -529,7 +573,14 @@ void SymbolizeAndGeneralizeOnlyLHS(InstContext &IC,
   Copy.Mapping = Mapping;
   bool IsValid = false;
 
-  InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
+  if (!InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S)) {
+    auto Relations = InferPotentialRelations(SymCS, IC);
+    for (auto R : Relations) {
+      Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+      InferPreconditionsAndVerify(Copy, Results, SymCS, IC, S);
+      Copy.PCs.pop_back();
+    }
+  }
 }
 
 void SymbolizeAndGeneralize(InstContext &IC,

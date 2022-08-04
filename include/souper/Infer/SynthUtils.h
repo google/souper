@@ -32,7 +32,9 @@ public:
     return Builder(IC.getInst(Inst::K, L->Width, {L, R}), IC);   \
   }
 
-  BINOP(Add) BINOP(Sub) BINOP(And) BINOP(Xor)
+  BINOP(Add) BINOP(Sub) BINOP(Mul)
+  BINOP(And) BINOP(Xor) BINOP(Or)
+  BINOP(Shl) BINOP(LShr)
 #undef BINOP
 
 #define BINOPW(K)                                                \
