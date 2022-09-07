@@ -71,7 +71,24 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
 
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
-ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {  
+ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
+  SynthesisContext SC{IC, S->getSMTLIBSolver(), Input.Mapping.LHS, nullptr,
+              Input.PCs,Input.BPCs, false, 15};
+  std::vector<Inst *> Vars;
+  findVars(Input.Mapping.LHS, Vars);
+
+  // TODO figure out why prunning isn't working
+
+//  PruningManager Pruner(SC, Vars, 5);
+
+//  Input.print(llvm::errs(), true);
+
+//  if (Pruner.isInfeasibleWithSolver(Input.Mapping.RHS, 5)) {
+//    llvm::errs() << "FOOOO\n";
+//  } else {
+//    llvm::errs() << "BAAAR\n";
+//  }
+
   Input = Clone(Input, IC);
   std::set<Inst *> ConstSet;
   souper::getConstants(Input.Mapping.RHS, ConstSet);
@@ -112,7 +129,7 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
     return Input;
   } else {
     static int C = 0;
-    llvm::errs() << "C " << C++ << '\n';
+//    llvm::errs() << "C " << C++ << '\n';
     Input.Mapping = InstMapping(nullptr, nullptr);
     return Input;
     // TODO: Better failure indication?

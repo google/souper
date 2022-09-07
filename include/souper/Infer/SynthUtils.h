@@ -46,6 +46,14 @@ public:
   BINOPW(Eq) BINOPW(Ne)
 #undef BINOPW
 
+#define UNOP(K)                                                  \
+  Builder K() {                                                  \
+    auto L = I;                                                  \
+    return Builder(IC.getInst(Inst::K, L->Width, {L}), IC);      \
+  }
+  UNOP(LogB)
+#undef UNOP
+
 private:
   Inst *I = nullptr;
   InstContext &IC;

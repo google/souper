@@ -294,7 +294,7 @@ bool PruningManager::isInfeasible(souper::Inst *RHS,
       if (C.hasValue()) {
         auto Val = C.getValue();
         if (StatsLevel > 2)
-          llvm::errs() << "  LHS value = " << Val << "\n";
+          llvm::errs() << "  LHS value = " << Val <<" - " <<RHSIsConcrete<< "\n";
         if (!RHSIsConcrete) {
           auto CR = ConstantRangeAnalysis().findConstantRange(RHS, ConcreteInterpreters[I]);
           if (StatsLevel > 2)

@@ -55,7 +55,7 @@ static llvm::cl::opt<bool> SymbolizeConstant("symbolize",
 static llvm::cl::opt<bool> FindConstantRelations("relational",
     llvm::cl::desc("Find constant relations."
                    "(default=false)"),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 static llvm::cl::opt<bool> SymbolizeWidth("symbolize-width",
     llvm::cl::desc("Try to replace a concrete constant with a function of bitwidth."
@@ -81,7 +81,7 @@ static llvm::cl::opt<bool> SymbolizeKBDF("symbolize-infer-kb",
 
 static llvm::cl::opt<bool> SymbolizeConstSynthesis("symbolize-constant-synthesis",
     llvm::cl::desc("Allow concrete constants in the generated code."),
-    llvm::cl::init(true));
+    llvm::cl::init(false));
 
 static llvm::cl::opt<bool> SymbolizeHackersDelight("symbolize-bit-hacks",
     llvm::cl::desc("Include bit hacks in the components."),
@@ -109,7 +109,7 @@ static llvm::cl::opt<bool> MinimizeWidth("minimize-width",
 
 static cl::opt<size_t> NumResults("generalization-num-results",
     cl::desc("Number of Generalization Results"),
-    cl::init(5));
+    cl::init(1));
 
 static cl::opt<bool> Everything("everything",
     cl::desc("Run everything, output one result."),
@@ -436,9 +436,12 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
 //  }
 
 
-    // Put custom components here
+  // Put custom components here
   if (SymbolizeConstant) {
     for (auto &&C : SymCS) {
+      if (Everything) {
+        Components.push_back(Builder(C.first, IC).LogB()());
+      }
       // Minus One
 //      Components.push_back(Builder(C.first, IC).Sub(1)());
       // Flip bits
@@ -617,12 +620,13 @@ void SymbolizeAndGeneralize(InstContext &IC,
     // TODO: Is it possible to encode this logically.
 
     // All at once
-//    SymbolizeAndGeneralizeImpl(IC, S, Input, LHSConsts, RHSConsts, Results);
+    SymbolizeAndGeneralizeImpl(IC, S, Input, LHSConsts, RHSConsts, Results);
   }
-  llvm::outs() << ";Input:\n";
-  Input.print(llvm::outs(), true);
-  llvm::outs() << "\n;Results:\n";
-
+  if (!Everything) {
+    llvm::outs() << ";Input:\n";
+    Input.print(llvm::outs(), true);
+    llvm::outs() << "\n;Results:\n";
+  }
   // TODO : Improve sorting.
   // Here are some ideas
   // Prioritize results with more symbolic constants
@@ -646,9 +650,15 @@ void SymbolizeAndGeneralize(InstContext &IC,
   }
 
   int n = 5;
-  for (auto &&Str : ResultStrs) {
+  for (auto &&Str : ResultStrs) {  
 //    if (!n--) break;
     llvm::outs() << Str << "\n";
+    if (Everything) {
+        break;
+    }
+  }
+  if (ResultStrs.empty()) {
+    Input.print(llvm::outs(), true);
   }
 }
 
@@ -856,9 +866,8 @@ int main(int argc, char **argv) {
         Rep =  ParseReplacements(IC, MB->getMemBufferRef().getBufferIdentifier(),
                                   Data.getBuffer(), ErrStr)[0];
       }
-
-      Rep.print(llvm::outs(), true);
-
+      SymbolizeAndGeneralize(IC, S.get(), Rep);
+      continue;
     }
     if (FixIt) {
       // TODO: Verify that inputs are valid optimizations
