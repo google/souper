@@ -34,7 +34,7 @@ static llvm::cl::opt<bool> IgnorePCs("ignore-pcs",
 static llvm::cl::opt<bool> IgnoreDF("ignore-df",
     llvm::cl::desc("Ignore inputs with dataflow constraints."
                    "(default=false)"),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 static const std::map<Inst::Kind, std::string> MatchOps = {
   {Inst::Add, "m_c_Add("}, {Inst::Sub, "m_Sub("},
@@ -262,10 +262,15 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
     llvm::errs() << "\nUnimplemented matcher:" << Inst::getKindName(I->K) << "\n";
     return false;
   }
+  
   auto Op = It->second;
 
   Out << Op;
 
+  if (I->K == Inst::SExt || I->K == Inst::ZExt || I->K == Inst::Trunc) {
+    Out << I->Width << ", ";
+  }
+  
   if (PredNames.find(I->K) != PredNames.end()) {
     Out << Syms.Preds[I] << ", ";
   }
@@ -536,6 +541,9 @@ int main(int argc, char **argv) {
   size_t optnumber = 0;
   for (auto &&Input: Inputs) {
     if (IgnorePCs && !Input.PCs.empty()) {
+      continue;
+    }
+    if (Input.Mapping.LHS == Input.Mapping.RHS) {
       continue;
     }
     if (IgnoreDF) {
