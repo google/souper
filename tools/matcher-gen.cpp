@@ -141,6 +141,15 @@ struct WidthEq : public Constraint {
   }
 };
 
+struct DomCheck : public Constraint {
+  DomCheck(std::string Name_) : Name(Name_) {}
+  std::string Name;
+  
+  std::string print() override {
+    return "util::dc(DT, I, " + Name + ")";
+  }
+};
+
 // Enforce that `Name` is a constant and a power of 2
 struct CPow2 : public Constraint {
   CPow2(std::string Name_) : Name(Name_)  {}
@@ -161,6 +170,8 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
   std::vector<Inst *> Vars;
   std::set<Inst *> Consts, ConstRefs;
 
+  std::set<Inst *> Used;
+
   void RegisterPred(Inst *I) {
     if (PredNames.find(I->K) == PredNames.end()) {
       return; // not a predicate
@@ -172,6 +183,7 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     Preds[I] = Name;
     Constraints.push_back(new PredEq(Name, PredNames.at(I->K)));
   }
+
   template<typename Stream>
   void PrintPreds(Stream &Out) {
     if (Preds.empty()) {
@@ -194,6 +206,24 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
       if (S.second.size() > 1) {
         for (size_t i = 1; i < S.second.size(); ++i) {
           Constraints.push_back(new VarEq(S.second[0], S.second[i]));
+        }
+      }
+    }
+  }
+  
+  void GenDomConstraints(Inst *RHS) {
+    static std::set<Inst *> Visited;
+    Visited.insert(RHS);
+    for (auto Op : RHS->Ops) {
+      if (Op->K == Inst::Const) {
+        continue;
+        // TODO: Find other cases
+      }
+      auto It = find(Op);
+      if (It != end()) {
+        if (Visited.find(Op) == Visited.end()) {
+          Constraints.push_back(new DomCheck(It->second[0]));
+          GenDomConstraints(Op);
         }
       }
     }
@@ -239,24 +269,34 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     Out << "}\n";
   }
 
+  // Consts = consts found in LHS
+  // ConstRefs = consts found in RHS
   template <typename Stream>
   void PrintConstDecls(Stream &Out) {
     size_t varnum = 0;
-    for (auto C : ConstRefs) {
-      if (Consts.find(C) != Consts.end()) {
-        continue;
-      }
+
+    auto Print = [&](SymbolTable &Syms, Inst *C){
       auto Name = "C" + std::to_string(varnum++);
       Out << "  auto " << Name << " = C("
           << C->Val.getBitWidth() <<", "
           << C->Val << ", B);\n";
-      (*this)[C].push_back(Name);
+      Syms[C].push_back(Name);
+    };
+
+    for (auto C : ConstRefs) {
+      if (Consts.find(C) == Consts.end()) {
+        Print(*this, C);
+      }
     }
   }
 };
 
 template <typename Stream>
 bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
+  if (I->K != souper::Inst::Var && Syms.Used.find(I) != Syms.Used.end()) {
+    Out << "&" << Syms[I].back() << " <<= ";
+  }
+
   auto It = MatchOps.find(I->K);
   if (It == MatchOps.end()) {
     llvm::errs() << "\nUnimplemented matcher:" << Inst::getKindName(I->K) << "\n";
@@ -282,18 +322,21 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
     } else {
       Out << ", ";
     }
+
     if (Child->K == Inst::Const) {
+      if (Child->K != souper::Inst::Var && Syms.Used.find(Child) != Syms.Used.end()) {
+        Out << "&" << Syms[Child].back() << " <<= ";
+      }
       auto Str = Child->Val.toString(10, false);
-      Out << "m_SpecificInt(" << Str << ")";
+      Out << "m_SpecificInt( " << Child->Width << ", " << Str << ")";
     } else if (Child->K == Inst::Var) {
       if (Child->Name.starts_with("symconst")) {
-        Out << "m_Constant()";
+        Out << "m_Constant(&" << Syms[Child].back() << ")";
       } else if (Child->Name.starts_with("constexpr")) {
         llvm::errs() << "FOUND A CONSTEXPR\n";
       } else {
       // FIXME What about Symbolic constants?
       // How about matching const exprs?
-
         Out << "m_Value(" << Syms[Child].back() << ")";
       }
       Syms[Child].pop_back();
@@ -342,71 +385,54 @@ bool GenRHSCreator(Inst *I, Stream &Out, SymbolTable &Syms) {
   return true;
 }
 
-template <typename Stream, typename Container>
-void printPath(Stream &Out, const Container& C) {
-  Out << "{";
-  bool first = true;
-  for (auto c : C) {
-    if (first) {
-      first = false;
-    } else {
-      Out << ", ";
-    }
-    Out << c;
-  }
-  Out << "}";
-}
-
 template <typename Stream>
 bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
-  std::map<Inst *, std::vector<int>> Paths;
+  std::set<Inst *> LHSInsts;
 
-  std::set<Inst *> Consts;
-
-
-  Paths[Root] = {}; // root has an empty path
+//  Paths[Root] = {}; // root has an empty path
   std::vector<Inst *> Stack{Root};
-
+//
   int varnum = 0;
   while (!Stack.empty()) {
     auto I = Stack.back();
     Stack.pop_back();
     Syms.RegisterPred(I);
+    LHSInsts.insert(I);
     if (I->K == Inst::Var) {
       Syms[I].push_back("x" + std::to_string(varnum++));
     }
     if (I->K == Inst::Const) {
-      Consts.insert(I);
+      Syms.Consts.insert(I);
     }
     for (int i = 0; i < I->Ops.size(); ++i) {
-      Paths[I->Ops[i]] = Paths[I]; // Child inherits parent's path
-      Paths[I->Ops[i]].push_back(i);
+//      Paths[I->Ops[i]] = Paths[I]; // Child inherits parent's path
+//      Paths[I->Ops[i]].push_back(i);
       Stack.push_back(I->Ops[i]); // Souper exprs are DAGs
     }
   }
 
-
   std::set<Inst *> LHSRefs;
   std::set<Inst *> Visited;
-  std::set<Inst *> ConstRefs;
   Stack.push_back(RHS);
   while (!Stack.empty()) {
     auto I = Stack.back();
     Stack.pop_back();
     Visited.insert(I);
     if (I->K == Inst::Const) {
-//      Consts.insert(I);
-      ConstRefs.insert(I);
+      Syms.ConstRefs.insert(I);
     }
-    if (Paths.find(I) != Paths.end()) {
-      LHSRefs.insert(I);
-    } else {
-      for (auto Child : I->Ops) {
-        if (Visited.find(Child) == Visited.end()) {
-          Stack.push_back(Child);
-        }
+
+    if (LHSInsts.find(I) != LHSInsts.end()) {
+      if (Syms.Used.insert(I).second && Syms.find(I) == Syms.end()) {
+        Syms[I].push_back("x" + std::to_string(varnum++));
       }
     }
+    for (auto Child : I->Ops) {
+      if (Visited.find(Child) == Visited.end()) {
+        Stack.push_back(Child);
+      }
+    }
+
   }
 
   if (!Syms.empty()) {
@@ -425,33 +451,29 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
     Out << ";\n";
   }
 
-  varnum = 0;
-  for (auto &&P : Paths) {
-    if (P.first == Root || P.first->K == Inst::Var
-        || LHSRefs.find(P.first) == LHSRefs.end()) {
-      continue;
-    }
-//    std::string Name = "I";
-//    for (auto idx : P.second) {
-//      auto NewName = "y" + std::to_string(varnum++);
-//      Out << "auto " << NewName << " = cast<Instruction>(" << Name;
-//      Out << ")->getOperand(" << idx << ");\n";
-//      std::swap(Name, NewName);
+//  varnum = 0;
+//  for (auto &&P : Paths) {
+//    if (P.first == Root || P.first->K == Inst::Var
+//        || LHSRefs.find(P.first) == LHSRefs.end()) {
+//      continue;
 //    }
+////    std::string Name = "I";
+////    for (auto idx : P.second) {
+////      auto NewName = "y" + std::to_string(varnum++);
+////      Out << "auto " << NewName << " = cast<Instruction>(" << Name;
+////      Out << ")->getOperand(" << idx << ");\n";
+////      std::swap(Name, NewName);
+////    }
+////    Syms[P.first].push_back(Name);
+//
+//    auto Name = "y" + std::to_string(varnum++);
+//    Out << "auto " << Name << " = util::node(I, ";
+//    printPath(Out, P.second);
+//    Out << ");\n";
 //    Syms[P.first].push_back(Name);
-
-    auto Name = "y" + std::to_string(varnum++);
-    Out << "auto " << Name << " = util::node(I, ";
-    printPath(Out, P.second);
-    Out << ");\n";
-    Syms[P.first].push_back(Name);
-  }
+//  }
   Syms[Root].push_back("I");
-
   Syms.PrintPreds(Out);
-
-  Syms.Consts = Consts;
-  Syms.ConstRefs = ConstRefs;
   return true;
 }
 
@@ -474,21 +496,12 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
 
   Syms.GenVarEqConstraints();
   Syms.GenVarPropConstraints(Input.Mapping.LHS);
+  Syms.GenDomConstraints(Input.Mapping.RHS);
   Syms.PrintConstraintsPre(Out);
-  Syms.PrintConstDecls(Out);
+
   Out << "  St.hit(" << OptID << ");\n";
 
-//  size_t varnum = 0;
-//  for (auto C : SymsCopy.ConstRefs) {
-//    if (SymsCopy.Consts.find(C) != SymsCopy.Consts.end()) {
-//      continue;
-//    }
-//    auto Name = "C" + std::to_string(varnum++);
-//    Out << "auto " << Name << " = C("
-//        << C->Val.getBitWidth() <<", "
-//        << C->Val << ", B);\n";
-//    Syms[C].push_back(Name);
-//  }
+  Syms.PrintConstDecls(Out);
 
   if (Syms.find(Input.Mapping.RHS) != Syms.end()) {
     Out << "  return " << Syms[Input.Mapping.RHS][0] << ";";
@@ -511,7 +524,58 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
   return true;
 }
 
+std::string getLLVMInstKindName(Inst::Kind K) {
+  StringRef str = MatchOps.find(K)->second;
+  str.consume_front("m_");
+  str.consume_back("(");
+//  str.consume_front("NSW");
+//  str.consume_front("NUW");
+//  str.consume_front("NW");
+  return str.str();
+}
 
+void genDispatchCode(const std::set<Inst::Kind> &Kinds) {
+  llvm::outs() << "bool matchAll = true;\n";
+  llvm::outs() << "auto CI = dyn_cast<CmpInst>(I);";
+  // TODO Handle NSW/etc
+  for (auto K : Kinds) {
+    switch(K) {
+      case Inst::Add:
+      llvm::outs() << "if (I->getOpcodeName() == \"add\") {matchAll = false;goto add_;}";
+        break;
+      case Inst::Sub:
+        llvm::outs() << "if (I->getOpcodeName() == \"sub\") {matchAll = false;goto sub_;}";
+        break;
+      case Inst::Mul:
+      llvm::outs() << "if (I->getOpcodeName() == \"mul\") {matchAll = false;goto mul_;}";
+        break;
+      case Inst::And:
+      llvm::outs() << "if (I->getOpcodeName() == \"and\") {matchAll = false;goto and_;}";
+        break;
+      case Inst::Or:
+        llvm::outs() << "if (I->getOpcodeName() == \"or\") {matchAll = false;goto or_;}";
+        break;
+      case Inst::Xor:
+      llvm::outs() << "if (I->getOpcodeName() == \"xor\") {matchAll = false;goto xor_;}";
+        break;
+
+      case Inst::Eq:
+      llvm::outs() << "if (I->getOpcodeName() == \"icmp\" &&"
+                   << "CI->getPredicate() == CmpInst::ICMP_EQ) "
+                   << "{matchAll = false;goto eq_;}";
+        break;
+      case Inst::Ne:
+      llvm::outs() << "if (I->getOpcodeName() == \"icmp\" &&"
+                   << "CI->getPredicate() == CmpInst::ICMP_NE) "
+                   << "{matchAll = false;goto ne_;}";
+        break;
+
+
+
+      default: break;
+    }
+  }
+}
 
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
@@ -533,13 +597,29 @@ int main(int argc, char **argv) {
   auto Inputs = ParseReplacements(IC, Data.getBufferIdentifier(),
                                   Data.getBuffer(), ErrStr);
 
+  std::set<Inst::Kind> Kinds;
+  std::sort(Inputs.begin(), Inputs.end(),
+            [&Kinds](const ParsedReplacement& A, const ParsedReplacement &B) {
+    Kinds.insert(A.Mapping.LHS->K);
+    Kinds.insert(B.Mapping.LHS->K);
+    return A.Mapping.LHS->K < B.Mapping.LHS->K;
+  });
+
   if (!ErrStr.empty()) {
     llvm::errs() << ErrStr << '\n';
     return 1;
   }
 
   size_t optnumber = 0;
+//  genDispatchCode(Kinds);
+  Inst::Kind Last = Inst::Kind::None;
+
   for (auto &&Input: Inputs) {
+//    if (Input.Mapping.LHS->K != Last) {
+//      llvm::outs() << "if (!matchAll) goto end;\n";
+//      Last = Input.Mapping.LHS->K;
+//      llvm::outs() << Inst::getKindName(Last) << "_" << ":\n";
+//    }
     if (IgnorePCs && !Input.PCs.empty()) {
       continue;
     }
@@ -588,6 +668,7 @@ int main(int argc, char **argv) {
       llvm::errs().flush();
     }
   }
+//  llvm::outs() << "end:\n";
 
   return 0;
 }
