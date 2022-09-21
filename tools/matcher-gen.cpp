@@ -10,6 +10,8 @@
 #include "souper/Tool/GetSolver.h"
 #include "souper/Util/DfaUtils.h"
 
+#include <fstream>
+
 using namespace llvm;
 using namespace souper;
 
@@ -36,6 +38,12 @@ static llvm::cl::opt<bool> IgnoreDF("ignore-df",
                    "(default=false)"),
     llvm::cl::init(true));
 
+static llvm::cl::opt<std::string> ListFile("listfile",
+    llvm::cl::desc("List of optimization indexes to include.\n"
+                   "(default=empty-string)"),
+    llvm::cl::init(""));
+
+
 static const std::map<Inst::Kind, std::string> MatchOps = {
   {Inst::Add, "m_c_Add("}, {Inst::Sub, "m_Sub("},
   {Inst::Mul, "m_c_Mul("},
@@ -57,12 +65,12 @@ static const std::map<Inst::Kind, std::string> MatchOps = {
   {Inst::And, "m_c_And("}, {Inst::Or, "m_c_Or("},
   {Inst::Xor, "m_c_Xor("},
 
-  {Inst::Eq, "m_Cmp("},
-  {Inst::Ne, "m_Cmp("},
-  {Inst::Ule, "m_Cmp("},
-  {Inst::Ult, "m_Cmp("},
-  {Inst::Sle, "m_Cmp("},
-  {Inst::Slt, "m_Cmp("},
+  {Inst::Eq, "m_c_ICmp("},
+  {Inst::Ne, "m_c_ICmp("},
+  {Inst::Ule, "m_ICmp("},
+  {Inst::Ult, "m_ICmp("},
+  {Inst::Sle, "m_ICmp("},
+  {Inst::Slt, "m_ICmp("},
 
   {Inst::SExt, "m_SExt("},
   {Inst::ZExt, "m_ZExt("},
@@ -150,13 +158,13 @@ struct DomCheck : public Constraint {
   }
 };
 
-// Enforce that `Name` is a constant and a power of 2
-struct CPow2 : public Constraint {
-  CPow2(std::string Name_) : Name(Name_)  {}
+struct VC : public Constraint {
+  VC(std::string Cons_, std::string Name_) : Cons(Cons_), Name(Name_)  {}
   std::string print() override {
-    return "util::cpow2(" + Name + ")";
+    return "util::" + Cons + "(" + Name + ")";
   }
   std::string Name;
+  std::string Cons;
 };
 
 //struct VarKB : public Constraint {
@@ -236,11 +244,19 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     for (auto V : Vars) {
       auto Name = this->at(V)[0];
       Constraints.push_back(new WidthEq(Name, V->Width));
-      if (V->Name.starts_with("symconst_")) {
-        if (V->PowOfTwo) {
-          Constraints.push_back(new CPow2(Name));
-        }
+      if (V->PowOfTwo) {
+        Constraints.push_back(new VC("pow2", Name));
       }
+      if (V->NonZero) {
+        Constraints.push_back(new VC("nz", Name));
+      }
+      if (V->NonNegative) {
+        Constraints.push_back(new VC("nn", Name));
+      }
+      if (V->Negative) {
+        Constraints.push_back(new VC("neg", Name));
+      }
+
     }
   }
 
@@ -337,6 +353,7 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
       } else {
       // FIXME What about Symbolic constants?
       // How about matching const exprs?
+
         Out << "m_Value(" << Syms[Child].back() << ")";
       }
       Syms[Child].pop_back();
@@ -534,47 +551,9 @@ std::string getLLVMInstKindName(Inst::Kind K) {
   return str.str();
 }
 
-void genDispatchCode(const std::set<Inst::Kind> &Kinds) {
-  llvm::outs() << "bool matchAll = true;\n";
-  llvm::outs() << "auto CI = dyn_cast<CmpInst>(I);";
-  // TODO Handle NSW/etc
-  for (auto K : Kinds) {
-    switch(K) {
-      case Inst::Add:
-      llvm::outs() << "if (I->getOpcodeName() == \"add\") {matchAll = false;goto add_;}";
-        break;
-      case Inst::Sub:
-        llvm::outs() << "if (I->getOpcodeName() == \"sub\") {matchAll = false;goto sub_;}";
-        break;
-      case Inst::Mul:
-      llvm::outs() << "if (I->getOpcodeName() == \"mul\") {matchAll = false;goto mul_;}";
-        break;
-      case Inst::And:
-      llvm::outs() << "if (I->getOpcodeName() == \"and\") {matchAll = false;goto and_;}";
-        break;
-      case Inst::Or:
-        llvm::outs() << "if (I->getOpcodeName() == \"or\") {matchAll = false;goto or_;}";
-        break;
-      case Inst::Xor:
-      llvm::outs() << "if (I->getOpcodeName() == \"xor\") {matchAll = false;goto xor_;}";
-        break;
-
-      case Inst::Eq:
-      llvm::outs() << "if (I->getOpcodeName() == \"icmp\" &&"
-                   << "CI->getPredicate() == CmpInst::ICMP_EQ) "
-                   << "{matchAll = false;goto eq_;}";
-        break;
-      case Inst::Ne:
-      llvm::outs() << "if (I->getOpcodeName() == \"icmp\" &&"
-                   << "CI->getPredicate() == CmpInst::ICMP_NE) "
-                   << "{matchAll = false;goto ne_;}";
-        break;
-
-
-
-      default: break;
-    }
-  }
+int profitability(const ParsedReplacement &Input) {
+  return souper::cost(Input.Mapping.LHS) -
+    souper::cost(Input.Mapping.RHS);
 }
 
 int main(int argc, char **argv) {
@@ -583,6 +562,15 @@ int main(int argc, char **argv) {
 
   std::unique_ptr<Solver> S = 0;
   S = GetSolver(KV);
+
+  std::unordered_set<size_t> optnumbers;
+  if (ListFile != "") {
+    std::ifstream in(ListFile);
+    size_t num;
+    while (in >> num) {
+      optnumbers.insert(num);
+    }
+  }
 
   auto MB = MemoryBuffer::getFileOrSTDIN(InputFilename);
   if (!MB) {
@@ -602,6 +590,14 @@ int main(int argc, char **argv) {
             [&Kinds](const ParsedReplacement& A, const ParsedReplacement &B) {
     Kinds.insert(A.Mapping.LHS->K);
     Kinds.insert(B.Mapping.LHS->K);
+
+//    if (A.Mapping.LHS->K < B.Mapping.LHS->K) {
+//      return true;
+//    } else if (A.Mapping.LHS->K == B.Mapping.LHS->K) {
+//      return profitability(A) > profitability(B);
+//    } else {
+//      return false;
+//    }
     return A.Mapping.LHS->K < B.Mapping.LHS->K;
   });
 
@@ -614,12 +610,9 @@ int main(int argc, char **argv) {
 //  genDispatchCode(Kinds);
   Inst::Kind Last = Inst::Kind::None;
 
+  bool first = true;
+
   for (auto &&Input: Inputs) {
-//    if (Input.Mapping.LHS->K != Last) {
-//      llvm::outs() << "if (!matchAll) goto end;\n";
-//      Last = Input.Mapping.LHS->K;
-//      llvm::outs() << Inst::getKindName(Last) << "_" << ":\n";
-//    }
     if (IgnorePCs && !Input.PCs.empty()) {
       continue;
     }
@@ -652,10 +645,86 @@ int main(int argc, char **argv) {
       if (found) continue;
     }
 
+    if (Input.Mapping.LHS->K != Last) {
+      if (!first) {
+        llvm::outs() << "}\n";
+      }
+      first = false;
+      llvm::outs() << "if (";
+      switch (Input.Mapping.LHS->K) {
+        case Inst::AddNW:
+        case Inst::AddNUW:
+        case Inst::AddNSW:
+        case Inst::Add: llvm::outs()
+          << "I->getOpcode() == Instruction::Add"; break;
+
+        case Inst::SubNW:
+        case Inst::SubNUW:
+        case Inst::SubNSW:
+        case Inst::Sub: llvm::outs()
+          << "I->getOpcode() == Instruction::Sub"; break;
+
+        case Inst::MulNW:
+        case Inst::MulNUW:
+        case Inst::MulNSW:
+        case Inst::Mul: llvm::outs()
+          << "I->getOpcode() == Instruction::Mul"; break;
+
+        case Inst::ShlNW:
+        case Inst::ShlNUW:
+        case Inst::ShlNSW:
+        case Inst::Shl: llvm::outs()
+          << "I->getOpcode() == Instruction::Shl"; break;
+
+        case Inst::And: llvm::outs()
+          << "I->getOpcode() == Instruction::And"; break;
+        case Inst::Or: llvm::outs()
+          << "I->getOpcode() == Instruction::Or"; break;
+        case Inst::Xor: llvm::outs()
+          << "I->getOpcode() == Instruction::Xor"; break;
+        case Inst::SRem: llvm::outs()
+          << "I->getOpcode() == Instruction::SRem"; break;
+        case Inst::URem: llvm::outs()
+          << "I->getOpcode() == Instruction::URem"; break;
+        case Inst::SDiv: llvm::outs()
+          << "I->getOpcode() == Instruction::SDiv"; break;
+        case Inst::UDiv: llvm::outs()
+          << "I->getOpcode() == Instruction::UDiv"; break;
+        case Inst::ZExt: llvm::outs()
+          << "I->getOpcode() == Instruction::ZExt"; break;
+        case Inst::SExt: llvm::outs()
+          << "I->getOpcode() == Instruction::SExt"; break;
+        case Inst::Trunc: llvm::outs()
+          << "I->getOpcode() == Instruction::Trunc"; break;
+        case Inst::Select: llvm::outs()
+          << "I->getOpcode() == Instruction::Select"; break;
+        case Inst::Phi: llvm::outs()
+          << "isa<PHINode>(I)"; break;
+        case Inst::Eq:
+        case Inst::Ne:
+        case Inst::Ult:
+        case Inst::Slt:
+        case Inst::Ule:
+        case Inst::Sle: llvm::outs()
+          << "I->getOpcode() == Instruction::ICmp"; break;
+
+        default: llvm::outs() << "true";
+      }
+      llvm::outs() << ") {\n";
+    }
+    Last = Input.Mapping.LHS->K;
+
     std::string Str;
     llvm::raw_string_ostream Out(Str);
     if (GenMatcher(Input, Out, optnumber)) {
       auto current = optnumber++;
+      if (!optnumbers.empty()
+          && optnumbers.find(current) == optnumbers.end()) {
+        Out.flush();
+        Str.clear();
+        llvm::errs() << "Opt " << current <<  " skipped on demand.\n";
+        continue;
+      }
       llvm::outs() << "/* Opt : " << current << "\n";
       Input.print(llvm::outs(), true);
       llvm::outs() << "*/\n";
@@ -668,6 +737,7 @@ int main(int argc, char **argv) {
       llvm::errs().flush();
     }
   }
+  llvm::outs() << "}\n";
 //  llvm::outs() << "end:\n";
 
   return 0;

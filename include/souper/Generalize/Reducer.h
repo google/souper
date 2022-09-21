@@ -29,14 +29,13 @@ public:
   // Assumes Input is valid
   ParsedReplacement ReducePCs(ParsedReplacement Input);
 
-  // Assumes Input is valid
   ParsedReplacement WeakenKB(ParsedReplacement Input);
 
-  // Assumes Input is valid
   ParsedReplacement WeakenCR(ParsedReplacement Input);
 
-  // Assumes Input is valid
   ParsedReplacement WeakenDB(ParsedReplacement Input);
+
+  ParsedReplacement WeakenOther(ParsedReplacement Input);
 
   bool VerifyInput(ParsedReplacement &Input);
 

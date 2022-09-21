@@ -266,8 +266,6 @@ bool All(const C &c, F f) {
   return true;
 }
 
-
-
 bool InferPreconditionsAndVerify(ParsedReplacement Input, CandidateMap &Results,
                                  std::vector<std::pair<Inst *, llvm::APInt>> &SymCS, InstContext &IC, Solver *S) {
   
@@ -782,6 +780,7 @@ std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
   Input = R.WeakenKB(Input);
   Input = R.WeakenCR(Input);
   Input = R.WeakenDB(Input);
+  Input = R.WeakenOther(Input);
   if (ReduceKBIFY) {
     Input = R.ReduceGreedyKBIFY(Input);
   }

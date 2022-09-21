@@ -404,6 +404,38 @@ ParsedReplacement Reducer::WeakenDB(ParsedReplacement Input) {
   return Input;
 }
 
+// Assumes Input is valid
+ParsedReplacement Reducer::WeakenOther(ParsedReplacement Input) {
+  std::vector<Inst *> Vars;
+  findVars(Input.Mapping.LHS, Vars);
+
+  for (auto &&V : Vars) {
+#define WEAKEN(X)           \
+if (V->X) {                 \
+  V->X = false;             \
+  if (!VerifyInput(Input)) {\
+    V->X = true;}}
+
+    WEAKEN(NonZero)
+    WEAKEN(NonNegative)
+    WEAKEN(PowOfTwo)
+    WEAKEN(Negative)
+
+#undef WEAKEN
+
+    while (V->NumSignBits) {
+      V->NumSignBits--;
+      if (!VerifyInput(Input)) {
+        V->NumSignBits++;
+        break;
+      }
+    }
+
+  }
+
+  return Input;
+}
+
 bool Reducer::VerifyInput(ParsedReplacement &Input) {
   std::vector<std::pair<Inst *, llvm::APInt>> Models;
   bool Valid;
