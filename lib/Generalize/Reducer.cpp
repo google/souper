@@ -30,6 +30,11 @@ ParsedReplacement Reducer::ReduceGreedy(ParsedReplacement Input) {
   int failcount = 0;
   std::set<Inst *> Visited;
   do {
+
+    if (souper::cost(Input.Mapping.LHS) - souper::cost(Input.Mapping.LHS) <= 1) {
+      break;
+    }
+
     auto It = Insts.begin();
     auto I = *It;
     Insts.erase(It);
@@ -141,6 +146,11 @@ ParsedReplacement Reducer::ReduceGreedyKBIFY(ParsedReplacement Input) {
   size_t failcount = 0;
   std::set<Inst *> Visited;
   do {
+
+    if (souper::cost(Input.Mapping.LHS) - souper::cost(Input.Mapping.LHS) <= 1) {
+      break;
+    }
+
     auto It = Insts.begin();
     auto I = *It;
     Insts.erase(It);
@@ -489,6 +499,10 @@ Inst *Reducer::Eliminate(ParsedReplacement &Input, Inst *I) {
 }
 
 void Reducer::ReduceRec(ParsedReplacement Input_, std::vector<ParsedReplacement> &Results) {
+
+  if (souper::cost(Input_.Mapping.LHS) - souper::cost(Input_.Mapping.LHS) <= 1) {
+    return;
+  }
 
   // Try to remove subsets of instructions recursively, and store all valid results
   ReplacementContext RC;

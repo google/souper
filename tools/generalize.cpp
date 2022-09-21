@@ -50,7 +50,7 @@ static llvm::cl::opt<bool> ReducePrintAll("reduce-all-results",
 static llvm::cl::opt<bool> SymbolizeConstant("symbolize",
     llvm::cl::desc("Try to replace a concrete constant with a symbolic constant."
                    "(default=false)"),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 static llvm::cl::opt<bool> FindConstantRelations("relational",
     llvm::cl::desc("Find constant relations."
@@ -81,7 +81,7 @@ static llvm::cl::opt<bool> SymbolizeKBDF("symbolize-infer-kb",
 
 static llvm::cl::opt<bool> SymbolizeConstSynthesis("symbolize-constant-synthesis",
     llvm::cl::desc("Allow concrete constants in the generated code."),
-    llvm::cl::init(false));
+    llvm::cl::init(true));
 
 static llvm::cl::opt<bool> SymbolizeHackersDelight("symbolize-bit-hacks",
     llvm::cl::desc("Include bit hacks in the components."),
@@ -113,7 +113,7 @@ static cl::opt<size_t> NumResults("generalization-num-results",
 
 static cl::opt<bool> Everything("everything",
     cl::desc("Run everything, output one result."),
-    cl::init(false));
+    cl::init(true));
 
 static cl::opt<bool> SymbolicDF("symbolic-df",
     cl::desc("Generalize with symbolic dataflow facts."),
@@ -435,7 +435,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
 
 
   // Put custom components here
-  if (SymbolizeConstant) {
+  if (SymbolizeConstant || Everything) {
     for (auto &&C : SymCS) {
       if (Everything) {
         Components.push_back(Builder(C.first, IC).LogB()());
@@ -555,7 +555,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
   }
 }
 
-// This is a simpler version of
+// This is a simpler version of the above
 void SymbolizeAndGeneralizeOnlyLHS(InstContext &IC,
                                    Solver *S,
                                    ParsedReplacement Input,
