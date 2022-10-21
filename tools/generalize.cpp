@@ -679,6 +679,83 @@ std::set<Inst *> findConcreteConsts(Inst *I) {
   return Ret;
 }
 
+ParsedReplacement
+FirstValidCombination(ParsedReplacement Input,
+                      const std::vector<Inst *> &Targets,
+                      const std::vector<std::vector<Inst *>> &Candidates,
+                      std::map<Inst *, Inst *> InstCache,
+                      InstContext &IC, Solver *S) {
+  std::vector<int> Counts;
+  for (auto &&Cand : Candidates) {
+    Counts.push_back(Cand.size());
+  }
+
+  auto Combinations = GetCombinations(Counts);
+
+  for (auto &&Comb : Combinations) {
+    static int SymExprCount = 0;
+    auto InstCacheRHS = InstCache;
+    for (int i = 0; i < Targets.size(); ++i) {
+      InstCacheRHS[Targets[i]] = Candidates[i][Comb[i]];
+      if (Candidates[i][Comb[i]]->K != Inst::Var) {
+        Candidates[i][Comb[i]]->Name = std::string("constexpr_") + std::to_string(SymExprCount++);
+      }
+    }
+
+    auto Copy = Replace(Input, IC, InstCacheRHS);
+
+//    Copy.print(llvm::errs(), true);
+
+    auto Clone = Verify(Copy, IC, S);
+
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+  }
+
+  Input.Mapping.LHS = nullptr;
+  Input.Mapping.RHS = nullptr;
+  return Input;
+}
+
+std::vector<std::vector<Inst *>>
+InferSimpleConstExprs(std::vector<Inst *> RHS, std::set<Inst *>
+                      LHS, std::map<Inst *, Inst *> SMap,
+                      InstContext &IC) {
+  std::vector<std::vector<Inst *>> Result;
+
+  for (auto &&RC : RHS) {
+    auto RV = RC->Val;
+    Result.push_back({});
+    for (auto &&LC : LHS) {
+      auto LV = LC->Val;
+
+      // TODO: Check width constraints
+
+      // RC = LC + (RV - LV)
+      Result.back().push_back(Builder(SMap[LC], IC).Add(RV - LV)());
+
+      // RC = (RV + LV) - LC
+      Result.back().push_back(Builder(IC, RV + LV).Sub(SMap[LC])());
+
+
+      // RC = LC * (RV / LV) only if no remainder
+      if (RV.urem(LV) == 0) {
+        Result.back().push_back(Builder(SMap[LC], IC).Mul(RV.udiv(LV))());
+      }
+
+      // RC = LC / (RV * LV) only if no remainder
+      if (RV.urem(LV) == 0) {
+        Result.back().push_back(Builder(SMap[LC], IC).UDiv(RV * LV)());
+      }
+
+      // TODO: Masks
+    }
+  }
+
+  return Result;
+}
+
 // Assuming the input has leaves pruned and preconditions weakened
 ParsedReplacement SuccessiveSymbolize(InstContext &IC,
                             Solver *S, ParsedReplacement Input) {
@@ -693,10 +770,15 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   ParsedReplacement Result = Input;
 
   std::map<Inst *, Inst *> SymConstMap;
+
+  std::map<Inst *, Inst *> InstCache;
+
   int i = 1;
   for (auto I : LHSConsts) {
     SymConstMap[I] = IC.createVar(I->Width, "symconst_" +
                                   std::to_string(i++));
+
+    InstCache[I] = SymConstMap[I];
   }
 
   for (auto I : RHSConsts) {
@@ -707,6 +789,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
                                   std::to_string(i++));
   }
 
+  llvm::errs() << "POST Prelude.\n";
   // Step 1 : Just direct symbolize for common consts, no constraints
 
   std::map<Inst *, Inst *> CommonConsts;
@@ -716,39 +799,100 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
   }
 
-  Result = Replace(Result, IC, CommonConsts);
+  if (!CommonConsts.empty()) {
+    Result = Replace(Result, IC, CommonConsts);
 
-  auto Clone = Verify(Result, IC, S);
+    auto Clone = Verify(Result, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+  }
+
+  llvm::errs() << "POST 1.\n";
+
+  // Step 1.5 : Direct symbolize, simple rel constraints on LHS
+
+  std::vector<std::pair<Inst *, llvm::APInt>> CMap;
+
+  for (auto &&C : LHSConsts) {
+    CMap.push_back({SymConstMap[C], C->Val});
+  }
+
+  auto Relations = InferPotentialRelations(CMap, IC, Input);
+
+  std::map<Inst *, Inst *> JustLHSSymConstMap;
+
+  for (auto &&C : LHSConsts) {
+    JustLHSSymConstMap[C] = SymConstMap[C];
+  }
+
+  // Maybe call InferPreconditionsAndVerify instead of Verify?
+  // TODO: Are these matched yet?
+  auto Copy = Replace(Input, IC, JustLHSSymConstMap);
+  for (auto &&R : Relations) {
+    Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+    auto Clone = Verify(Copy, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+    Copy.PCs.pop_back();
+  }
+
+  llvm::errs() << "POST 1.5\n";
+
+  // Step 2 : Symbolize LHS Consts with KB, CR, SimpleDF constrains
+
+  Copy = Replace(Input, IC, JustLHSSymConstMap);
+
+  // TODO: write precondition inference for a given set of variables.
+  // TODO: Do this today!!
+
+  llvm::errs() << "POST 2\n";
+
+  // Step 3 : Simple RHS constant exprs
+
+  std::vector<Inst *> RHSFresh; // RHSConsts - LHSConsts
+
+  for (auto C : RHSConsts) {
+    if (LHSConsts.find(C) == LHSConsts.end()) {
+      RHSFresh.push_back(C);
+    }
+  }
+
+  std::vector<std::vector<Inst *>> Candidates =
+    InferSimpleConstExprs(RHSFresh, LHSConsts, SymConstMap, IC);
+
+  auto Clone = FirstValidCombination(Input, RHSFresh, Candidates,
+                                     InstCache, IC, S);
   if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
     return Clone;
   }
 
-  // Step 1.5 : Direct symbolize, simple rel constraints.
-
-  std::set<Inst *> RHSFresh; // RHSConsts - LHSConsts
-
-  for (auto C : RHSConsts) {
-    if (LHSConsts.find(C) == LHSConsts.end()) {
-      RHSFresh.insert(C);
-    }
-  }
-
-  
-
-
-  // Step 2 : Symbolize LHS Consts with KB, CR, Rel constraints.
-
-  // Step 3 : Simple RHS constant exprs
+  llvm::errs() << "POST 3\n";
 
   // Step 3.5: Simple RHS exprs with constraints
 
+  for (auto &&R : Relations) {
+    Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+
+    auto Clone = FirstValidCombination(Input, RHSFresh, Candidates,
+                                       InstCache, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+
+    Input.PCs.pop_back();
+  }
+
+  llvm::errs() << "POST 3\n";
+
   // Step 4 : Synthesized RHS exprs, no constant synthesis
+  
 
   // Step 4.1 : Synthesized RHS exprs, with synthesize + weakened KB. CR?
 
   // Step 4.5 : Synthesized RHS constant exprs, no constant synthesis, rel preconditions
 
-  // Step 5 : Synthesized RHS constant exprs with specific consts
 
   return Input;
 }

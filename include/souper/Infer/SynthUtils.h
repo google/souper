@@ -34,7 +34,7 @@ public:
 
   BINOP(Add) BINOP(Sub) BINOP(Mul)
   BINOP(And) BINOP(Xor) BINOP(Or)
-  BINOP(Shl) BINOP(LShr)
+  BINOP(Shl) BINOP(LShr) BINOP(UDiv)
 #undef BINOP
 
 #define BINOPW(K)                                                \
