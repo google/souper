@@ -113,7 +113,15 @@ static cl::opt<size_t> NumResults("generalization-num-results",
 
 static cl::opt<bool> Everything("everything",
     cl::desc("Run everything, output one result."),
+    cl::init(false));
+
+static cl::opt<bool> Basic("basic",
+    cl::desc("Run all fast techniques, no synthesis^2."),
     cl::init(true));
+
+static cl::opt<bool> Advanced("advanced",
+    cl::desc("Just run more advanced stuff. Assume -basic."),
+    cl::init(false));
 
 static cl::opt<bool> SymbolicDF("symbolic-df",
     cl::desc("Generalize with symbolic dataflow facts."),
@@ -660,6 +668,107 @@ void SymbolizeAndGeneralize(InstContext &IC,
   }
 }
 
+std::set<Inst *> findConcreteConsts(Inst *I) {
+  std::vector<Inst *> Results;
+  std::set<Inst *> Ret;
+  auto Pred = [](Inst *I) {return I->K == Inst::Const;};
+  findInsts(I, Results, Pred);
+  for (auto R : Results) {
+    Ret.insert(R);
+  }
+  return Ret;
+}
+
+// Assuming the input has leaves pruned and preconditions weakened
+ParsedReplacement SuccessiveSymbolize(InstContext &IC,
+                            Solver *S, ParsedReplacement Input) {
+
+  // Print first successful result and exit, no result sorting.
+
+  // Prelude
+
+  auto LHSConsts = findConcreteConsts(Input.Mapping.LHS);
+  auto RHSConsts = findConcreteConsts(Input.Mapping.RHS);
+
+  ParsedReplacement Result = Input;
+
+  std::map<Inst *, Inst *> SymConstMap;
+  int i = 1;
+  for (auto I : LHSConsts) {
+    SymConstMap[I] = IC.createVar(I->Width, "symconst_" +
+                                  std::to_string(i++));
+  }
+
+  for (auto I : RHSConsts) {
+    if (SymConstMap.find(I) != SymConstMap.end()) {
+      continue;
+    }
+    SymConstMap[I] = IC.createVar(I->Width, "symconst_" +
+                                  std::to_string(i++));
+  }
+
+  // Step 1 : Just direct symbolize for common consts, no constraints
+
+  std::map<Inst *, Inst *> CommonConsts;
+  for (auto C : RHSConsts) {
+    if (LHSConsts.find(C) != LHSConsts.end()) {
+      CommonConsts[C] = SymConstMap[C];
+    }
+  }
+
+  Result = Replace(Result, IC, CommonConsts);
+
+  auto Clone = Verify(Result, IC, S);
+  if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    return Clone;
+  }
+
+  // Step 1.5 : Direct symbolize, simple rel constraints.
+
+  std::set<Inst *> RHSFresh; // RHSConsts - LHSConsts
+
+  for (auto C : RHSConsts) {
+    if (LHSConsts.find(C) == LHSConsts.end()) {
+      RHSFresh.insert(C);
+    }
+  }
+
+  
+
+
+  // Step 2 : Symbolize LHS Consts with KB, CR, Rel constraints.
+
+  // Step 3 : Simple RHS constant exprs
+
+  // Step 3.5: Simple RHS exprs with constraints
+
+  // Step 4 : Synthesized RHS exprs, no constant synthesis
+
+  // Step 4.1 : Synthesized RHS exprs, with synthesize + weakened KB. CR?
+
+  // Step 4.5 : Synthesized RHS constant exprs, no constant synthesis, rel preconditions
+
+  // Step 5 : Synthesized RHS constant exprs with specific consts
+
+  return Input;
+}
+
+ParsedReplacement SuccessiveSymbolizeAdvanced(InstContext &IC,
+                                              Solver *S,
+                                              ParsedReplacement Input) {
+  // Step 90 : Symbolic dataflow for LHS + preconditions
+
+  // Step 100 : Symbolic dataflow vars in RHS const exprs
+
+  // Step 101 : Permuted exprs for RHS consts
+
+  // Step 110 : Synthesized RHS constant exprs with constant synthesis.
+  //           ^ This would get stuck fairly often.
+
+  return Input;
+}
+
+
 size_t InferWidth(Inst::Kind K, const std::vector<Inst *> &Ops) {
   switch (K) {
     case Inst::LShr:
@@ -799,7 +908,7 @@ std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
     std::vector<std::string> SortedResults(DedupedResults.begin(), DedupedResults.end());
     std::sort(SortedResults.begin(), SortedResults.end(), [](auto a, auto b){return a.length() < b.length();});
 
-    if (!Everything) {
+    if (!Everything && !Basic && !Advanced) {
       for (auto &&S : SortedResults) {
         if (DebugLevel > 2) {
           llvm::outs() << "\n\nResult:\n";
@@ -815,7 +924,7 @@ std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
     }
     return SortedResults;
   } else {
-    if (!Everything) {
+    if (!Everything && !Basic && !Advanced) {
       Input.print(llvm::outs(), true);
       if (DebugLevel > 2) {
         llvm::errs() << "Failed to Generalize.\n";
@@ -853,8 +962,9 @@ int main(int argc, char **argv) {
   // TODO: Write default action which chooses what to do based on input structure
 
   for (auto &&Input: Inputs) {
-    if (Everything) {
+    if (Basic) {
       auto Reduced = ReduceAndGeneralize(IC, S.get(), Input);
+      // TODO make sure this doesn't destroy the optimization
 
       ParsedReplacement Rep;
 
@@ -865,9 +975,24 @@ int main(int argc, char **argv) {
         Rep =  ParseReplacements(IC, MB->getMemBufferRef().getBufferIdentifier(),
                                   Data.getBuffer(), ErrStr)[0];
       }
-      SymbolizeAndGeneralize(IC, S.get(), Rep);
+
+//      SymbolizeAndGeneralize(IC, S.get(), Rep);
+
+      auto Result = SuccessiveSymbolize(IC, S.get(), Rep);
+
+      Result.print(llvm::outs(), true);
+      llvm::outs() << "\n";
+
       continue;
     }
+
+    if (Advanced) {
+      auto Result = SuccessiveSymbolize(IC, S.get(), Input);
+      Result.print(llvm::outs());
+      llvm::outs() << "\n";
+      continue;
+    }
+
     if (FixIt) {
       // TODO: Verify that inputs are valid optimizations
       Generalize(IC, S.get(), Input);

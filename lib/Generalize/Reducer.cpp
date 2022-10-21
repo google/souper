@@ -30,6 +30,7 @@ ParsedReplacement Reducer::ReduceGreedy(ParsedReplacement Input) {
   int failcount = 0;
   std::set<Inst *> Visited;
   do {
+    // TODO : implement reduction properly
 
     if (souper::cost(Input.Mapping.LHS) - souper::cost(Input.Mapping.LHS) <= 1) {
       break;
