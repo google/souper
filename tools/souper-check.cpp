@@ -88,6 +88,69 @@ static cl::opt<bool> CheckAllGuesses("souper-check-all-guesses",
     cl::desc("Continue even after a valid RHS is found. (default=false)"),
     cl::init(false));
 
+static cl::opt<bool> Hash("hash",
+    cl::desc("Hash a trasnformation."),
+    cl::init(false));
+
+
+size_t HashInt(size_t x) {
+  x = (x ^ (x >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+  x = (x ^ (x >> 27)) * UINT64_C(0x94d049bb133111eb);
+  x = x ^ (x >> 31);
+  return x;
+}
+
+size_t HashInst(Inst *I, std::map<Inst *, size_t> &M, std::set<Inst *> &SeenVars) {
+  if (M.find(I) != M.end()) {
+    return M[I];
+  }
+
+  size_t Result = 0;
+
+//  if (I->Name != "") {
+//    Result ^= std::hash<std::string>()(I->Name);
+//  }
+
+  Result ^= std::hash<Inst::Kind>()(I->K);
+
+  if (I->K == Inst::Var) {
+    SeenVars.insert(I);
+    Result ^= HashInt(SeenVars.size());
+    // TODO: DF attributes
+    M[I] = Result;
+  }
+
+  if (I->K == Inst::Const) {
+    Result ^= HashInt(I->Val.getLimitedValue());
+  }
+
+  for (size_t i = 0; i < I->Ops.size(); ++i) {
+    size_t Weight = Inst::isCommutative(I->K) ? 0 : HashInt(i);
+
+    Result ^= (Weight ^ HashInst(I->Ops[i], M, SeenVars));
+  }
+
+  M[I] = Result;
+  return Result;
+}
+
+size_t HashRep(ParsedReplacement Rep) {
+  std::map<Inst *, size_t> M;
+  std::set<Inst *> SeenVars;
+  auto Result = HashInst(Rep.Mapping.LHS, M, SeenVars);
+  Result ^= HashInst(Rep.Mapping.RHS, M, SeenVars);
+
+  // Is this needed?
+  Result ^= Rep.Mapping.LHS->Width;
+
+  for (auto PC : Rep.PCs)  {
+    Result ^= HashInst(PC.LHS, M, SeenVars);
+    Result ^= HashInst(PC.RHS, M, SeenVars);
+  }
+
+  return Result;
+}
+
 int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   InstContext IC;
   std::string ErrStr;
@@ -121,6 +184,11 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   int Ret = 0;
   int Success = 0, Fail = 0, Error = 0;
   for (auto Rep : Reps) {
+    if (Hash) {
+      llvm::outs() << HashRep(Rep) << '\n';
+      continue;
+    }
+
     if (isInferDFA()) {
       if (InferNeg) {
         bool Negative;

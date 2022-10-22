@@ -864,10 +864,10 @@ InferSimpleConstExprs(std::vector<Inst *> RHS, std::set<Inst *>
     auto RV = RC->Val;
     Result.push_back({});
     for (auto &&LC : LHS) {
-      if (LC->Width != RC->Width) {
+      auto LV = LC->Val;
+      if (LC->Width != RC->Width || LV.getBitWidth() != RV.getBitWidth()) {
         continue;
       }
-      auto LV = LC->Val;
       // TODO: Check width constraints
 
       // RC = LC + (RV - LV)
