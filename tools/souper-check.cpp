@@ -111,7 +111,7 @@ size_t HashInst(Inst *I, std::map<Inst *, size_t> &M, std::set<Inst *> &SeenVars
 //    Result ^= std::hash<std::string>()(I->Name);
 //  }
 
-  Result ^= std::hash<Inst::Kind>()(I->K);
+  Result ^= HashInt(I->K);
 
   if (I->K == Inst::Var) {
     SeenVars.insert(I);
