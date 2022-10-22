@@ -22,6 +22,126 @@ void collectInsts(Inst *I, std::set<Inst *> &Results) {
   }
 }
 
+void collectInstsToDepth(Inst *I, size_t Depth, std::set<Inst *> &Results) {
+  std::vector<Inst *> Stack{I};
+  std::map<Inst *, size_t> DepthMap;
+  DepthMap[I] = 0;
+  while (!Stack.empty()) {
+    auto Current = Stack.back();
+    Stack.pop_back();
+
+    if (DepthMap[Current] > Depth) {
+      continue;
+    }
+    Results.insert(Current);
+
+    for (auto Child : Current->Ops) {
+      DepthMap[Child] = DepthMap[Current] + 1;
+      if (Results.find(Child) == Results.end()) {
+        Stack.push_back(Child);
+      }
+    }
+  }
+}
+
+ParsedReplacement Reducer::ReducePairsGreedy(ParsedReplacement Input) {
+  size_t Depth = 4, Passes = 5;
+  bool Changed = false;
+  while (Passes-- ) {
+    // Try to remove two instructions at a time
+    std::set<Inst *> Insts;
+
+    collectInstsToDepth(Input.Mapping.LHS, Depth, Insts);
+
+    for (auto &&I : Insts) {
+      if (!safeToRemove(I, Input)) {
+        continue;
+      }
+      for (auto &&J : Insts) {
+        if (I != J) {
+          if (!safeToRemove(J, Input)) {
+            continue;
+          }
+
+          auto Copy = Input;
+          Eliminate(Input, I);
+          Eliminate(Input, J);
+
+          if (souper::cost(Input.Mapping.LHS) <= souper::cost(Input.Mapping.RHS)) {
+            Input = Copy;
+            continue;
+          }
+
+          if (!VerifyInput(Input)) {
+            Input = Copy;
+            continue;
+          }
+          Changed = true;
+
+        }
+      }
+    }
+    if (!Changed) {
+      break;
+    }
+  }
+
+  return Input;
+}
+
+ParsedReplacement Reducer::ReduceTriplesGreedy(ParsedReplacement Input) {
+  size_t Depth = 4, Passes = 2;
+  bool Changed = false;
+  while (Passes-- ) {
+    // Try to remove two instructions at a time
+    std::set<Inst *> Insts;
+
+    collectInstsToDepth(Input.Mapping.LHS, Depth, Insts);
+
+    for (auto &&I : Insts) {
+      if (!safeToRemove(I, Input)) {
+        continue;
+      }
+      for (auto &&J : Insts) {
+        if (I != J) {
+          if (!safeToRemove(J, Input)) {
+            continue;
+          }
+
+          for (auto &&K : Insts) {
+            if (!safeToRemove(K, Input)) {
+              continue;
+            }
+            if (I != K && J != K) {
+
+              auto Copy = Input;
+              Eliminate(Input, I);
+              Eliminate(Input, J);
+              Eliminate(Input, K);
+
+              if (souper::cost(Input.Mapping.LHS) <= souper::cost(Input.Mapping.RHS)) {
+                Input = Copy;
+                continue;
+              }
+
+              if (!VerifyInput(Input)) {
+                Input = Copy;
+                continue;
+              }
+              Changed = true;
+            }
+          }
+        }
+      }
+    }
+    if (!Changed) {
+      break;
+    }
+  }
+
+  return Input;
+}
+
 ParsedReplacement Reducer::ReduceGreedy(ParsedReplacement Input) {
   std::set<Inst *> Insts;
   collectInsts(Input.Mapping.LHS, Insts);
@@ -43,7 +163,7 @@ ParsedReplacement Reducer::ReduceGreedy(ParsedReplacement Input) {
     auto Copy = Input;
     Eliminate(Input, I);
 
-    if (souper::cost(Input.Mapping.LHS) - souper::cost(Input.Mapping.LHS) <= 1) {
+    if (souper::cost(Input.Mapping.LHS) <= souper::cost(Input.Mapping.RHS)) {
       Input = Copy;
       failcount++;
       if (failcount >= Insts.size()) {
@@ -444,7 +564,6 @@ if (V->X) {                 \
         break;
       }
     }
-
   }
 
   return Input;

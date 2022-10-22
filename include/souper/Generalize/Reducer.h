@@ -18,6 +18,10 @@ public:
 
   ParsedReplacement ReduceGreedy(ParsedReplacement Input);
 
+  ParsedReplacement ReducePairsGreedy(ParsedReplacement Input);
+
+  ParsedReplacement ReduceTriplesGreedy(ParsedReplacement Input);
+
   // Eventually replace the functions in Preconditions{.h/.cpp} with this.
   // Does not produce exhaustive result. TODO Have an option to wrap in a cegis loop.
   bool inferKBPrecondition(ParsedReplacement &Input, std::vector<Inst *> Targets);

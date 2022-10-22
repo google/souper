@@ -683,9 +683,73 @@ std::set<Inst *> findConcreteConsts(Inst *I) {
   return Ret;
 }
 
+ParsedReplacement DFPreconditionsAndVerifyGreedy(
+  ParsedReplacement Input, InstContext &IC, Solver *S,
+  std::map<Inst *, llvm::APInt> SymCS) {
+
+  std::map<Inst *, std::pair<llvm::APInt, llvm::APInt>> Restore;
+
+
+  size_t BitsWeakened = 0;
+
+  auto Clone = souper::Clone(Input, IC);
+
+  for (auto &&C : SymCS) {
+    Restore[C.first] = {C.first->KnownZeros, C.first->KnownOnes};
+    C.first->KnownZeros = ~C.second;
+    C.first->KnownOnes = C.second;
+  }
+
+  ParsedReplacement Ret;
+  auto SOLVE = [&]() -> bool {
+    Ret = Verify(Input, IC, S);
+    if (Ret.Mapping.LHS && Ret.Mapping.RHS) {
+      return true;
+    } else {
+      return false;
+    }
+  };
+
+  for (auto &&C : SymCS) {
+    for (size_t i = 0; i < C.first->Width; ++i) {
+      llvm::APInt OriZ = C.first->KnownZeros;
+      llvm::APInt OriO = C.first->KnownOnes;
+
+      if (OriO[i] == 0 && OriZ[i] == 0) {
+        continue;
+      }
+
+      if (OriO[i] == 1) C.first->KnownOnes.clearBit(i);
+      if (OriZ[i] == 1) C.first->KnownZeros.clearBit(i);
+
+      if (!SOLVE()) {
+        C.first->KnownZeros = OriZ;
+        C.first->KnownOnes = OriO;
+      } else {
+        BitsWeakened++;
+      }
+    }
+  }
+
+  if (BitsWeakened >= 32) { // compute better threshold somehow
+    return Input;
+  } else {
+    for (auto &&P : Restore) {
+      P.first->KnownZeros = P.second.first;
+      P.first->KnownOnes = P.second.second;
+    }
+    Clone.Mapping.LHS = nullptr;
+    Clone.Mapping.RHS = nullptr;
+    return Clone;
+  }
+
+}
+
 ParsedReplacement SimplePreconditionsAndVerifyGreedy(
         ParsedReplacement Input, InstContext &IC,
         Solver *S, std::map<Inst *, llvm::APInt> SymCS) {
+  // Assume Input is not valid
+
   ParsedReplacement Clone;
   Clone.Mapping.LHS = nullptr;
   Clone.Mapping.RHS = nullptr;
@@ -716,10 +780,10 @@ ParsedReplacement SimplePreconditionsAndVerifyGreedy(
     }
   }
 
-
 #define DF(Fact, Check)                                    \
 if (All(CVals[C], [](auto Val) { return Check;})) {        \
-C->Fact = true; if (SOLVE()) return Clone; C->Fact = false;};
+C->Fact = true; auto s = SOLVE(); C->Fact = false;         \
+if(s) return Clone;};
 
    for (auto &&P : SymCS) {
      auto C = P.first;
@@ -740,7 +804,9 @@ FirstValidCombination(ParsedReplacement Input,
                       const std::vector<std::vector<Inst *>> &Candidates,
                       std::map<Inst *, Inst *> InstCache,
                       InstContext &IC, Solver *S,
-                      std::map<Inst *, llvm::APInt> SymCS, bool SDF = false) {
+                      std::map<Inst *, llvm::APInt> SymCS,
+                      bool SDF = false,
+                      bool DFF = false) {
   std::vector<int> Counts;
   for (auto &&Cand : Candidates) {
     Counts.push_back(Cand.size());
@@ -770,9 +836,16 @@ FirstValidCombination(ParsedReplacement Input,
 
     if (SDF) {
       Clone = SimplePreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
+      }
     }
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      return Clone;
+
+    if (DFF) {
+      Clone = DFPreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
+      }
     }
   }
 
@@ -805,12 +878,12 @@ InferSimpleConstExprs(std::vector<Inst *> RHS, std::set<Inst *>
 
 
       // RC = LC * (RV / LV) only if no remainder
-      if (RV.urem(LV) == 0) {
+      if (LV != 0 && RV.urem(LV) == 0) {
         Result.back().push_back(Builder(SMap[LC], IC).Mul(RV.udiv(LV))());
       }
 
       // RC = LC / (RV * LV) only if no remainder
-      if (RV.urem(LV) == 0) {
+      if (LV != 0 && RV!= 0 && RV.urem(LV) == 0) {
         Result.back().push_back(Builder(SMap[LC], IC).UDiv(RV * LV)());
       }
 
@@ -893,7 +966,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     SymConstMap[I] = IC.createVar(I->Width, "symconst_" +
                                   std::to_string(i++));
     InstCache[I] = SymConstMap[I];
-    SymCS[SymConstMap[I]] = I->Val;
+//    SymCS[SymConstMap[I]] = I->Val;
   }
 
 //  llvm::errs() << "POST Prelude.\n";
@@ -915,6 +988,11 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
 
     Clone = SimplePreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+
+    Clone = DFPreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
@@ -954,11 +1032,21 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 //  llvm::errs() << "POST 1.5\n";
 
   // Step 2 : Symbolize LHS Consts with KB, CR, SimpleDF constrains
+  {
+    auto Copy = Replace(Input, IC, JustLHSSymConstMap);
 
-  Copy = Replace(Input, IC, JustLHSSymConstMap);
+    auto Clone = SimplePreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
 
-  // TODO: write precondition inference for a given set of variables.
-  // TODO: Do this today!!
+    Clone = DFPreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+  }
+
+
 
 //  llvm::errs() << "POST 2\n";
 
@@ -978,7 +1066,8 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     InferSimpleConstExprs(RHSFresh, LHSConsts, SymConstMap, IC);
 
   auto Clone = FirstValidCombination(Input, RHSFresh, Candidates,
-                                     InstCache, IC, S, SymCS, true);
+                                     InstCache, IC, S, SymCS,
+                                     true, true);
   if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
     return Clone;
   }
@@ -1133,28 +1222,14 @@ void GeneralizeBitWidth(InstContext &IC, Solver *S,
 
 }
 
-void collectInsts(Inst *I, std::set<Inst *> &Results) {
-  std::vector<Inst *> Stack{I};
-  while (!Stack.empty()) {
-    auto Current = Stack.back();
-    Stack.pop_back();
-
-    Results.insert(Current);
-
-    for (auto Child : Current->Ops) {
-      if (Results.find(Child) == Results.end()) {
-        Stack.push_back(Child);
-      }
-    }
-  }
-}
-
 ParsedReplacement ReduceBasic(InstContext &IC,
                               Solver *S, ParsedReplacement Input) {
   Reducer R(IC, S);
   Input = R.ReducePCs(Input);
   Input = R.ReduceRedundantPhis(Input);
   Input = R.ReduceGreedy(Input);
+  Input = R.ReducePairsGreedy(Input);
+  Input = R.ReduceTriplesGreedy(Input);
   Input = R.WeakenKB(Input);
   Input = R.WeakenCR(Input);
   Input = R.WeakenDB(Input);
