@@ -115,9 +115,13 @@ static cl::opt<bool> Everything("everything",
     cl::desc("Run everything, output one result."),
     cl::init(false));
 
+static cl::opt<bool> JustReduce("just-reduce",
+    cl::desc("JustReduce"),
+    cl::init(false));
+
 static cl::opt<bool> Basic("basic",
     cl::desc("Run all fast techniques, no synthesis^2."),
-    cl::init(true));
+    cl::init(false));
 
 static cl::opt<bool> Advanced("advanced",
     cl::desc("Just run more advanced stuff. Assume -basic."),
@@ -679,12 +683,64 @@ std::set<Inst *> findConcreteConsts(Inst *I) {
   return Ret;
 }
 
+ParsedReplacement SimplePreconditionsAndVerifyGreedy(
+        ParsedReplacement Input, InstContext &IC,
+        Solver *S, std::map<Inst *, llvm::APInt> SymCS) {
+  ParsedReplacement Clone;
+  Clone.Mapping.LHS = nullptr;
+  Clone.Mapping.RHS = nullptr;
+
+  auto SOLVE = [&]() -> bool {
+    Clone = Verify(Input, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return true;
+    } else {
+      return false;
+    }
+  };
+
+  std::vector<Inst *> Insts;
+  findVars(Input.Mapping.LHS, Insts);
+
+  std::vector<std::map<Inst *, llvm::APInt>> Inputs;
+  Inputs.push_back({});
+  for (auto &&P : SymCS) {
+    Inputs.back()[P.first] = P.second;
+  }
+
+  std::map<Inst *, std::vector<llvm::APInt>> CVals;
+
+  for (auto &&I : Inputs) {
+    for (auto &&P: I) {
+      CVals[P.first].push_back(P.second);
+    }
+  }
+
+
+#define DF(Fact, Check)                                    \
+if (All(CVals[C], [](auto Val) { return Check;})) {        \
+C->Fact = true; if (SOLVE()) return Clone; C->Fact = false;};
+
+   for (auto &&P : SymCS) {
+     auto C = P.first;
+     DF(PowOfTwo, Val.isPowerOf2())
+     DF(NonZero, Val != 0);
+     DF(NonNegative, Val.uge(0));
+     DF(Negative, Val.slt(0));
+   }
+#undef DF
+
+  return Clone;
+}
+
+
 ParsedReplacement
 FirstValidCombination(ParsedReplacement Input,
                       const std::vector<Inst *> &Targets,
                       const std::vector<std::vector<Inst *>> &Candidates,
                       std::map<Inst *, Inst *> InstCache,
-                      InstContext &IC, Solver *S) {
+                      InstContext &IC, Solver *S,
+                      std::map<Inst *, llvm::APInt> SymCS, bool SDF = false) {
   std::vector<int> Counts;
   for (auto &&Cand : Candidates) {
     Counts.push_back(Cand.size());
@@ -711,6 +767,13 @@ FirstValidCombination(ParsedReplacement Input,
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
+
+    if (SDF) {
+      Clone = SimplePreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
+    }
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
   }
 
   Input.Mapping.LHS = nullptr;
@@ -728,8 +791,10 @@ InferSimpleConstExprs(std::vector<Inst *> RHS, std::set<Inst *>
     auto RV = RC->Val;
     Result.push_back({});
     for (auto &&LC : LHS) {
+      if (LC->Width != RC->Width) {
+        continue;
+      }
       auto LV = LC->Val;
-
       // TODO: Check width constraints
 
       // RC = LC + (RV - LV)
@@ -749,11 +814,48 @@ InferSimpleConstExprs(std::vector<Inst *> RHS, std::set<Inst *>
         Result.back().push_back(Builder(SMap[LC], IC).UDiv(RV * LV)());
       }
 
+      // RC = logb(LC) if logb(LV) = RV && LV is a power of 2.
+      if (LV.isPowerOf2() && LV.logBase2() == RV) {
+        Result.back().push_back(Builder(SMap[LC], IC).LogB()());
+      }
+
       // TODO: Masks
     }
   }
 
   return Result;
+}
+
+std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
+                                           std::set<Inst *> LHSConsts, InstContext &IC) {
+    std::vector<std::vector<Inst *>> Candidates;
+
+    std::vector<Inst *> Components;
+    for (auto &&C : LHSConsts) {
+      Components.push_back(C);
+    }
+
+    // TODO: Custom components
+
+    for (auto &&Target : RHSConsts) {
+      Candidates.push_back({});
+      EnumerativeSynthesis ES;
+      auto Guesses = ES.generateExprs(IC, SymbolizeNumInsts, Components,
+                                      Target->Width);
+      for (auto &&Guess : Guesses) {
+        std::set<Inst *> ConstSet;
+        souper::getConstants(Guess, ConstSet);
+        if (!ConstSet.empty()) {
+          if (SymbolizeConstSynthesis) {
+            Candidates.back().push_back(Guess);
+          }
+        } else {
+            Candidates.back().push_back(Guess);
+        }
+      }
+    }
+
+    return Candidates;
 }
 
 // Assuming the input has leaves pruned and preconditions weakened
@@ -773,12 +875,15 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   std::map<Inst *, Inst *> InstCache;
 
+  std::map<Inst *, llvm::APInt> SymCS;
+
   int i = 1;
   for (auto I : LHSConsts) {
     SymConstMap[I] = IC.createVar(I->Width, "symconst_" +
                                   std::to_string(i++));
 
     InstCache[I] = SymConstMap[I];
+    SymCS[SymConstMap[I]] = I->Val;
   }
 
   for (auto I : RHSConsts) {
@@ -787,9 +892,11 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
     SymConstMap[I] = IC.createVar(I->Width, "symconst_" +
                                   std::to_string(i++));
+    InstCache[I] = SymConstMap[I];
+    SymCS[SymConstMap[I]] = I->Val;
   }
 
-  llvm::errs() << "POST Prelude.\n";
+//  llvm::errs() << "POST Prelude.\n";
   // Step 1 : Just direct symbolize for common consts, no constraints
 
   std::map<Inst *, Inst *> CommonConsts;
@@ -806,9 +913,15 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
+
+    Clone = SimplePreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+
   }
 
-  llvm::errs() << "POST 1.\n";
+//  llvm::errs() << "POST 1.\n";
 
   // Step 1.5 : Direct symbolize, simple rel constraints on LHS
 
@@ -838,7 +951,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Copy.PCs.pop_back();
   }
 
-  llvm::errs() << "POST 1.5\n";
+//  llvm::errs() << "POST 1.5\n";
 
   // Step 2 : Symbolize LHS Consts with KB, CR, SimpleDF constrains
 
@@ -847,7 +960,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   // TODO: write precondition inference for a given set of variables.
   // TODO: Do this today!!
 
-  llvm::errs() << "POST 2\n";
+//  llvm::errs() << "POST 2\n";
 
   // Step 3 : Simple RHS constant exprs
 
@@ -859,16 +972,18 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
   }
 
+  if (!RHSFresh.empty()) {
+
   std::vector<std::vector<Inst *>> Candidates =
     InferSimpleConstExprs(RHSFresh, LHSConsts, SymConstMap, IC);
 
   auto Clone = FirstValidCombination(Input, RHSFresh, Candidates,
-                                     InstCache, IC, S);
+                                     InstCache, IC, S, SymCS, true);
   if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
     return Clone;
   }
 
-  llvm::errs() << "POST 3\n";
+//  llvm::errs() << "POST 3\n";
 
   // Step 3.5: Simple RHS exprs with constraints
 
@@ -876,7 +991,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
 
     auto Clone = FirstValidCombination(Input, RHSFresh, Candidates,
-                                       InstCache, IC, S);
+                                       InstCache, IC, S, SymCS, false);
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
@@ -884,16 +999,38 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Input.PCs.pop_back();
   }
 
-  llvm::errs() << "POST 3\n";
+//  llvm::errs() << "POST 3\n";
 
   // Step 4 : Synthesized RHS exprs, no constant synthesis
-  
 
-  // Step 4.1 : Synthesized RHS exprs, with synthesize + weakened KB. CR?
+  Candidates = Enumerate(RHSFresh, LHSConsts, IC);
+
+  Clone = FirstValidCombination(Input, RHSFresh, Candidates,
+                                InstCache, IC, S, SymCS, false);
+  if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    return Clone;
+  }
+
+  Clone = FirstValidCombination(Input, RHSFresh, Candidates,
+                                InstCache, IC, S, SymCS, true);
+  if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    return Clone;
+  }
+
+  // Step 4.1 : Synthesized RHS exprs, weakened KB. CR?
+  // TODO
 
   // Step 4.5 : Synthesized RHS constant exprs, no constant synthesis, rel preconditions
+  for (auto &&R : Relations) {
+    Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
 
-
+    auto Clone = FirstValidCombination(Input, RHSFresh, Candidates,
+                                       InstCache, IC, S, SymCS, false);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+  }
+  }
   return Input;
 }
 
@@ -1012,6 +1149,23 @@ void collectInsts(Inst *I, std::set<Inst *> &Results) {
   }
 }
 
+ParsedReplacement ReduceBasic(InstContext &IC,
+                              Solver *S, ParsedReplacement Input) {
+  Reducer R(IC, S);
+  Input = R.ReducePCs(Input);
+  Input = R.ReduceRedundantPhis(Input);
+  Input = R.ReduceGreedy(Input);
+  Input = R.WeakenKB(Input);
+  Input = R.WeakenCR(Input);
+  Input = R.WeakenDB(Input);
+  Input = R.WeakenOther(Input);
+  if (ReduceKBIFY) {
+    Input = R.ReduceGreedyKBIFY(Input);
+  }
+  Input = R.ReducePCs(Input);
+  return Input;
+}
+
 std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
                                Solver *S, ParsedReplacement Input) {
   std::vector<std::pair<Inst *, APInt>> Models;
@@ -1038,11 +1192,17 @@ std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
     Input = R.ReduceGreedyKBIFY(Input);
   }
   Input = R.ReducePCs(Input);
+
+  llvm::outs() << "HERE5\n";
+  Input.print(llvm::outs(), true);
+  return {Input.getString(true)};
+
   R.ReduceRec(Input, Results);
 
   if (DebugLevel > 3) {
     R.Stats();
   }
+//  llvm::errs() << "HERE0: " << Results.size();
   if (!Results.empty()) {
     std::set<std::string> DedupedResults;
     for (auto &&Result : Results) {
@@ -1051,6 +1211,11 @@ std::vector<std::string> ReduceAndGeneralize(InstContext &IC,
 
     std::vector<std::string> SortedResults(DedupedResults.begin(), DedupedResults.end());
     std::sort(SortedResults.begin(), SortedResults.end(), [](auto a, auto b){return a.length() < b.length();});
+
+    if (Basic) {
+//      llvm::errs() << "HERE: " << SortedResults.size();
+      return SortedResults;
+    }
 
     if (!Everything && !Basic && !Advanced) {
       for (auto &&S : SortedResults) {
@@ -1107,26 +1272,12 @@ int main(int argc, char **argv) {
 
   for (auto &&Input: Inputs) {
     if (Basic) {
-      auto Reduced = ReduceAndGeneralize(IC, S.get(), Input);
-      // TODO make sure this doesn't destroy the optimization
-
-      ParsedReplacement Rep;
-
-      if (Reduced.empty()) {
-        Rep = Input;
-      } else {
-        auto MB = llvm::MemoryBuffer::getMemBuffer(Reduced[0]);
-        Rep =  ParseReplacements(IC, MB->getMemBufferRef().getBufferIdentifier(),
-                                  Data.getBuffer(), ErrStr)[0];
+      ParsedReplacement Result = ReduceBasic(IC, S.get(), Input);
+      if (!JustReduce) {
+        Result = SuccessiveSymbolize(IC, S.get(), Result);
       }
-
-//      SymbolizeAndGeneralize(IC, S.get(), Rep);
-
-      auto Result = SuccessiveSymbolize(IC, S.get(), Rep);
-
       Result.print(llvm::outs(), true);
       llvm::outs() << "\n";
-
       continue;
     }
 

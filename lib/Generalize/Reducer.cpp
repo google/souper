@@ -30,12 +30,6 @@ ParsedReplacement Reducer::ReduceGreedy(ParsedReplacement Input) {
   int failcount = 0;
   std::set<Inst *> Visited;
   do {
-    // TODO : implement reduction properly
-
-    if (souper::cost(Input.Mapping.LHS) - souper::cost(Input.Mapping.LHS) <= 1) {
-      break;
-    }
-
     auto It = Insts.begin();
     auto I = *It;
     Insts.erase(It);
@@ -48,6 +42,15 @@ ParsedReplacement Reducer::ReduceGreedy(ParsedReplacement Input) {
     }
     auto Copy = Input;
     Eliminate(Input, I);
+
+    if (souper::cost(Input.Mapping.LHS) - souper::cost(Input.Mapping.LHS) <= 1) {
+      Input = Copy;
+      failcount++;
+      if (failcount >= Insts.size()) {
+        break;
+      }
+      continue;
+    }
 
     if (!VerifyInput(Input)) {
       Input = Copy;
