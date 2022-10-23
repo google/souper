@@ -127,7 +127,7 @@ size_t HashInst(Inst *I, std::map<Inst *, size_t> &M, std::set<Inst *> &SeenVars
   for (size_t i = 0; i < I->Ops.size(); ++i) {
     size_t Weight = Inst::isCommutative(I->K) ? 0 : HashInt(i);
 
-    Result ^= (Weight ^ HashInst(I->Ops[i], M, SeenVars));
+    Result ^= (Weight + HashInst(I->Ops[i], M, SeenVars));
   }
 
   M[I] = Result;
@@ -138,7 +138,8 @@ size_t HashRep(ParsedReplacement Rep) {
   std::map<Inst *, size_t> M;
   std::set<Inst *> SeenVars;
   auto Result = HashInst(Rep.Mapping.LHS, M, SeenVars);
-  Result ^= HashInst(Rep.Mapping.RHS, M, SeenVars);
+  Result ^= 7* HashInst(Rep.Mapping.RHS, M, SeenVars);
+  // Just ^ produces weird conflicts for very different trees
 
   // Is this needed?
   Result ^= HashInt(Rep.Mapping.LHS->Width);
