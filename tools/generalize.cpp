@@ -750,6 +750,14 @@ ParsedReplacement SimplePreconditionsAndVerifyGreedy(
         Solver *S, std::map<Inst *, llvm::APInt> SymCS) {
   // Assume Input is not valid
 
+  std::map<Inst *, llvm::APInt> NonBools;
+  for (auto &&C : SymCS) {
+    if (C.first->Width != 1) {
+      NonBools.insert(C);
+    }
+  }
+  std::swap(SymCS, NonBools);
+
   ParsedReplacement Clone;
   Clone.Mapping.LHS = nullptr;
   Clone.Mapping.RHS = nullptr;
@@ -796,7 +804,6 @@ if(s) return Clone;};
 
   return Clone;
 }
-
 
 ParsedReplacement
 FirstValidCombination(ParsedReplacement Input,
@@ -1045,7 +1052,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       return Clone;
     }
   }
-
 
 
 //  llvm::errs() << "POST 2\n";

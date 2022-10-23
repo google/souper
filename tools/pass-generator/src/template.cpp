@@ -388,7 +388,12 @@ namespace util {
     if (llvm::isa<llvm::Constant>(a) || llvm::isa<llvm::Constant>(b)) return false;
     return true;
   }
+
+  llvm::APInt V(llvm::Value *V) {
+    return llvm::dyn_cast<ConstantInt>(V)->getValue();
+  }
 }
+
 struct SouperCombine : public FunctionPass {
   static char ID;
   SouperCombine() : FunctionPass(ID) {

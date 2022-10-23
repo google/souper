@@ -1,14 +1,9 @@
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/GraphWriter.h"
-#include "llvm/Support/KnownBits.h"
 
 #include "souper/Infer/Preconditions.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
-#include "souper/Infer/ConstantSynthesis.h"
-#include "souper/Inst/InstGraph.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/GetSolver.h"
-#include "souper/Util/DfaUtils.h"
 
 #include <fstream>
 
@@ -31,7 +26,7 @@ InputFilename(cl::Positional, cl::desc("<input souper optimization>"),
 static llvm::cl::opt<bool> IgnorePCs("ignore-pcs",
     llvm::cl::desc("Ignore inputs which have souper path conditions."
                    "(default=false)"),
-    llvm::cl::init(true));
+    llvm::cl::init(false));
 
 static llvm::cl::opt<bool> IgnoreDF("ignore-df",
     llvm::cl::desc("Ignore inputs with dataflow constraints."
@@ -167,6 +162,14 @@ struct VC : public Constraint {
   std::string Cons;
 };
 
+struct PC : public Constraint {
+  PC(std::string LHS, std::string RHS) : L(LHS), R(RHS) {}
+  std::string print() override {
+    return "(" + L + " == " + R + ")";
+  }
+  std::string L, R;
+};
+
 //struct VarKB : public Constraint {
 
 //};
@@ -217,6 +220,81 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
         }
       }
     }
+  }
+
+  // Try to translate Souper expressions to APInt operations.
+  std::pair<std::string, bool> Translate(souper::Inst *I) {
+    std::vector<std::pair<std::string, bool>> Children;
+
+    for (auto Op : I ->Ops) {
+      Children.push_back(Translate(Op));
+      if (!Children.back().second) {
+        return {"", false};
+      }
+    }
+
+    auto MET = [&](auto Str) {
+      return Children[0].first + "." + Str + "(" + Children[1].first + ")";
+    };
+
+    auto OP = [&](auto Str) {
+      return Children[0].first + " " + Str + " " + Children[1].first;
+    };
+
+    switch (I->K) {
+    case Inst::Var : return {"util::V(" + at(I)[0] + ")", true};
+    case Inst::Const : return {I->Val.toString(10, false), true};
+
+    case Inst::AddNW :
+    case Inst::AddNUW :
+    case Inst::AddNSW :
+    case Inst::Add : return {OP("+"), true};
+
+    case Inst::SubNW :
+    case Inst::SubNUW :
+    case Inst::SubNSW :
+    case Inst::Sub : return {OP("-"), true};
+
+    case Inst::MulNW :
+    case Inst::MulNUW :
+    case Inst::MulNSW :
+    case Inst::Mul : return {OP("*"), true};
+
+    case Inst::Shl : return {MET("shl"), true};
+    case Inst::LShr : return {MET("lshr"), true};
+    case Inst::AShr : return {MET("ashr"), true};
+
+    case Inst::And : return {OP("&"), true};
+    case Inst::Or : return {OP("|"), true};
+    case Inst::Xor : return {OP("^"), true};
+
+    case Inst::URem : return {MET("urem"), true};
+    case Inst::SRem : return {MET("srem"), true};
+    case Inst::UDiv : return {MET("udiv"), true};
+    case Inst::SDiv : return {MET("sdiv"), true};
+
+    case Inst::Slt : return {MET("slt"), true};
+    case Inst::Sle : return {MET("sle"), true};
+    case Inst::Ult : return {MET("ult"), true};
+    case Inst::Ule : return {MET("ule"), true};
+    case Inst::Eq : return {MET("eq"), true};
+    case Inst::Ne : return {MET("ne"), true};
+
+    default: return {"", false};
+    }
+
+  }
+
+  bool GenPCConstraints(std::vector<InstMapping> PCs) {
+    for (auto M : PCs) {
+      auto L = Translate(M.LHS);
+      auto R = Translate(M.RHS);
+      if (!L.second || !R.second) {
+        return false;
+      }
+      Constraints.push_back(new PC(L.first, R.first));
+    }
+    return true;
   }
   
   void GenDomConstraints(Inst *RHS) {
@@ -511,6 +589,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
   }
   Out << ")) {\n";
 
+  if (!Syms.GenPCConstraints(Input.PCs)) return false;
   Syms.GenVarEqConstraints();
   Syms.GenVarPropConstraints(Input.Mapping.LHS);
   Syms.GenDomConstraints(Input.Mapping.RHS);
@@ -554,6 +633,22 @@ std::string getLLVMInstKindName(Inst::Kind K) {
 int profitability(const ParsedReplacement &Input) {
   return souper::cost(Input.Mapping.LHS) -
     souper::cost(Input.Mapping.RHS);
+}
+
+bool PCHasVar(const ParsedReplacement &Input) {
+  std::vector<Inst *> Vars;
+  for (auto &&PC : Input.PCs) {
+    findVars(PC.LHS, Vars);
+    findVars(PC.RHS, Vars);
+  }
+
+  for (auto &&V : Vars) {
+    if (!V->Name.starts_with("sym")) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 int main(int argc, char **argv) {
@@ -611,11 +706,13 @@ int main(int argc, char **argv) {
   Inst::Kind Last = Inst::Kind::None;
 
   bool first = true;
+  bool outputs = false;
 
   for (auto &&Input: Inputs) {
-    if (IgnorePCs && !Input.PCs.empty()) {
+    if (PCHasVar(Input)) {
       continue;
     }
+
     if (Input.Mapping.LHS == Input.Mapping.RHS) {
       continue;
     }
@@ -730,6 +827,7 @@ int main(int argc, char **argv) {
       llvm::outs() << "*/\n";
       llvm::outs() << Str << "\n";
       llvm::outs().flush();
+      outputs= true;
     } else {
       Input.print(llvm::errs(), true);
       llvm::errs() << "Failed to generate matcher.\n\n\n";
@@ -737,7 +835,9 @@ int main(int argc, char **argv) {
       llvm::errs().flush();
     }
   }
-  llvm::outs() << "}\n";
+  if (outputs) {
+    llvm::outs() << "}\n";
+  }
 //  llvm::outs() << "end:\n";
 
   return 0;

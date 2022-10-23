@@ -141,7 +141,7 @@ size_t HashRep(ParsedReplacement Rep) {
   Result ^= HashInst(Rep.Mapping.RHS, M, SeenVars);
 
   // Is this needed?
-  Result ^= Rep.Mapping.LHS->Width;
+  Result ^= HashInt(Rep.Mapping.LHS->Width);
 
   for (auto PC : Rep.PCs)  {
     Result ^= HashInst(PC.LHS, M, SeenVars);
