@@ -1159,7 +1159,7 @@ void souper::findInsts(Inst *Root, std::vector<Inst *> &Insts, std::function<boo
 
 void hasConstantHelper(Inst *I, std::set<Inst *> &Visited,
                        std::set<Inst *> &ConstSet) {
-  if (I->K == Inst::Var && I->SynthesisConstID != 0) {
+  if (I->K == Inst::Var && (I->SynthesisConstID != 0 || I->Name.starts_with("reserved"))) {
     ConstSet.insert(I);
   } else {
     if (Visited.insert(I).second)
