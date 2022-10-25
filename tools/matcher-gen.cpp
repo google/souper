@@ -31,7 +31,7 @@ static llvm::cl::opt<bool> IgnorePCs("ignore-pcs",
 static llvm::cl::opt<bool> IgnoreDF("ignore-df",
     llvm::cl::desc("Ignore inputs with dataflow constraints."
                    "(default=false)"),
-    llvm::cl::init(true));
+    llvm::cl::init(false));
 
 static llvm::cl::opt<std::string> ListFile("listfile",
     llvm::cl::desc("List of optimization indexes to include.\n"
@@ -170,6 +170,14 @@ struct PC : public Constraint {
   std::string L, R;
 };
 
+struct DB : public Constraint {
+  DB(std::string Val_) : Val(Val_) {}
+  std::string print() override {
+    return "util::vdb(DB, I, \"" + Val + "\")";
+  }
+  std::string Val;
+};
+
 //struct VarKB : public Constraint {
 
 //};
@@ -243,7 +251,8 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
 
     switch (I->K) {
     case Inst::Var : return {"util::V(" + at(I)[0] + ")", true};
-    case Inst::Const : return {I->Val.toString(10, false), true};
+      case Inst::Const : return {"util::V(" + std::to_string(I->Width)
+        + ", " + I->Val.toString(10, false) + ")", true};
 
     case Inst::AddNW :
     case Inst::AddNUW :
@@ -313,6 +322,16 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
         }
       }
     }
+  }
+
+  void GenDFConstraints(Inst *LHS) {
+    if (LHS->DemandedBits.getBitWidth()
+        == LHS->Width && !LHS->DemandedBits.isAllOnesValue()) {
+      Constraints.push_back(new DB(LHS->DemandedBits.toString(2, false)));
+    }
+
+    // TODO KB and CR
+
   }
 
   void GenVarPropConstraints(Inst *LHS) {
@@ -593,6 +612,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
   Syms.GenVarEqConstraints();
   Syms.GenVarPropConstraints(Input.Mapping.LHS);
   Syms.GenDomConstraints(Input.Mapping.RHS);
+  Syms.GenDFConstraints(Input.Mapping.LHS);
   Syms.PrintConstraintsPre(Out);
 
   Out << "  St.hit(" << OptID << ");\n";
@@ -709,16 +729,25 @@ int main(int argc, char **argv) {
   bool outputs = false;
 
   for (auto &&Input: Inputs) {
+    auto SKIP = [&] (auto Msg) {
+      Input.print(llvm::errs(), true);
+      llvm::errs() << Msg << "\n\n\n";
+      llvm::errs().flush();
+    };
+
     if (PCHasVar(Input)) {
+      SKIP("SKIP PC has var.");
       continue;
     }
 
     if (Input.Mapping.LHS == Input.Mapping.RHS) {
+      SKIP("SKIP LHS = RHS.");
       continue;
     }
     if (IgnoreDF) {
       if (Input.Mapping.LHS->DemandedBits.getBitWidth()
           == Input.Mapping.LHS->Width && !Input.Mapping.LHS->DemandedBits.isAllOnesValue()) {
+
         continue;
       }
       std::vector<Inst *> Vars;
@@ -739,7 +768,10 @@ int main(int argc, char **argv) {
 //          continue;
 //        }
       }
-      if (found) continue;
+      if (found) {
+        SKIP("SKIP Unsupported DF.");
+        continue;
+      }
     }
 
     if (Input.Mapping.LHS->K != Last) {
@@ -820,6 +852,7 @@ int main(int argc, char **argv) {
         Out.flush();
         Str.clear();
         llvm::errs() << "Opt " << current <<  " skipped on demand.\n";
+        SKIP("SKIP Filtered.");
         continue;
       }
       llvm::outs() << "/* Opt : " << current << "\n";
@@ -829,10 +862,7 @@ int main(int argc, char **argv) {
       llvm::outs().flush();
       outputs= true;
     } else {
-      Input.print(llvm::errs(), true);
-      llvm::errs() << "Failed to generate matcher.\n\n\n";
-
-      llvm::errs().flush();
+      SKIP("SKIP Failed to generate matcher.");
     }
   }
   if (outputs) {

@@ -411,6 +411,118 @@ ParsedReplacement Reducer::ReduceRedundantPhis(ParsedReplacement Input) {
   return Input;
 }
 
+size_t WeakenSingleKB(ParsedReplacement Input, InstContext &IC, Solver *S,
+                Inst *Target, std::optional<llvm::APInt> Val) {
+  size_t BitsWeakened = 0;
+
+  if (Target->Width <= 8) return 0; // hack
+
+  if (!Val.has_value()) {
+    // Synthesize a value
+    Inst *C = IC.createVar(Target->Width, "reservedconst_1");
+    C->SynthesisConstID = 1;
+    std::map<Inst *, Inst *> InstCache = {{Target, C}};
+
+    auto Copy = Input;
+
+    auto Rep = Replace(Input, IC, InstCache);
+
+    std::set<Inst *> ConstSet{C};
+
+    std::map<Inst *, llvm::APInt> ConstMap;
+    ConstantSynthesis CS;
+
+//    Rep.print(llvm::errs(), true);
+
+    if (auto EC = CS.synthesize(S->getSMTLIBSolver(), Rep.BPCs,
+        Rep.PCs, Rep.Mapping, ConstSet, ConstMap, IC, 30, 60, false)) {
+      llvm::errs() << "Constant Synthesis internal error : " <<  EC.message();
+    }
+
+    if (!ConstMap.empty()) {
+      Val = ConstMap[C];
+    }
+
+  }
+
+  if (!Val.has_value()) {
+    return 0; // No bits weakened
+  }
+
+  ParsedReplacement Ret;
+  auto SOLVE = [&]() -> bool {
+    Ret = Verify(Input, IC, S);
+    if (Ret.Mapping.LHS && Ret.Mapping.RHS) {
+      return true;
+    } else {
+      return false;
+    }
+  };
+
+  llvm::APInt RestoreZero = Target->KnownZeros;
+  llvm::APInt RestoreOne = Target->KnownOnes;
+
+  Target->KnownOnes = Val.value();
+  Target->KnownZeros = ~Val.value();
+
+  for (size_t i = 0; i < Target->Width; ++i) {
+    llvm::APInt OriZ = Target->KnownZeros;
+    llvm::APInt OriO = Target->KnownOnes;
+
+    if (OriO[i] == 0 && OriZ[i] == 0) {
+      continue;
+    }
+
+    if (OriO[i] == 1) Target->KnownOnes.clearBit(i);
+    if (OriZ[i] == 1) Target->KnownZeros.clearBit(i);
+
+    if (!SOLVE()) {
+      Target->KnownZeros = OriZ;
+      Target->KnownOnes = OriO;
+    } else {
+      BitsWeakened++;
+    }
+  }
+
+  if (BitsWeakened < Target->Width / 2) {
+    Target->KnownOnes = RestoreOne;
+    Target->KnownZeros = RestoreZero;
+    BitsWeakened = 0;
+  }
+
+  return BitsWeakened;
+}
+
+ParsedReplacement Reducer::ReducePCsToDF(ParsedReplacement Input) {
+  std::vector<Inst *> FoundVars;
+  for (auto &&PC : Input.PCs) {
+    findVars(PC.LHS, FoundVars);
+    findVars(PC.RHS, FoundVars);
+  }
+  std::set<Inst *> Vars;
+  for (auto &&V : FoundVars) {
+    if (!V->Name.starts_with("sym") && !V->Name.starts_with("const")) {
+      Vars.insert(V);
+    }
+  }
+
+  auto Backup = Input.PCs;
+  Input.PCs.clear();
+
+  bool Succ = false;
+
+  for (auto &&V : Vars) {
+    auto BitsWeakened = WeakenSingleKB(Input, IC, S, V, {});
+    Succ |= (BitsWeakened != 0);
+  }
+
+  if (!Succ) {
+    Input.PCs = Backup;
+  }
+
+  return Input;
+}
+
 // Assumes Input is valid
 ParsedReplacement Reducer::ReducePCs(ParsedReplacement Input) {
 

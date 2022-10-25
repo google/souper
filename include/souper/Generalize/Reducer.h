@@ -41,6 +41,8 @@ public:
 
   ParsedReplacement WeakenOther(ParsedReplacement Input);
 
+  ParsedReplacement ReducePCsToDF(ParsedReplacement Input);
+
   bool VerifyInput(ParsedReplacement &Input);
 
   bool safeToRemove(Inst *I, ParsedReplacement &Input);

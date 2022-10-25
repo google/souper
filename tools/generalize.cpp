@@ -1368,6 +1368,7 @@ ParsedReplacement ReduceBasic(InstContext &IC,
     Input = R.ReduceGreedyKBIFY(Input);
   }
   Input = R.ReducePCs(Input);
+  Input = R.ReducePCsToDF(Input);
   return Input;
 }
 

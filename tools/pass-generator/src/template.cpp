@@ -15,6 +15,8 @@
 #include "llvm/InitializePasses.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Analysis/DemandedBits.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Support/Debug.h"
 #define DEBUG_TYPE ""
@@ -84,30 +86,30 @@ template <typename ...Args>
 struct phi_match {
   phi_match(Args... args) : Matchers{args...} {};
   std::tuple<Args...> Matchers;
+
+  // cpp weirdness for accessing specific tuple element in runtime
+  template <class Func, class Tuple, size_t N = 0>
+  void runtime_get(Func func, Tuple& tup, size_t idx) {
+    if (N == idx) {
+      std::invoke(func, std::get<N>(tup));
+      return;
+    }
+
+    if constexpr (N + 1 < std::tuple_size_v<Tuple>) {
+      return runtime_get<Func, Tuple, N + 1>(func, tup, idx);
+    }
+  }
   
   bool match_nth(size_t n, Value *V) {
-    switch (n) {
-      case 0 : return std::get<0>(Matchers).match(V);
-      case 1 : return std::get<1>(Matchers).match(V);
-      // case 2 : return std::get<2>(Matchers).match(V);
-      // case 3 : return std::get<3>(Matchers).match(V);
-      // case 4 : return std::get<4>(Matchers).match(V);
-      default: return false;
-      // TODO Add more if needed.
-    }
+    bool Ret = false;
+    auto F = [&](auto M) {Ret = M.match(V);};
+    runtime_get(F, Matchers, n);
+    return Ret;
   }
 
   bool check(const Value *V) {
     if (auto Phi = dyn_cast<PHINode>(V)) {
       for (size_t i =0; i < Phi->getNumOperands(); ++i) {
-        // bool Matched = false;
-        // std::apply([&](auto &&... args){
-        //   ((Matched |= args.match(Phi->getOperand(i))), ...);
-        // }, Matchers);
-
-        // if (!Matched) {
-        //   return false;
-        // }
         if (!match_nth(i, Phi->getOperand(i))) {
           return false;
         }
@@ -122,7 +124,6 @@ struct phi_match {
   }
 };
 
-// TODO Test semantics, it compiles and runs.
 template<typename ...Args>
 phi_match<Args...> m_Phi(Args... args) {
   return phi_match<Args...>(args...);
@@ -337,6 +338,15 @@ namespace util {
     return false;
   }
 
+  bool vdb(llvm::DemandedBits *DB, llvm::Instruction *I, std::string DBUnderApprox) {
+    llvm::APInt V = llvm::APInt(I->getType()->getIntegerBitWidth(), DBUnderApprox, 2);
+    auto ComputedDB = DB->getDemandedBits(I);
+
+    // 0 in DBUnderApprox implies 0 in ComputedDB
+    return (V | ~ComputedDB) != 0;
+    // TODO Carefully think about this.
+  }
+
   bool nz(llvm::Value *V) {
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
       return !Con->getValue().isZero();
@@ -392,6 +402,9 @@ namespace util {
   llvm::APInt V(llvm::Value *V) {
     return llvm::dyn_cast<ConstantInt>(V)->getValue();
   }
+  llvm::APInt V(size_t Width, size_t Val) {
+    return llvm::APInt(Width, Val);
+  }
 }
 
 struct SouperCombine : public FunctionPass {
@@ -403,7 +416,9 @@ struct SouperCombine : public FunctionPass {
   }
 
   bool runOnFunction(Function &F) override {
+    AssumptionCache AC(F);
     DT = new DominatorTree(F);
+    DB = new DemandedBits(F, AC, *DT);
     
     W.reserve(F.getInstructionCount());
     for (auto &BB : F) {
@@ -415,6 +430,8 @@ struct SouperCombine : public FunctionPass {
     // llvm::errs() << "Before:\n" << F;
     auto r = run(Builder);
     // llvm::errs() << "After:\n" << F;
+    delete DB;
+    delete DT;
     return r;
   }
 
@@ -469,6 +486,7 @@ struct SouperCombine : public FunctionPass {
   InstructionWorklist W;
   util::Stats St;
   DominatorTree *DT;
+  DemandedBits *DB;
 };
 }
 
