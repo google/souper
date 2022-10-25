@@ -1003,7 +1003,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   auto Refresh = [&] (auto Msg) {
     Input = Fresh;
-    llvm::errs() << "POST " << Msg << "\n";
+//    llvm::errs() << "POST " << Msg << "\n";
     return Fresh;
   };
 

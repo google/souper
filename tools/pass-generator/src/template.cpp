@@ -456,9 +456,9 @@ struct SouperCombine : public FunctionPass {
   }
   
   Value *getReplacement(llvm::Instruction *I, IRBuilder *B) {
-    if (!I->hasOneUse()) {
-      return nullptr;
-    }
+//    if (!I->hasOneUse()) {
+//      return nullptr;
+//    }
 
     // Interestingly commenting out ^this block
     // slightly improves results.

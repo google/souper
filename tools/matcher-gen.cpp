@@ -840,6 +840,7 @@ int main(int argc, char **argv) {
         default: llvm::outs() << "true";
       }
       llvm::outs() << ") {\n";
+      outputs = true;
     }
     Last = Input.Mapping.LHS->K;
 
