@@ -3,6 +3,7 @@ import sys
 r = redis.Redis()
 n = 0
 dir = sys.argv[1]
+fails = 0
 for key in r.keys():
   try:
     val = r.hgetall(key)[b'result']
@@ -13,4 +14,7 @@ for key in r.keys():
       f.write(s)
       f.close()
   except KeyError:
-    pass
+    fails = fails + 1
+
+print("Number of failures = ", fails)
+
