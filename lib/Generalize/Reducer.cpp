@@ -45,7 +45,7 @@ void collectInstsToDepth(Inst *I, size_t Depth, std::set<Inst *> &Results) {
 }
 
 bool IsReductionCostEffective(Inst *LHS, Inst *RHS) {
-  return souper::cost(RHS) < souper::cost(LHS);
+  return souper::instCount(RHS) < souper::instCount(LHS);
 }
 
 ParsedReplacement Reducer::ReducePairsGreedy(ParsedReplacement Input) {
