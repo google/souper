@@ -367,7 +367,9 @@ std::vector<Inst *> InferPotentialRelations(
   // Generate a set of pairwise relations
   for (auto &&[XI, XC] : CMap) {
     for (auto &&[YI, YC] : CMap) {
-      if (XI == YI) continue;
+      if (XI == YI || XC.getBitWidth() != YC.getBitWidth()) {
+        continue;
+      }
       // Add C
 //      auto Diff = XC - YC;
 //      Results.push_back(Builder(XI, IC).Sub(Diff).Eq(YI)());
