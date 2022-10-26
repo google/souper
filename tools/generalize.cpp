@@ -1017,17 +1017,18 @@ void findDangerousConstants(Inst *I, std::set<Inst *> &Results) {
 
 // Assuming the input has leaves pruned and preconditions weakened
 ParsedReplacement SuccessiveSymbolize(InstContext &IC,
-                            Solver *S, ParsedReplacement Input) {
+                            Solver *S, ParsedReplacement Input, bool &Changed) {
 
   // Print first successful result and exit, no result sorting.
 
   // Prelude
 
   auto Fresh = Clone(Input, IC);
-
+  Changed = true;
   auto Refresh = [&] (auto Msg) {
     Input = Fresh;
 //    llvm::errs() << "POST " << Msg << "\n";
+    Changed = false;
     return Fresh;
   };
 
@@ -1109,7 +1110,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   }
 
-  Refresh(1);
+  Refresh("Direct Symbolize for common consts");
 
   // Step 1.5 : Direct symbolize, simple rel constraints on LHS
 
@@ -1127,8 +1128,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     JustLHSSymConstMap[C] = SymConstMap[C];
   }
 
-  // Maybe call InferPreconditionsAndVerify instead of Verify?
-
   auto Copy = Replace(Input, IC, JustLHSSymConstMap);
   for (auto &&R : Relations) {
     Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
@@ -1139,7 +1138,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Copy.PCs.pop_back();
   }
 
-  Refresh(1.5);
+  Refresh("Direct + simple rel constraints");
 
   // Step 2 : Symbolize LHS Consts with KB, CR, SimpleDF constrains
   if (RHSFresh.empty()) {
@@ -1150,14 +1149,46 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       return Clone;
     }
 
-    Refresh(1.51);
+    Refresh("LHS Constraints");
 
     Clone = DFPreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
   }
-  Refresh(2);
+  Refresh("All LHS Constraints");
+
+  // Step 4 : Enumerated expressions
+
+  std::set<Inst *> Components;
+  for (auto C : LHSConsts) {
+    Components.insert(SymConstMap[C]);
+  }
+
+  auto EnumeratedCandidates = Enumerate(RHSFresh, Components, IC);
+
+  if (!EnumeratedCandidates.empty()) {
+    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                  InstCache, IC, S, SymCS, true, false, false);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+    Refresh("Enumerated cands, no constraints");
+
+    // Enumerated Expressions with some relational constraints
+    if (CMap.size() == 2) {
+      for (auto &&R : Relations) {
+        Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+
+        auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                           InstCache, IC, S, SymCS, true, false, false);
+        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+          return Clone;
+        }
+      }
+    }
+    Refresh("Some constraints for enumerated cands.");
+  }
 
   // Step 3 : Simple RHS constant exprs
 
@@ -1175,39 +1206,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
   }
 
-  Refresh(3);
-
-  // Step 4 : Enumerated expressions
-
-  std::set<Inst *> Components;
-  for (auto C : LHSConsts) {
-    Components.insert(SymConstMap[C]);
-  }
-
-  auto EnumeratedCandidates = Enumerate(RHSFresh, Components, IC);
-
-  if (!EnumeratedCandidates.empty()) {
-    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                  InstCache, IC, S, SymCS, true, false, false);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      return Clone;
-    }
-    Refresh(4);
-
-    // Enumerated Expressions with some relational constraints
-    if (CMap.size() == 2) {
-      for (auto &&R : Relations) {
-        Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-
-        auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                           InstCache, IC, S, SymCS, true, false, false);
-        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-          return Clone;
-        }
-      }
-    }
-    Refresh(4.5);
-  }
+  Refresh("Simple cands with constants");
 
   // Step 4.75 : Enumerate 2 instructions when single RHS Constant.
   if (RHSFresh.size() == 1) {
@@ -1218,7 +1217,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
-    Refresh(4.75);
+    Refresh("Enumerated 2 insts");
 
     // Enumerated Expressions with some relational constraints
     if (CMap.size() == 2) {
@@ -1231,7 +1230,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
           return Clone;
         }
       }
-      Refresh(4.76);
+      Refresh("Enumerated 2 insts some constraints");
     }
   }
 
@@ -1245,7 +1244,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
-    Refresh(5);
+    Refresh("Simple cands with constraints");
 
     for (auto &&R : Relations) {
       Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
@@ -1258,7 +1257,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
       Input.PCs.pop_back();
     }
-    Refresh(5.1);
+    Refresh("Simple cands with constraints and relations");
   }
 
   // Step 6 : Enumerated exprs with constraints
@@ -1270,20 +1269,21 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       return Clone;
     }
 
-    Refresh(6);
+    Refresh("Enumerated exprs with constraints");
 
     for (auto &&R : Relations) {
       Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
 
       auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                         InstCache, IC, S, SymCS, false, true, true);
+                                         InstCache, IC, S, SymCS, true, true, true);
       if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
         return Clone;
       }
     }
-    Refresh(6.1);
+    Refresh("Enumerated exprs with constraints and relations");
   }
   }
+  Refresh("END");
   return Input;
 }
 
@@ -1514,19 +1514,24 @@ int main(int argc, char **argv) {
     if (Basic) {
       ParsedReplacement Result = ReduceBasic(IC, S.get(), Input);
       if (!JustReduce) {
-        Result = SuccessiveSymbolize(IC, S.get(), Result);
+        bool Changed = false;
+        size_t MaxTries = 4;
+        do {
+          Result = ReduceBasic(IC, S.get(), Input);
+          Result = SuccessiveSymbolize(IC, S.get(), Result, Changed);
+        } while (MaxTries-- && Changed);
       }
       Result.print(llvm::outs(), true);
       llvm::outs() << "\n";
       continue;
     }
 
-    if (Advanced) {
-      auto Result = SuccessiveSymbolize(IC, S.get(), Input);
-      Result.print(llvm::outs());
-      llvm::outs() << "\n";
-      continue;
-    }
+//    if (Advanced) {
+//      auto Result = SuccessiveSymbolize(IC, S.get(), Input);
+//      Result.print(llvm::outs());
+//      llvm::outs() << "\n";
+//      continue;
+//    }
 
     if (FixIt) {
       // TODO: Verify that inputs are valid optimizations
