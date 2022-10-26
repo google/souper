@@ -1024,11 +1024,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   // Prelude
 
   auto Fresh = Clone(Input, IC);
-  Changed = true;
   auto Refresh = [&] (auto Msg) {
     Input = Fresh;
 //    llvm::errs() << "POST " << Msg << "\n";
-    Changed = false;
+    Changed = true;
     return Fresh;
   };
 
@@ -1283,6 +1282,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Refresh("Enumerated exprs with constraints and relations");
   }
   }
+  Changed = false;
   Refresh("END");
   return Input;
 }
