@@ -44,6 +44,10 @@ void collectInstsToDepth(Inst *I, size_t Depth, std::set<Inst *> &Results) {
   }
 }
 
+bool IsReductionCostEffective(Inst *LHS, Inst *RHS) {
+  return souper::instCount(RHS) < souper::instCount(LHS);
+}
+
 ParsedReplacement Reducer::ReducePairsGreedy(ParsedReplacement Input) {
   size_t Depth = 4, Passes = 5;
   bool Changed = false;
@@ -67,7 +71,7 @@ ParsedReplacement Reducer::ReducePairsGreedy(ParsedReplacement Input) {
           Eliminate(Input, I);
           Eliminate(Input, J);
 
-          if (souper::cost(Input.Mapping.LHS) <= souper::cost(Input.Mapping.RHS)) {
+          if (!IsReductionCostEffective(Input.Mapping.LHS, Input.Mapping.RHS)) {
             Input = Copy;
             continue;
           }
@@ -119,7 +123,7 @@ ParsedReplacement Reducer::ReduceTriplesGreedy(ParsedReplacement Input) {
               Eliminate(Input, J);
               Eliminate(Input, K);
 
-              if (souper::cost(Input.Mapping.LHS) <= souper::cost(Input.Mapping.RHS)) {
+              if (!IsReductionCostEffective(Input.Mapping.LHS, Input.Mapping.RHS)) {
                 Input = Copy;
                 continue;
               }
@@ -163,7 +167,7 @@ ParsedReplacement Reducer::ReduceGreedy(ParsedReplacement Input) {
     auto Copy = Input;
     Eliminate(Input, I);
 
-    if (souper::cost(Input.Mapping.LHS) <= souper::cost(Input.Mapping.RHS)) {
+    if (!IsReductionCostEffective(Input.Mapping.LHS, Input.Mapping.RHS)) {
       Input = Copy;
       failcount++;
       if (failcount >= Insts.size()) {
