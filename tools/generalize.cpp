@@ -1282,8 +1282,8 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Refresh("Enumerated exprs with constraints and relations");
   }
   }
-  Changed = false;
   Refresh("END");
+  Changed = false;
   return Input;
 }
 
@@ -1515,11 +1515,12 @@ int main(int argc, char **argv) {
       ParsedReplacement Result = ReduceBasic(IC, S.get(), Input);
       if (!JustReduce) {
         bool Changed = false;
-        size_t MaxTries = 4;
+        size_t MaxTries = 2;
         do {
           Result = ReduceBasic(IC, S.get(), Input);
           Result = SuccessiveSymbolize(IC, S.get(), Result, Changed);
-        } while (MaxTries-- && Changed);
+//          Result.print(llvm::errs(), true);
+        } while (--MaxTries && Changed);
       }
       Result.print(llvm::outs(), true);
       llvm::outs() << "\n";

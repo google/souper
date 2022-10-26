@@ -203,6 +203,13 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     Constraints.push_back(new PredEq(Name, PredNames.at(I->K)));
   }
 
+  bool exists(Inst *I) {
+    if (find(I) == end()) {
+      return false;
+    }
+    return !at(I).empty();
+  }
+
   template<typename Stream>
   void PrintPreds(Stream &Out) {
     if (Preds.empty()) {
@@ -250,8 +257,12 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     };
 
     switch (I->K) {
-    case Inst::Var : return {"util::V(" + at(I)[0] + ")", true};
-      case Inst::Const : return {"util::V(" + std::to_string(I->Width)
+    case Inst::Var : if (exists(I)) {
+        return {"util::V(" + at(I)[0] + ")", true};
+      } else {
+        return {"", false};
+      }
+    case Inst::Const : return {"util::V(" + std::to_string(I->Width)
         + ", " + I->Val.toString(10, false) + ")", true};
 
     case Inst::AddNW :
@@ -608,11 +619,13 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
   }
   Out << ")) {\n";
 
-  if (!Syms.GenPCConstraints(Input.PCs)) return false;
+  Input.print(llvm::errs(), true);
+
   Syms.GenVarEqConstraints();
   Syms.GenVarPropConstraints(Input.Mapping.LHS);
   Syms.GenDomConstraints(Input.Mapping.RHS);
   Syms.GenDFConstraints(Input.Mapping.LHS);
+  if (!Syms.GenPCConstraints(Input.PCs)) return false;
   Syms.PrintConstraintsPre(Out);
 
   Out << "  St.hit(" << OptID << ");\n";
