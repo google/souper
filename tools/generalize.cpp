@@ -991,6 +991,28 @@ std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
     return Candidates;
 }
 
+void findDangerousConstants(Inst *I, std::set<Inst *> &Results) {
+  std::set<Inst *> Visited;
+  std::vector<Inst *> Stack{I};
+  while (!Stack.empty()) {
+    auto Cur = Stack.back();
+    Stack.pop_back();
+    Visited.insert(Cur);
+    if (Visited.find(Cur) == Visited.end()) {
+      continue;
+    }
+    for (auto Child : Cur->Ops) {
+      if (Cur->K == Inst::ExtractValue) {
+        if (Child->K == Inst::Const) {
+          // Constant operands of ExtractValue instructions
+          Results.insert(Child);
+        }
+      }
+      Stack.push_back(Child);
+    }
+  }
+}
+
 // Assuming the input has leaves pruned and preconditions weakened
 ParsedReplacement SuccessiveSymbolize(InstContext &IC,
                             Solver *S, ParsedReplacement Input) {
@@ -1009,6 +1031,16 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   auto LHSConsts = findConcreteConsts(Input.Mapping.LHS);
   auto RHSConsts = findConcreteConsts(Input.Mapping.RHS);
+
+  std::set<Inst *> ConstsBlackList;
+  findDangerousConstants(Input.Mapping.LHS, ConstsBlackList);
+  findDangerousConstants(Input.Mapping.RHS, ConstsBlackList);
+
+  for (auto &&C : ConstsBlackList) {
+    LHSConsts.erase(C);
+    RHSConsts.erase(C);
+  }
+
 
   ParsedReplacement Result = Input;
 
