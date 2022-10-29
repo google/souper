@@ -178,9 +178,29 @@ struct DB : public Constraint {
   std::string Val;
 };
 
-//struct VarKB : public Constraint {
+struct K0 : public Constraint {
+  K0(std::string Name_, std::string Val_) : Name(Name_), Val(Val_) {}
+  std::string print() override {
+    return "util::k0(" + Name + ", \"" + Val + "\")";
+  }
+  std::string Name, Val;
+};
 
-//};
+struct K1 : public Constraint {
+  K1(std::string Name_, std::string Val_) : Name(Name_), Val(Val_) {}
+  std::string print() override {
+    return "util::k1(" + Name + ", \"" + Val + "\")";
+  }
+  std::string Name, Val;
+};
+
+struct CR : public Constraint {
+  CR(std::string Name_, std::string L_, std::string H_) : Name(Name_), L(L_), H(H_) {}
+  std::string print() override {
+    return "util::cr(" + Name + ", \"" + L + "\", \"" + H + "\")";
+  }
+  std::string Name, L, H;
+};
 
 struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
   std::vector<Constraint *> Constraints;
@@ -251,6 +271,8 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     auto MET = [&](auto Str) {
       return Children[0].first + "." + Str + "(" + Children[1].first + ")";
     };
+
+//    auto B = []
 
     auto OP = [&](auto Str) {
       return Children[0].first + " " + Str + " " + Children[1].first;
@@ -341,17 +363,42 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
       Constraints.push_back(new DB(LHS->DemandedBits.toString(2, false)));
     }
 
-    // TODO KB and CR
+    std::vector<Inst *> Vars;
+    findVars(LHS, Vars);
 
+    std::set<Inst *> VarSet;
+    for (auto &&V : Vars) {
+      VarSet.insert(V);
+    }
+
+    for (auto &&V : VarSet) {
+      auto Name = this->at(V)[0];
+      if (V->KnownOnes.getBitWidth() == V->Width &&
+          V->KnownOnes != 0) {
+        Constraints.push_back(new K1(Name, V->KnownOnes.toString(2, false)));
+      }
+      if (V->KnownZeros.getBitWidth() == V->Width &&
+          V->KnownZeros != 0) {
+        Constraints.push_back(new K0(Name, V->KnownZeros.toString(2, false)));
+      }
+
+      if (!V->Range.isFullSet()) {
+        Constraints.push_back(new CR(Name, V->Range.getLower().toString(10, false), V->Range.getUpper().toString(10, false)));
+      }
+    }
   }
 
-  void GenVarPropConstraints(Inst *LHS) {
+  void GenVarPropConstraints(Inst *LHS, bool WidthIndependent) {
     std::vector<Inst *> Vars;
     findVars(LHS, Vars);
 
     for (auto V : Vars) {
       auto Name = this->at(V)[0];
-      Constraints.push_back(new WidthEq(Name, V->Width));
+
+      if (!WidthIndependent) {
+        Constraints.push_back(new WidthEq(Name, V->Width));
+      }
+
       if (V->PowOfTwo) {
         Constraints.push_back(new VC("pow2", Name));
       }
@@ -401,9 +448,15 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
 
     auto Print = [&](SymbolTable &Syms, Inst *C){
       auto Name = "C" + std::to_string(varnum++);
-      Out << "  auto " << Name << " = C("
-          << C->Val.getBitWidth() <<", "
-          << C->Val << ", B);\n";
+      if (C->Width < 64) {
+        Out << "  auto " << Name << " = C("
+            << C->Val.getBitWidth() <<", "
+            << C->Val << ", B);\n";
+      } else {
+        Out << "  auto " << Name << " = C("
+            << "APInt(" << C->Val.getBitWidth() << ", "
+            << "\"" << C->Val.toString(10, false) << "\", 10), B);\n";
+      }
       Syms[C].push_back(Name);
     };
 
@@ -452,16 +505,14 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
         Out << "&" << Syms[Child].back() << " <<= ";
       }
       auto Str = Child->Val.toString(10, false);
-      Out << "m_SpecificInt( " << Child->Width << ", " << Str << ")";
+      Out << "m_SpecificInt( " << Child->Width << ", \"" << Str << "\")";
     } else if (Child->K == Inst::Var) {
       if (Child->Name.starts_with("symconst")) {
         Out << "m_Constant(&" << Syms[Child].back() << ")";
       } else if (Child->Name.starts_with("constexpr")) {
         llvm::errs() << "FOUND A CONSTEXPR\n";
+        return false;
       } else {
-      // FIXME What about Symbolic constants?
-      // How about matching const exprs?
-
         Out << "m_Value(" << Syms[Child].back() << ")";
       }
       Syms[Child].pop_back();
@@ -603,15 +654,17 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
 }
 
 template <typename Stream>
-bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
+bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIndependent) {
   SymbolTable Syms;
   Out << "{\n";
 
   if (!InitSymbolTable(Input.Mapping.LHS, Input.Mapping.RHS, Out, Syms)) {
     return false;
   }
+//  Out << "  llvm::errs() << \"NOW \" << " << OptID << "<< \"\\n\";\n";
 
-  Out << "if (match(I, ";
+  auto F = "util::filter(F, " + std::to_string(OptID) + ") && ";
+  Out << "if (" << F << "match(I, ";
 
   SymbolTable SymsCopy = Syms;
   if (!GenLHSMatcher(Input.Mapping.LHS, Out, SymsCopy)) {
@@ -619,10 +672,10 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID) {
   }
   Out << ")) {\n";
 
-  Input.print(llvm::errs(), true);
+//  Input.print(llvm::errs(), true);
 
   Syms.GenVarEqConstraints();
-  Syms.GenVarPropConstraints(Input.Mapping.LHS);
+  Syms.GenVarPropConstraints(Input.Mapping.LHS, WidthIndependent);
   Syms.GenDomConstraints(Input.Mapping.RHS);
   Syms.GenDFConstraints(Input.Mapping.LHS);
   if (!Syms.GenPCConstraints(Input.PCs)) return false;
@@ -684,6 +737,54 @@ bool PCHasVar(const ParsedReplacement &Input) {
   return false;
 }
 
+bool IsWidthIndependent(InstContext &IC,
+                        Solver *S, ParsedReplacement Input) {
+
+  if (Input.Mapping.LHS->Width == 1) {
+    return false;
+  }
+
+
+
+  std::vector<Inst *> Consts;
+  auto Pred = [](Inst *I) {return I->K == Inst::Const;};
+  findInsts(Input.Mapping.LHS, Consts, Pred);
+  findInsts(Input.Mapping.RHS, Consts, Pred);
+  for (auto M : Input.PCs) {
+    findInsts(M.LHS, Consts, Pred);
+    findInsts(M.RHS, Consts, Pred);
+  }
+
+  std::vector<Inst *> WidthChanges;
+  auto WPred = [](Inst *I) {return I->K == Inst::Trunc || I->K == Inst::SExt
+                                                 || I->K == Inst::ZExt;};
+
+  findInsts(Input.Mapping.LHS, WidthChanges, WPred);
+  findInsts(Input.Mapping.RHS, WidthChanges, WPred);
+  for (auto M : Input.PCs) {
+    findInsts(M.LHS, WidthChanges, WPred);
+    findInsts(M.RHS, WidthChanges, WPred);
+  }
+
+  if (!WidthChanges.empty()) {
+    return false;
+    // TODO This is too conservative.
+    // Figure out where this is allowed in a width independent manner.
+  }
+
+  // False if non zero const
+  for (auto &&C : Consts) {
+    if (C->K == Inst::Const && C->Val != 0) {
+      return false;
+    }
+  }
+
+  // TODO Set up constant sytnthesis problem to see if subexpressions
+  // simplify to non zero consts
+
+  return true;
+}
+
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
   KVStore *KV = 0;
@@ -740,6 +841,7 @@ int main(int argc, char **argv) {
 
   bool first = true;
   bool outputs = false;
+
 
   for (auto &&Input: Inputs) {
     auto SKIP = [&] (auto Msg) {
@@ -859,7 +961,8 @@ int main(int argc, char **argv) {
 
     std::string Str;
     llvm::raw_string_ostream Out(Str);
-    if (GenMatcher(Input, Out, optnumber)) {
+
+    if (GenMatcher(Input, Out, optnumber, IsWidthIndependent(IC, S.get(), Input))) {
       auto current = optnumber++;
       if (!optnumbers.empty()
           && optnumbers.find(current) == optnumbers.end()) {
@@ -872,7 +975,9 @@ int main(int argc, char **argv) {
       llvm::outs() << "/* Opt : " << current << "\n";
       Input.print(llvm::outs(), true);
       llvm::outs() << "*/\n";
+
       llvm::outs() << Str << "\n";
+
       llvm::outs().flush();
       outputs= true;
     } else {
@@ -882,6 +987,7 @@ int main(int argc, char **argv) {
   if (outputs) {
     llvm::outs() << "}\n";
   }
+  
 //  llvm::outs() << "end:\n";
 
   return 0;

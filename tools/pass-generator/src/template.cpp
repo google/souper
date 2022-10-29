@@ -22,11 +22,27 @@
 #define DEBUG_TYPE ""
 #include "llvm/Transforms/Utils/InstructionWorklist.h"
 #include "llvm/Support/KnownBits.h"
+#include "llvm/Support/CommandLine.h"
 
 #include <map>
+#include <fstream>
 
 using namespace llvm;
 using namespace llvm::PatternMatch;
+
+static llvm::cl::opt<std::string> ListFile("listfile",
+    llvm::cl::desc("List of optimization indexes to include.\n"
+                   "(default=empty-string)"),
+    llvm::cl::init(""));
+
+static llvm::cl::opt<int> Low("low",
+    llvm::cl::desc("Low"),
+    llvm::cl::init(-1));
+
+static llvm::cl::opt<int> High("high",
+    llvm::cl::desc("High"),
+    llvm::cl::init(-1));
+
 
 // TODO Match trees
 // TODO Make the commutative operations work
@@ -162,6 +178,10 @@ inline width_specific_intval m_SpecificInt(size_t W, uint64_t V) {
   return width_specific_intval(APInt(64, V), W);
 }
 
+inline width_specific_intval m_SpecificInt(size_t W, std::string S) {
+  return width_specific_intval(APInt(W, S, 10), W);
+}
+
 struct constant_matcher {
   llvm::Value** Captured;
   constant_matcher(llvm::Value** C) : Captured(C) {}
@@ -278,7 +298,11 @@ namespace util {
   }
 
   bool check_width(llvm::Value *V, size_t W) {
-   return V->getType()->getScalarSizeInBits() == W;
+    if (V->getType()) {
+      return V->getType()->getScalarSizeInBits() == W;
+    } else {
+      return false;
+    }
   }
 
   template<typename Out, typename FT, typename ...Args>
@@ -295,46 +319,79 @@ namespace util {
     return false;
   }
 
-  bool IsKBSubset(KnownBits Small, KnownBits Big) {
-    // FIXME Think about this carefully.
-    // It can't just be conflict.
+  bool KnownBitImplies(llvm::APInt Big, llvm::APInt Small) {
 
-    return false;
-  }
-
-  bool IsCRSubset(ConstantRange Small, ConstantRange Big) {
-    return Big.contains(Small);
-  }
-
-  bool ckb(llvm::Value *V, llvm::KnownBits Overapprox) {
-    if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
-      auto Val = Con->getUniqueInteger();
-      llvm::KnownBits KB(V->getType()->getIntegerBitWidth());
-      KB.One = Val;
-      KB.Zero = ~Val;
-      return IsKBSubset(KB, Overapprox);
+    if (Big.getBitWidth() != Small.getBitWidth()) {
+      return false;
     }
-    return false;
+
+//    auto P = [](llvm::APInt A, auto S) {
+//      llvm::SmallVector<char> Foo;
+//      A.toString(Foo, 2, false);
+//      llvm::errs() << "\n" <<  Foo << " <--" << S << "\n";
+//    };
+//
+//    auto Val = (~Big | Small);
+//
+//    P(Big, "BIG");
+//    P(Small, "SMALL");
+//    P(~Big, "FLIP");
+//
+//    P(Small, "OR");
+//    P(~Big | Small, "RES");
+
+    return (~Big | Small).isAllOnes();
   }
 
-  bool ccr(llvm::Value *V,llvm::ConstantRange R) {
+  bool k0(llvm::Value *V, std::string Val) {
+    auto W = V->getType()->getIntegerBitWidth();
+    llvm::APInt Value(W, Val, 2);
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
-      return R.contains(Con->getUniqueInteger());
+      auto X = Con->getUniqueInteger();
+      return KnownBitImplies(Value, ~X);
     }
-    return false;
-  }
-
-  bool vkb(llvm::Value *V, llvm::KnownBits OverApprox) {
-    auto Analyzed = llvm::KnownBits(V->getType()->getIntegerBitWidth());
+    auto Analyzed = llvm::KnownBits(W);
     if (Instruction *I = llvm::dyn_cast<Instruction>(V)) {
       DataLayout DL(I->getParent()->getParent()->getParent());
       computeKnownBits(V, Analyzed, DL, 4);
+
+      llvm::SmallVector<char> Result;
+      Analyzed.Zero.toString(Result, 2, false);
+
+      auto b = KnownBitImplies(Value, Analyzed.Zero);
+//      llvm::errs() << "HERE: " << Result << ' ' << Val
+//        << ' ' << b << "\n\n";
+      return b;
     }
-    return IsKBSubset(Analyzed, OverApprox);
+    return false;
   }
 
-  bool vcr(llvm::Value *V, llvm::ConstantRange R) {
+  bool k1(llvm::Value *V, std::string Val) {
+    auto W = V->getType()->getIntegerBitWidth();
+    llvm::APInt Value(W, Val, 2);
+    if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
+      auto X = Con->getUniqueInteger();
+      return KnownBitImplies(Value, X);
+    }
+    auto Analyzed = llvm::KnownBits(W);
+    if (Instruction *I = llvm::dyn_cast<Instruction>(V)) {
+      DataLayout DL(I->getParent()->getParent()->getParent());
+      computeKnownBits(V, Analyzed, DL, 4);
+      return KnownBitImplies(Value, Analyzed.One);
+    }
+    return false;
+  }
+
+  bool cr(llvm::Value *V, std::string L, std::string H) {
+    auto W = V->getType()->getIntegerBitWidth();
+    llvm::ConstantRange R(llvm::APInt(W, L, 10), llvm::APInt(W, H, 10));
+    if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
+      return R.contains(Con->getUniqueInteger());
+    }
     // FIXME obtain result from range analysis pass
+//    if (Instruction *I = llvm::dyn_cast<Instruction>(V)) {
+//
+//    }
     return false;
   }
 
@@ -343,8 +400,7 @@ namespace util {
     auto ComputedDB = DB->getDemandedBits(I);
 
     // 0 in DBUnderApprox implies 0 in ComputedDB
-    return (V | ~ComputedDB) != 0;
-    // TODO Carefully think about this.
+    return (V | ~ComputedDB).isAllOnes();
   }
 
   bool nz(llvm::Value *V) {
@@ -369,6 +425,16 @@ namespace util {
     }
 //    llvm::errs() << "Neg called on NC.\n";
     return false;
+  }
+
+  bool filter(const std::set<size_t> &F, size_t id) {
+    if (Low != -1 && High != -1) {
+      llvm::errs() << Low << " " << id << " " << High << " " << (Low <= id && id < High) << "\n";
+      return Low <= id && id < High;
+    }
+    if (F.empty()) return true;
+    return F.find(id) != F.end();
+//    return true;
   }
 
   struct Stats {
@@ -410,6 +476,13 @@ namespace util {
 struct SouperCombine : public FunctionPass {
   static char ID;
   SouperCombine() : FunctionPass(ID) {
+    if (ListFile != "") {
+      std::ifstream in(ListFile);
+      size_t num;
+      while (in >> num) {
+        F.insert(num);
+      }
+    }
   }
   ~SouperCombine() {
     St.print();
@@ -423,7 +496,13 @@ struct SouperCombine : public FunctionPass {
     W.reserve(F.getInstructionCount());
     for (auto &BB : F) {
       for (auto &&I : BB) {
-        W.push(&I);
+        if (I.getNumOperands() &&
+            !isa<StoreInst>(&I) &&
+            !isa<LoadInst>(&I) &&
+            !isa<GetElementPtrInst>(&I) &&
+            !isa<CallInst>(&I)) {
+          W.push(&I);
+        }
       }
     }
     IRBuilder Builder(F.getContext());
@@ -437,10 +516,14 @@ struct SouperCombine : public FunctionPass {
 
   bool processInst(Instruction *I, IRBuilder &Builder) {
     Builder.SetInsertPoint(I);
+//    llvm::errs() << "HERE0\n";
     if (auto V = getReplacement(I, &Builder)) {
+//      llvm::errs() << "HERE1\n";
       replace(I, V, Builder);
+//      llvm::errs() << "BAR\n";
       return true;
     }
+//    llvm::errs() << "HERE2\n";
     return false;
   }
   void replace(Instruction *I, Value *V, IRBuilder &Builder) {
@@ -450,6 +533,8 @@ struct SouperCombine : public FunctionPass {
   bool run(IRBuilder &Builder) {
     bool Changed = false;
     while (auto I = W.removeOne()) {
+//      llvm::errs() << "FOO\n";
+//      I->print(llvm::errs());
       Changed = processInst(I, Builder) || Changed;
     }
     return Changed;
@@ -459,7 +544,7 @@ struct SouperCombine : public FunctionPass {
 //    if (!I->hasOneUse()) {
 //      return nullptr;
 //    }
-
+//    llvm::errs() << "\nHERE REPL\n";
     // Interestingly commenting out ^this block
     // slightly improves results.
     // Implying this situation can be improved further
@@ -475,8 +560,8 @@ struct SouperCombine : public FunctionPass {
   }
 
   Value *C(llvm::APInt Value, IRBuilder *B) {
-    return B->getIntN(Value.getBitWidth(), Value.getLimitedValue());
-    // FIXME: Figure out how to make a value from a full APInt.
+    return ConstantInt::get(B->getIntNTy(Value.getBitWidth()), Value);
+//    return B->getIntN(Value.getBitWidth(), Value.getLimitedValue());
   }
 
   Type *T(size_t W, IRBuilder *B) {
@@ -487,6 +572,7 @@ struct SouperCombine : public FunctionPass {
   util::Stats St;
   DominatorTree *DT;
   DemandedBits *DB;
+  std::set<size_t> F;
 };
 }
 
