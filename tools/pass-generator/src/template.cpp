@@ -16,6 +16,7 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Analysis/DemandedBits.h"
+#include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Support/Debug.h"
@@ -388,11 +389,8 @@ namespace util {
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
       return R.contains(Con->getUniqueInteger());
     }
-    // FIXME obtain result from range analysis pass
-//    if (Instruction *I = llvm::dyn_cast<Instruction>(V)) {
-//
-//    }
-    return false;
+    auto CR = computeConstantRange(V, true);
+    return R.contains(CR);
   }
 
   bool vdb(llvm::DemandedBits *DB, llvm::Instruction *I, std::string DBUnderApprox) {
@@ -488,11 +486,26 @@ struct SouperCombine : public FunctionPass {
     St.print();
   }
 
+  virtual void getAnalysisUsage(AnalysisUsage &Info) const override {
+//    Info.addRequired<LoopInfoWrapperPass>();
+    Info.addRequired<DominatorTreeWrapperPass>();
+    Info.addRequired<DemandedBitsWrapperPass>();
+    Info.addRequired<LazyValueInfoWrapperPass>();
+//    Info.addRequired<ScalarEvolutionWrapperPass>();
+//    Info.addRequired<TargetLibraryInfoWrapperPass>();
+  }
+
+
   bool runOnFunction(Function &F) override {
     AssumptionCache AC(F);
+
     DT = new DominatorTree(F);
     DB = new DemandedBits(F, AC, *DT);
-    
+////    LVI =
+//    auto DL = new DataLayout(F.getParent());
+//    auto TLI = new TargetLibraryInfo();
+//    new LazyValueInfo
+
     W.reserve(F.getInstructionCount());
     for (auto &BB : F) {
       for (auto &&I : BB) {
@@ -509,8 +522,8 @@ struct SouperCombine : public FunctionPass {
     // llvm::errs() << "Before:\n" << F;
     auto r = run(Builder);
     // llvm::errs() << "After:\n" << F;
-    delete DB;
-    delete DT;
+//    delete DB;
+//    delete DT;
     return r;
   }
 
@@ -572,6 +585,7 @@ struct SouperCombine : public FunctionPass {
   util::Stats St;
   DominatorTree *DT;
   DemandedBits *DB;
+  LazyValueInfo *LVI;
   std::set<size_t> F;
 };
 }

@@ -1,4 +1,5 @@
 #include "llvm/Support/KnownBits.h"
+#include "llvm/IR/ConstantRange.h"
 #include "souper/Generalize/Reducer.h"
 #include "souper/Infer/SynthUtils.h"
 
@@ -414,6 +415,102 @@ ParsedReplacement Reducer::ReduceRedundantPhis(ParsedReplacement Input) {
   }
   return Input;
 }
+size_t WeakenSingleCR(ParsedReplacement Input, InstContext &IC, Solver *S,
+                      Inst *Target, std::optional<llvm::APInt> Val) {
+  if (Target->Width <= 8) return 0; // hack
+  if (!Val.has_value()) {
+    // Synthesize a value
+    Inst *C = IC.createVar(Target->Width, "reservedconst_1");
+    C->SynthesisConstID = 1;
+    std::map<Inst *, Inst *> InstCache = {{Target, C}};
+
+    auto Copy = Input;
+
+    auto Rep = Replace(Input, IC, InstCache);
+
+    std::set<Inst *> ConstSet{C};
+
+    std::map<Inst *, llvm::APInt> ConstMap;
+    ConstantSynthesis CS;
+
+//    Rep.print(llvm::errs(), true);
+
+    if (auto EC = CS.synthesize(S->getSMTLIBSolver(), Rep.BPCs,
+        Rep.PCs, Rep.Mapping, ConstSet, ConstMap, IC, 30, 60, false)) {
+      llvm::errs() << "Constant Synthesis internal error : " <<  EC.message();
+    }
+
+    if (!ConstMap.empty()) {
+      Val = ConstMap[C];
+    }
+  }
+
+  if (!Val.has_value()) {
+    return 0; // fail
+  }
+
+  ParsedReplacement Ret;
+  auto SOLVE = [&]() -> bool {
+    Ret = Verify(Input, IC, S);
+    if (Ret.Mapping.LHS && Ret.Mapping.RHS) {
+      return true;
+    } else {
+      return false;
+    }
+  };
+
+  auto Restore = Target->Range;
+
+  // Binary search to extend upper and lower boundaries
+  llvm::ConstantRange R(Val.value());
+
+//  llvm::errs() << "R " << R << " " << Val.value() <<"\n";
+
+  auto Full = R.getFull(R.getBitWidth());
+
+  auto L = R.getLower();
+  auto U = R.getUpper();
+
+  size_t inc = 1;
+  while (inc && U.ult(Full.getUpper())) {
+    auto Backup = Target->Range;
+    auto Attempt = U + inc;
+    Target->Range = llvm::ConstantRange(L, Attempt);
+    if (SOLVE()) {
+      U = Attempt;
+//      llvm::errs() << "U " << Attempt << '\n';
+      inc *= 2;
+    } else {
+      inc /= 2;
+      Target->Range = Backup;
+    }
+  }
+
+  size_t dec = 1;
+  while (dec && L.ult(0)) {
+    auto Backup = Target->Range;
+    auto Attempt = L - dec;
+    Target->Range = llvm::ConstantRange(Attempt, U);
+    if (SOLVE()) {
+      L = Attempt;
+//      llvm::errs() << "L " << Attempt << '\n';
+      dec *= 2;
+    } else {
+      dec /= 2;
+      Target->Range = Backup;
+    }
+  }
+
+//  llvm::errs() << "HERE " << L << " " << U << "\n";
+
+  if ((U - L).sgt(1 << (Target->Width - 2))) { // Heuristic
+    return (U - L).getLimitedValue();
+  } else {
+    Target->Range = Restore;
+    return 0;
+  };
+
+}
 
 size_t WeakenSingleKB(ParsedReplacement Input, InstContext &IC, Solver *S,
                 Inst *Target, std::optional<llvm::APInt> Val) {
@@ -446,7 +543,6 @@ size_t WeakenSingleKB(ParsedReplacement Input, InstContext &IC, Solver *S,
     if (!ConstMap.empty()) {
       Val = ConstMap[C];
     }
-
   }
 
   if (!Val.has_value()) {
@@ -516,8 +612,15 @@ ParsedReplacement Reducer::ReducePCsToDF(ParsedReplacement Input) {
   bool Succ = false;
 
   for (auto &&V : Vars) {
-    auto BitsWeakened = WeakenSingleKB(Input, IC, S, V, {});
-    Succ |= (BitsWeakened != 0);
+    auto RangeSize = WeakenSingleCR(Input, IC, S, V, {});
+    Succ |= (RangeSize > 0);
+  }
+
+  if (!Succ) {
+    for (auto &&V : Vars) {
+      auto BitsWeakened = WeakenSingleKB(Input, IC, S, V, {});
+      Succ |= (BitsWeakened != 0);
+    }
   }
 
   if (!Succ) {
@@ -530,35 +633,22 @@ ParsedReplacement Reducer::ReducePCsToDF(ParsedReplacement Input) {
 // Assumes Input is valid
 ParsedReplacement Reducer::ReducePCs(ParsedReplacement Input) {
 
-  std::set<size_t> UnnecessaryPCs;
-  for (size_t i =0; i < Input.PCs.size(); ++i) {
-    std::vector<InstMapping> PCsExceptOne;
+  for (size_t i = 0; i < Input.PCs.size(); ++i) {
+    auto Result = Input;
+    Result.PCs.clear();
     for (size_t j = 0; j < Input.PCs.size(); ++j) {
       if (i != j) {
-        PCsExceptOne.push_back(Input.PCs[i]);
+        Result.PCs.push_back(Input.PCs[j]);
       }
     }
 
-    std::vector<std::pair<Inst *, llvm::APInt>> Models;
-    bool Valid;
-    if (std::error_code EC = S->isValid(IC, Input.BPCs, PCsExceptOne, Input.Mapping, Valid, &Models)) {
-      llvm::errs() << EC.message() << '\n';
-    }
-    if (Valid) {
-      UnnecessaryPCs.insert(i);
+    auto Clone = Verify(Result, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return ReducePCs(Result);
     }
   }
 
-  std::vector<InstMapping> NecessaryPCs;
-  for (size_t i =0; i < Input.PCs.size(); ++i) {
-    if (UnnecessaryPCs.find(i) == UnnecessaryPCs.end()) {
-      NecessaryPCs.push_back(Input.PCs[i]);
-    }
-  }
-
-  auto Result = Input;
-  Result.PCs = NecessaryPCs;
-  return Result;
+  return Input;
 }
 
 // Assumes Input is valid
@@ -608,7 +698,6 @@ ParsedReplacement Reducer::WeakenKB(ParsedReplacement Input) {
 
 // Assumes Input is valid
 ParsedReplacement Reducer::WeakenCR(ParsedReplacement Input) {
-  // Just try to remove CR for now.
   std::vector<Inst *> Vars;
   findVars(Input.Mapping.LHS, Vars);
 
@@ -621,7 +710,45 @@ ParsedReplacement Reducer::WeakenCR(ParsedReplacement Input) {
     if (!VerifyInput(Input)) {
       V->Range = Ori;
     }
-    // TODO: Try Widening Range
+
+    auto R = V->Range;
+
+    if (!R.isWrappedSet()) {
+      auto Full = R.getFull(R.getBitWidth());
+
+      auto L = R.getLower();
+      auto U = R.getUpper();
+
+      size_t inc = 1;
+      while (inc && U.ult(Full.getUpper())) {
+        auto Backup = V->Range;
+        auto Attempt = U + inc;
+        V->Range = llvm::ConstantRange(L, Attempt);
+        if (VerifyInput(Input)) {
+          U = Attempt;
+    //      llvm::errs() << "U " << Attempt << '\n';
+          inc *= 2;
+        } else {
+          inc /= 2;
+          V->Range = Backup;
+        }
+      }
+
+      size_t dec = 1;
+      while (dec && L.ult(0)) {
+        auto Backup = V->Range;
+        auto Attempt = L - dec;
+        V->Range = llvm::ConstantRange(Attempt, U);
+        if (VerifyInput(Input)) {
+          L = Attempt;
+    //      llvm::errs() << "L " << Attempt << '\n';
+          dec *= 2;
+        } else {
+          dec /= 2;
+          V->Range = Backup;
+        }
+      }
+    }
   }
 
   return Input;
