@@ -386,6 +386,7 @@ ParsedReplacement Reducer::ReduceRedundantPhis(ParsedReplacement Input) {
   size_t NumPhis = Phis.size();
   while (NumPhis --) {
     std::map<Inst *, Inst *> ICache;
+    bool Done = false;
     for (auto &&I : Phis) {
       if (I->Ops.size() == 1) {
         ICache[I] = I->Ops[0];
@@ -399,8 +400,16 @@ ParsedReplacement Reducer::ReduceRedundantPhis(ParsedReplacement Input) {
         }
         if (allEq) {
           ICache[I] = I->Ops[0];
+        } else {
+          Done = true;
         }
+      } else {
+        Done  = true;
       }
+    }
+
+    if (Done || instCount(Input.Mapping.LHS) - instCount(Input.Mapping.RHS) <= 1) {
+      break;
     }
 
     Input.Mapping.LHS = Replace(Input.Mapping.LHS, IC, ICache);
@@ -472,9 +481,15 @@ size_t WeakenSingleCR(ParsedReplacement Input, InstContext &IC, Solver *S,
   auto U = R.getUpper();
 
   size_t inc = 1;
-  while (inc && U.ult(Full.getUpper())) {
+  while (inc && U.slt(Full.getUpper())) {
+
+//    llvm::errs() << "L " << L << " " << "U " << U << " inc " << inc <<"\n";
+
     auto Backup = Target->Range;
     auto Attempt = U + inc;
+    if (Attempt.sge(Full.getUpper())) {
+      Attempt = Full.getLower();
+    }
     Target->Range = llvm::ConstantRange(L, Attempt);
     if (SOLVE()) {
       U = Attempt;
@@ -490,6 +505,9 @@ size_t WeakenSingleCR(ParsedReplacement Input, InstContext &IC, Solver *S,
   while (dec && L.ult(0)) {
     auto Backup = Target->Range;
     auto Attempt = L - dec;
+    if (Attempt.sle(Full.getLower())) {
+      Attempt = Full.getLower();
+    }
     Target->Range = llvm::ConstantRange(Attempt, U);
     if (SOLVE()) {
       L = Attempt;
@@ -516,7 +534,7 @@ size_t WeakenSingleKB(ParsedReplacement Input, InstContext &IC, Solver *S,
                 Inst *Target, std::optional<llvm::APInt> Val) {
   size_t BitsWeakened = 0;
 
-  if (Target->Width <= 8) return 0; // hack
+  if (Target->Width < 8) return 0; // hack
 
   if (!Val.has_value()) {
     // Synthesize a value

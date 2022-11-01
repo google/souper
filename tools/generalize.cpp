@@ -691,12 +691,12 @@ ParsedReplacement DFPreconditionsAndVerifyGreedy(
 
   std::map<Inst *, std::pair<llvm::APInt, llvm::APInt>> Restore;
 
-
   size_t BitsWeakened = 0;
 
   auto Clone = souper::Clone(Input, IC);
 
   for (auto &&C : SymCS) {
+    if (C.first->Width < 8) continue;
     Restore[C.first] = {C.first->KnownZeros, C.first->KnownOnes};
     C.first->KnownZeros = ~C.second;
     C.first->KnownOnes = C.second;
@@ -713,6 +713,7 @@ ParsedReplacement DFPreconditionsAndVerifyGreedy(
   };
 
   for (auto &&C : SymCS) {
+    if (C.first->Width < 8) continue;
     for (size_t i = 0; i < C.first->Width; ++i) {
       llvm::APInt OriZ = C.first->KnownZeros;
       llvm::APInt OriO = C.first->KnownOnes;
@@ -1046,51 +1047,6 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
 
   return Results;
 }
-
-//std::vector<std::vector<Inst *>>
-//InferSimpleConstExprs(std::vector<Inst *> RHS, std::set<Inst *>
-//                      LHS, std::map<Inst *, Inst *> SMap,
-//                      InstContext &IC) {
-//  std::vector<std::vector<Inst *>> Result;
-//
-//  for (auto &&RC : RHS) {
-//    auto RV = RC->Val;
-//    Result.push_back({});
-//    for (auto &&LC : LHS) {
-//      auto LV = LC->Val;
-//      if (LC->Width != RC->Width || LV.getBitWidth() != RV.getBitWidth()) {
-//        continue;
-//      }
-//      // TODO: Check width constraints
-//
-//      // RC = LC + (RV - LV)
-//      Result.back().push_back(Builder(SMap[LC], IC).Add(RV - LV)());
-//
-//      // RC = (RV + LV) - LC
-//      Result.back().push_back(Builder(IC, RV + LV).Sub(SMap[LC])());
-//
-//
-//      // RC = LC * (RV / LV) only if no remainder
-//      if (LV != 0 && RV.urem(LV) == 0) {
-//        Result.back().push_back(Builder(SMap[LC], IC).Mul(RV.udiv(LV))());
-//      }
-//
-//      // RC = LC / (RV * LV) only if no remainder
-//      if (LV != 0 && RV!= 0 && RV.urem(LV) == 0) {
-//        Result.back().push_back(Builder(SMap[LC], IC).UDiv(RV * LV)());
-//      }
-//
-//      // RC = logb(LC) if logb(LV) = RV && LV is a power of 2.
-//      if (LV.isPowerOf2() && LV.logBase2() == RV) {
-//        Result.back().push_back(Builder(SMap[LC], IC).LogB()());
-//      }
-//
-//      // TODO: Masks
-//    }
-//  }
-//
-//  return Result;
-//}
 
 std::vector<std::vector<Inst *>>
 InferSpecialConstExprsAllSym(std::vector<Inst *> RHS, std::set<Inst *>
@@ -1486,6 +1442,40 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
     Refresh("Enumerated exprs with constraints and relations");
   }
+
+//  std::vector<Inst *> SymDFVars;
+//  std::set<Inst *> LHSConstsAndSymDF;
+
+//  auto Clone = souper::Clone(Input, IC);
+//  std::vector<Inst *> Vars;
+//  findVars(Clone.Mapping.LHS, Vars);
+
+
+//  std::set<Inst *> Visited;
+//  for (size_t i = 0; i < Vars.size(); ++i) {
+//    if (Visited.find(Vars[i]) != Visited.end()/* || Vars[i]->Width == 7*/) {
+//      continue;
+//    }
+//    if (Vars[i]->KnownOnes.getBitWidth() != Vars[i]->Width ||
+//        Vars[i]->KnownZeros.getBitWidth() != Vars[i]->Width) {
+//      continue;
+//    }
+
+//    SymDFVars.push_back(IC.createVar(Vars[i]->Width, "skb_one_" + std::to_string(i)));
+//    SymDFVars.back()->SymOneOf = Vars[i];
+//    Vars[i]->SymKnownOnes = SymDFVars.back();
+//    LHSConstsAndSymDF.insert(SymDFVars.back());
+//    Vars[i]->KnownOnes = llvm::APInt();
+
+//    SymDFVars.push_back(IC.createVar(Vars[i]->Width, "skb_zero_" + std::to_string(i)));
+//    SymDFVars.back()->SymZeroOf = Vars[i];
+//    Vars[i]->SymKnownZeros = SymDFVars.back();
+//    LHSConstsAndSymDF.insert(SymDFVars.back());
+//    Vars[i]->KnownZeros = llvm::APInt();
+//  }
+
+
+//  Refresh("Symbolic known bits");
   }
   Refresh("END");
   Changed = false;
