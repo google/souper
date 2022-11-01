@@ -502,7 +502,8 @@ size_t WeakenSingleCR(ParsedReplacement Input, InstContext &IC, Solver *S,
   }
 
   size_t dec = 1;
-  while (dec && L.ult(0)) {
+  while (dec && L.slt(0)) {
+//    llvm::errs() << "L " << L << " " << "U " << U << " inc " << dec <<"\n";
     auto Backup = Target->Range;
     auto Attempt = L - dec;
     if (Attempt.sle(Full.getLower())) {
@@ -738,9 +739,14 @@ ParsedReplacement Reducer::WeakenCR(ParsedReplacement Input) {
       auto U = R.getUpper();
 
       size_t inc = 1;
-      while (inc && U.ult(Full.getUpper())) {
+      while (inc && U.slt(Full.getUpper())) {
         auto Backup = V->Range;
         auto Attempt = U + inc;
+
+        if (Attempt.sge(Full.getUpper())) {
+          Attempt = Full.getLower();
+        }
+
         V->Range = llvm::ConstantRange(L, Attempt);
         if (VerifyInput(Input)) {
           U = Attempt;
@@ -753,9 +759,12 @@ ParsedReplacement Reducer::WeakenCR(ParsedReplacement Input) {
       }
 
       size_t dec = 1;
-      while (dec && L.ult(0)) {
+      while (dec && L.slt(0)) {
         auto Backup = V->Range;
         auto Attempt = L - dec;
+        if (Attempt.sle(Full.getLower())) {
+          Attempt = Full.getLower();
+        }
         V->Range = llvm::ConstantRange(Attempt, U);
         if (VerifyInput(Input)) {
           L = Attempt;
