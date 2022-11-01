@@ -1,4 +1,5 @@
 #include "llvm/Pass.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/IR/Constant.h"
@@ -299,7 +300,7 @@ namespace util {
   }
 
   bool check_width(llvm::Value *V, size_t W) {
-    if (V->getType()) {
+    if (V && V->getType() && V->getType()->isIntegerTy()) {
       return V->getType()->getScalarSizeInBits() == W;
     } else {
       return false;
@@ -345,7 +346,11 @@ namespace util {
   }
 
   bool k0(llvm::Value *V, std::string Val) {
+    if (!V || !V->getType() || !V->getType()->isIntegerTy() ) {
+      return false;
+    }
     auto W = V->getType()->getIntegerBitWidth();
+
     llvm::APInt Value(W, Val, 2);
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
       auto X = Con->getUniqueInteger();
@@ -368,6 +373,9 @@ namespace util {
   }
 
   bool k1(llvm::Value *V, std::string Val) {
+    if (!V || !V->getType() || !V->getType()->isIntegerTy()) {
+      return false;
+    }
     auto W = V->getType()->getIntegerBitWidth();
     llvm::APInt Value(W, Val, 2);
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
@@ -384,6 +392,9 @@ namespace util {
   }
 
   bool cr(llvm::Value *V, std::string L, std::string H) {
+    if (!V || !V->getType() || !V->getType()->isIntegerTy()) {
+      return false;
+    }
     auto W = V->getType()->getIntegerBitWidth();
     llvm::ConstantRange R(llvm::APInt(W, L, 10), llvm::APInt(W, H, 10));
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
@@ -396,6 +407,9 @@ namespace util {
   bool vdb(llvm::DemandedBits *DB, llvm::Instruction *I, std::string DBUnderApprox) {
     llvm::APInt V = llvm::APInt(I->getType()->getIntegerBitWidth(), DBUnderApprox, 2);
     auto ComputedDB = DB->getDemandedBits(I);
+
+//    llvm::errs() << DBUnderApprox << ' ' << llvm::toString(ComputedDB, 2, false) << ' '
+//                 << (V | ~ComputedDB).isAllOnes() << "\n";
 
     // 0 in DBUnderApprox implies 0 in ComputedDB
     return (V | ~ComputedDB).isAllOnes();
