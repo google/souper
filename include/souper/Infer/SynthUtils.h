@@ -35,6 +35,7 @@ public:
   BINOP(Add) BINOP(Sub) BINOP(Mul)
   BINOP(And) BINOP(Xor) BINOP(Or)
   BINOP(Shl) BINOP(LShr) BINOP(UDiv)
+  BINOP(SDiv)
 #undef BINOP
 
 #define BINOPW(K)                                                \
@@ -51,7 +52,8 @@ public:
     auto L = I;                                                  \
     return Builder(IC.getInst(Inst::K, L->Width, {L}), IC);      \
   }
-  UNOP(LogB)
+  UNOP(LogB) UNOP(BitReverse) UNOP(BSwap)
+
 #undef UNOP
 
 private:
