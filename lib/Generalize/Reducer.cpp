@@ -386,7 +386,7 @@ ParsedReplacement Reducer::ReduceRedundantPhis(ParsedReplacement Input) {
   size_t NumPhis = Phis.size();
   while (NumPhis --) {
     std::map<Inst *, Inst *> ICache;
-    bool Done = false;
+//    bool Done = false;
     for (auto &&I : Phis) {
       if (I->Ops.size() == 1) {
         ICache[I] = I->Ops[0];
@@ -401,16 +401,16 @@ ParsedReplacement Reducer::ReduceRedundantPhis(ParsedReplacement Input) {
         if (allEq) {
           ICache[I] = I->Ops[0];
         } else {
-          Done = true;
+//          Done = true;
         }
       } else {
-        Done  = true;
+//        Done  = true;
       }
     }
 
-    if (Done || instCount(Input.Mapping.LHS) - instCount(Input.Mapping.RHS) <= 1) {
-      break;
-    }
+//    if (Done || instCount(Input.Mapping.LHS) - instCount(Input.Mapping.RHS) <= 1) {
+//      break;
+//    }
 
     Input.Mapping.LHS = Replace(Input.Mapping.LHS, IC, ICache);
     Input.Mapping.RHS = Replace(Input.Mapping.RHS, IC, ICache);
