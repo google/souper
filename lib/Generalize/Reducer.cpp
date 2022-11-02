@@ -46,7 +46,7 @@ void collectInstsToDepth(Inst *I, size_t Depth, std::set<Inst *> &Results) {
 }
 
 bool IsReductionCostEffective(Inst *LHS, Inst *RHS) {
-  return souper::instCount(RHS) < souper::instCount(LHS);
+  return souper::cost(RHS) < souper::cost(LHS);
 }
 
 ParsedReplacement Reducer::ReducePairsGreedy(ParsedReplacement Input) {
@@ -411,6 +411,9 @@ ParsedReplacement Reducer::ReduceRedundantPhis(ParsedReplacement Input) {
 //    if (Done || instCount(Input.Mapping.LHS) - instCount(Input.Mapping.RHS) <= 1) {
 //      break;
 //    }
+    if (souper::cost(Input.Mapping.LHS) <= souper::cost(Input.Mapping.RHS)) {
+      break;
+    }
 
     Input.Mapping.LHS = Replace(Input.Mapping.LHS, IC, ICache);
     Input.Mapping.RHS = Replace(Input.Mapping.RHS, IC, ICache);
