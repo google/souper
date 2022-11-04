@@ -469,9 +469,11 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
 };
 
 template <typename Stream>
-bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms) {
-  if (I->K != souper::Inst::Var && Syms.Used.find(I) != Syms.Used.end()) {
-    Out << "&" << Syms[I].back() << " <<= ";
+bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms, bool IsRoot = false) {
+  if (!IsRoot) {
+    if (I->K != souper::Inst::Var && Syms.Used.find(I) != Syms.Used.end()) {
+      Out << "&" << Syms[I].back() << " <<= ";
+    }
   }
 
   auto It = MatchOps.find(I->K);
@@ -667,7 +669,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
   Out << "if (" << F << "match(I, ";
 
   SymbolTable SymsCopy = Syms;
-  if (!GenLHSMatcher(Input.Mapping.LHS, Out, SymsCopy)) {
+  if (!GenLHSMatcher(Input.Mapping.LHS, Out, SymsCopy, /*IsRoot = */true)) {
     return false;
   }
   Out << ")) {\n";
