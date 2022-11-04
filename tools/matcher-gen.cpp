@@ -284,8 +284,9 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
       } else {
         return {"", false};
       }
-    case Inst::Const : return {"util::V(" + std::to_string(I->Width)
-        + ", " + I->Val.toString(10, false) + ")", true};
+    case Inst::Const :
+      return {"util::V(" + std::to_string(I->Width)
+        + ", \"" + I->Val.toString(10, false) + "\")", true};
 
     case Inst::AddNW :
     case Inst::AddNUW :
