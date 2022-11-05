@@ -765,6 +765,7 @@ ParsedReplacement SimplePreconditionsAndVerifyGreedy(
   Clone.Mapping.RHS = nullptr;
 
   auto SOLVE = [&]() -> bool {
+//    Input.print(llvm::errs(), true);
     Clone = Verify(Input, IC, S);
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return true;
@@ -1027,6 +1028,21 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
     }
     // TODO Add others
 
+    // bit flip
+    llvm::APInt D = C->Val;
+    D.flipAllBits();
+//    llvm::errs() << "HERE: " << Target << ' ' << C->Val << ' ' << D << "\n";
+    if (Target == D) {
+      Results.push_back(Builder(SMap[C], IC).Xor(llvm::APInt::getAllOnesValue(C->Width))());
+    }
+
+    // neg
+    D = C->Val;
+    D.negate();
+    if (Target == D) {
+      Results.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C->Width)).Sub(SMap[C])());
+    }
+
     if (Threshold == 1) {
       for (auto C2 : LHSConsts) {
         if (C == C2 || C->Width != C2->Width) {
@@ -1085,12 +1101,11 @@ std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
     std::vector<Inst *> Components;
     for (auto &&C : LHSConsts) {
       Components.push_back(C);
+      Components.push_back(Builder(C, IC).LogB()());
       Components.push_back(Builder(C, IC).Sub(1)());
       Components.push_back(Builder(C, IC).Xor(-1)());
       Components.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C->Width)).Shl(C)());
     }
-
-    // TODO: Custom components
 
     for (auto &&Target : RHSConsts) {
       Candidates.push_back({});
@@ -1120,6 +1135,12 @@ void findDangerousConstants(Inst *I, std::set<Inst *> &Results) {
     auto Cur = Stack.back();
     Stack.pop_back();
     Visited.insert(Cur);
+
+    if (Cur->K == Inst::Const && Cur->Val == 0) {
+      // Don't try to 'generalize' zero!
+      Results.insert(Cur);
+    }
+
     if (Visited.find(Cur) == Visited.end()) {
       continue;
     }
@@ -1146,7 +1167,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   auto Fresh = Clone(Input, IC);
   auto Refresh = [&] (auto Msg) {
     Input = Fresh;
-//    llvm::errs() << "POST " << Msg << "\n";
+    llvm::errs() << "POST " << Msg << "\n";
     Changed = true;
     return Fresh;
   };
@@ -1372,6 +1393,29 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
     Refresh("Special expressions, with constants");
 
+  // Enumerated exprs with constraints
+
+  if (!EnumeratedCandidates.empty()) {
+    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                  InstCache, IC, S, SymCS, true, true, true);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+
+    Refresh("Enumerated exprs with constraints");
+
+    for (auto &&R : Relations) {
+      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+
+      auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                         InstCache, IC, S, SymCS, true, true, true);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
+      }
+    }
+    Refresh("Enumerated exprs with constraints and relations");
+  }
+
   // Step 5 : Simple exprs with constraints
 
   if (!SimpleCandidates.empty()) {
@@ -1420,28 +1464,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Refresh("Simple cands+consts with constraints and relations");
   }
 
-  // Step 6 : Enumerated exprs with constraints
 
-  if (!EnumeratedCandidates.empty()) {
-    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                  InstCache, IC, S, SymCS, true, true, true);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      return Clone;
-    }
-
-    Refresh("Enumerated exprs with constraints");
-
-    for (auto &&R : Relations) {
-      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-
-      auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                         InstCache, IC, S, SymCS, true, true, true);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-    }
-    Refresh("Enumerated exprs with constraints and relations");
-  }
 
 //  std::vector<Inst *> SymDFVars;
 //  std::set<Inst *> LHSConstsAndSymDF;

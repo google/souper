@@ -483,6 +483,9 @@ namespace util {
   llvm::APInt V(size_t Width, size_t Val) {
     return llvm::APInt(Width, Val);
   }
+  llvm::APInt V(size_t Width, std::string Val) {
+    return llvm::APInt(Width, Val, 2);
+  }
 }
 
 struct SouperCombine : public FunctionPass {
