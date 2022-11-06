@@ -52,7 +52,7 @@ public:
     auto L = I;                                                  \
     return Builder(IC.getInst(Inst::K, L->Width, {L}), IC);      \
   }
-  UNOP(LogB) UNOP(BitReverse) UNOP(BSwap)
+  UNOP(LogB) UNOP(BitReverse) UNOP(BSwap) UNOP(Cttz) UNOP(Ctlz)
 
 #undef UNOP
 

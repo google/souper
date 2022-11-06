@@ -808,6 +808,127 @@ if(s) return Clone;};
   return Clone;
 }
 
+ParsedReplacement SymKBPreconditionsAndVerifyGreedy(
+        ParsedReplacement Input, InstContext &IC,
+    Solver *S, std::map<Inst *, llvm::APInt> SymCS) {
+
+  std::map<Inst *, Inst *> SymKMap;
+  static size_t i = 0;
+  for (auto &&C : SymCS) {
+    SymKMap[IC.createVar(C.first->Width, "symconst_k0_" + std::to_string(i++))] = C.first;
+    SymKMap[IC.createVar(C.first->Width, "symconst_k1_" + std::to_string(i++))] = C.first;
+    // Only discriminant for these two are in Name
+  }
+
+  auto KPC = [&](Inst *SymK) -> InstMapping {
+    // true : Constraint for known zero
+    // false : Constraint for known one
+
+    InstMapping Result;
+    Result.RHS = IC.getConst(llvm::APInt(1, 1));
+
+    auto I = SymKMap[SymK];
+    auto Width = I->Width;
+
+    auto K0 = SymK->Name.starts_with("symconst_k0_");
+
+    if (K0) {
+      Inst *AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(Width));
+      Inst *NotZeros = IC.getInst(Inst::Xor, Width, {SymK, AllOnes});
+      Inst *VarNotZero = IC.getInst(Inst::Or, Width, {I, NotZeros});
+      Inst *ZeroBits = IC.getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
+      Result.LHS = ZeroBits;
+    } else {
+      Inst *VarAndOnes = IC.getInst(Inst::And, Width, {I, SymK});
+      Inst *OneBits = IC.getInst(Inst::Eq, 1, {VarAndOnes, SymK});
+      Result.LHS = OneBits;
+    }
+
+    return Result;
+  };
+
+
+  // Pairwise expressions, all boolean
+
+  for (auto &&P1 : SymKMap) {
+    for (auto &&P2 : SymKMap) {
+      if (P1.first == P2.first || P1.first->Width != P2.first->Width) {
+        continue;
+      }
+
+      auto X = P1.first;
+      auto Y = P2.first;
+
+      auto W = P1.first->Width;
+
+      std::vector<Inst *> Exprs;
+
+      auto TrueVal = IC.getConst(llvm::APInt(1, 1));
+
+      // bit flip x == ~y
+      Exprs.push_back(Builder(X, IC).Xor(Y).Eq(llvm::APInt::getAllOnesValue(X->Width))());
+
+      // cttz(val) + ctlz(val) >= Width
+      auto XV = X;
+      if (X->Name.starts_with("symconst_k0_")) {
+        XV = Builder(X, IC).Xor(llvm::APInt::getAllOnesValue(W))();
+      }
+      auto YV = Y;
+      if (Y->Name.starts_with("symconst_k0_")) {
+        YV = Builder(Y, IC).Xor(llvm::APInt::getAllOnesValue(W))();
+      }
+      Exprs.push_back(Builder(IC, llvm::APInt(W, W)).Ule(
+                        Builder(XV, IC).Cttz().Add(
+                          Builder(YV, IC).Ctlz()())())());
+
+
+      std::vector<Inst *> Components{X, Y, XV, YV};
+      Components.push_back(IC.getConst(llvm::APInt::getAllOnesValue(W)));
+
+      EnumerativeSynthesis ES;
+      auto Guesses = ES.generateExprs(IC, 2, Components, 1);
+      for (auto &&Guess : Guesses) {
+        std::set<Inst *> ConstSet;
+        souper::getConstants(Guess, ConstSet);
+        if (!ConstSet.empty()) {
+          if (SymbolizeConstSynthesis) {
+            Exprs.push_back(Guess);
+          }
+        } else {
+          Exprs.push_back(Guess);
+        }
+      }
+
+
+      for (auto &&E : Exprs) {
+
+        auto Backup = Input.PCs;
+
+        InstMapping M(E, TrueVal);
+
+        Input.PCs.push_back(M);
+        Input.PCs.push_back(KPC(X));
+        Input.PCs.push_back(KPC(Y));
+
+//        Input.print(llvm::errs(), true);
+//        llvm::errs() << "\n";
+
+        auto Clone = Verify(Input, IC, S);
+        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+          return Clone;
+        }
+
+        Input.PCs = Backup;
+      }
+    }
+  }
+
+  Input.Mapping.LHS = nullptr;
+  Input.Mapping.RHS = nullptr;
+  //TODO Better failure indicator
+  return Input;
+}
+
 ParsedReplacement
 FirstValidCombination(ParsedReplacement Input,
                       const std::vector<Inst *> &Targets,
@@ -1243,6 +1364,13 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       return Clone;
     }
 
+    if (Advanced) {
+      Clone = SymKBPreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
+      }
+    }
+
     Clone = DFPreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
@@ -1295,6 +1423,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
+
   }
   Refresh("All LHS Constraints");
 
