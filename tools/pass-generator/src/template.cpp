@@ -450,13 +450,15 @@ namespace util {
   }
 
   struct Stats {
-    void hit(size_t opt) {
+    void hit(size_t opt, int cost) {
       Hits[opt]++;
+      Cost[opt] = cost;
     }
 //    void dcmiss(size_t opt) {
 //      DCMiss[opt]++;
 //    }
     std::map<size_t, size_t> Hits;
+    std::map<size_t, int64_t> Cost;
 //    std::map<size_t, size_t> DCMiss;
     void print() {
       std::vector<std::pair<size_t, size_t>> Copy(Hits.size(), std::make_pair(0, 0));
@@ -467,7 +469,13 @@ namespace util {
       size_t sum = 0;
       for (auto &&P : Copy) {
         sum += P.second;
-        llvm::errs() << "OptID " << P.first << " matched " << P.second << " time(s).\n";
+        int64_t cost;
+        if (Cost.find(P.first) == Cost.end()) {
+          cost = 1;
+        } else {
+          cost = Cost[P.first];
+        }
+        llvm::errs() << "OptID " << P.first << " matched " << P.second << " time(s). Cost " << int(P.second) * cost << "\n";
       }
       llvm::errs() << "Hits end. Total = " << sum << ".\n";
     }

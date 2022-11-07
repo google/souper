@@ -1144,6 +1144,7 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
     if (Target == C->Val.logBase2()) {
       Results.push_back(Builder(SMap[C], IC).LogB()());
     }
+    
     if (Target == C->Val.reverseBits()) {
       Results.push_back(Builder(SMap[C], IC).BitReverse()());
     }
@@ -1152,9 +1153,12 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
     // bit flip
     llvm::APInt D = C->Val;
     D.flipAllBits();
-//    llvm::errs() << "HERE: " << Target << ' ' << C->Val << ' ' << D << "\n";
     if (Target == D) {
       Results.push_back(Builder(SMap[C], IC).Xor(llvm::APInt::getAllOnesValue(C->Width))());
+    }
+
+    if (Target == D + 1) {
+      Results.push_back(Builder(SMap[C], IC).Xor(llvm::APInt::getAllOnesValue(C->Width)).Add(1)());
     }
 
     // neg
@@ -1288,7 +1292,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   auto Fresh = Clone(Input, IC);
   auto Refresh = [&] (auto Msg) {
     Input = Fresh;
-//    llvm::errs() << "POST " << Msg << "\n";
+//  llvm::errs() << "POST " << Msg << "\n";
     Changed = true;
     return Fresh;
   };
@@ -1481,8 +1485,9 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
 
   // Step 4.75 : Enumerate 2 instructions when single RHS Constant.
+  std::vector<std::vector<Inst *>> EnumeratedCandidatesTwoInsts;
   if (RHSFresh.size() == 1) {
-    auto EnumeratedCandidatesTwoInsts = Enumerate(RHSFresh, Components, IC, 2);
+    EnumeratedCandidatesTwoInsts = Enumerate(RHSFresh, Components, IC, 2);
 
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
                                   InstCache, IC, S, SymCS, true, false, false);
@@ -1490,7 +1495,19 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       return Clone;
     }
     Refresh("Enumerated 2 insts");
+  }
+  
+  if (!EnumeratedCandidates.empty()) {
+    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                  InstCache, IC, S, SymCS, true, true, true);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
 
+    Refresh("Enumerated exprs with constraints");
+  }
+  
+  if (RHSFresh.size() == 1) {
     // Enumerated Expressions with some relational constraints
     if (CMap.size() == 2) {
       for (auto &&R : Relations) {
@@ -1506,33 +1523,25 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
   }
 
-    // Step 4.8 : Special RHS constant exprs, with constants
+  // Step 4.8 : Special RHS constant exprs, with constants
 
-    std::vector<std::vector<Inst *>> SimpleCandidatesWithConsts =
-      InferSpecialConstExprsWithConcretes(RHSFresh, LHSConsts, SymConstMap, IC);
+  std::vector<std::vector<Inst *>> SimpleCandidatesWithConsts =
+    InferSpecialConstExprsWithConcretes(RHSFresh, LHSConsts, SymConstMap, IC);
 
-    if (!SimpleCandidatesWithConsts.empty()) {
-      auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
-                                         InstCache, IC, S, SymCS,
-                                         true, false, false);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
+  if (!SimpleCandidatesWithConsts.empty()) {
+    auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
+                                        InstCache, IC, S, SymCS,
+                                        true, false, false);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
     }
+  }
 
-    Refresh("Special expressions, with constants");
+  Refresh("Special expressions, with constants");
 
   // Enumerated exprs with constraints
 
   if (!EnumeratedCandidates.empty()) {
-    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                  InstCache, IC, S, SymCS, true, true, true);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      return Clone;
-    }
-
-    Refresh("Enumerated exprs with constraints");
-
     for (auto &&R : Relations) {
       Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
 

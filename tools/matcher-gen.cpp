@@ -656,10 +656,21 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
   return true;
 }
 
+int profitability(const ParsedReplacement &Input) {
+  return souper::cost(Input.Mapping.LHS) -
+    souper::cost(Input.Mapping.RHS);
+}
+
 template <typename Stream>
 bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIndependent) {
   SymbolTable Syms;
   Out << "{\n";
+
+  int prof = profitability(Input);
+  size_t LHSSize = souper::instCount(Input.Mapping.LHS);
+  if (prof <= 1 || LHSSize > 15) {
+    return false;
+  }
 
   if (!InitSymbolTable(Input.Mapping.LHS, Input.Mapping.RHS, Out, Syms)) {
     return false;
@@ -684,7 +695,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
   if (!Syms.GenPCConstraints(Input.PCs)) return false;
   Syms.PrintConstraintsPre(Out);
 
-  Out << "  St.hit(" << OptID << ");\n";
+  Out << "  St.hit(" << OptID << ", " << prof  << ");\n";
 
   Syms.PrintConstDecls(Out);
 
@@ -717,11 +728,6 @@ std::string getLLVMInstKindName(Inst::Kind K) {
 //  str.consume_front("NUW");
 //  str.consume_front("NW");
   return str.str();
-}
-
-int profitability(const ParsedReplacement &Input) {
-  return souper::cost(Input.Mapping.LHS) -
-    souper::cost(Input.Mapping.RHS);
 }
 
 bool PCHasVar(const ParsedReplacement &Input) {
