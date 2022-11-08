@@ -668,7 +668,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
 
   int prof = profitability(Input);
   size_t LHSSize = souper::instCount(Input.Mapping.LHS);
-  if (prof <= 1 || LHSSize > 15) {
+  if (prof < 1 || LHSSize > 15) {
     return false;
   }
 
