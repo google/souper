@@ -290,6 +290,9 @@ namespace util {
   }
 
   bool dc(llvm::DominatorTree *DT, llvm::Instruction *I, llvm::Value *V) {
+    if (!V) {
+      return false;
+    }
     if (auto Def = dyn_cast<Instruction>(V)) {
       if (I->getParent() == Def->getParent()) {
         return true;

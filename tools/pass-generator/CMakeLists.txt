@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.7)
 project(souper-combine)
 
+cmake_policy(SET CMP0074 NEW)
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
 find_package(LLVM 14.0 REQUIRED CONFIG)

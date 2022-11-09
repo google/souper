@@ -33,6 +33,16 @@ static llvm::cl::opt<bool> IgnoreDF("ignore-df",
                    "(default=false)"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> NoDispatch("no-dispatch",
+    llvm::cl::desc("Do not generate code to dispatch on root instruction kind."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> Sort("sortf",
+    llvm::cl::desc("Sort matchers according to listfile"
+                   "(default=false)"),
+    llvm::cl::init(false));
+
 static llvm::cl::opt<std::string> ListFile("listfile",
     llvm::cl::desc("List of optimization indexes to include.\n"
                    "(default=empty-string)"),
@@ -668,7 +678,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
 
   int prof = profitability(Input);
   size_t LHSSize = souper::instCount(Input.Mapping.LHS);
-  if (prof < 1 || LHSSize > 15) {
+  if (prof < 0 || LHSSize > 15) {
     return false;
   }
 
@@ -802,11 +812,15 @@ int main(int argc, char **argv) {
   S = GetSolver(KV);
 
   std::unordered_set<size_t> optnumbers;
+  std::vector<size_t> Ordered;
   if (ListFile != "") {
     std::ifstream in(ListFile);
     size_t num;
     while (in >> num) {
       optnumbers.insert(num);
+      if (Sort) {
+        Ordered.push_back(num);
+      }
     }
   }
 
@@ -845,12 +859,13 @@ int main(int argc, char **argv) {
   }
 
   size_t optnumber = 0;
-//  genDispatchCode(Kinds);
+
   Inst::Kind Last = Inst::Kind::None;
 
   bool first = true;
   bool outputs = false;
 
+  std::map<size_t, std::string> Results;
 
   for (auto &&Input: Inputs) {
     auto SKIP = [&] (auto Msg) {
@@ -898,7 +913,7 @@ int main(int argc, char **argv) {
       }
     }
 
-    if (Input.Mapping.LHS->K != Last) {
+    if (Input.Mapping.LHS->K != Last && !NoDispatch) {
       if (!first) {
         llvm::outs() << "}\n";
       }
@@ -981,20 +996,28 @@ int main(int argc, char **argv) {
         SKIP("SKIP Filtered.");
         continue;
       }
-      llvm::outs() << "/* Opt : " << current << "\n";
-      Input.print(llvm::outs(), true);
-      llvm::outs() << "*/\n";
+      std::string IRComment = "/* Opt : " + std::to_string(current) + "\n" + Input.getString(true) + "*/\n";
 
-      llvm::outs() << Str << "\n";
+      if (NoDispatch && Sort && !Ordered.empty()) {
+        Results[current] = IRComment + Str + "\n";
+      } else {
+        llvm::outs() << IRComment << Str << "\n";
+        llvm::outs().flush();
+        outputs= true;
+      }
 
-      llvm::outs().flush();
-      outputs= true;
     } else {
       SKIP("SKIP Failed to generate matcher.");
     }
   }
   if (outputs) {
     llvm::outs() << "}\n";
+  }
+
+  if (NoDispatch && Sort && !Ordered.empty()) {
+    for (auto N : Ordered) {
+      llvm::outs() << Results[N];
+    }
   }
   
 //  llvm::outs() << "end:\n";
