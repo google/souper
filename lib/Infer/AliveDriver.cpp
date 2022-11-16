@@ -241,14 +241,14 @@ performCegisFirstQuery(tools::Transform &t,
   for (auto &[Var, Val] : TgtState.getValues()) {
     auto &Name = Var->getName();
     if (startsWith("%reservedconst", Name)) {
-      SMTConsts[Name] = Val.first.value;
+      SMTConsts[Name] = Val.val.value;
     }
   }
 
   if (SkipAliveSolver)
     return SynthesisResult;
 
-  auto R = smt::check_expr((Sv.first.value == Tv.first.value) && (TriedExpr));
+  auto R = smt::check_expr((Sv.val.value == Tv.val.value) && (TriedExpr));
   // no more guesses, stop immediately
   if (R.isUnsat()) {
     if (DebugLevel > 3)
