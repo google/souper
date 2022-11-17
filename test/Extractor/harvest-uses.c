@@ -6,7 +6,7 @@ int func(int x) {
   int y = x * 11;
   int z = x * 17;
   if (y == 88)
-    // CHECK: call i32 @a(i32 136)
+    // CHECK: call i32 @a(i32 noundef 136)
     return a(z);
   else
     return b(z);
