@@ -1,4 +1,4 @@
-; RUN: %opt -load %pass -souper -S -o - %s 2>&1 | %FileCheck %s
+; RUN: %opt -load-pass-plugin %pass -passes='function(souper)'  -S -o - %s 2>&1 | %FileCheck %s
 
 ; CHECK-NOT: ptrtoint
 ; CHECK-NOT: trunc

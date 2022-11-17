@@ -1,7 +1,7 @@
 
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper -dce -souper-use-cegis -souper-synthesis-comps=and,const,or,add,xor -S -o - %s | %FileCheck %s
+; RUN: %opt -load-pass-plugin %pass -passes='function(souper),dce' -souper-use-cegis -souper-synthesis-comps=and,const,or,add,xor -S -o - %s | %FileCheck %s
 
 define i32 @ia32_Blsr_unsupported(i32) local_unnamed_addr #0 {
   %2 = sub i32 0, %0

@@ -18,6 +18,8 @@
 #include "souper/Extractor/Candidates.h"
 #include "souper/Util/LLVMUtils.h"
 
+#include "llvm/IR/Operator.h"
+
 using namespace llvm;
 
 namespace {

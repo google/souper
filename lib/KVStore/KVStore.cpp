@@ -88,8 +88,8 @@ void KVStore::KVImpl::hIncrBy(llvm::StringRef Key, llvm::StringRef Field,
   }
   if (reply->type != REDIS_REPLY_INTEGER)
     llvm::report_fatal_error(
-        "Redis protocol error for static profile, didn't expect reply type "
-        + std::to_string(reply->type));
+        ("Redis protocol error for static profile, didn't expect reply type "
+         + std::to_string(reply->type)).c_str());
   freeReplyObject(reply);
 }
 
@@ -112,8 +112,8 @@ bool KVStore::KVImpl::hGet(llvm::StringRef Key, llvm::StringRef Field,
     return true;
   } else {
     llvm::report_fatal_error(
-        "Redis protocol error for cache lookup, didn't expect reply type " +
-        std::to_string(reply->type));
+        ("Redis protocol error for cache lookup, didn't expect reply type " +
+         std::to_string(reply->type)).c_str());
   }
 }
 
@@ -125,8 +125,8 @@ void KVStore::KVImpl::hSet(llvm::StringRef Key, llvm::StringRef Field,
     llvm::report_fatal_error((llvm::StringRef)"Redis error: " + Ctx->errstr);
   if (reply->type != REDIS_REPLY_INTEGER) {
     llvm::report_fatal_error(
-        "Redis protocol error for cache fill, didn't expect reply type " +
-        std::to_string(reply->type));
+        ("Redis protocol error for cache fill, didn't expect reply type " +
+         std::to_string(reply->type)).c_str());
   }
   freeReplyObject(reply);
 }

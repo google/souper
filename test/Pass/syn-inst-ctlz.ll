@@ -1,7 +1,7 @@
 
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %opt -load %pass -souper -dce -souper-use-cegis -souper-synthesis-comps=ctlz -S -o - %s | %FileCheck %s
+; RUN: %opt -load-pass-plugin %pass -passes='function(souper),dce' -souper-use-cegis -souper-synthesis-comps=ctlz -S -o - %s | %FileCheck %s
 
 define i8 @func(i8 %v) local_unnamed_addr #0 {
 entry:

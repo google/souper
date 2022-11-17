@@ -9,9 +9,3 @@ result %1
 ; CHECK-NEXT:   %1 = call i8 @llvm.bitreverse.i8(i8 %0)
 ; CHECK-NEXT:   ret i8 %1
 ; CHECK-NEXT: }
-
-; CHECK: ; Function Attrs: nofree nosync nounwind readnone speculatable willreturn
-; CHECK-NEXT: declare i8 @llvm.bitreverse.i8(i8) #0
-
-; attributes #0 = { nofree nosync nounwind readnone speculatable willreturn }
-

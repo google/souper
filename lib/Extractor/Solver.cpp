@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#define DEBUG_TYPE "souper"
-
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/Statistic.h"
@@ -33,6 +31,8 @@
 #include "souper/Parser/Parser.h"
 
 #include <unordered_map>
+
+#define DEBUG_TYPE "souper"
 
 STATISTIC(MemHitsInfer, "Number of internal cache hits for infer()");
 STATISTIC(MemMissesInfer, "Number of internal cache misses for infer()");
@@ -470,11 +470,13 @@ public:
     if (RHSs.size() <= 1)
       return EC;
 
+#if 0
     for (auto &RHS : RHSs) {
       BackendCost BC;
       getBackendCost(IC, RHS, BC);
       // FIXME sort the list
     }
+#endif
 
     return EC;
   }

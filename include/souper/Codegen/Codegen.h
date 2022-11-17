@@ -60,7 +60,7 @@ struct BackendCost {
   std::vector<int> C;
 };
 
-void getBackendCost(InstContext &IC, Inst *I, BackendCost &BC);
+  // void getBackendCost(InstContext &IC, Inst *I, BackendCost &BC);
  
 bool compareCosts(const BackendCost &C1, const BackendCost &C2);
 

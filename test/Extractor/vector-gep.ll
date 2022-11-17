@@ -1,7 +1,7 @@
 
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper -souper-harvest-dataflow-facts=false -check %t
+; RUN: %souper -passes='function(souper)' -harvest-dataflow-facts=false -check %t
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 

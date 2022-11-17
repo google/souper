@@ -55,7 +55,7 @@ static bool exists_and_executable(const char *fn) {
 static std::unique_ptr<SMTLIBSolver> GetUnderlyingSolver() {
   std::string Z3PathStr(Z3Path);
   if (!exists_and_executable(Z3Path))
-    llvm::report_fatal_error("Solver '" + Z3PathStr + "' does not exist or is not executable");
+    llvm::report_fatal_error(((std::string)"Solver '" + Z3PathStr + "' does not exist or is not executable").c_str());
   return createZ3Solver(makeExternalSolverProgram(Z3PathStr),
                         KeepSolverInputs);
 }
