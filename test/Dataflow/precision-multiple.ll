@@ -1,7 +1,7 @@
 
 
 ; RUN: %llvm-as -o %t %s
-; RUN: %souper -infer-range -infer-non-zero -passes='function(souper)' -max-constant-synthesis-tries=60 %t > %t2 || true
+; RUN: %souper -infer-range -infer-non-zero -souper-max-constant-synthesis-tries=60 %t > %t2 || true
 ; RUN: %FileCheck %s < %t2
 
 define i8 @foo(i8 %x1, i64 %_phiinput) {
