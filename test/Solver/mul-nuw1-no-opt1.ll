@@ -1,12 +1,10 @@
-
-
 ; RUN: %llvm-as -o %t %s
 ; RUN: %souper -check %t
 
-define i32 @foo(i32 %x) #0 {
+define i16 @foo(i16 %x) #0 {
 entry:
-  %mul = mul nsw i32 %x, %x
-  %cmp = icmp uge i32 %mul, %x
-  %conv = zext i1 %cmp to i32
-  ret i32 %conv
+  %mul = mul nsw i16 %x, %x
+  %cmp = icmp uge i16 %mul, %x
+  %conv = zext i1 %cmp to i16
+  ret i16 %conv
 }
