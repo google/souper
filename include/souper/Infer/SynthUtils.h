@@ -5,6 +5,7 @@
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Parser/Parser.h"
+#include "souper/Infer/Pruning.h"
 
 namespace souper {
 
@@ -106,7 +107,6 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC);
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
 ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S);
-
 
 std::map<Inst *, llvm::APInt> findOneConstSet(ParsedReplacement Input, const std::set<Inst *> &SymCS, InstContext &IC, Solver *S);
 

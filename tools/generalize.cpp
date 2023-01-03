@@ -734,6 +734,7 @@ ParsedReplacement DFPreconditionsAndVerifyGreedy(
     }
   }
 
+//  llvm::errs() << "HERE " << BitsWeakened << "\n";
   if (BitsWeakened >= 32) { // compute better threshold somehow
     return Input;
   } else {
@@ -1375,10 +1376,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       }
     }
 
-    Clone = DFPreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      return Clone;
-    }
+//    Clone = DFPreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
+//    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+//      return Clone;
+//    }
 
   }
 

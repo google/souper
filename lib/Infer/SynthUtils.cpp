@@ -77,16 +77,13 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
   std::vector<Inst *> Vars;
   findVars(Input.Mapping.LHS, Vars);
 
-  // TODO figure out why prunning isn't working
-
 //  PruningManager Pruner(SC, Vars, 5);
-
-//  Input.print(llvm::errs(), true);
-
-//  if (Pruner.isInfeasibleWithSolver(Input.Mapping.RHS, 5)) {
-//    llvm::errs() << "FOOOO\n";
-//  } else {
-//    llvm::errs() << "BAAAR\n";
+//  Pruner.init();
+//
+//  if (Pruner.isInfeasible(Input.Mapping.RHS, 0)) {
+//    Input.Mapping.LHS = nullptr;
+//    Input.Mapping.RHS = nullptr;
+//    return Input;
 //  }
 
   Input = Clone(Input, IC);

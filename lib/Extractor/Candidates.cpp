@@ -76,6 +76,10 @@ static llvm::cl::opt<bool> PrintSignBitsAtReturn(
     "print-sign-bits-at-return",
     llvm::cl::desc("Print sign bits dfa in each value returned from a function (default=false)"),
     llvm::cl::init(false));
+static llvm::cl::opt<bool> NoExternalUses(
+    "no-external-uses",
+    llvm::cl::desc("Do not mark external uses. (default=false)"),
+    llvm::cl::init(false));
 static llvm::cl::opt<bool> PrintRangeAtReturn(
     "print-range-at-return",
     llvm::cl::desc("Print range inforation in each value returned from a function (default=false)"),
@@ -294,6 +298,9 @@ Inst *ExprBuilder::buildGEP(Inst *Ptr, gep_type_iterator begin,
 #endif
 
 void ExprBuilder::markExternalUses (Inst *I) {
+  if (NoExternalUses) {
+    return;
+  }
   std::map<Inst *, unsigned> UsesCount;
   std::unordered_set<Inst *> Visited;
   std::vector<Inst *> Stack;

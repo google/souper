@@ -53,6 +53,10 @@ OutputFilename("o", cl::desc("Override output filename"),
 static cl::opt<bool> StaticProfile("souper-static-profile", cl::init(false),
     cl::desc("Static profiling of Souper optimizations (default=false)"));
 
+static cl::opt<bool> HarvestOpts("harvest-opts", cl::init(false),
+    cl::desc("Harvest optimizations performed by InstCombine (default=false)"));
+
+
 static cl::opt<bool>
 Check("check", cl::desc("Check input for expected results"),
     cl::init(false));
@@ -105,6 +109,11 @@ int main(int argc, char **argv) {
   InstContext IC;
   ExprBuilderContext EBC;
   CandidateMap CandMap;
+
+  if (HarvestOpts) {
+    HarvestAndPrintOpts(IC, EBC, M.get(), S.get());
+    return 0;
+  }
 
   AddModuleToCandidateMap(IC, EBC, CandMap, M.get());
 
