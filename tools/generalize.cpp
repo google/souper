@@ -1293,7 +1293,9 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   auto Fresh = Clone(Input, IC);
   auto Refresh = [&] (auto Msg) {
     Input = Fresh;
-//  llvm::errs() << "POST " << Msg << "\n";
+    if (DebugLevel > 2) {
+      llvm::errs() << "POST " << Msg << "\n";
+    }
     Changed = true;
     return Fresh;
   };
@@ -1507,7 +1509,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
     Refresh("Enumerated exprs with constraints");
   }
-  
+
   if (RHSFresh.size() == 1) {
     // Enumerated Expressions with some relational constraints
     if (CMap.size() == 2) {
@@ -1602,7 +1604,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
     Refresh("Simple cands+consts with constraints and relations");
   }
-
 
 
 //  std::vector<Inst *> SymDFVars;
@@ -1863,7 +1864,11 @@ int main(int argc, char **argv) {
 //          Result.print(llvm::errs(), true);
         } while (--MaxTries && Changed);
       }
-      Result.print(llvm::outs(), true);
+      ReplacementContext RC;
+      RC.printPCs(Result.PCs, llvm::outs(), true);
+      RC.printBlockPCs(Result.BPCs, llvm::outs(), true);
+      Result.printLHS(llvm::outs(), RC, true);
+      Result.printRHS(llvm::outs(), RC, true);
       llvm::outs() << "\n";
       continue;
     }

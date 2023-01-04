@@ -65,13 +65,10 @@ void souper::HarvestAndPrintOpts(InstContext &IC, ExprBuilderContext &EBC, llvm:
       for (auto V : LHSVars) {
         LHSVarSet.insert(V);
       }
-
       for (auto RHS : RHSs) {
         if (LHS != RHS && LHS->Width == RHS->Width) {
-
           std::vector<Inst *> RHSVars;
           findVars(RHS, RHSVars);
-
           std::set<Inst *> RHSVarSet;
           for (auto RV : RHSVars) {
             if (LHSVarSet.find(RV) == LHSVarSet.end()) {
@@ -82,30 +79,27 @@ void souper::HarvestAndPrintOpts(InstContext &IC, ExprBuilderContext &EBC, llvm:
           if (LHSVarSet.size() != RHSVarSet.size()) {
             continue;
           }
-
           ParsedReplacement Rep;
           Rep.Mapping.LHS = LHS;
           Rep.Mapping.RHS = RHS;
 
-//          Rep.print(llvm::errs(), true);
+//          Rep.print(llvm::outs(), true);
 
           auto Clone = Verify(Rep, IC, S);
           if (Clone.Mapping.RHS && Clone.Mapping.LHS) {
+            BlockPCs BPCs;
+            std::vector<InstMapping> PCs;
             ReplacementContext RC;
-            auto LS = RC.printInst(Clone.Mapping.LHS, llvm::outs(), true);
-            llvm::outs() << "infer " << LS << '\n';
-            auto RS = RC.printInst(Clone.Mapping.RHS, llvm::outs(), true);
-            llvm::outs() << "result " << RS << '\n';
+            souper::PrintReplacementLHS(llvm::outs(), BPCs, PCs, Rep.Mapping.LHS, RC, true);
+            souper::PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, RC, true);
+            llvm::outs() << "\n";
             llvm::outs().flush();
           }
-
         }
       }
     }
-
   }
   P.doFinalization();
-
 }
 
 void souper::AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
