@@ -291,7 +291,7 @@ int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
 int backendCost(Inst *I, bool IgnoreDepsWithExternalUses = false);
 int countHelper(Inst *I, std::set<Inst *> &Visited);
 int instCount(Inst *I);
-int benefit(Inst *LHS, Inst *RHS);
+int benefit(Inst *LHS, Inst *RHS, bool IgnoreDepsWithExternalUses = true);
 
 void PrintReplacement(llvm::raw_ostream &Out, const BlockPCs &BPCs,
                       const std::vector<InstMapping> &PCs, InstMapping Mapping,

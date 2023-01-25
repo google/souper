@@ -33,6 +33,31 @@ void souper::AddToCandidateMap(CandidateMap &M,
   M.emplace_back(CR);
 }
 
+// limited implementation to filter out specific buggy harvests
+bool isWellTyped(souper::Inst *I) {
+  if (I->K == souper::Inst::Kind::Select) {
+    return I->Ops[0]->Width == 1
+    && (I->Ops[1]->Width == I->Ops[2]->Width)
+    && isWellTyped(I->Ops[1])
+    && isWellTyped(I->Ops[2]);
+  }
+
+  if (I->Ops.size() == 2) {
+    return (I->Ops[0]->Width == I->Ops[1]->Width)
+    && isWellTyped(I->Ops[0])
+    && isWellTyped(I->Ops[1]);
+  }
+  return true;
+}
+
+bool isProfitable(souper::ParsedReplacement &R) {
+  if (R.Mapping.LHS->Width == 1 || R.Mapping.RHS->K == souper::Inst::Select) {
+    return true;
+    // TODO: Improved cost model for Select
+  } else {
+    return souper::benefit(R.Mapping.LHS, R.Mapping.RHS, false) >= 0;
+  }
+}
 
 void souper::HarvestAndPrintOpts(InstContext &IC, ExprBuilderContext &EBC, llvm::Module *M, Solver *S) {
   legacy::FunctionPassManager P(M);
@@ -65,7 +90,16 @@ void souper::HarvestAndPrintOpts(InstContext &IC, ExprBuilderContext &EBC, llvm:
       for (auto V : LHSVars) {
         LHSVarSet.insert(V);
       }
+
+      if (!isWellTyped(LHS)) {
+        continue;
+      }
+
       for (auto RHS : RHSs) {
+        if (!isWellTyped(RHS)) {
+          continue;
+        }
+
         if (LHS != RHS && LHS->Width == RHS->Width) {
           std::vector<Inst *> RHSVars;
           findVars(RHS, RHSVars);
@@ -87,13 +121,15 @@ void souper::HarvestAndPrintOpts(InstContext &IC, ExprBuilderContext &EBC, llvm:
 
           auto Clone = Verify(Rep, IC, S);
           if (Clone.Mapping.RHS && Clone.Mapping.LHS) {
-            BlockPCs BPCs;
-            std::vector<InstMapping> PCs;
-            ReplacementContext RC;
-            souper::PrintReplacementLHS(llvm::outs(), BPCs, PCs, Rep.Mapping.LHS, RC, true);
-            souper::PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, RC, true);
-            llvm::outs() << "\n";
-            llvm::outs().flush();
+            if (isProfitable(Rep)) {
+              BlockPCs BPCs;
+              std::vector<InstMapping> PCs;
+              ReplacementContext RC;
+              souper::PrintReplacementLHS(llvm::outs(), BPCs, PCs, Rep.Mapping.LHS, RC, true);
+              souper::PrintReplacementRHS(llvm::outs(), Rep.Mapping.RHS, RC, true);
+              llvm::outs() << "\n";
+              llvm::outs().flush();
+            }
           }
         }
       }

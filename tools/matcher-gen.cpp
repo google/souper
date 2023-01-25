@@ -759,6 +759,9 @@ bool PCHasVar(const ParsedReplacement &Input) {
 bool IsWidthIndependent(InstContext &IC,
                         Solver *S, ParsedReplacement Input) {
 
+  // FIXME Re-enable this later
+  return false;
+
   if (Input.Mapping.LHS->Width == 1) {
     return false;
   }
@@ -996,7 +999,12 @@ int main(int argc, char **argv) {
         SKIP("SKIP Filtered.");
         continue;
       }
-      std::string IRComment = "/* Opt : " + std::to_string(current) + "\n" + Input.getString(true) + "*/\n";
+      ReplacementContext RC;
+      std::string IRComment =
+        "/* Opt : " +
+        std::to_string(current) + "\n" +
+        Input.getLHSString(RC, true) +
+        Input.getRHSString(RC, true) + "*/\n";
 
       if (NoDispatch && Sort && !Ordered.empty()) {
         Results[current] = IRComment + Str + "\n";

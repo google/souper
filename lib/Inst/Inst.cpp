@@ -20,6 +20,7 @@
 
 #include <queue>
 #include <set>
+#include <iostream>
 
 using namespace souper;
 
@@ -1015,8 +1016,8 @@ int souper::instCount(Inst *I) {
   return countHelper(I, Visited);
 }
 
-int souper::benefit(Inst *LHS, Inst *RHS) {
-  return cost(LHS, /*IgnoreDepsWithExternalUses=*/true) - cost(RHS);
+int souper::benefit(Inst *LHS, Inst *RHS, bool IgnoreDepsWithExternalUses) {
+  return cost(LHS, IgnoreDepsWithExternalUses) - cost(RHS);
 }
 
 void souper::PrintReplacement(llvm::raw_ostream &Out,

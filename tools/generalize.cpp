@@ -157,7 +157,6 @@ void Generalize(InstContext &IC, Solver *S, ParsedReplacement Input) {
   }
 }
 
-
 // This can probably be done more efficiently, but likely not the bottleneck anywhere
 std::vector<std::vector<int>> GetCombinations(std::vector<int> Counts) {
   if (Counts.size() == 1) {
@@ -258,16 +257,6 @@ void SymbolizeWidthNew(InstContext &IC, Solver *S, ParsedReplacement Input,
   }
 }
 
-void ReplaceConstsSimple(InstContext &IC, Solver *S,
-                         ParsedReplacement Input,
-                         std::vector<Inst *> LHSConsts,
-                         std::vector<Inst *> RHSConsts,
-                         CandidateMap &Results) {
-  // FIXME Start from here
-  // Try replacing each constant with a width independent
-  // expr or a kb expr
-}
-
 template <typename C, typename F>
 bool All(const C &c, F f) {
   for (auto &&m : c) {
@@ -280,7 +269,7 @@ bool All(const C &c, F f) {
 
 bool InferPreconditionsAndVerify(ParsedReplacement Input, CandidateMap &Results,
                                  std::vector<std::pair<Inst *, llvm::APInt>> &SymCS, InstContext &IC, Solver *S) {
-  
+
   auto SOLVE = [&]() {
     auto Result = Verify(Input, IC, S);
     if (Result.Mapping.LHS && Result.Mapping.RHS) {
@@ -292,25 +281,25 @@ bool InferPreconditionsAndVerify(ParsedReplacement Input, CandidateMap &Results,
       return false;
     }
   };
-  
+
   if (SOLVE()) return true;
-  
+
   std::vector<Inst *> Insts;
   findVars(Input.Mapping.LHS, Insts);
-  
+
   std::set<Inst *> ModelInsts;
   for (auto I : SymCS) {
     ModelInsts.insert(I.first);
   }
-  
-  
-  
+
+
+
   std::vector<std::map<Inst *, llvm::APInt>> Inputs;
   Inputs.push_back({});
   for (auto &&P : SymCS) {
     Inputs.back()[P.first] = P.second;
   }
-  
+
   // TODO Is this worth using?
   bool SynthNewConsts = false;
   if (SynthNewConsts) {
@@ -318,21 +307,21 @@ bool InferPreconditionsAndVerify(ParsedReplacement Input, CandidateMap &Results,
       Inputs.push_back(I);
     }
   }
-  
+
   std::map<Inst *, std::vector<llvm::APInt>> CVals;
-  
+
   for (auto &&I : Inputs) {
     for (auto &&P: I) {
       CVals[P.first].push_back(P.second);
     }
   }
-  
+
   if (Inputs.empty()) {
     if (DebugLevel > 4)
       llvm::errs() << "Could not find valid concrete constants.\n";
     return false;
   }
-  
+
   if (SymbolizeSimpleDF) {
 
 #define DF(Fact, Check)                                    \
@@ -351,12 +340,64 @@ C->Fact = true; if (SOLVE()) return true; C->Fact = false;};
 
   if (SymbolizeKBDF) {
 //    Reducer R(IC, S);
-    
+
   }
-  
+
   return false;
 }
 
+std::vector<Inst *> findConcreteConsts(const ParsedReplacement &Input) {
+  std::vector<Inst *> Consts;
+  auto Pred = [](Inst *I) {
+    return I->K == Inst::Const && I->Name.find("sym") == std::string::npos;
+  };
+
+  findInsts(Input.Mapping.LHS, Consts, Pred);
+  findInsts(Input.Mapping.RHS, Consts, Pred);
+  std::set<Inst *> ResultSet; // For deduplication
+  for (auto &&C : Consts) {
+    ResultSet.insert(C);
+  }
+  std::vector<Inst *> Result;
+  for (auto &&C : ResultSet) {
+    Result.push_back(C);
+  }
+  return Result;
+}
+
+std::vector<Inst *> InferConstantLimits(
+  const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
+        InstContext &IC, const ParsedReplacement &Input) {
+  std::vector<Inst *> Results;
+  if (!FindConstantRelations) {
+    return Results;
+  }
+  auto ConcreteConsts = findConcreteConsts(Input);
+  std::sort(ConcreteConsts.begin(), ConcreteConsts.end(),
+          [](auto A, auto B) { return A->Val.ugt(B->Val); });
+
+  for (auto &&[XI, XC] : CMap) {
+    for (auto &&[YI, YC] : CMap) {
+      // Sum less than const, Sum greater= than const
+      for (auto C : ConcreteConsts) {
+        auto Sum = Builder(XI, IC).Add(YI)();
+        Results.push_back(Builder(Sum, IC).Ult(C->Val)());
+        Results.push_back(Builder(Sum, IC).Ult(C->Val).Xor(1)());
+      }
+      // 2 * X < C, 2 * X >= C
+      for (auto C : ConcreteConsts) {
+        auto Sum = Builder(XI, IC).Add(XI)();
+        Results.push_back(Builder(Sum, IC).Ult(C->Val)());
+        Results.push_back(Builder(Sum, IC).Ult(C->Val).Xor(1)());
+      }
+    }
+  }
+  return Results;
+}
+
+// This was originally intended to fine relational constraints
+// but we also use to fine some ad hoc constraints now.
+// TODO: Filter relations by concrete interpretation
 std::vector<Inst *> InferPotentialRelations(
         const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
         InstContext &IC, const ParsedReplacement &Input) {
@@ -364,15 +405,20 @@ std::vector<Inst *> InferPotentialRelations(
   if (!FindConstantRelations) {
     return Results;
   }
+
   // Generate a set of pairwise relations
   for (auto &&[XI, XC] : CMap) {
+    // llvm::errs() << "HERE: " << XC << "\n";
     for (auto &&[YI, YC] : CMap) {
+
       if (XI == YI || XC.getBitWidth() != YC.getBitWidth()) {
         continue;
       }
-      // Add C
-//      auto Diff = XC - YC;
-//      Results.push_back(Builder(XI, IC).Sub(Diff).Eq(YI)());
+
+      // // Add C
+      // auto Diff = XC - YC;
+      // Results.push_back(Builder(XI, IC).Sub(Diff).Eq(YI)());
+
       // Mul C
       if (YC!= 0 && XC.urem(YC) == 0) {
         auto Fact = XC.udiv(YC);
@@ -383,7 +429,7 @@ std::vector<Inst *> InferPotentialRelations(
         Results.push_back(Builder(XI, IC).Mul(Fact).Eq(YI)());
       }
 
-      // TODO CHeck if this is too slow
+      // TODO Check if this is too slow
       if (Input.Mapping.LHS->Width == 1) {
         // need both signed and unsigned?
         // What about s/t/e/ versions?
@@ -394,9 +440,8 @@ std::vector<Inst *> InferPotentialRelations(
       }
     }
   }
-
   return Results;
-};
+}
 
 // FIXME Other interesting things to try
 // Symbolic KB in preconditions
@@ -407,7 +452,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
                             std::vector<Inst *> LHSConsts,
                             std::vector<Inst *> RHSConsts,
                             CandidateMap &Results) {
-  
+
   if (RHSConsts.empty()) {
     // Handled in another function
     return;
@@ -417,10 +462,10 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
   std::vector<Inst *> Vars;
   std::vector<Inst *> SymDFVars;
   findVars(Input.Mapping.LHS, Vars);
-  
+
   std::map<Inst *, Inst *> InstCache;
   ValueCache VC;
-  
+
   // Create a symbolic const for each LHS const
   for (size_t i = 0; i < LHSConsts.size(); ++i) {
     auto C = IC.createVar(LHSConsts[i]->Width, "symconst_" + std::to_string(i));
@@ -431,7 +476,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
 
   auto Relations = InferPotentialRelations(SymCS, IC, Input);
   std::vector<Inst *> Components;
-  
+
 //  // Symbolic known bits
 //  if (false) {
 //    for (size_t i = 0; i < Vars.size(); ++i) {
@@ -461,7 +506,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
 
       // Shiftmask
 //      Components.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C.first->Width)).Shl(C.first)());
-      
+
       // Custom test
       // auto M1 = IC.getConst(llvm::APInt(C->Width, -1));
       // auto Test = Builder(C, IC).Add(M1).Xor(M1).And(M1);
@@ -552,7 +597,7 @@ void SymbolizeAndGeneralizeImpl(InstContext &IC, Solver *S, ParsedReplacement In
     InstMapping Mapping(LHS, RHS);
     auto Copy = Input;
     Copy.Mapping = Mapping;
-    
+
     //if (Pr.isInfeasible(RHS, 0)) {
 //      llvm::errs() << "PRUNED\n"; // Figure out why this never succeeds :(
     //} else {
@@ -582,10 +627,10 @@ void SymbolizeAndGeneralizeOnlyLHS(InstContext &IC,
   std::vector<Inst *> Vars;
   std::vector<Inst *> SymDFVars;
   findVars(Input.Mapping.LHS, Vars);
-  
+
   std::map<Inst *, Inst *> InstCache;
   ValueCache VC;
-  
+
   // Create a symbolic const for each LHS const
   for (size_t i = 0; i < LHSConsts.size(); ++i) {
     auto C = IC.createVar(LHSConsts[i]->Width, "symconst_" + std::to_string(i));
@@ -593,10 +638,10 @@ void SymbolizeAndGeneralizeOnlyLHS(InstContext &IC,
     InstCache[LHSConsts[i]] = C;
     VC[C] = EvalValue(LHSConsts[i]->Val);
   }
-  
+
   auto LHS = Replace(Input.Mapping.LHS, IC, InstCache);
   auto RHS = Replace(Input.Mapping.RHS, IC, InstCache);
-  
+
   InstMapping Mapping(LHS, RHS);
   auto Copy = Input;
   Copy.Mapping = Mapping;
@@ -619,7 +664,7 @@ void SymbolizeAndGeneralize(InstContext &IC,
   findInsts(Input.Mapping.RHS, RHSConsts, Pred);
 
   CandidateMap Results;
-  
+
   if (RHSConsts.empty()) {
     SymbolizeAndGeneralizeOnlyLHS(IC, S, Input, LHSConsts, Results);
   } else {
@@ -662,7 +707,7 @@ void SymbolizeAndGeneralize(InstContext &IC,
   }
 
   int n = 5;
-  for (auto &&Str : ResultStrs) {  
+  for (auto &&Str : ResultStrs) {
 //    if (!n--) break;
     llvm::outs() << Str << "\n";
     if (Everything) {
@@ -1019,12 +1064,17 @@ FirstValidCombination(ParsedReplacement Input,
       return false;
     };
 
-    auto Copy = Replace(Input, IC, InstCacheRHS);
+    auto Copy = Input;
+    Copy.Mapping.LHS = Replace(Input.Mapping.LHS, IC, InstCacheRHS);
+    Copy.Mapping.RHS = Replace(Input.Mapping.RHS, IC, InstCacheRHS);
+
+    // Copy.PCs = Input.PCs;
     if (SOLVE(Copy)) {
       return Clone;
     }
 
-    Copy = Replace(Copy, IC, ReverseMap);
+    Copy.Mapping.LHS = Replace(Copy.Mapping.LHS, IC, ReverseMap);
+    Copy.Mapping.RHS = Replace(Copy.Mapping.RHS, IC, ReverseMap);
     if (SOLVE(Copy)) {
       return Clone;
     }
@@ -1036,7 +1086,7 @@ FirstValidCombination(ParsedReplacement Input,
   return Input;
 }
 
-
+// TODO: Prevent NOPs from being synthesized by passing parent instruction
 std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
                   std::map<Inst *, Inst *> SMap, InstContext &IC, size_t Threshold, bool ConstMode) {
 
@@ -1145,7 +1195,7 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
     if (Target == C->Val.logBase2()) {
       Results.push_back(Builder(SMap[C], IC).LogB()());
     }
-    
+
     if (Target == C->Val.reverseBits()) {
       Results.push_back(Builder(SMap[C], IC).BitReverse()());
     }
@@ -1169,20 +1219,18 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
       Results.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C->Width)).Sub(SMap[C])());
     }
 
-    if (Threshold == 1) {
-      for (auto C2 : LHSConsts) {
-        if (C == C2 || C->Width != C2->Width) {
-          continue;
-        }
-        if ((C->Val & C2->Val) == Target) {
-          Results.push_back(Builder(SMap[C], IC).And(SMap[C2])());
-        }
-        if ((C->Val | C2->Val) == Target) {
-          Results.push_back(Builder(SMap[C], IC).Or(SMap[C2])());
-        }
-        if ((C->Val ^ C2->Val) == Target) {
-          Results.push_back(Builder(SMap[C], IC).Xor(SMap[C2])());
-        }
+    for (auto C2 : LHSConsts) {
+      if (C == C2 || C->Width != C2->Width) {
+        continue;
+      }
+      if ((C->Val & C2->Val) == Target) {
+        Results.push_back(Builder(SMap[C], IC).And(SMap[C2])());
+      }
+      if ((C->Val | C2->Val) == Target) {
+        Results.push_back(Builder(SMap[C], IC).Or(SMap[C2])());
+      }
+      if ((C->Val ^ C2->Val) == Target) {
+        Results.push_back(Builder(SMap[C], IC).Xor(SMap[C2])());
       }
     }
   }
@@ -1192,11 +1240,13 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
 
 std::vector<std::vector<Inst *>>
 InferSpecialConstExprsAllSym(std::vector<Inst *> RHS, std::set<Inst *>
-                      LHS, std::map<Inst *, Inst *> SMap,
-                             InstContext &IC) {
+                             LHS, std::map<Inst *, Inst *> SMap,
+                             InstContext &IC, int depth = 3) {
   std::vector<std::vector<Inst *>> Results;
   for (auto R : RHS) {
-    Results.push_back(IOSynthesize(R->Val, LHS, SMap, IC, 3, false));
+    Results.push_back(IOSynthesize(R->Val, LHS, SMap, IC, depth, false));
+    std::sort(Results.back().begin(), Results.back().end(),
+              [](Inst *A, Inst *B) { return instCount(A) < instCount(B);});
   }
   return Results;
 }
@@ -1481,6 +1531,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
         if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
           return Clone;
         }
+        Input.PCs.pop_back();
       }
     }
     Refresh("Relational constraints for enumerated cands.");
@@ -1499,7 +1550,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
     Refresh("Enumerated 2 insts");
   }
-  
+
   if (!EnumeratedCandidates.empty()) {
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
                                   InstCache, IC, S, SymCS, true, true, true);
@@ -1510,12 +1561,27 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Refresh("Enumerated exprs with constraints");
   }
 
+  {
+    auto Copy = Replace(Input, IC, JustLHSSymConstMap);
+    auto ConstantLimits = InferConstantLimits(CMap, IC, Input);
+    for (auto &&R : ConstantLimits) {
+      Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+      // Copy.print(llvm::errs(), true);
+      // llvm::errs() << "\n\n";
+      auto Clone = Verify(Copy, IC, S);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
+      }
+      Copy.PCs.pop_back();
+    }
+    Refresh("Constant limit constraints on LHS");
+  }
+
   if (RHSFresh.size() == 1) {
     // Enumerated Expressions with some relational constraints
     if (CMap.size() == 2) {
       for (auto &&R : Relations) {
         Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-
         auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
                                            InstCache, IC, S, SymCS, true, false, false);
         if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
@@ -1605,6 +1671,23 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Refresh("Simple cands+consts with constraints and relations");
   }
 
+  {
+    if (!RHSFresh.empty()) {
+      std::vector<std::vector<Inst *>> SimpleCandidatesMoreInsts =
+        InferSpecialConstExprsAllSym(RHSFresh, LHSConsts, SymConstMap, IC, /*depth =*/ 5);
+
+      if (!SimpleCandidates.empty()) {
+        auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesMoreInsts,
+                                          InstCache, IC, S, SymCS,
+                                          true, false, false);
+        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+          return Clone;
+        }
+      }
+
+      Refresh("Special expressions, no constants");
+    }
+  }
 
 //  std::vector<Inst *> SymDFVars;
 //  std::set<Inst *> LHSConstsAndSymDF;
@@ -1865,8 +1948,6 @@ int main(int argc, char **argv) {
         } while (--MaxTries && Changed);
       }
       ReplacementContext RC;
-      RC.printPCs(Result.PCs, llvm::outs(), true);
-      RC.printBlockPCs(Result.BPCs, llvm::outs(), true);
       Result.printLHS(llvm::outs(), RC, true);
       Result.printRHS(llvm::outs(), RC, true);
       llvm::outs() << "\n";
@@ -1903,9 +1984,3 @@ int main(int argc, char **argv) {
   }
   return 0;
 }
-
-// TODO List
-// Derive relations between LHSConsts and use them as preconditions
-// Test phase before verification
-// Is it possible to pre-generate the set of all possible constants? No.
-// Some? definitely.

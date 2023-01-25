@@ -417,6 +417,12 @@ bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
   RExprCache.clear();
   IR::Function RHSF;
   copyInputs(RExprCache, RHSF);
+
+  for (const IR::Value &I : RHSF.getInputs()) {
+    std::cerr << I << "\n";
+    std::cerr << I.getType() << "\n";
+  }
+
   if (!translateRoot(RHS, RHSAssumptions, RHSF, RExprCache)) {
     llvm::errs() << "Failed to translate RHS.\n";
     // TODO: Eventually turn this into an assertion
@@ -761,7 +767,8 @@ souper::AliveDriver::translateDemandedBits(const souper::Inst* I,
 IR::Type &souper::AliveDriver::getType(int Width) {
   std::string n = "i" + std::to_string(Width);
   if (TypeCache.find(n) == TypeCache.end()) {
-    TypeCache[n] = new IR::IntType(std::move(n), Width);
+//    TypeCache[n] = new IR::IntType(std::move(n), Width);
+    TypeCache[n] = new IR::SymbolicType(std::to_string(Width));
   }
   return *TypeCache[n];
 }
