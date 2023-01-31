@@ -30,7 +30,7 @@ class AliveDriver {
   typedef std::unordered_map<const Inst *, IR::Value *> Cache;
 public:
   AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_,
-               std::vector<Inst *> ExtraInputs = {});
+               std::vector<Inst *> ExtraInputs = {}, bool WidthIndep = false);
 
   std::map<Inst *, llvm::APInt> synthesizeConstants(souper::Inst *RHS);
   std::map<Inst *, llvm::APInt> synthesizeConstantsWithCegis(souper::Inst *RHS, InstContext &IC);
@@ -41,6 +41,8 @@ public:
       delete(p.second);
     }
   }
+
+  bool WidthIndependentMode; // This probably doesn't need to be public
 private:
   Inst *LHS, *PreCondition;
 
@@ -50,7 +52,6 @@ private:
   void copyInputs(Cache &To, IR::Function &RHS);
 
   std::unordered_map<std::string, IR::Type*> TypeCache;
-
 
   IR::Type &getType(int n);
   IR::Type &getOverflowType(int n);
@@ -64,6 +65,8 @@ private:
   int InstNumbers;
   std::unordered_map<const Inst *, std::string> NamesCache;
   bool IsLHS;
+
+  std::vector<std::map<const Inst *, size_t>> ValidTypings;
 
   InstContext &IC;
   smt::smt_initializer smt_init;

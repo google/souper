@@ -43,6 +43,15 @@ static llvm::cl::opt<bool> SkipAliveSolver("alive-skip-solver",
   llvm::cl::desc("Omit Alive solver calls for performance testing (default = false)"),
   llvm::cl::init(false));
 
+static llvm::cl::opt<bool> WidthIndepOpt("alive-all-widths",
+  llvm::cl::desc("Ignore Souper type widths and verify for all widths."),
+  llvm::cl::init(false));
+
+static llvm::cl::opt<bool> ShowValidWidths("show-valid-widths",
+  llvm::cl::desc("Show widths for which the input is valid."),
+  llvm::cl::init(true));
+
+
 class FunctionBuilder {
 public:
   FunctionBuilder(IR::Function &F_) : F(F_) {}
@@ -284,10 +293,14 @@ synthesizeConstantUsingSolver(tools::Transform &t,
 }
 
 souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_,
-                                 std::vector<Inst *> ExtraInputs)
+                                 std::vector<Inst *> ExtraInputs, bool WidthIndep)
     : LHS(LHS_), PreCondition(PreCondition_), IC(IC_) {
   smt::set_query_timeout(std::to_string(60000)); // milliseconds
   IsLHS = true;
+  WidthIndependentMode = WidthIndep;
+  if (WidthIndepOpt) {
+    WidthIndependentMode = true;
+  }
   InstNumbers = 101;
   //FIXME: Magic number. 101 is chosen arbitrarily.
   //This should go away once non-input variable names are not discarded
@@ -415,14 +428,9 @@ void souper::AliveDriver::copyInputs(souper::AliveDriver::Cache &To,
 
 bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
   RExprCache.clear();
+  ValidTypings.clear();
   IR::Function RHSF;
   copyInputs(RExprCache, RHSF);
-
-  for (const IR::Value &I : RHSF.getInputs()) {
-    std::cerr << I << "\n";
-    std::cerr << I.getType() << "\n";
-  }
-
   if (!translateRoot(RHS, RHSAssumptions, RHSF, RExprCache)) {
     llvm::errs() << "Failed to translate RHS.\n";
     // TODO: Eventually turn this into an assertion
@@ -441,6 +449,52 @@ bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
   t.src = std::move(LHSF);
   t.tgt = std::move(RHSF);
   tools::TransformVerify tv(t, /*check_each_var=*/false);
+
+  auto types = tv.getTypings();
+
+  if (!types.hasSingleTyping()) {
+    unsigned i = 0;
+    size_t correct = 0;
+    size_t incorrect = 0;
+    for (; types; ++types) {
+
+      tv.fixupTypes(types);
+      if (auto errs = tv.verify()) {
+        if (DebugLevel > 4) {
+          llvm::errs() << "Invalid typing: ";
+          for (auto &&P : Inputs) {
+            llvm::errs() << P.first->Name << ' ' << P.second->bits() << "\n";
+          }
+        }
+        incorrect++;
+      } else {
+        std::map<const Inst *, size_t> Typing;
+        for (auto &&P : Inputs) {
+          Typing[P.first] = P.second->bits();
+        }
+        ValidTypings.push_back(Typing);
+        correct++;
+      }
+    }
+    if (!incorrect) {
+      return true;
+    } else if (!correct) {
+      return false;
+    } else {
+      if (ShowValidWidths) {
+        llvm::outs() << "Transformation seems to be correct for some widths!\n";
+        std::sort(ValidTypings.begin(), ValidTypings.end(),
+                  [](const auto &A, const auto &B) {return A.begin()->second < B.begin()->second;});
+        for (auto &&P : ValidTypings) {
+          for (auto &&I : P) {
+            llvm::outs() << I.first->Name << ' ' <<  I.second << '\t';
+          }
+          llvm::outs() << '\n';
+        }
+      }
+      return false;
+    }
+  }
 
   if (SkipAliveSolver)
     return false;
@@ -767,10 +821,13 @@ souper::AliveDriver::translateDemandedBits(const souper::Inst* I,
 IR::Type &souper::AliveDriver::getType(int Width) {
   std::string n = "i" + std::to_string(Width);
   if (TypeCache.find(n) == TypeCache.end()) {
-//    TypeCache[n] = new IR::IntType(std::move(n), Width);
-    TypeCache[n] = new IR::SymbolicType(std::to_string(Width));
+    if (WidthIndependentMode) {
+      TypeCache[""] = new IR::SymbolicType("symty_", (1 << IR::SymbolicType::Int));
+    } else {
+      TypeCache[n] = new IR::IntType(std::move(n), Width);
+    }
   }
-  return *TypeCache[n];
+  return WidthIndependentMode ? *TypeCache[""] : *TypeCache[n];
 }
 
 IR::Type &souper::AliveDriver::getOverflowType(int Width) {

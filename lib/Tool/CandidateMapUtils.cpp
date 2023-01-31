@@ -101,6 +101,11 @@ void souper::HarvestAndPrintOpts(InstContext &IC, ExprBuilderContext &EBC, llvm:
         }
 
         if (LHS != RHS && LHS->Width == RHS->Width) {
+          if ((RHS->K == Inst::ZExt || RHS->K == Inst::Freeze)
+              && RHS->Ops[0] == LHS) {
+            continue;
+          }
+
           std::vector<Inst *> RHSVars;
           findVars(RHS, RHSVars);
           std::set<Inst *> RHSVarSet;
