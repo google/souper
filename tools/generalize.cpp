@@ -248,13 +248,24 @@ std::vector<Inst *> InferPotentialRelations(
         if (YC.ult(XC)) Results.push_back(Builder(YI, IC).Ult(XI)());
       // }
 
-      for (auto &&XBit : BitFuncs(XI, IC)) {
-        for (auto &&YBit : BitFuncs(YI, IC)) {
-          Results.push_back(Builder(XBit, IC).Eq(YBit)());
+      auto XBits = BitFuncs(XI, IC);
+      auto YBits = BitFuncs(YI, IC);
+
+      for (auto &&XBit : XBits) {
+        for (auto &&YBit : YBits) {
           Results.push_back(Builder(XBit, IC).Ule(YBit)());
           Results.push_back(Builder(XBit, IC).Ult(YBit)());
         }
       }
+
+      // No example yet where this is useful
+      // for (auto &&XBit : XBits) {
+      //   for (auto &&YBit : YBits) {
+      //     Results.push_back(Builder(XBit, IC).Ne(YBit)());
+      //     Results.push_back(Builder(XBit, IC).Eq(YBit)());
+      //   }
+      // }
+
     }
   }
   return FilterRelationsByValue(Results, CMap);
