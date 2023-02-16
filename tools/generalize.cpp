@@ -4,6 +4,7 @@
 #include "llvm/Support/GraphWriter.h"
 #include "llvm/Support/KnownBits.h"
 
+#include "souper/Infer/AliveDriver.h"
 #include "souper/Infer/Preconditions.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/ConstantSynthesis.h"
@@ -68,8 +69,17 @@ static cl::opt<bool> JustReduce("just-reduce",
     cl::init(false));
 
 static cl::opt<bool> Basic("basic",
-    cl::desc("Run all fast techniques, no synthesis^2."),
+    cl::desc("Run all fast techniques."),
     cl::init(false));
+
+static cl::opt<bool> OnlyWidth("only-width",
+    cl::desc("Only infer width checks, no synthesis."),
+    cl::init(false));
+
+static cl::opt<bool> NoWidth("no-width",
+    cl::desc("No width independence checks."),
+    cl::init(false));
+
 
 static cl::opt<bool> Advanced("advanced",
     cl::desc("Just run more advanced stuff. Assume -basic."),
@@ -162,7 +172,39 @@ std::vector<Inst *> InferConstantLimits(
   return Results;
 }
 
-// This was originally intended to fine relational constraints
+std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
+                        const std::vector<std::pair<Inst *, llvm::APInt>> &CMap) {
+  std::unordered_map<Inst *, EvalValue> ValueCache;
+  for (auto &&[I, V] : CMap) {
+    ValueCache[I] = EvalValue(V);
+  }
+  ConcreteInterpreter CI(ValueCache);
+  std::vector<Inst *> FilteredRelations;
+  for (auto &&R : Relations) {
+    auto Result = CI.evaluateInst(R);
+    // llvm::errs() << "HERE: " << Result.getValue().toString(2, false) << "\n";
+    if (Result.hasValue() && Result.getValue().isAllOnesValue()) {
+      FilteredRelations.push_back(R);
+    }
+  }
+  return FilteredRelations;
+}
+
+std::vector<Inst *> BitFuncs(Inst *I, InstContext &IC) {
+  std::vector<Inst *> Results;
+  Results.push_back(Builder(I, IC).CtPop()());
+  Results.push_back(Builder(I, IC).Ctlz()());
+  Results.push_back(Builder(I, IC).Cttz()());
+
+  auto Copy = Results;
+  for (auto &&C : Copy) {
+    Results.push_back(Builder(C, IC).BitWidth().Sub(C)());
+  }
+
+  return Results;
+}
+
+// This was originally intended to find relational constraints
 // but we also use to fine some ad hoc constraints now.
 // TODO: Filter relations by concrete interpretation
 std::vector<Inst *> InferPotentialRelations(
@@ -197,17 +239,25 @@ std::vector<Inst *> InferPotentialRelations(
       }
 
       // TODO Check if this is too slow
-      if (Input.Mapping.LHS->Width == 1) {
+      // if (Input.Mapping.LHS->Width == 1) {
         // need both signed and unsigned?
         // What about s/t/e/ versions?
         if (XC.slt(YC)) Results.push_back(Builder(XI, IC).Slt(YI)());
         if (XC.ult(YC)) Results.push_back(Builder(XI, IC).Ult(YI)());
         if (YC.slt(XC)) Results.push_back(Builder(YI, IC).Slt(XI)());
         if (YC.ult(XC)) Results.push_back(Builder(YI, IC).Ult(XI)());
+      // }
+
+      for (auto &&XBit : BitFuncs(XI, IC)) {
+        for (auto &&YBit : BitFuncs(YI, IC)) {
+          Results.push_back(Builder(XBit, IC).Eq(YBit)());
+          Results.push_back(Builder(XBit, IC).Ule(YBit)());
+          Results.push_back(Builder(XBit, IC).Ult(YBit)());
+        }
       }
     }
   }
-  return Results;
+  return FilterRelationsByValue(Results, CMap);
 }
 
 std::set<Inst *> findConcreteConsts(Inst *I) {
@@ -771,6 +821,7 @@ std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
       Components.push_back(Builder(C, IC).Sub(1)());
       Components.push_back(Builder(C, IC).Xor(-1)());
       Components.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C->Width)).Shl(C)());
+      // TODO: Add a few more, we can afford to run generalization longer
     }
 
     for (auto &&Target : RHSConsts) {
@@ -1252,6 +1303,68 @@ Inst *CloneInst(InstContext &IC, Inst *I, std::map<Inst *, Inst *> &Vars) {
   }
 }
 
+InstMapping GetEqWidthConstraint(Inst *I, size_t Width, InstContext &IC) {
+  return {Builder(I, IC).BitWidth().Eq(Width)(), IC.getConst(llvm::APInt(1, 1))};
+}
+
+InstMapping GetLessThanWidthConstraint(Inst *I, size_t Width, InstContext &IC) {
+  // Don't need to check for >0.
+  return {Builder(I, IC).BitWidth().Ule(Width)(), IC.getConst(llvm::APInt(1, 1))};
+}
+// TODO: More as needed.
+
+Inst *CombinePCs(const std::vector<InstMapping> &PCs, InstContext &IC) {
+  Inst *Ante = IC.getConst(llvm::APInt(1, true));
+  for (auto PC : PCs ) {
+    Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+  }
+  return Ante;
+}
+
+ParsedReplacement InstantiateWidthChecks(InstContext &IC,
+  Solver *S, ParsedReplacement Input) {
+  // TODO: minimize width?
+
+  // Instantiate Alive driver with Symbolic width.
+  AliveDriver Alive(Input.Mapping.LHS,
+  Input.PCs.empty() ? nullptr : CombinePCs(Input.PCs, IC),
+  IC, {}, true);
+
+  // Find set of valid widths.
+  if (Alive.verify(Input.Mapping.RHS)) {
+    if (DebugLevel > 4) {
+      llvm::errs() << "WIDTH: Generalized opt is valid for all widths.\n";
+    }
+    // Completely width independent. No width checks needed.
+    return Input;
+  }
+
+  auto &&ValidTypings = Alive.getValidTypings();
+
+  if (ValidTypings.empty()) {
+    // Something went wrong, generalized opt is not valid at any width.
+    if (DebugLevel > 4) {
+      llvm::errs() << "WIDTH: Generalized opt is not valid for any width.\n";
+    }
+    Input.Mapping.LHS = nullptr;
+    Input.Mapping.RHS = nullptr;
+    return Input;
+  }
+
+  // Abstract width to a range or relational precondition
+  // TODO: Abstraction
+
+
+  // If abstraction fails, insert checks for existing widths.
+  std::vector<Inst *> Inputs;
+  findVars(Input.Mapping.LHS, Inputs);
+  for (auto &&I : Inputs) {
+    Input.PCs.push_back(GetEqWidthConstraint(I, I->Width, IC));
+  }
+  return Input;
+}
+
 ParsedReplacement ReduceBasic(InstContext &IC,
                               Solver *S, ParsedReplacement Input) {
   Reducer R(IC, S);
@@ -1304,17 +1417,27 @@ int main(int argc, char **argv) {
       ParsedReplacement Result = ReduceBasic(IC, S.get(), Input);
       if (!JustReduce) {
         bool Changed = false;
-        size_t MaxTries = 1; // Increase this if we even run with 10/100x timeout.
+        size_t MaxTries = 1; // Increase this if we ever run with 10/100x timeout.
         do {
-          Result = ReduceBasic(IC, S.get(), Input);
-          Result = SuccessiveSymbolize(IC, S.get(), Result, Changed);
+          if (!OnlyWidth) {
+            Result = ReduceBasic(IC, S.get(), Input);
+            Result = SuccessiveSymbolize(IC, S.get(), Result, Changed);
+          }
+          if (!NoWidth) {
+            Result = InstantiateWidthChecks(IC, S.get(), Result);
+          }
 //          Result.print(llvm::errs(), true);
+          if (!Result.Mapping.LHS) {
+            break;
+          }
         } while (--MaxTries && Changed);
       }
-      ReplacementContext RC;
-      Result.printLHS(llvm::outs(), RC, true);
-      Result.printRHS(llvm::outs(), RC, true);
-      llvm::outs() << "\n";
+      if (Result.Mapping.LHS && Result.Mapping.RHS) {
+        ReplacementContext RC;
+        Result.printLHS(llvm::outs(), RC, true);
+        Result.printRHS(llvm::outs(), RC, true);
+        llvm::outs() << "\n";
+      }
       continue;
     }
 

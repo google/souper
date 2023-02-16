@@ -54,6 +54,7 @@ public:
     return Builder(IC.getInst(Inst::K, L->Width, {L}), IC);      \
   }
   UNOP(LogB) UNOP(BitReverse) UNOP(BSwap) UNOP(Cttz) UNOP(Ctlz)
+  UNOP(BitWidth) UNOP(CtPop)
 
 #undef UNOP
 

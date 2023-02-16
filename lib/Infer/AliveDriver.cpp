@@ -49,7 +49,7 @@ static llvm::cl::opt<bool> WidthIndepOpt("alive-all-widths",
 
 static llvm::cl::opt<bool> ShowValidWidths("show-valid-widths",
   llvm::cl::desc("Show widths for which the input is valid."),
-  llvm::cl::init(true));
+  llvm::cl::init(false));
 
 
 class FunctionBuilder {
@@ -60,6 +60,15 @@ public:
   IR::Value *freeze(IR::Type &t, std::string name, A a) {
     return append
       (std::make_unique<IR::Freeze>(t, std::move(name), *toValue(t, a)));
+  }
+
+  template <typename A>
+  IR::Value *width(IR::Type &t, std::string name, A a) {
+    auto fc = std::make_unique<IR::ConstantFn>(IR::ConstantFn(t, "width", {toValue(t, a)}));
+    // make_unique fails template type deduction
+    auto ret = fc.get();
+    F.addConstant(std::move(fc));
+    return ret;
   }
 
   IR::Value *undef(IR::Type &t, std::string name) {
@@ -293,9 +302,9 @@ synthesizeConstantUsingSolver(tools::Transform &t,
 }
 
 souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_,
-                                 std::vector<Inst *> ExtraInputs, bool WidthIndep)
+                                 const std::vector<Inst *> &ExtraInputs, bool WidthIndep)
     : LHS(LHS_), PreCondition(PreCondition_), IC(IC_) {
-  smt::set_query_timeout(std::to_string(60000)); // milliseconds
+  smt::set_query_timeout(std::to_string(30000)); // milliseconds
   IsLHS = true;
   WidthIndependentMode = WidthIndep;
   if (WidthIndepOpt) {
@@ -461,7 +470,7 @@ bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
       tv.fixupTypes(types);
       if (auto errs = tv.verify()) {
         if (DebugLevel > 4) {
-          llvm::errs() << "Invalid typing: ";
+          llvm::errs() << "Invalid typing: \n";
           for (auto &&P : Inputs) {
             llvm::errs() << P.first->Name << ' ' << P.second->bits() << "\n";
           }
@@ -773,6 +782,14 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     UNARYOP(CtPop, Ctpop);
     UNARYOP(BSwap, BSwap);
     UNARYOP(BitReverse, BitReverse);
+
+    case souper::Inst::BitWidth: {
+      ExprCache[I] = Builder.width(t, Name /*is ignored*/,
+      ExprCache[I->Ops[0]]);
+      return true;
+    }
+
+    // TODO: Desugar log2. Alive2 only supports log2 for concrete constants.
 
     default:{
       llvm::outs() << "Unsupported Instruction Kind : " << I->getKindName(I->K) << "\n";

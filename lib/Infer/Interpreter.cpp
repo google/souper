@@ -448,6 +448,11 @@ namespace souper {
       return {llvm::APInt(Inst->Width, ARG0.logBase2())};
     }
 
+    case Inst::BitWidth: {
+      return {llvm::APInt(Inst->Width, Inst->Width)};
+      // Is the result always of this width?
+    }
+
     default:
       llvm::report_fatal_error("unimplemented instruction kind " +
                                std::string(Inst::getKindName(Inst->K)) +
