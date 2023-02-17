@@ -852,7 +852,6 @@ std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
         }
       }
     }
-
     return Candidates;
 }
 
@@ -903,6 +902,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   };
 
   auto LHSConsts = findConcreteConsts(Input.Mapping.LHS);
+
   auto RHSConsts = findConcreteConsts(Input.Mapping.RHS);
 
   std::set<Inst *> ConstsBlackList;
@@ -925,19 +925,24 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   int i = 1;
   for (auto I : LHSConsts) {
-    SymConstMap[I] = IC.createVar(I->Width, "symconst_" +
-                                  std::to_string(i++));
+    auto Name = "symconst_" + std::to_string(i++);
+    if (I->Name != "") {
+      Name = I->Name;
+    }
+    SymConstMap[I] = IC.createVar(I->Width, Name);
 
     InstCache[I] = SymConstMap[I];
     SymCS[SymConstMap[I]] = I->Val;
   }
-
   for (auto I : RHSConsts) {
     if (SymConstMap.find(I) != SymConstMap.end()) {
       continue;
     }
-    SymConstMap[I] = IC.createVar(I->Width, "symconst_" +
-                                  std::to_string(i++));
+    auto Name = "symconst_" + std::to_string(i++);
+    if (I->Name != "") {
+      Name = I->Name;
+    }
+    SymConstMap[I] = IC.createVar(I->Width, Name);
     InstCache[I] = SymConstMap[I];
 //    SymCS[SymConstMap[I]] = I->Val;
   }
@@ -1239,41 +1244,101 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       Refresh("Special expressions, no constants");
     }
   }
-
-//  std::vector<Inst *> SymDFVars;
-//  std::set<Inst *> LHSConstsAndSymDF;
-
-//  auto Clone = souper::Clone(Input, IC);
-//  std::vector<Inst *> Vars;
-//  findVars(Clone.Mapping.LHS, Vars);
-
-
-//  std::set<Inst *> Visited;
-//  for (size_t i = 0; i < Vars.size(); ++i) {
-//    if (Visited.find(Vars[i]) != Visited.end()/* || Vars[i]->Width == 7*/) {
-//      continue;
-//    }
-//    if (Vars[i]->KnownOnes.getBitWidth() != Vars[i]->Width ||
-//        Vars[i]->KnownZeros.getBitWidth() != Vars[i]->Width) {
-//      continue;
-//    }
-
-//    SymDFVars.push_back(IC.createVar(Vars[i]->Width, "skb_one_" + std::to_string(i)));
-//    SymDFVars.back()->SymOneOf = Vars[i];
-//    Vars[i]->SymKnownOnes = SymDFVars.back();
-//    LHSConstsAndSymDF.insert(SymDFVars.back());
-//    Vars[i]->KnownOnes = llvm::APInt();
-
-//    SymDFVars.push_back(IC.createVar(Vars[i]->Width, "skb_zero_" + std::to_string(i)));
-//    SymDFVars.back()->SymZeroOf = Vars[i];
-//    Vars[i]->SymKnownZeros = SymDFVars.back();
-//    LHSConstsAndSymDF.insert(SymDFVars.back());
-//    Vars[i]->KnownZeros = llvm::APInt();
-//  }
-
-
-//  Refresh("Symbolic known bits");
   }
+
+  Refresh("PUSH SYMDF_DB");
+  if (Input.Mapping.LHS->DemandedBits.getBitWidth() == Input.Mapping.LHS->Width &&
+      !Input.Mapping.LHS->DemandedBits.isAllOnesValue()) {
+    auto DB = Input.Mapping.LHS->DemandedBits;
+    auto SymDFVar = IC.getConst(DB);
+    SymDFVar->Name = "SYMDF_DB";
+
+    SymDFVar->KnownOnes = llvm::APInt(DB.getBitWidth(), 0);
+    SymDFVar->KnownZeros = llvm::APInt(DB.getBitWidth(), 0);
+    SymDFVar->Val = DB;
+
+    auto LHS = Input.Mapping.LHS;
+    auto RHS = Input.Mapping.RHS;
+
+    Input.Mapping.LHS->DemandedBits.setAllBits();
+    Input.Mapping.RHS->DemandedBits.setAllBits();
+
+    Input.Mapping.LHS = Builder(Input.Mapping.LHS, IC).And(SymDFVar)();
+    Input.Mapping.RHS = Builder(Input.Mapping.RHS, IC).And(SymDFVar)();
+
+    bool SymDFChanged = false;
+    auto Generalized = SuccessiveSymbolize(IC, S, Input, SymDFChanged);
+
+    if (SymDFChanged) {
+      return Generalized;
+    } else {
+      Input.Mapping.LHS = LHS;
+      Input.Mapping.RHS = RHS;
+      Input.Mapping.LHS->DemandedBits = DB;
+      Input.Mapping.RHS->DemandedBits = DB;
+    }
+  }
+  Refresh("POP SYMDF_DB");
+  Refresh("PUSH SYMDF_KB");
+  {
+    // Find good examples and test
+    std::vector<Inst *> Inputs;
+    findVars(Input.Mapping.LHS, Inputs);
+
+    std::map<Inst *, APInt> KnownZero, KnownOne;
+    auto PCs = Input.PCs;
+
+    for (auto &&I : Inputs) {
+      auto Width = I->Width;
+
+      if (I->KnownZeros.getBitWidth() == I->Width &&
+          I->KnownOnes.getBitWidth() == I->Width &&
+          !(I->KnownZeros == 0 && I->KnownOnes == 0)) {
+        KnownZero[I] = I->KnownZeros;
+        KnownOne[I] = I->KnownOnes;
+
+        I->KnownZeros = llvm::APInt(I->Width, 0);
+        I->KnownOnes = llvm::APInt(I->Width, 0);
+
+        if (I->KnownZeros != 0) {
+          Inst *Zeros = IC.getConst(I->KnownZeros);
+          Zeros->Name = "SYMDF_KZ";
+          Inst *AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(Width));
+          Inst *NotZeros = IC.getInst(Inst::Xor, Width,
+                                  {Zeros, AllOnes});
+          Inst *VarNotZero = IC.getInst(Inst::Or, Width, {I, NotZeros});
+          Inst *ZeroBits = IC.getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
+          PCs.push_back({ZeroBits, IC.getConst(llvm::APInt(1, 1))});
+        }
+
+        if (I->KnownOnes != 0) {
+          Inst *Ones = IC.getConst(I->KnownOnes);
+          Ones->Name = "SYMDF_KO";
+          Inst *VarAndOnes = IC.getInst(Inst::And, Width, {I, Ones});
+          Inst *OneBits = IC.getInst(Inst::Eq, 1, {VarAndOnes, Ones});
+          PCs.push_back({OneBits, IC.getConst(llvm::APInt(1, 1))});
+        }
+      }
+    }
+
+    if (!KnownZero.empty() || !KnownOne.empty()) {
+      bool SymDFChanged = false;
+      auto Generalized = SuccessiveSymbolize(IC, S, Input, SymDFChanged);
+
+      if (SymDFChanged) {
+        return Generalized;
+      } else {
+        Input.PCs = PCs;
+        for (auto &&I : Inputs) {
+          I->KnownZeros = KnownZero[I];
+          I->KnownOnes = KnownOne[I];
+        }
+      }
+    }
+  }
+
+  Refresh("POP SYMDF_KB");
+
   Refresh("END");
   Changed = false;
   return Input;
