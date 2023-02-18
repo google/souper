@@ -395,7 +395,7 @@ if(s) return Clone;};
 
    for (auto &&P : SymCS) {
      auto C = P.first;
-     DF(PowOfTwo, Val.isPowerOf2());
+     DF(PowOfTwo, Val.isPowerOf2()); // Invoke solver only if Val is a power of 2
      DF(NonNegative, Val.uge(0));
      DF(NonZero, Val != 0);
      DF(Negative, Val.slt(0));
@@ -959,15 +959,11 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   // Step 1 : Just direct symbolize for common consts, no constraints
 
   std::map<Inst *, Inst *> CommonConsts;
-  for (auto C : RHSConsts) {
-    if (LHSConsts.find(C) != LHSConsts.end()) {
-      CommonConsts[C] = SymConstMap[C];
-    }
+  for (auto C : LHSConsts) {
+    CommonConsts[C] = SymConstMap[C];
   }
-
   if (!CommonConsts.empty()) {
     Result = Replace(Result, IC, CommonConsts);
-
     auto Clone = Verify(Result, IC, S);
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
@@ -1297,26 +1293,25 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
         KnownZero[I] = I->KnownZeros;
         KnownOne[I] = I->KnownOnes;
 
-        I->KnownZeros = llvm::APInt(I->Width, 0);
-        I->KnownOnes = llvm::APInt(I->Width, 0);
-
         if (I->KnownZeros != 0) {
           Inst *Zeros = IC.getConst(I->KnownZeros);
-          Zeros->Name = "SYMDF_KZ";
+          Zeros->Name = "SYMDF_K0";
           Inst *AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(Width));
           Inst *NotZeros = IC.getInst(Inst::Xor, Width,
                                   {Zeros, AllOnes});
           Inst *VarNotZero = IC.getInst(Inst::Or, Width, {I, NotZeros});
           Inst *ZeroBits = IC.getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
-          PCs.push_back({ZeroBits, IC.getConst(llvm::APInt(1, 1))});
+          Input.PCs.push_back({ZeroBits, IC.getConst(llvm::APInt(1, 1))});
+          I->KnownZeros = llvm::APInt(I->Width, 0);
         }
 
         if (I->KnownOnes != 0) {
           Inst *Ones = IC.getConst(I->KnownOnes);
-          Ones->Name = "SYMDF_KO";
+          Ones->Name = "SYMDF_K1";
           Inst *VarAndOnes = IC.getInst(Inst::And, Width, {I, Ones});
           Inst *OneBits = IC.getInst(Inst::Eq, 1, {VarAndOnes, Ones});
-          PCs.push_back({OneBits, IC.getConst(llvm::APInt(1, 1))});
+          Input.PCs.push_back({OneBits, IC.getConst(llvm::APInt(1, 1))});
+          I->KnownOnes = llvm::APInt(I->Width, 0);
         }
       }
     }
@@ -1324,7 +1319,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     if (!KnownZero.empty() || !KnownOne.empty()) {
       bool SymDFChanged = false;
       auto Generalized = SuccessiveSymbolize(IC, S, Input, SymDFChanged);
-
       if (SymDFChanged) {
         return Generalized;
       } else {
