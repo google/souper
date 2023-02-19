@@ -831,8 +831,11 @@ std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
       Components.push_back(Builder(C, IC).LogB()());
       Components.push_back(Builder(C, IC).Sub(1)());
       Components.push_back(Builder(C, IC).Xor(-1)());
-      Components.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C->Width)).Shl(C)());
-      // TODO: Add a few more, we can afford to run generalization longer
+      if (SymbolizeHackersDelight) {
+        Components.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C->Width)).Shl(C)());
+        Components.push_back(Builder(IC, llvm::APInt(C->Width, 1)).Shl(C)());
+        // TODO: Add a few more, we can afford to run generalization longer
+      }
     }
 
     for (auto &&Target : RHSConsts) {
