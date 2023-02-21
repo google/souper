@@ -186,7 +186,7 @@ std::vector<Inst *> InferConstantLimits(
     for (auto C : ConcreteConsts) {
       auto Sum = Builder(XI, IC).Add(XI)();
       Results.push_back(Builder(Sum, IC).Ult(C->Val)());
-      Results.push_back(Builder(Sum, IC).Ult(C->Val).Xor(1)());
+      Results.push_back(Builder(Sum, IC).Ugt(C->Val)());
     }
   }
 
@@ -203,7 +203,7 @@ std::vector<Inst *> InferConstantLimits(
       for (auto C : ConcreteConsts) {
 
         Results.push_back(Builder(Sum, IC).Ult(C->Val)());
-        Results.push_back(Builder(Sum, IC).Ult(C->Val).Xor(1)());
+        Results.push_back(Builder(Sum, IC).Ugt(C->Val)());
       }
     }
   }
