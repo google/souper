@@ -142,36 +142,6 @@ std::vector<Inst *> findConcreteConsts(const ParsedReplacement &Input) {
   return Result;
 }
 
-std::vector<Inst *> InferConstantLimits(
-  const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
-        InstContext &IC, const ParsedReplacement &Input) {
-  std::vector<Inst *> Results;
-  if (!FindConstantRelations) {
-    return Results;
-  }
-  auto ConcreteConsts = findConcreteConsts(Input);
-  std::sort(ConcreteConsts.begin(), ConcreteConsts.end(),
-          [](auto A, auto B) { return A->Val.ugt(B->Val); });
-
-  for (auto &&[XI, XC] : CMap) {
-    for (auto &&[YI, YC] : CMap) {
-      // Sum less than const, Sum greater= than const
-      for (auto C : ConcreteConsts) {
-        auto Sum = Builder(XI, IC).Add(YI)();
-        Results.push_back(Builder(Sum, IC).Ult(C->Val)());
-        Results.push_back(Builder(Sum, IC).Ult(C->Val).Xor(1)());
-      }
-      // 2 * X < C, 2 * X >= C
-      for (auto C : ConcreteConsts) {
-        auto Sum = Builder(XI, IC).Add(XI)();
-        Results.push_back(Builder(Sum, IC).Ult(C->Val)());
-        Results.push_back(Builder(Sum, IC).Ult(C->Val).Xor(1)());
-      }
-    }
-  }
-  return Results;
-}
-
 std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
                         const std::vector<std::pair<Inst *, llvm::APInt>> &CMap) {
   std::unordered_map<Inst *, EvalValue> ValueCache;
@@ -188,6 +158,56 @@ std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
     }
   }
   return FilteredRelations;
+}
+
+std::vector<Inst *> InferConstantLimits(
+  const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
+        InstContext &IC, const ParsedReplacement &Input) {
+  std::vector<Inst *> Results;
+  if (!FindConstantRelations) {
+    return Results;
+  }
+  auto ConcreteConsts = findConcreteConsts(Input);
+  std::sort(ConcreteConsts.begin(), ConcreteConsts.end(),
+          [](auto A, auto B) { return A->Val.ugt(B->Val); });
+
+  for (auto &&[XI, XC] : CMap) {
+    // X < Width, X <= Width
+    auto Width = Builder(XI, IC).BitWidth();
+    Results.push_back(Builder(XI, IC).Ult(Width)());
+    Results.push_back(Builder(XI, IC).Ule(Width)());
+
+    auto gZ = Builder(XI, IC).Ugt(0)();
+
+    Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
+    Results.push_back(Builder(XI, IC).Ule(Width).And(gZ)());
+
+    // 2 * X < C, 2 * X >= C
+    for (auto C : ConcreteConsts) {
+      auto Sum = Builder(XI, IC).Add(XI)();
+      Results.push_back(Builder(Sum, IC).Ult(C->Val)());
+      Results.push_back(Builder(Sum, IC).Ult(C->Val).Xor(1)());
+    }
+  }
+
+  for (auto &&[XI, XC] : CMap) {
+    for (auto &&[YI, YC] : CMap) {
+      auto Sum = Builder(XI, IC).Add(YI)();
+      // Sum related to width
+      auto Width = Builder(Sum, IC).BitWidth();
+      Results.push_back(Builder(Sum, IC).Ult(Width)());
+      Results.push_back(Builder(Sum, IC).Ule(Width)());
+      Results.push_back(Builder(Sum, IC).Eq(Width)());
+
+      // Sum less than const, Sum greater= than const
+      for (auto C : ConcreteConsts) {
+
+        Results.push_back(Builder(Sum, IC).Ult(C->Val)());
+        Results.push_back(Builder(Sum, IC).Ult(C->Val).Xor(1)());
+      }
+    }
+  }
+  return FilterRelationsByValue(Results, CMap);
 }
 
 std::vector<Inst *> BitFuncs(Inst *I, InstContext &IC) {
@@ -267,6 +287,12 @@ std::vector<Inst *> InferPotentialRelations(
       // }
 
     }
+    Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth().Sub(1))());
+    Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth().UDiv(2))());
+    Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth())());
+  }
+  for (auto R : InferConstantLimits(CMap, IC, Input)) {
+    Results.push_back(R);
   }
   return FilterRelationsByValue(Results, CMap);
 }
@@ -443,7 +469,6 @@ ParsedReplacement SymKBPreconditionsAndVerifyGreedy(
 
     return Result;
   };
-
 
   // Pairwise expressions, all boolean
 
@@ -828,12 +853,15 @@ std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
     std::vector<Inst *> Components;
     for (auto &&C : LHSConsts) {
       Components.push_back(C);
+      // Components.push_back(Builder(C, IC).BSwap()());
       Components.push_back(Builder(C, IC).LogB()());
       Components.push_back(Builder(C, IC).Sub(1)());
       Components.push_back(Builder(C, IC).Xor(-1)());
       if (SymbolizeHackersDelight) {
         Components.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C->Width)).Shl(C)());
         Components.push_back(Builder(IC, llvm::APInt(C->Width, 1)).Shl(C)());
+        Components.push_back(Builder(IC, C).BitWidth().Sub(1)());
+        Components.push_back(Builder(IC, C).BitWidth().Sub(C)());
         // TODO: Add a few more, we can afford to run generalization longer
       }
     }
@@ -1130,23 +1158,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
   }
 
-
-  {
-    auto Copy = Replace(Input, IC, JustLHSSymConstMap);
-    auto ConstantLimits = InferConstantLimits(CMap, IC, Input);
-    for (auto &&R : ConstantLimits) {
-      Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-      // Copy.print(llvm::errs(), true);
-      // llvm::errs() << "\n\n";
-      auto Clone = Verify(Copy, IC, S);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-      Copy.PCs.pop_back();
-    }
-    Refresh("Constant limit constraints on LHS");
-  }
-
   // Step 4.8 : Special RHS constant exprs, with constants
 
   std::vector<std::vector<Inst *>> SimpleCandidatesWithConsts =
@@ -1243,6 +1254,20 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       Refresh("Special expressions, no constants");
     }
   }
+  }
+
+  {
+    auto Copy = Replace(Input, IC, JustLHSSymConstMap);
+    auto ConstantLimits = InferConstantLimits(CMap, IC, Input);
+    for (auto &&R : ConstantLimits) {
+      Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+      auto Clone = Verify(Copy, IC, S);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
+      }
+      Copy.PCs.pop_back();
+    }
+    Refresh("Constant limit constraints on LHS");
   }
 
   Refresh("PUSH SYMDF_DB");

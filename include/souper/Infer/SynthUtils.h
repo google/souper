@@ -15,6 +15,7 @@ namespace souper {
 class Builder {
 public:
   Builder(Inst *I_, InstContext &IC_) : I(I_), IC(IC_) {}
+  Builder(InstContext &IC_, Inst *I_) : I(I_), IC(IC_) {}
   Builder(InstContext &IC_, llvm::APInt Value) : IC(IC_) {
     I = IC.getConst(Value);
   }
@@ -38,6 +39,11 @@ public:
   BINOP(Shl) BINOP(LShr) BINOP(UDiv)
   BINOP(SDiv)
 #undef BINOP
+
+  template<typename T> Builder Ugt(T t) {                        \
+    auto L = I; auto R = i(t, *this);                            \
+    return Builder(IC.getInst(Inst::Ult, 1, {R, L}), IC); \
+  }
 
 #define BINOPW(K)                                                \
   template<typename T> Builder K(T t) {                          \
