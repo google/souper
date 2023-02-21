@@ -177,6 +177,11 @@ std::vector<Inst *> InferConstantLimits(
     Results.push_back(Builder(XI, IC).Ult(Width)());
     Results.push_back(Builder(XI, IC).Ule(Width)());
 
+    // X slt SMAX, x ult UMAX
+    auto WM1 = Width.Sub(1);
+    auto SMax = Builder(IC, llvm::APInt(XI->Width, 1)).Shl(WM1).Sub(1)();
+    Results.push_back(Builder(XI, IC).Slt(SMax)());
+
     auto gZ = Builder(XI, IC).Ugt(0)();
 
     Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
@@ -291,9 +296,9 @@ std::vector<Inst *> InferPotentialRelations(
     Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth().UDiv(2))());
     Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth())());
   }
-  for (auto R : InferConstantLimits(CMap, IC, Input)) {
-    Results.push_back(R);
-  }
+  // for (auto R : InferConstantLimits(CMap, IC, Input)) {
+  //   Results.push_back(R);
+  // }
   return FilterRelationsByValue(Results, CMap);
 }
 
@@ -1069,6 +1074,9 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   Refresh("All LHS Constraints");
 
 
+  auto ConstantLimits = InferConstantLimits(CMap, IC, Input);
+
+
   // Step 3 : Special RHS constant exprs, no constants
 
   if (!RHSFresh.empty()) {
@@ -1150,13 +1158,15 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       for (auto &&R : Relations) {
         Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
         auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
-                                           InstCache, IC, S, SymCS, true, false, false);
+                                           InstCache, IC, S, SymCS, true, true, false);
         if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
           return Clone;
         }
+        Input.PCs.pop_back();
       }
     }
   }
+  Refresh("Enumerated 2 insts exprs with relations");
 
   // Step 4.8 : Special RHS constant exprs, with constants
 
@@ -1254,11 +1264,39 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       Refresh("Special expressions, no constants");
     }
   }
+
+  if (!EnumeratedCandidates.empty()) {
+    for (auto &&R : ConstantLimits) {
+      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+
+      auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                         InstCache, IC, S, SymCS, true, true, false);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
+      }
+      Input.PCs.pop_back();
+    }
+    Refresh("Enumerated expressions+consts and constant limits");
+  }
+
+  if (!SimpleCandidatesWithConsts.empty()) {
+    for (auto &&R : ConstantLimits) {
+      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+
+      auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
+                                         InstCache, IC, S, SymCS, true, false, false);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
+      }
+      Input.PCs.pop_back();
+    }
+    Refresh("Simple expressions+consts and constant limits");
+  }
+
   }
 
   {
     auto Copy = Replace(Input, IC, JustLHSSymConstMap);
-    auto ConstantLimits = InferConstantLimits(CMap, IC, Input);
     for (auto &&R : ConstantLimits) {
       Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
       auto Clone = Verify(Copy, IC, S);
