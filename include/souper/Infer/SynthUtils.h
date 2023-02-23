@@ -61,8 +61,15 @@ public:
   }
   UNOP(LogB) UNOP(BitReverse) UNOP(BSwap) UNOP(Cttz) UNOP(Ctlz)
   UNOP(BitWidth) UNOP(CtPop)
-
 #undef UNOP
+
+#define UNOPW(K)                                                 \
+  Builder K(size_t W) {                                          \
+    auto L = I;                                                  \
+    return Builder(IC.getInst(Inst::K, W, {L}), IC);             \
+  }
+  UNOPW(ZExt)
+#undef UNOPW
 
 private:
   Inst *I = nullptr;

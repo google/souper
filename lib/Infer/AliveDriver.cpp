@@ -304,7 +304,7 @@ synthesizeConstantUsingSolver(tools::Transform &t,
 souper::AliveDriver::AliveDriver(Inst *LHS_, Inst *PreCondition_, InstContext &IC_,
                                  const std::vector<Inst *> &ExtraInputs, bool WidthIndep)
     : LHS(LHS_), PreCondition(PreCondition_), IC(IC_) {
-  smt::set_query_timeout(std::to_string(30000)); // milliseconds
+  smt::set_query_timeout(std::to_string(10000)); // milliseconds
   IsLHS = true;
   WidthIndependentMode = WidthIndep;
   if (WidthIndepOpt) {
@@ -491,10 +491,11 @@ bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
       return false;
     } else {
       if (ShowValidWidths) {
-        llvm::outs() << "Transformation seems to be correct for some widths!\n";
+        llvm::outs() << "; Partially Valid.\n";
         std::sort(ValidTypings.begin(), ValidTypings.end(),
                   [](const auto &A, const auto &B) {return A.begin()->second < B.begin()->second;});
         for (auto &&P : ValidTypings) {
+          llvm::outs() << "; ";
           for (auto &&I : P) {
             llvm::outs() << I.first->Name << ' ' <<  I.second << '\t';
           }
@@ -839,7 +840,8 @@ IR::Type &souper::AliveDriver::getType(int Width) {
   std::string n = "i" + std::to_string(Width);
   if (TypeCache.find(n) == TypeCache.end()) {
     if (WidthIndependentMode) {
-      TypeCache[""] = new IR::SymbolicType("symty_", (1 << IR::SymbolicType::Int));
+      auto t = new IR::SymbolicType("symty_", (1 << IR::SymbolicType::Int));
+      TypeCache[""] = t;
     } else {
       TypeCache[n] = new IR::IntType(std::move(n), Width);
     }

@@ -66,6 +66,8 @@ static const std::map<Inst::Kind, std::string> MatchOps = {
   {Inst::SDiv, "m_SDiv("}, {Inst::UDiv, "m_UDiv("},
   {Inst::SRem, "m_SRem("}, {Inst::URem, "m_URem("},
 
+  {Inst::AShrExact, "m_AShrExact("}, {Inst::LShrExact, "m_LShrExact("},
+  {Inst::UDivExact, "m_UDivExact("}, {Inst::SDivExact, "m_SDivExact("},
 
   {Inst::And, "m_c_And("}, {Inst::Or, "m_c_Or("},
   {Inst::Xor, "m_c_Xor("},
@@ -90,6 +92,8 @@ static const std::map<Inst::Kind, std::string> CreateOps = {
   {Inst::SDiv, "CreateSDiv("}, {Inst::UDiv, "CreateUDiv("}, {Inst::SRem, "CreateSRem("},
   {Inst::URem, "CreateURem("},
   {Inst::Or, "CreateOr("}, {Inst::And, "CreateAnd("}, {Inst::Xor, "CreateXor("},
+  {Inst::AShrExact, "CreateAShrExact("},// {Inst::LShrExact, "CreateExactLShr("},
+  // {Inst::UDivExact, "CreateExactUDiv("}, {Inst::SDivExact, "CreateExactSDiv("},
 
   // FakeOps
   {Inst::LogB, "CreateLogB("},
@@ -157,7 +161,7 @@ struct WidthEq : public Constraint {
 struct DomCheck : public Constraint {
   DomCheck(std::string Name_) : Name(Name_) {}
   std::string Name;
-  
+
   std::string print() override {
     return "util::dc(DT, I, " + Name + ")";
   }
@@ -349,7 +353,7 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     }
     return true;
   }
-  
+
   void GenDomConstraints(Inst *RHS) {
     static std::set<Inst *> Visited;
     Visited.insert(RHS);
@@ -492,7 +496,7 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms, bool IsRoot = false)
     llvm::errs() << "\nUnimplemented matcher:" << Inst::getKindName(I->K) << "\n";
     return false;
   }
-  
+
   auto Op = It->second;
 
   Out << Op;
@@ -500,7 +504,7 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms, bool IsRoot = false)
   if (I->K == Inst::SExt || I->K == Inst::ZExt || I->K == Inst::Trunc) {
     Out << I->Width << ", ";
   }
-  
+
   if (PredNames.find(I->K) != PredNames.end()) {
     Out << Syms.Preds[I] << ", ";
   }
@@ -1027,7 +1031,7 @@ int main(int argc, char **argv) {
       llvm::outs() << Results[N];
     }
   }
-  
+
 //  llvm::outs() << "end:\n";
 
   return 0;

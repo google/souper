@@ -169,7 +169,13 @@ std::vector<Inst *> InferConstantLimits(
   }
   auto ConcreteConsts = findConcreteConsts(Input);
   std::sort(ConcreteConsts.begin(), ConcreteConsts.end(),
-          [](auto A, auto B) { return A->Val.ugt(B->Val); });
+          [](auto A, auto B) {
+            if (A->Width == B->Width) {
+              return A->Val.ugt(B->Val);
+            } else {
+              return A->Width < B->Width;
+            }
+          });
 
   for (auto &&[XI, XC] : CMap) {
     // X < Width, X <= Width
@@ -189,6 +195,9 @@ std::vector<Inst *> InferConstantLimits(
 
     // 2 * X < C, 2 * X >= C
     for (auto C : ConcreteConsts) {
+      if (C->Width != XI->Width) {
+        continue;
+      }
       auto Sum = Builder(XI, IC).Add(XI)();
       Results.push_back(Builder(Sum, IC).Ult(C->Val)());
       Results.push_back(Builder(Sum, IC).Ugt(C->Val)());
@@ -197,6 +206,9 @@ std::vector<Inst *> InferConstantLimits(
 
   for (auto &&[XI, XC] : CMap) {
     for (auto &&[YI, YC] : CMap) {
+      if (XI == YI) {
+        continue;
+      }
       auto Sum = Builder(XI, IC).Add(YI)();
       // Sum related to width
       auto Width = Builder(Sum, IC).BitWidth();
@@ -206,7 +218,9 @@ std::vector<Inst *> InferConstantLimits(
 
       // Sum less than const, Sum greater= than const
       for (auto C : ConcreteConsts) {
-
+        if (Sum->Width != C->Width) {
+          continue;
+        }
         Results.push_back(Builder(Sum, IC).Ult(C->Val)());
         Results.push_back(Builder(Sum, IC).Ugt(C->Val)());
       }
@@ -239,6 +253,24 @@ std::vector<Inst *> InferPotentialRelations(
   if (!FindConstantRelations) {
     return Results;
   }
+
+  for (auto &&[XI, XC] : CMap) {
+    for (auto &&[YI, YC] : CMap) {
+      if (XI == YI || XC.getBitWidth() == YC.getBitWidth()) {
+        continue;
+      }
+      llvm::errs() << "HERE: " << XC.getLimitedValue() << ' ' <<  YC.getLimitedValue() << '\n';
+      if (XC.getLimitedValue() == YC.getLimitedValue()) {
+        if (XI->Width > YI->Width) {
+          Builder(YI, IC).ZExt(XI->Width).Eq(XI)()->Print();
+          Results.push_back(Builder(YI, IC).ZExt(XI->Width).Eq(XI)());
+        } else {
+          Results.push_back(Builder(XI, IC).ZExt(YI->Width).Eq(YI)());
+        }
+      }
+    }
+  }
+
 
   // Generate a set of pairwise relations
   for (auto &&[XI, XC] : CMap) {
@@ -899,10 +931,10 @@ void findDangerousConstants(Inst *I, std::set<Inst *> &Results) {
     Stack.pop_back();
     Visited.insert(Cur);
 
-    if (Cur->K == Inst::Const && Cur->Val == 0) {
-      // Don't try to 'generalize' zero!
-      Results.insert(Cur);
-    }
+    // if (Cur->K == Inst::Const && Cur->Val == 0) {
+    //   // Don't try to 'generalize' zero!
+    //   Results.insert(Cur);
+    // }
 
     if (Visited.find(Cur) == Visited.end()) {
       continue;
@@ -1307,7 +1339,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
     Refresh("Constant limit constraints on LHS");
   }
-
+  if (SymbolicDF) {
   Refresh("PUSH SYMDF_DB");
   if (Input.Mapping.LHS->DemandedBits.getBitWidth() == Input.Mapping.LHS->Width &&
       !Input.Mapping.LHS->DemandedBits.isAllOnesValue()) {
@@ -1396,8 +1428,8 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       }
     }
   }
-
   Refresh("POP SYMDF_KB");
+  }
 
   Refresh("END");
   Changed = false;
