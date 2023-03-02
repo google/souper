@@ -705,7 +705,7 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
       EC = isConcreteCandidateSat(SC, I, IsSAT);
       if (EC) {
         if (DebugLevel > 0)
-          llvm::errs() << "OOPS: error from isConcreteCanddiateSat()\n";
+          llvm::errs() << "OOPS: error from isConcreteCandidateSat()\n";
         continue;
       }
       if (IsSAT) {
