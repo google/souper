@@ -126,5 +126,7 @@ std::map<Inst *, llvm::APInt> findOneConstSet(ParsedReplacement Input, const std
 
 std::vector<std::map<Inst *, llvm::APInt>> findValidConsts(ParsedReplacement Input, const std::set<Inst *> &Insts, InstContext &IC, Solver *S, size_t MaxCount);
 
+ValueCache GetCEX(const ParsedReplacement &Input, InstContext &IC, Solver *S);
+
 }
 #endif

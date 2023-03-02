@@ -13,15 +13,15 @@ ParsedReplacement Replace(ParsedReplacement I, InstContext &IC,
                           std::map<Inst *, Inst *> &M) {
   std::map<Block *, Block *> BlockCache;
   std::map<Inst *, llvm::APInt> ConstMap;
-  
+
   I.Mapping.LHS =  getInstCopy(I.Mapping.LHS, IC, M, BlockCache, &ConstMap, false);
   I.Mapping.RHS =  getInstCopy(I.Mapping.RHS, IC, M, BlockCache, &ConstMap, false);
-  
+
   for (auto &PC : I.PCs) {
     PC.LHS = getInstCopy(PC.LHS, IC, M, BlockCache, &ConstMap, false, false);
     PC.RHS = getInstCopy(PC.RHS, IC, M, BlockCache, &ConstMap, false, false);
   }
-  
+
   return I;
 }
 
@@ -63,7 +63,7 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
       InstCache[V->SymZeroOf]->SymKnownZeros = InstCache[V];
     }
   }
-  
+
   return In;
 }
 
@@ -77,14 +77,14 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
   std::vector<Inst *> Vars;
   findVars(Input.Mapping.LHS, Vars);
 
-//  PruningManager Pruner(SC, Vars, 5);
-//  Pruner.init();
-//
-//  if (Pruner.isInfeasible(Input.Mapping.RHS, 0)) {
-//    Input.Mapping.LHS = nullptr;
-//    Input.Mapping.RHS = nullptr;
-//    return Input;
-//  }
+  PruningManager Pruner(SC, Vars, 0);
+  Pruner.init();
+
+  if (Pruner.isInfeasible(Input.Mapping.RHS, 0)) {
+    Input.Mapping.LHS = nullptr;
+    Input.Mapping.RHS = nullptr;
+    return Input;
+  }
 
   Input = Clone(Input, IC);
   std::set<Inst *> ConstSet;
@@ -93,7 +93,7 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
     std::map <Inst *, llvm::APInt> ResultConstMap;
     ConstantSynthesis CS;
     auto SMTSolver = S->getSMTLIBSolver();
-    
+
     auto EC = CS.synthesize(SMTSolver, Input.BPCs, Input.PCs,
                          Input.Mapping, ConstSet,
                          ResultConstMap, IC, /*MaxTries=*/30, 10,
@@ -134,44 +134,44 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
 }
 
 std::map<Inst *, llvm::APInt> findOneConstSet(ParsedReplacement Input, const std::set<Inst *> &SymCS, InstContext &IC, Solver *S) {
-  
+
   std::map<Inst *, Inst *> InstCache;
-  
+
   std::set<Inst *> SynthCS;
-  
+
   size_t cid = 0;
   for (auto C : SymCS) {
     InstCache[C] = IC.createSynthesisConstant(C->Width, cid++);
     SynthCS.insert(InstCache[C]);
   }
   Input = Replace(Input, IC, InstCache);
-  
+
   std::map <Inst *, llvm::APInt> ResultConstMap;
   ConstantSynthesis CS;
   auto EC = CS.synthesize(S->getSMTLIBSolver(), Input.BPCs, Input.PCs,
                        Input.Mapping, SynthCS,
                        ResultConstMap, IC, /*MaxTries=*/30, 10,
                        /*AvoidNops=*/true);
-  
+
   std::map<Inst *, llvm::APInt> Result;
   if (!ResultConstMap.empty()) {
     for (auto C : SymCS) {
       Result[C] = ResultConstMap[InstCache[C]];
     }
   }
-  
+
   return Result;
-  
+
 }
 
 std::vector<std::map<Inst *, llvm::APInt>> findValidConsts(ParsedReplacement Input, const std::set<Inst *> &Insts, InstContext &IC, Solver *S, size_t MaxCount = 1) {
-  
+
   // FIXME: Ignores Count
   std::vector<std::map<Inst *, llvm::APInt>> Results;
-  
+
   Inst *T = IC.getConst(llvm::APInt(1, 1)); // true
   Inst *F = IC.getConst(llvm::APInt(1, 0)); // false
-  
+
   while (MaxCount-- ) {
     auto &&Result = findOneConstSet(Input, Insts, IC, S);
     if (Result.empty()) {
@@ -183,8 +183,32 @@ std::vector<std::map<Inst *, llvm::APInt>> findValidConsts(ParsedReplacement Inp
       }
     }
   }
-  
+
   return Results;
+}
+
+// Find a single counterexample
+ValueCache GetCEX(const ParsedReplacement &Input, InstContext &IC, Solver *S) {
+  std::vector<Inst *> Vars;
+  findVars(Input.Mapping.LHS, Vars);
+  std::vector<std::pair<Inst *, llvm::APInt>> Models;
+  bool IsValid;
+  if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, IsValid, &Models)) {
+    llvm::errs() << EC.message() << '\n';
+  }
+  if (IsValid) {
+    return ValueCache();
+  } else {
+    ValueCache Result;
+    for (auto &V : Vars) {
+      for (auto &M : Models) {
+        if (M.first == V) {
+          Result[V] = M.second;
+        }
+      }
+    }
+    return Result;
+  }
 }
 
 }

@@ -15,6 +15,7 @@
 #include "souper/Generalize/Reducer.h"
 #include "souper/Tool/GetSolver.h"
 #include "souper/Util/DfaUtils.h"
+#include <cstdlib>
 
 using namespace llvm;
 using namespace souper;
@@ -143,18 +144,38 @@ std::vector<Inst *> findConcreteConsts(const ParsedReplacement &Input) {
 }
 
 std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
-                        const std::vector<std::pair<Inst *, llvm::APInt>> &CMap) {
+                        const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
+                        ValueCache CEX) {
   std::unordered_map<Inst *, EvalValue> ValueCache;
   for (auto &&[I, V] : CMap) {
     ValueCache[I] = EvalValue(V);
   }
-  ConcreteInterpreter CI(ValueCache);
+
+  // for (auto P : CEX) {
+  //   llvm::errs() << "CEX: " << P.first->Name << ' '
+  //                << P.second.getValue().toString(2, false) << "\n";
+  // }
+
+  ConcreteInterpreter CPos(ValueCache);
+  ConcreteInterpreter CNeg(CEX);
+
   std::vector<Inst *> FilteredRelations;
   for (auto &&R : Relations) {
-    auto Result = CI.evaluateInst(R);
-    // llvm::errs() << "HERE: " << Result.getValue().toString(2, false) << "\n";
+    auto Result = CPos.evaluateInst(R);
+    EvalValue ResultNeg = CEX.empty() ? EvalValue() : CNeg.evaluateInst(R);
+
+    // llvm::errs() << "P: " << Result.getValue().toString(2, false) << ' ' << Result.getValue().isAllOnesValue() << "\n";
+    // llvm::errs() << "N: " << ResultNeg.getValue().toString(2, false) << ' ' << ResultNeg.getValue().isNullValue()<< "\n";
+
     if (Result.hasValue() && Result.getValue().isAllOnesValue()) {
-      FilteredRelations.push_back(R);
+      // llvm::errs() << "Keeping "<< "\n";
+      if (ResultNeg.hasValue()) {
+        if (ResultNeg.getValue().isNullValue()) {
+          FilteredRelations.push_back(R);
+        }
+      } else {
+        FilteredRelations.push_back(R);
+      }
     }
   }
   return FilteredRelations;
@@ -162,7 +183,7 @@ std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
 
 std::vector<Inst *> InferConstantLimits(
   const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
-        InstContext &IC, const ParsedReplacement &Input) {
+        InstContext &IC, const ParsedReplacement &Input, ValueCache CEX) {
   std::vector<Inst *> Results;
   if (!FindConstantRelations) {
     return Results;
@@ -226,7 +247,15 @@ std::vector<Inst *> InferConstantLimits(
       }
     }
   }
-  return FilterRelationsByValue(Results, CMap);
+  return FilterRelationsByValue(Results, CMap, CEX);
+}
+
+// Enforce commutativity to prune search space
+bool comm(Inst *A, Inst *B, Inst *C) {
+  return A > B && B > C;
+}
+bool comm(Inst *A, Inst *B) {
+  return A > B;
 }
 
 std::vector<Inst *> BitFuncs(Inst *I, InstContext &IC) {
@@ -246,39 +275,70 @@ std::vector<Inst *> BitFuncs(Inst *I, InstContext &IC) {
 // This was originally intended to find relational constraints
 // but we also use to fine some ad hoc constraints now.
 // TODO: Filter relations by concrete interpretation
+#define C2 comm(XI, YI)
+#define C3 comm(XI, YI, ZI)
+
 std::vector<Inst *> InferPotentialRelations(
         const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
-        InstContext &IC, const ParsedReplacement &Input) {
+        InstContext &IC, const ParsedReplacement &Input, ValueCache CEX) {
   std::vector<Inst *> Results;
   if (!FindConstantRelations) {
     return Results;
   }
 
-  for (auto &&[XI, XC] : CMap) {
-    for (auto &&[YI, YC] : CMap) {
-      if (XI == YI || XC.getBitWidth() == YC.getBitWidth()) {
-        continue;
-      }
-      llvm::errs() << "HERE: " << XC.getLimitedValue() << ' ' <<  YC.getLimitedValue() << '\n';
-      if (XC.getLimitedValue() == YC.getLimitedValue()) {
-        if (XI->Width > YI->Width) {
-          Builder(YI, IC).ZExt(XI->Width).Eq(XI)()->Print();
-          Results.push_back(Builder(YI, IC).ZExt(XI->Width).Eq(XI)());
-        } else {
-          Results.push_back(Builder(XI, IC).ZExt(YI->Width).Eq(YI)());
+
+  // if (DebugLevel) {
+  //   llvm::errs() << "Symconsts for rels: " << CMap.size() << "\n";
+  // }
+  // Triple rels
+  if (CMap.size() >= 3) {
+    for (auto &&[XI, XC] : CMap) {
+      for (auto &&[YI, YC] : CMap) {
+        for (auto &&[ZI, ZC] : CMap) {
+          if (XI == YI || XI == ZI || YI == ZI) {
+            continue;
+          }
+          if (XC.getBitWidth() != YC.getBitWidth() ||
+              XC.getBitWidth() != ZC.getBitWidth()) {
+            continue;
+          }
+
+          if (C3 && (XC | YC | ZC).isAllOnesValue()) {
+            Results.push_back(Builder(XI, IC).Or(YI).Or(ZI)
+              .Eq(llvm::APInt::getAllOnesValue(XI->Width))());
+            // TODO Make width independent by using bitwidth inst
+          }
         }
       }
     }
   }
 
-
-  // Generate a set of pairwise relations
+  // Pairwise relations
   for (auto &&[XI, XC] : CMap) {
     // llvm::errs() << "HERE: " << XC << "\n";
     for (auto &&[YI, YC] : CMap) {
-
       if (XI == YI || XC.getBitWidth() != YC.getBitWidth()) {
         continue;
+      }
+
+      if (C2 && XC == YC) {
+        Results.push_back(Builder(XI, IC).Eq(YI)());
+      }
+
+      if ((XC & YC) == XC) {
+        Results.push_back(Builder(XI, IC).And(YI).Eq(XI)());
+      }
+
+      if ((XC & YC) == YC) {
+        Results.push_back(Builder(XI, IC).And(YI).Eq(YI)());
+      }
+
+      if ((XC | YC) == XC) {
+        Results.push_back(Builder(XI, IC).Or(YI).Eq(XI)());
+      }
+
+      if ((XC | YC) == YC) {
+        Results.push_back(Builder(XI, IC).Or(YI).Eq(YI)());
       }
 
       // // Add C
@@ -286,11 +346,11 @@ std::vector<Inst *> InferPotentialRelations(
       // Results.push_back(Builder(XI, IC).Sub(Diff).Eq(YI)());
 
       // Mul C
-      if (YC!= 0 && XC.urem(YC) == 0) {
+      if (C2 && YC!= 0 && XC.urem(YC) == 0) {
         auto Fact = XC.udiv(YC);
         Results.push_back(Builder(YI, IC).Mul(Fact).Eq(XI)());
       }
-      if (XC != 0 && YC.urem(XC) == 0) {
+      if (C2 && XC != 0 && YC.urem(XC) == 0) {
         auto Fact = YC.udiv(XC);
         Results.push_back(Builder(XI, IC).Mul(Fact).Eq(YI)());
       }
@@ -328,10 +388,33 @@ std::vector<Inst *> InferPotentialRelations(
     Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth().UDiv(2))());
     Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth())());
   }
+
+  // TODO: Make sure this works.
+  for (auto &&[XI, XC] : CMap) {
+    for (auto &&[YI, YC] : CMap) {
+      if (XI == YI || XC.getBitWidth() == YC.getBitWidth()) {
+        continue;
+      }
+
+      // llvm::errs() << "HERE: " << XI->Name << ' ' << YI->Name << ' ' << XC.getLimitedValue() << ' ' <<  YC.getLimitedValue() << '\n';
+
+      // llvm::errs() << "HERE: " << XC.getLimitedValue() << ' ' <<  YC.getLimitedValue() << '\n';
+      if (XC.getLimitedValue() == YC.getLimitedValue()) {
+        if (XI->Width > YI->Width) {
+          // Builder(YI, IC).ZExt(XI->Width).Eq(XI)()->Print();
+          Results.push_back(Builder(YI, IC).ZExt(XI->Width).Eq(XI)());
+        } else {
+          Results.push_back(Builder(XI, IC).ZExt(YI->Width).Eq(YI)());
+        }
+      }
+    }
+  }
+
   // for (auto R : InferConstantLimits(CMap, IC, Input)) {
   //   Results.push_back(R);
   // }
-  return FilterRelationsByValue(Results, CMap);
+  // llvm::errs() << "HERE: " << Results.size() << '\n';
+  return FilterRelationsByValue(Results, CMap, CEX);
 }
 
 std::set<Inst *> findConcreteConsts(Inst *I) {
@@ -468,126 +551,6 @@ if(s) return Clone;};
   return Clone;
 }
 
-ParsedReplacement SymKBPreconditionsAndVerifyGreedy(
-        ParsedReplacement Input, InstContext &IC,
-    Solver *S, std::map<Inst *, llvm::APInt> SymCS) {
-
-  std::map<Inst *, Inst *> SymKMap;
-  static size_t i = 0;
-  for (auto &&C : SymCS) {
-    SymKMap[IC.createVar(C.first->Width, "symconst_k0_" + std::to_string(i++))] = C.first;
-    SymKMap[IC.createVar(C.first->Width, "symconst_k1_" + std::to_string(i++))] = C.first;
-    // Only discriminant for these two are in Name
-  }
-
-  auto KPC = [&](Inst *SymK) -> InstMapping {
-    // true : Constraint for known zero
-    // false : Constraint for known one
-
-    InstMapping Result;
-    Result.RHS = IC.getConst(llvm::APInt(1, 1));
-
-    auto I = SymKMap[SymK];
-    auto Width = I->Width;
-
-    auto K0 = SymK->Name.starts_with("symconst_k0_");
-
-    if (K0) {
-      Inst *AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(Width));
-      Inst *NotZeros = IC.getInst(Inst::Xor, Width, {SymK, AllOnes});
-      Inst *VarNotZero = IC.getInst(Inst::Or, Width, {I, NotZeros});
-      Inst *ZeroBits = IC.getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
-      Result.LHS = ZeroBits;
-    } else {
-      Inst *VarAndOnes = IC.getInst(Inst::And, Width, {I, SymK});
-      Inst *OneBits = IC.getInst(Inst::Eq, 1, {VarAndOnes, SymK});
-      Result.LHS = OneBits;
-    }
-
-    return Result;
-  };
-
-  // Pairwise expressions, all boolean
-
-  for (auto &&P1 : SymKMap) {
-    for (auto &&P2 : SymKMap) {
-      if (P1.first == P2.first || P1.first->Width != P2.first->Width) {
-        continue;
-      }
-
-      auto X = P1.first;
-      auto Y = P2.first;
-
-      auto W = P1.first->Width;
-
-      std::vector<Inst *> Exprs;
-
-      auto TrueVal = IC.getConst(llvm::APInt(1, 1));
-
-      // bit flip x == ~y
-      Exprs.push_back(Builder(X, IC).Xor(Y).Eq(llvm::APInt::getAllOnesValue(X->Width))());
-
-      // cttz(val) + ctlz(val) >= Width
-      auto XV = X;
-      if (X->Name.starts_with("symconst_k0_")) {
-        XV = Builder(X, IC).Xor(llvm::APInt::getAllOnesValue(W))();
-      }
-      auto YV = Y;
-      if (Y->Name.starts_with("symconst_k0_")) {
-        YV = Builder(Y, IC).Xor(llvm::APInt::getAllOnesValue(W))();
-      }
-      Exprs.push_back(Builder(IC, llvm::APInt(W, W)).Ule(
-                        Builder(XV, IC).Cttz().Add(
-                          Builder(YV, IC).Ctlz()())())());
-
-
-      std::vector<Inst *> Components{X, Y, XV, YV};
-      Components.push_back(IC.getConst(llvm::APInt::getAllOnesValue(W)));
-
-      EnumerativeSynthesis ES;
-      auto Guesses = ES.generateExprs(IC, 2, Components, 1);
-      for (auto &&Guess : Guesses) {
-        std::set<Inst *> ConstSet;
-        souper::getConstants(Guess, ConstSet);
-        if (!ConstSet.empty()) {
-          if (SymbolizeConstSynthesis) {
-            Exprs.push_back(Guess);
-          }
-        } else {
-          Exprs.push_back(Guess);
-        }
-      }
-
-
-      for (auto &&E : Exprs) {
-
-        auto Backup = Input.PCs;
-
-        InstMapping M(E, TrueVal);
-
-        Input.PCs.push_back(M);
-        Input.PCs.push_back(KPC(X));
-        Input.PCs.push_back(KPC(Y));
-
-//        Input.print(llvm::errs(), true);
-//        llvm::errs() << "\n";
-
-        auto Clone = Verify(Input, IC, S);
-        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-          return Clone;
-        }
-
-        Input.PCs = Backup;
-      }
-    }
-  }
-
-  Input.Mapping.LHS = nullptr;
-  Input.Mapping.RHS = nullptr;
-  //TODO Better failure indicator
-  return Input;
-}
-
 ParsedReplacement
 FirstValidCombination(ParsedReplacement Input,
                       const std::vector<Inst *> &Targets,
@@ -682,6 +645,10 @@ FirstValidCombination(ParsedReplacement Input,
     Copy.Mapping.RHS = Replace(Input.Mapping.RHS, IC, InstCacheRHS);
 
     // Copy.PCs = Input.PCs;
+
+    // Copy.print(llvm::errs(), true);
+    // llvm::errs() << "\n";
+
     if (SOLVE(Copy)) {
       return Clone;
     }
@@ -699,21 +666,24 @@ FirstValidCombination(ParsedReplacement Input,
   return Input;
 }
 
-// TODO: Prevent NOPs from being synthesized by passing parent instruction
-std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
-                  std::map<Inst *, Inst *> SMap, InstContext &IC, size_t Threshold, bool ConstMode) {
+std::vector<Inst *> IOSynthesize(llvm::APInt Target,
+const std::vector<std::pair<Inst *, llvm::APInt>> &ConstMap,
+InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) {
 
   std::vector<Inst *> Results;
 
   // Just symbolic or Concrete constant
 
-  for (auto C : LHSConsts) {
+  for (const auto &[I, Val] : ConstMap) {
+    if (I == ParentConst) {
+      continue;
+    }
     if (!ConstMode) {
-      if (C->Width == Target.getBitWidth() && C->Val == Target) {
-        Results.push_back(SMap[C]);
+      if (I->Width == Target.getBitWidth() && Val == Target) {
+        Results.push_back(I);
       }
     } else {
-      if (C->Width == Target.getBitWidth()) {
+      if (I->Width == Target.getBitWidth()) {
         Results.push_back(Builder(IC, Target)());
       }
     }
@@ -725,79 +695,79 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
 
   // Recursive formulation
 
-  for (auto C : LHSConsts) {
-    if (C->Width != Target.getBitWidth()) {
+  #define for_no_nop(X, x) \
+  if (Target != x) for (auto X : \
+  IOSynthesize(x, ConstMap, IC, Threshold - 1, ConstMode, ParentConst))
+
+  for (const auto &[I, Val] : ConstMap) {
+    if (I->Width != Target.getBitWidth()) {
       continue;
     }
+
+    if (I == ParentConst) {
+      continue;
+    }
+    ParentConst = I;
 
     // Binary operators
 
     // C + X == Target
-    for (auto X : IOSynthesize(Target - C->Val, LHSConsts, SMap, IC,
-                               Threshold - 1, ConstMode)) {
-      Results.push_back(Builder(SMap[C], IC).Add(X)());
+    for_no_nop(X, Target - Val) {
+      Results.push_back(Builder(I, IC).Add(X)());
     }
 
     // C - X == Target
-    for (auto X : IOSynthesize(C->Val - Target, LHSConsts, SMap, IC,
-                               Threshold - 1, ConstMode)) {
-      Results.push_back(Builder(SMap[C], IC).Sub(X)());
+    for_no_nop(X, Val - Target) {
+      Results.push_back(Builder(I, IC).Sub(X)());
     }
 
     // X - C == Target
-    for (auto X : IOSynthesize(Target + C->Val, LHSConsts, SMap, IC,
-                               Threshold - 1, ConstMode)) {
-      Results.push_back(Builder(X, IC).Sub(SMap[C])());
+    for_no_nop(X, Target + Val) {
+      Results.push_back(Builder(X, IC).Sub(I)());
     }
 
     // C * X == Target
-    if (C->Val.isNegative() || Target.isNegative()) {
-      if (C->Val != 0 && Target.srem(C->Val) == 0) {
-        for (auto X : IOSynthesize(Target.sdiv(C->Val), LHSConsts, SMap,
-                                   IC, Threshold - 1, ConstMode)) {
-          Results.push_back(Builder(X, IC).Mul(SMap[C])());
+    if (Val.isNegative() || Target.isNegative()) {
+      if (Val != 0 && Target.srem(Val) == 0) {
+        for_no_nop(X, Target.sdiv(Val)) {
+          Results.push_back(Builder(X, IC).Mul(I)());
         }
       }
     } else {
-      if (C->Val != 0 && Target.urem(C->Val) == 0) {
-        for (auto X : IOSynthesize(Target.udiv(C->Val), LHSConsts, SMap,
-                                   IC, Threshold - 1, ConstMode)) {
-          Results.push_back(Builder(X, IC).Mul(SMap[C])());
+      if (Val != 0 && Target.urem(Val) == 0) {
+        for_no_nop(X, Target.udiv(Val)) {
+          Results.push_back(Builder(X, IC).Mul(I)());
         }
       }
     }
 
     // C / X == Target
-    if (C->Val.isNegative() || Target.isNegative()) {
-      if (Target != 0 && C->Val.srem(Target) == 0) {
-        for (auto X : IOSynthesize(C->Val.sdiv(Target), LHSConsts, SMap,
-                                   IC, Threshold - 1, ConstMode)) {
-          Results.push_back(Builder(SMap[C], IC).SDiv(X)());
+    if (Val.isNegative() || Target.isNegative()) {
+      if (Target != 0 && Val.srem(Target) == 0) {
+        for_no_nop(X, Val.sdiv(Target)) {
+          Results.push_back(Builder(I, IC).SDiv(X)());
         }
       }
     } else {
-      if (Target != 0 && C->Val.urem(Target) == 0) {
-        for (auto X : IOSynthesize(C->Val.udiv(Target), LHSConsts, SMap,
-                                   IC, Threshold - 1, ConstMode)) {
-          Results.push_back(Builder(SMap[C], IC).UDiv(X)());
+      if (Target != 0 && Val.urem(Target) == 0) {
+        for_no_nop(X, Val.udiv(Target)) {
+          Results.push_back(Builder(I, IC).UDiv(X)());
         }
       }
     }
 
     // X / C == Target
 
-    if (C->Val.isNegative() || Target.isNegative()) {
-      if (C->Val != 0 && Target.srem(C->Val) == 0) {
-        for (auto X : IOSynthesize(C->Val * Target, LHSConsts, SMap,
-                                   IC, Threshold - 1, ConstMode)) {
-          Results.push_back(Builder(X, IC).SDiv(SMap[C])());
+    if (Val.isNegative() || Target.isNegative()) {
+      if (Val != 0 && Target.srem(Val) == 0) {
+        for_no_nop(X, Val * Target) {
+          Results.push_back(Builder(X, IC).SDiv(I)());
         }
       }
     } else {
-      if (C->Val != 0 && Target.urem(C->Val) == 0) {
-        for (auto X : IOSynthesize(C->Val * Target, LHSConsts, SMap,
-                                   IC, Threshold - 1, ConstMode)) {
-          Results.push_back(Builder(X, IC).UDiv(SMap[C])());
+      if (Val != 0 && Target.urem(Val) == 0) {
+        for_no_nop(X, Val * Target) {
+          Results.push_back(Builder(X, IC).UDiv(I)());
         }
       }
     }
@@ -805,45 +775,45 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
     // Shifts?
 
     // Unary operators (no recursion required)
-    if (Target == C->Val.logBase2()) {
-      Results.push_back(Builder(SMap[C], IC).LogB()());
+    if (Target == Val.logBase2()) {
+      Results.push_back(Builder(I, IC).LogB()());
     }
 
-    if (Target == C->Val.reverseBits()) {
-      Results.push_back(Builder(SMap[C], IC).BitReverse()());
+    if (Target == Val.reverseBits()) {
+      Results.push_back(Builder(I, IC).BitReverse()());
     }
     // TODO Add others
 
     // bit flip
-    llvm::APInt D = C->Val;
+    llvm::APInt D = Val;
     D.flipAllBits();
     if (Target == D) {
-      Results.push_back(Builder(SMap[C], IC).Xor(llvm::APInt::getAllOnesValue(C->Width))());
+      Results.push_back(Builder(I, IC).Xor(llvm::APInt::getAllOnesValue(I->Width))());
     }
 
     if (Target == D + 1) {
-      Results.push_back(Builder(SMap[C], IC).Xor(llvm::APInt::getAllOnesValue(C->Width)).Add(1)());
+      Results.push_back(Builder(I, IC).Xor(llvm::APInt::getAllOnesValue(I->Width)).Add(1)());
     }
 
     // neg
-    D = C->Val;
+    D = Val;
     D.negate();
-    if (Target == D) {
-      Results.push_back(Builder(IC, llvm::APInt::getAllOnesValue(C->Width)).Sub(SMap[C])());
+    if (Target == D && D != Val) {
+      Results.push_back(Builder(IC, llvm::APInt::getAllOnesValue(I->Width)).Sub(I)());
     }
 
-    for (auto C2 : LHSConsts) {
-      if (C == C2 || C->Width != C2->Width) {
+    for (const auto &[I2, Val2] : ConstMap) {
+      if (I == I2 || I->Width != I2->Width || I2 == ParentConst) {
         continue;
       }
-      if ((C->Val & C2->Val) == Target) {
-        Results.push_back(Builder(SMap[C], IC).And(SMap[C2])());
+      if ((Val & Val2) == Target && !Val.isAllOnesValue() && !Val2.isAllOnesValue()) {
+        Results.push_back(Builder(I, IC).And(I2)());
       }
-      if ((C->Val | C2->Val) == Target) {
-        Results.push_back(Builder(SMap[C], IC).Or(SMap[C2])());
+      if ((Val | Val2) == Target && Val != 0 && Val2 != 0) {
+        Results.push_back(Builder(I, IC).Or(I2)());
       }
-      if ((C->Val ^ C2->Val) == Target) {
-        Results.push_back(Builder(SMap[C], IC).Xor(SMap[C2])());
+      if ((Val ^ Val2) == Target && Val != Target && Val2 != Target) {
+        Results.push_back(Builder(I, IC).Xor(I2)());
       }
     }
   }
@@ -851,26 +821,142 @@ std::vector<Inst *> IOSynthesize(llvm::APInt Target, std::set<Inst *> LHSConsts,
   return Results;
 }
 
+std::map<Inst *, size_t> CountUses(Inst *I) {
+  std::vector<Inst *> Stack{I};
+  std::set<Inst *> Visited;
+  std::map<Inst *, size_t> Count;
+  while (!Stack.empty()) {
+    auto *I = Stack.back();
+    Stack.pop_back();
+    if (Visited.count(I)) {
+      continue;
+    }
+    Visited.insert(I);
+    for (auto *U : I->Ops) {
+      if (U->K == Inst::Var) {
+        Count[U]++;
+      }
+      Stack.push_back(U);
+    }
+  }
+  return Count;
+}
+
+// // Filter candidates to rule out NOPs as much as possible
+// std::vector<Inst *> FilterCand(std::vector<Inst *> Cands,
+// const std::vector<std::pair<Inst *, llvm::APInt>> &ConstMap) {
+//   return Cands;
+//   std::vector<Inst *> Results;
+//   for (auto &&C : Cands) {
+//     std::map<Inst *, size_t> VarCount = CountUses(C);
+
+//     C->Print();
+//     for (auto &[I, Count] : VarCount) {
+//       llvm::errs() << I->Name << " " << Count << "\t";
+//     }
+//     llvm::errs() << "\n\n";
+
+
+//     bool hasDupe = false;
+//     for (auto &[_, Count] : VarCount) {
+//       if (Count > 4) {
+//         hasDupe = true;
+//         break;
+//       }
+//     }
+//     if (hasDupe) {
+//       continue;
+//     }
+
+//     Results.push_back(C);
+//   }
+//   return Results;
+// }
+
 std::vector<std::vector<Inst *>>
-InferSpecialConstExprsAllSym(std::vector<Inst *> RHS, std::set<Inst *>
-                             LHS, std::map<Inst *, Inst *> SMap,
+InferSpecialConstExprsAllSym(std::vector<Inst *> RHS,
+const std::vector<std::pair<Inst *, llvm::APInt>> &ConstMap,
                              InstContext &IC, int depth = 3) {
   std::vector<std::vector<Inst *>> Results;
   for (auto R : RHS) {
-    Results.push_back(IOSynthesize(R->Val, LHS, SMap, IC, depth, false));
+    auto Cands = IOSynthesize(R->Val, ConstMap, IC, depth, false);
+    Results.push_back(Cands);
     std::sort(Results.back().begin(), Results.back().end(),
               [](Inst *A, Inst *B) { return instCount(A) < instCount(B);});
   }
   return Results;
 }
 
+using ConstMapT = std::vector<std::pair<Inst *, llvm::APInt>>;
+
+std::pair<ConstMapT, ParsedReplacement>
+AugmentForSymDB(ParsedReplacement Original, InstContext &IC) {
+  auto Input = Clone(Original, IC);
+  std::vector<std::pair<Inst *, llvm::APInt>> ConstMap;
+  if (Input.Mapping.LHS->DemandedBits.getBitWidth() == Input.Mapping.LHS->Width &&
+    !Input.Mapping.LHS->DemandedBits.isAllOnesValue()) {
+    auto DB = Input.Mapping.LHS->DemandedBits;
+    auto SymDFVar = IC.createVar(DB.getBitWidth(), "symDF_DB");
+    // SymDFVar->Name = "symDF_DB";
+
+    SymDFVar->KnownOnes = llvm::APInt(DB.getBitWidth(), 0);
+    SymDFVar->KnownZeros = llvm::APInt(DB.getBitWidth(), 0);
+    // SymDFVar->Val = DB;
+
+    Input.Mapping.LHS->DemandedBits.setAllBits();
+    Input.Mapping.RHS->DemandedBits.setAllBits();
+
+    Input.Mapping.LHS = Builder(Input.Mapping.LHS, IC).And(SymDFVar)();
+    Input.Mapping.RHS = Builder(Input.Mapping.RHS, IC).And(SymDFVar)();
+    ConstMap.push_back({SymDFVar, DB});
+  }
+  return {ConstMap, Input};
+}
+
+std::pair<ConstMapT, ParsedReplacement> AugmentForSymKB(ParsedReplacement Original, InstContext &IC) {
+  auto Input = Clone(Original, IC);
+  ConstMapT ConstMap;
+  std::vector<Inst *> Inputs;
+  findVars(Input.Mapping.LHS, Inputs);
+
+  for (auto &&I : Inputs) {
+    auto Width = I->Width;
+    if (I->KnownZeros.getBitWidth() == I->Width &&
+        I->KnownOnes.getBitWidth() == I->Width &&
+        !(I->KnownZeros == 0 && I->KnownOnes == 0)) {
+      if (I->KnownZeros != 0) {
+        Inst *Zeros = IC.createVar(Width, "symDF_K0");
+
+        Inst *AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(Width));
+        Inst *NotZeros = IC.getInst(Inst::Xor, Width,
+                                {Zeros, AllOnes});
+        Inst *VarNotZero = IC.getInst(Inst::Or, Width, {I, NotZeros});
+        Inst *ZeroBits = IC.getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
+        Input.PCs.push_back({ZeroBits, IC.getConst(llvm::APInt(1, 1))});
+        ConstMap.push_back({Zeros, I->KnownZeros});
+        I->KnownZeros = llvm::APInt(I->Width, 0);
+      }
+
+      if (I->KnownOnes != 0) {
+        Inst *Ones = IC.createVar(Width, "symDF_K1");
+        Inst *VarAndOnes = IC.getInst(Inst::And, Width, {I, Ones});
+        Inst *OneBits = IC.getInst(Inst::Eq, 1, {VarAndOnes, Ones});
+        Input.PCs.push_back({OneBits, IC.getConst(llvm::APInt(1, 1))});
+        ConstMap.push_back({Ones, I->KnownOnes});
+        I->KnownOnes = llvm::APInt(I->Width, 0);
+      }
+    }
+  }
+  return {ConstMap, Input};
+}
+
 std::vector<std::vector<Inst *>>
-InferSpecialConstExprsWithConcretes(std::vector<Inst *> RHS, std::set<Inst *>
-                      LHS, std::map<Inst *, Inst *> SMap,
-                             InstContext &IC) {
+InferSpecialConstExprsWithConcretes(std::vector<Inst *> RHS,
+const std::vector<std::pair<Inst *, llvm::APInt>> &ConstMap,
+                             InstContext &IC, int depth = 3) {
   std::vector<std::vector<Inst *>> Results;
   for (auto R : RHS) {
-    auto Cands = IOSynthesize(R->Val, LHS, SMap, IC, 3, true);
+    auto Cands = IOSynthesize(R->Val, ConstMap, IC, depth, true);
     std::vector<Inst *> Filtered;
     for (auto Cand : Cands) {
       if (Cand->K != Inst::Const) {
@@ -883,12 +969,12 @@ InferSpecialConstExprsWithConcretes(std::vector<Inst *> RHS, std::set<Inst *>
 }
 
 std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
-                                           std::set<Inst *> LHSConsts, InstContext &IC,
+                                           std::set<Inst *> AtomicComps, InstContext &IC,
                                            size_t NumInsts = 1) {
     std::vector<std::vector<Inst *>> Candidates;
 
     std::vector<Inst *> Components;
-    for (auto &&C : LHSConsts) {
+    for (auto &&C : AtomicComps) {
       Components.push_back(C);
       // Components.push_back(Builder(C, IC).BSwap()());
       Components.push_back(Builder(C, IC).LogB()());
@@ -953,21 +1039,26 @@ void findDangerousConstants(Inst *I, std::set<Inst *> &Results) {
 
 // Assuming the input has leaves pruned and preconditions weakened
 ParsedReplacement SuccessiveSymbolize(InstContext &IC,
-                            Solver *S, ParsedReplacement Input, bool &Changed) {
+                            Solver *S, ParsedReplacement Input, bool &Changed,
+                            std::vector<std::pair<Inst *, llvm::APInt>> ConstMap = {}) {
 
   // Print first successful result and exit, no result sorting.
-
   // Prelude
 
-  auto Fresh = Clone(Input, IC);
+  auto Fresh = Input;
+  size_t ticks = std::clock();
   auto Refresh = [&] (auto Msg) {
+    // Input = Clone(Fresh, IC);
     Input = Fresh;
     if (DebugLevel > 2) {
-      llvm::errs() << "POST " << Msg << "\n";
+      auto now = std::clock();
+      llvm::errs() << "POST " << Msg << " - " << (now - ticks)*1000/CLOCKS_PER_SEC << " ms\n";
+      ticks = now;
     }
     Changed = true;
-    return Fresh;
   };
+
+  bool Nested = !ConstMap.empty();
 
   auto LHSConsts = findConcreteConsts(Input.Mapping.LHS);
 
@@ -1042,13 +1133,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       return Clone;
     }
 
-    if (Advanced) {
-      Clone = SymKBPreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-    }
-
 //    Clone = DFPreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
 //    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
 //      return Clone;
@@ -1060,13 +1144,15 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   // Step 1.5 : Direct symbolize, simple rel constraints on LHS
 
-  std::vector<std::pair<Inst *, llvm::APInt>> CMap;
-
   for (auto &&C : LHSConsts) {
-    CMap.push_back({SymConstMap[C], C->Val});
+    ConstMap.push_back({SymConstMap[C], C->Val});
   }
-
-  auto Relations = InferPotentialRelations(CMap, IC, Input);
+  auto CEX = GetCEX(Result, IC, S);
+  if (Nested) {
+    CEX = {};
+    // FIXME : Figure out how to get CEX for symbolic dataflow
+  }
+  auto Relations = InferPotentialRelations(ConstMap, IC, Input, CEX);
 
   std::map<Inst *, Inst *> JustLHSSymConstMap;
 
@@ -1077,6 +1163,8 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   auto Copy = Replace(Input, IC, JustLHSSymConstMap);
   for (auto &&R : Relations) {
     Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+    // Copy.print(llvm::errs(), true);
+    // llvm::errs() << "\n";
     auto Clone = Verify(Copy, IC, S);
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
@@ -1101,22 +1189,46 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
-
   }
+
   Refresh("All LHS Constraints");
 
-
-  auto ConstantLimits = InferConstantLimits(CMap, IC, Input);
-
+  auto ConstantLimits = InferConstantLimits(ConstMap, IC, Input, CEX);
 
   // Step 3 : Special RHS constant exprs, no constants
 
   if (!RHSFresh.empty()) {
 
+  std::vector<std::vector<Inst *>> UnitaryCandidates =
+    InferSpecialConstExprsAllSym(RHSFresh, ConstMap, IC, /*depth*/0);
+
+  if (!UnitaryCandidates.empty()) {
+
+    // if (DebugLevel > 4) {
+    //   llvm::errs() << "Rels " << Relations.size() << "\n";
+    //   llvm::errs() << "Unitary candidates: " << UnitaryCandidates[0].size() << "\n";
+    // }
+
+    for (auto &&R : Relations) {
+      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+
+      auto Clone = FirstValidCombination(Input, RHSFresh, UnitaryCandidates,
+                                    InstCache, IC, S, SymCS, true, false, false);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
+      }
+      Input.PCs.pop_back();
+    }
+    Refresh("Unitary cands, rel constraints");
+  }
+
   std::vector<std::vector<Inst *>> SimpleCandidates =
-    InferSpecialConstExprsAllSym(RHSFresh, LHSConsts, SymConstMap, IC);
+    InferSpecialConstExprsAllSym(RHSFresh, ConstMap, IC, /*depth=*/ 4);
 
   if (!SimpleCandidates.empty()) {
+    if (DebugLevel > 4) {
+      llvm::errs() << "InferSpecialConstExprsAllSym candidates: " << SimpleCandidates[0].size() << "\n";
+    }
     auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
                                        InstCache, IC, S, SymCS,
                                        true, false, false);
@@ -1124,18 +1236,21 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       return Clone;
     }
   }
-
   Refresh("Special expressions, no constants");
-
 
   // Step 4 : Enumerated expressions
 
   std::set<Inst *> Components;
-  for (auto C : LHSConsts) {
-    Components.insert(SymConstMap[C]);
+  for (auto C : ConstMap) {
+    Components.insert(C.first);
   }
 
   auto EnumeratedCandidates = Enumerate(RHSFresh, Components, IC);
+  //   if (DebugLevel > 4) {
+  //   llvm::errs() << "RHSFresh: " << RHSFresh.size() << "\n";
+  //   llvm::errs() << "Components: " << Components.size() << "\n";
+  //   llvm::errs() << "EnumeratedCandidates: " << EnumeratedCandidates[0].size() << "\n";
+  // }
 
   if (!EnumeratedCandidates.empty()) {
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
@@ -1146,7 +1261,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Refresh("Enumerated cands, no constraints");
 
     // Enumerated Expressions with some relational constraints
-    if (CMap.size() == 2) {
+    if (ConstMap.size() == 2) {
+      // llvm::errs() << "Relations: " << Relations.size() << "\n";
+      // llvm::errs() << "Guesses: " << EnumeratedCandidates[0].size() << "\n";
+
       for (auto &&R : Relations) {
         Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
 
@@ -1167,13 +1285,15 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   if (RHSFresh.size() == 1) {
     EnumeratedCandidatesTwoInsts = Enumerate(RHSFresh, Components, IC, 2);
 
+    // llvm::errs() << "Guesses: " << EnumeratedCandidatesTwoInsts[0].size() << "\n";
+
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
                                   InstCache, IC, S, SymCS, true, false, false);
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
       return Clone;
     }
-    Refresh("Enumerated 2 insts");
   }
+  Refresh("Enumerated 2 insts for single RHS const cases");
 
   if (!EnumeratedCandidates.empty()) {
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
@@ -1184,13 +1304,13 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   }
   Refresh("Enumerated exprs with constraints");
 
-  if (RHSFresh.size() == 1) {
+  if (RHSFresh.size() == 1 && !Nested) {
     // Enumerated Expressions with some relational constraints
-    if (CMap.size() == 2) {
+    if (ConstMap.size() == 2) {
       for (auto &&R : Relations) {
         Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
         auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
-                                           InstCache, IC, S, SymCS, true, true, false);
+                                           InstCache, IC, S, SymCS, true, false, false);
         if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
           return Clone;
         }
@@ -1203,9 +1323,9 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   // Step 4.8 : Special RHS constant exprs, with constants
 
   std::vector<std::vector<Inst *>> SimpleCandidatesWithConsts =
-    InferSpecialConstExprsWithConcretes(RHSFresh, LHSConsts, SymConstMap, IC);
+    InferSpecialConstExprsWithConcretes(RHSFresh, ConstMap, IC, /*depth=*/ 2);
 
-  if (!SimpleCandidatesWithConsts.empty()) {
+  if (!SimpleCandidatesWithConsts.empty() && !Nested) {
     auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
                                         InstCache, IC, S, SymCS,
                                         true, false, false);
@@ -1218,7 +1338,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   // Enumerated exprs with constraints
 
-  if (!EnumeratedCandidates.empty()) {
+  if (!EnumeratedCandidates.empty() && !Nested) {
     for (auto &&R : Relations) {
       Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
 
@@ -1245,7 +1365,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
 
       auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
-                                         InstCache, IC, S, SymCS, true, true, true);
+                                         InstCache, IC, S, SymCS, true, false, false);
       if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
         return Clone;
       }
@@ -1257,7 +1377,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   // Step 5.5 : Simple exprs with constraints
 
-  if (!SimpleCandidatesWithConsts.empty()) {
+  if (!SimpleCandidatesWithConsts.empty() && !Nested) {
     auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
                                        InstCache, IC, S, SymCS, false, true, true);
     if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
@@ -1279,23 +1399,23 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Refresh("Simple cands+consts with constraints and relations");
   }
 
-  {
-    if (!RHSFresh.empty()) {
-      std::vector<std::vector<Inst *>> SimpleCandidatesMoreInsts =
-        InferSpecialConstExprsAllSym(RHSFresh, LHSConsts, SymConstMap, IC, /*depth =*/ 5);
+  // {
+  //   if (!RHSFresh.empty()) {
+  //     std::vector<std::vector<Inst *>> SimpleCandidatesMoreInsts =
+  //       InferSpecialConstExprsAllSym(RHSFresh, ConstMap, IC, /*depth =*/ 5);
 
-      if (!SimpleCandidates.empty()) {
-        auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesMoreInsts,
-                                          InstCache, IC, S, SymCS,
-                                          true, false, false);
-        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-          return Clone;
-        }
-      }
+  //     if (!SimpleCandidates.empty()) {
+  //       auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesMoreInsts,
+  //                                         InstCache, IC, S, SymCS,
+  //                                         true, false, false);
+  //       if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+  //         return Clone;
+  //       }
+  //     }
 
-      Refresh("Special expressions, no constants");
-    }
-  }
+  //     Refresh("Special expressions, no constants");
+  //   }
+  // }
 
   if (!EnumeratedCandidates.empty()) {
     for (auto &&R : ConstantLimits) {
@@ -1339,96 +1459,80 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
     Refresh("Constant limit constraints on LHS");
   }
+
   if (SymbolicDF) {
+  bool canTrySymDB = false;
+  bool canTrySymKB = false;
+
   Refresh("PUSH SYMDF_DB");
-  if (Input.Mapping.LHS->DemandedBits.getBitWidth() == Input.Mapping.LHS->Width &&
-      !Input.Mapping.LHS->DemandedBits.isAllOnesValue()) {
-    auto DB = Input.Mapping.LHS->DemandedBits;
-    auto SymDFVar = IC.getConst(DB);
-    SymDFVar->Name = "SYMDF_DB";
-
-    SymDFVar->KnownOnes = llvm::APInt(DB.getBitWidth(), 0);
-    SymDFVar->KnownZeros = llvm::APInt(DB.getBitWidth(), 0);
-    SymDFVar->Val = DB;
-
-    auto LHS = Input.Mapping.LHS;
-    auto RHS = Input.Mapping.RHS;
-
-    Input.Mapping.LHS->DemandedBits.setAllBits();
-    Input.Mapping.RHS->DemandedBits.setAllBits();
-
-    Input.Mapping.LHS = Builder(Input.Mapping.LHS, IC).And(SymDFVar)();
-    Input.Mapping.RHS = Builder(Input.Mapping.RHS, IC).And(SymDFVar)();
-
+  auto [SymDBConstMap, Augmented] = AugmentForSymDB(Input, IC);
+  canTrySymDB = !SymDBConstMap.empty();
+  if (canTrySymDB) {
     bool SymDFChanged = false;
-    auto Generalized = SuccessiveSymbolize(IC, S, Input, SymDFChanged);
+    // Augmented.print(llvm::errs(), true);
+    auto Clone = Verify(Augmented, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      // Symbolic demanded bits can be unconstrained
+      return Clone;
+    }
 
+    auto Generalized = SuccessiveSymbolize(IC, S, Augmented, SymDFChanged, SymDBConstMap);
     if (SymDFChanged) {
       return Generalized;
-    } else {
-      Input.Mapping.LHS = LHS;
-      Input.Mapping.RHS = RHS;
-      Input.Mapping.LHS->DemandedBits = DB;
-      Input.Mapping.RHS->DemandedBits = DB;
     }
   }
   Refresh("POP SYMDF_DB");
+
   Refresh("PUSH SYMDF_KB");
   {
-    // Find good examples and test
-    std::vector<Inst *> Inputs;
-    findVars(Input.Mapping.LHS, Inputs);
+    auto [SymKBConstMap, Augmented] = AugmentForSymKB(Input, IC);
+    canTrySymKB = !SymKBConstMap.empty();
 
-    std::map<Inst *, APInt> KnownZero, KnownOne;
-    auto PCs = Input.PCs;
-
-    for (auto &&I : Inputs) {
-      auto Width = I->Width;
-
-      if (I->KnownZeros.getBitWidth() == I->Width &&
-          I->KnownOnes.getBitWidth() == I->Width &&
-          !(I->KnownZeros == 0 && I->KnownOnes == 0)) {
-        KnownZero[I] = I->KnownZeros;
-        KnownOne[I] = I->KnownOnes;
-
-        if (I->KnownZeros != 0) {
-          Inst *Zeros = IC.getConst(I->KnownZeros);
-          Zeros->Name = "SYMDF_K0";
-          Inst *AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(Width));
-          Inst *NotZeros = IC.getInst(Inst::Xor, Width,
-                                  {Zeros, AllOnes});
-          Inst *VarNotZero = IC.getInst(Inst::Or, Width, {I, NotZeros});
-          Inst *ZeroBits = IC.getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
-          Input.PCs.push_back({ZeroBits, IC.getConst(llvm::APInt(1, 1))});
-          I->KnownZeros = llvm::APInt(I->Width, 0);
-        }
-
-        if (I->KnownOnes != 0) {
-          Inst *Ones = IC.getConst(I->KnownOnes);
-          Ones->Name = "SYMDF_K1";
-          Inst *VarAndOnes = IC.getInst(Inst::And, Width, {I, Ones});
-          Inst *OneBits = IC.getInst(Inst::Eq, 1, {VarAndOnes, Ones});
-          Input.PCs.push_back({OneBits, IC.getConst(llvm::APInt(1, 1))});
-          I->KnownOnes = llvm::APInt(I->Width, 0);
-        }
-      }
+    auto Clone = Verify(Augmented, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      // Symbolic known bits can be unconstrained
+      return Clone;
     }
 
-    if (!KnownZero.empty() || !KnownOne.empty()) {
+    if (canTrySymKB) {
       bool SymDFChanged = false;
-      auto Generalized = SuccessiveSymbolize(IC, S, Input, SymDFChanged);
+      auto Generalized = SuccessiveSymbolize(IC, S, Augmented,
+      SymDFChanged, SymKBConstMap);
       if (SymDFChanged) {
         return Generalized;
-      } else {
-        Input.PCs = PCs;
-        for (auto &&I : Inputs) {
-          I->KnownZeros = KnownZero[I];
-          I->KnownOnes = KnownOne[I];
-        }
       }
     }
   }
   Refresh("POP SYMDF_KB");
+
+
+
+  if (canTrySymDB && canTrySymKB) {
+    Refresh("PUSH SYMDF_KB_DB");
+    auto [CM1, Aug1] = AugmentForSymDB(Input, IC);
+    auto [CM2, Aug2] = AugmentForSymKB(Aug1, IC);
+    bool SymDFChanged = false;
+
+    // Aug2.print(llvm::errs(), true);
+
+    for (auto P : CM1) {
+      CM2.push_back(P);
+    }
+
+    auto Clone = Verify(Aug2, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      // Symbolic db+kb can be unconstrained
+      // very unlikely? test if needed
+      return Clone;
+    }
+
+    auto Generalized = SuccessiveSymbolize(IC, S, Aug2, SymDFChanged, CM2);
+    if (SymDFChanged) {
+      return Generalized;
+    }
+    Refresh("POP SYMDF_KB_DB");
+  }
+
   }
 
   Refresh("END");
