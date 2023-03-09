@@ -63,6 +63,12 @@ public:
   UNOP(BitWidth) UNOP(CtPop)
 #undef UNOP
 
+  Builder Flip() {
+    auto L = I;
+    auto AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(L->Width));
+    return Builder(IC.getInst(Inst::Xor, L->Width, {L, AllOnes}), IC);
+  }
+
 #define UNOPW(K)                                                 \
   Builder K(size_t W) {                                          \
     auto L = I;                                                  \
@@ -121,6 +127,7 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC);
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
 ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S);
+// bool IsValid(ParsedReplacement Input, InstContext &IC, Solver *S);
 
 std::map<Inst *, llvm::APInt> findOneConstSet(ParsedReplacement Input, const std::set<Inst *> &SymCS, InstContext &IC, Solver *S);
 

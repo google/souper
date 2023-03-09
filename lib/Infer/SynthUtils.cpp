@@ -67,23 +67,48 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
   return In;
 }
 
+// bool IsValid(ParsedReplacement Input, InstContext &IC, Solver *S) {
+//   if (Input.PCs.empty()) {
+//     SynthesisContext SC{IC, S->getSMTLIBSolver(), Input.Mapping.LHS, nullptr,
+//                 Input.PCs,Input.BPCs, false, 15};
+//     std::vector<Inst *> Vars;
+//     findVars(Input.Mapping.LHS, Vars);
+
+//     PruningManager Pruner(SC, Vars, 0);
+//     Pruner.init();
+
+//     if (Pruner.isInfeasible(Input.Mapping.RHS, 0)) {
+//       return false;
+//     }
+//   }
+
+//   bool IsValid;
+//   if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, IsValid, nullptr)) {
+//     llvm::errs() << EC.message() << '\n';
+//   }
+//   return IsValid;
+// }
+
 //std::map <Inst *, llvm::APInt> ConstantSynthesis
 
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
 ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
-  SynthesisContext SC{IC, S->getSMTLIBSolver(), Input.Mapping.LHS, nullptr,
-              Input.PCs,Input.BPCs, false, 15};
-  std::vector<Inst *> Vars;
-  findVars(Input.Mapping.LHS, Vars);
 
-  PruningManager Pruner(SC, Vars, 0);
-  Pruner.init();
+  if (Input.PCs.empty()) {
+    SynthesisContext SC{IC, S->getSMTLIBSolver(), Input.Mapping.LHS, nullptr,
+                Input.PCs,Input.BPCs, false, 15};
+    std::vector<Inst *> Vars;
+    findVars(Input.Mapping.LHS, Vars);
 
-  if (Pruner.isInfeasible(Input.Mapping.RHS, 0)) {
-    Input.Mapping.LHS = nullptr;
-    Input.Mapping.RHS = nullptr;
-    return Input;
+    PruningManager Pruner(SC, Vars, 0);
+    Pruner.init();
+
+    if (Pruner.isInfeasible(Input.Mapping.RHS, 0)) {
+      Input.Mapping.LHS = nullptr;
+      Input.Mapping.RHS = nullptr;
+      return Input;
+    }
   }
 
   Input = Clone(Input, IC);

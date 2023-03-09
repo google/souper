@@ -544,6 +544,9 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   case Inst::UAddSat:
   case Inst::SSubSat:
   case Inst::USubSat:
+  case Inst::KnownOnesP:
+  case Inst::KnownZerosP:
+  case Inst::DemandedMask:
     MinOps = MaxOps = 2;
     break;
 
@@ -597,6 +600,7 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
     break;
   case Inst::FShl:
   case Inst::FShr:
+  case Inst::RangeP:
     MaxOps = MinOps = 3;
     break;
 
@@ -660,6 +664,9 @@ bool Parser::typeCheckInst(Inst::Kind IK, unsigned &Width,
   case Inst::Slt:
   case Inst::Ule:
   case Inst::Sle:
+  case Inst::KnownOnesP:
+  case Inst::KnownZerosP:
+  case Inst::RangeP:
     ExpectedWidth = 1;
     break;
 

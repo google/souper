@@ -359,6 +359,37 @@ private:
       unsigned Width = L->getWidth();
       return klee::ConstantExpr::create(Width, Width);
     }
+
+    case Inst::KnownOnesP: {
+      auto VarAndOnes = klee::AndExpr::create(get(Ops[0]), get(Ops[1]));
+      return klee::EqExpr::create(VarAndOnes, get(Ops[1]));
+    }
+    case Inst::KnownZerosP: {
+      auto NotZeros = klee::NotExpr::create(get(Ops[1]));
+      auto VarNotZero = klee::OrExpr::create(get(Ops[0]), NotZeros);
+      return klee::EqExpr::create(VarNotZero, NotZeros);
+    }
+    case Inst::RangeP: {
+      auto Var = get(Ops[0]);
+      auto Lower = get(Ops[1]);
+      auto Upper = get(Ops[2]);
+      auto GELower = klee::SgeExpr::create(Var, Lower);
+      auto LTUpper = klee::SltExpr::create(Var, Upper);
+      auto Ordinary = klee::AndExpr::create(GELower, LTUpper);
+
+      auto GEUpper = klee::SgeExpr::create(Var, Upper);
+      auto LTLower = klee::SltExpr::create(Var, Lower);
+      auto Wrapped = klee::OrExpr::create(GEUpper, LTLower);
+
+      auto Cond = klee::SgtExpr::create(Upper, Lower);
+
+      return klee::SelectExpr::create(Cond, Ordinary, Wrapped);
+    }
+
+    case Inst::DemandedMask: {
+      return klee::AndExpr::create(get(Ops[0]), get(Ops[1]));
+    }
+
     case Inst::FShl:
     case Inst::FShr: {
       unsigned IWidth = I->Width;

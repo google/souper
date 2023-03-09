@@ -437,6 +437,14 @@ const char *Inst::getKindName(Kind K) {
     return "logb";
   case BitWidth:
     return "width";
+  case KnownOnesP:
+    return "knownones";
+  case KnownZerosP:
+    return "knownzeros";
+  case RangeP:
+    return "range";
+  case DemandedMask:
+    return "demandedmask";
   case FShl:
     return "fshl";
   case FShr:
@@ -533,6 +541,10 @@ Inst::Kind Inst::getKind(std::string Name) {
                    .Case("ctlz", Inst::Ctlz)
                    .Case("logb", Inst::LogB)
                    .Case("width", Inst::BitWidth)
+                   .Case("knownones", Inst::KnownOnesP)
+                   .Case("knownzeros", Inst::KnownZerosP)
+                   .Case("range", Inst::RangeP)
+                   .Case("demandedmask", Inst::DemandedMask)
                    .Case("fshl", Inst::FShl)
                    .Case("fshr", Inst::FShr)
                    .Case("sadd.with.overflow", Inst::SAddWithOverflow)

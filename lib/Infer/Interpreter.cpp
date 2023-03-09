@@ -453,6 +453,18 @@ namespace souper {
       // Is the result always of this width?
     }
 
+    case Inst::KnownOnesP: {
+      auto A = ARG0;
+      return A & ARG1 == A;
+    }
+    case Inst::KnownZerosP: {
+      auto Z = ARG1;
+      return ARG0 | ~Z == Z;
+    }
+    case Inst::DemandedMask: {
+      return ARG0 & ARG1;
+    }
+
     default:
       llvm::report_fatal_error("unimplemented instruction kind " +
                                std::string(Inst::getKindName(Inst->K)) +

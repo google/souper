@@ -127,6 +127,11 @@ struct Inst : llvm::FoldingSetNode {
     ReservedConst,
     ReservedInst,
 
+    KnownOnesP,
+    KnownZerosP,
+    RangeP,
+    DemandedMask,
+
     None,
 } Kind;
 
