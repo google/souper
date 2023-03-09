@@ -314,21 +314,21 @@ std::vector<Inst *> InferPotentialRelations(
               .Eq(llvm::APInt(XI->Width, 0))());
           }
 
-          if (C2 && (XC & YC).eq(ZC)) {
-            Results.push_back(Builder(XI, IC).And(YI).Eq(ZI)());
-          }
+          // if (C2 && (XC & YC).eq(ZC)) {
+          //   Results.push_back(Builder(XI, IC).And(YI).Eq(ZI)());
+          // }
 
-          if (C2 && (XC | YC).eq(ZC)) {
-            Results.push_back(Builder(XI, IC).Or(YI).Eq(ZI)());
-          }
+          // if (C2 && (XC | YC).eq(ZC)) {
+          //   Results.push_back(Builder(XI, IC).Or(YI).Eq(ZI)());
+          // }
 
-          if (C2 && (XC ^ YC).eq(ZC)) {
-            Results.push_back(Builder(XI, IC).Xor(YI).Eq(ZI)());
-          }
+          // if (C2 && (XC ^ YC).eq(ZC)) {
+          //   Results.push_back(Builder(XI, IC).Xor(YI).Eq(ZI)());
+          // }
 
-          if (C2 && (XC != 0 && YC != 0) && (XC + YC).eq(ZC)) {
-            Results.push_back(Builder(XI, IC).Add(YI).Eq(ZI)());
-          }
+          // if (C2 && (XC != 0 && YC != 0) && (XC + YC).eq(ZC)) {
+          //   Results.push_back(Builder(XI, IC).Add(YI).Eq(ZI)());
+          // }
 
           // TODO Make width independent by using bitwidth insts
           if (C2 && (XC | YC | ~ZC).isAllOnesValue()) {
