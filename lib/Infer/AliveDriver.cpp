@@ -37,7 +37,7 @@ namespace {
 
 static llvm::cl::opt<bool> DisableUndefInput("alive-disable-undef-input",
   llvm::cl::desc("Assume inputs can not be undef (default = false)"),
-  llvm::cl::init(false));
+  llvm::cl::init(true));
 
 static llvm::cl::opt<bool> SkipAliveSolver("alive-skip-solver",
   llvm::cl::desc("Omit Alive solver calls for performance testing (default = false)"),

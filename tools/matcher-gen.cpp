@@ -192,6 +192,14 @@ struct DB : public Constraint {
   std::string Val;
 };
 
+struct SymDB : public Constraint {
+  SymDB(std::string Name_) : Name(Name_) {}
+  std::string print() override {
+    return "util::symdb(DB, I, " + Name + ")";
+  }
+  std::string Name;
+};
+
 struct K0 : public Constraint {
   K0(std::string Name_, std::string Val_) : Name(Name_), Val(Val_) {}
   std::string print() override {
@@ -491,6 +499,11 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms, bool IsRoot = false)
     }
   }
 
+  if (IsRoot && I->K == Inst::Var) {
+    Out << "m_Value(" << Syms[I].front() << ")";
+    return true;
+  }
+
   auto It = MatchOps.find(I->K);
   if (It == MatchOps.end()) {
     llvm::errs() << "\nUnimplemented matcher:" << Inst::getKindName(I->K) << "\n";
@@ -695,18 +708,31 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
   Out << "if (" << F << "match(I, ";
 
   SymbolTable SymsCopy = Syms;
-  if (!GenLHSMatcher(Input.Mapping.LHS, Out, SymsCopy, /*IsRoot = */true)) {
-    return false;
+  if (Input.Mapping.LHS->K == Inst::DemandedMask) {
+    if (!GenLHSMatcher(Input.Mapping.LHS->Ops[0], Out, SymsCopy, /*IsRoot = */true)) {
+      return false;
+    }
+  } else {
+    if (!GenLHSMatcher(Input.Mapping.LHS, Out, SymsCopy, /*IsRoot = */true)) {
+      return false;
+    }
   }
   Out << ")) {\n";
 
 //  Input.print(llvm::errs(), true);
-
+  Inst *DemandedMask = nullptr;
+  if (Input.Mapping.LHS->K == Inst::DemandedMask) {
+    DemandedMask = Input.Mapping.LHS->Ops[1];
+    Syms.Constraints.push_back(new SymDB(Syms[Input.Mapping.LHS->Ops[1]].back()));
+  }
   Syms.GenVarEqConstraints();
   Syms.GenVarPropConstraints(Input.Mapping.LHS, WidthIndependent);
   Syms.GenDomConstraints(Input.Mapping.RHS);
   Syms.GenDFConstraints(Input.Mapping.LHS);
-  if (!Syms.GenPCConstraints(Input.PCs)) return false;
+  if (!Syms.GenPCConstraints(Input.PCs)) {
+    llvm::errs() << "Failed to generate PC constraints.\n";
+    return false;
+  }
   Syms.PrintConstraintsPre(Out);
 
   Out << "  St.hit(" << OptID << ", " << prof  << ");\n";
@@ -715,6 +741,9 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
 
   if (Syms.find(Input.Mapping.RHS) != Syms.end()) {
     Out << "  return " << Syms[Input.Mapping.RHS][0] << ";";
+  } else if (Input.Mapping.RHS->K == Inst::DemandedMask && Syms.find(Input.Mapping.RHS->Ops[0]) != Syms.end()) {
+    assert(DemandedMask == Input.Mapping.RHS->Ops[1] && "DemandedMask mismatch");
+    Out << "  return " << Syms[Input.Mapping.RHS->Ops[0]][0] << ";";
   } else if (Input.Mapping.RHS->K == Inst::Const) {
     Out << "  APInt Result("
         << Input.Mapping.RHS->Width <<", "
@@ -722,8 +751,15 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
     Out << "  return ConstantInt::get(TheContext, Result);";
   } else {
     Out << "  return ";
-    if (!GenRHSCreator(Input.Mapping.RHS, Out, Syms)) {
-      return false;
+    if (Input.Mapping.RHS->K == Inst::DemandedMask) {
+      assert(DemandedMask == Input.Mapping.RHS->Ops[1] && "DemandedMask mismatch");
+      if (!GenRHSCreator(Input.Mapping.RHS->Ops[0], Out, Syms)) {
+        return false;
+      }
+    } else {
+      if (!GenRHSCreator(Input.Mapping.RHS, Out, Syms)) {
+        return false;
+      }
     }
     Out << ";";
   }
@@ -747,11 +783,14 @@ std::string getLLVMInstKindName(Inst::Kind K) {
 bool PCHasVar(const ParsedReplacement &Input) {
   std::vector<Inst *> Vars;
   for (auto &&PC : Input.PCs) {
+    if (PC.LHS->K == Inst::KnownOnesP || PC.LHS->K == Inst::KnownZerosP)
+      continue;
     findVars(PC.LHS, Vars);
     findVars(PC.RHS, Vars);
   }
 
   for (auto &&V : Vars) {
+    // llvm::errs() << V->Name << "\n";
     if (!V->Name.starts_with("sym")) {
       return true;
     }

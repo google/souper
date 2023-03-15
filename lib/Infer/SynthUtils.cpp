@@ -55,15 +55,6 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
     PC.RHS = getInstCopy(PC.RHS, IC, InstCache, BlockCache, &ConstMap, false, false);
   }
 
-  for (auto &V : RHSVars) {
-    if (V->SymOneOf) {
-      InstCache[V->SymOneOf]->SymKnownOnes = InstCache[V];
-    }
-    if (V->SymZeroOf) {
-      InstCache[V->SymZeroOf]->SymKnownZeros = InstCache[V];
-    }
-  }
-
   return In;
 }
 

@@ -1,0 +1,11 @@
+; RUN: %generalize -basic -no-width -souper-debug-level=2 %s > /dev/null 2>%t
+; RUN: %FileCheck %s < %t
+
+%x:i8 = var
+%foo = add %x, 2
+%bar = sub %foo, %x
+infer %bar
+result 2:i8
+; CHECK:(x:i8 + C1:i8) - x
+; CHECK: =>
+; CHECK:C1

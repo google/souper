@@ -1,0 +1,13 @@
+; RUN: %generalize -basic -no-width -souper-debug-level=2 %s > /dev/null 2>%t
+; RUN: %FileCheck %s < %t
+
+%0:i32 = var
+%1:i32 = shl %0, 12:i32
+%2:i32 = lshr %1, 12:i32
+%3:i32 = and 1048575:i32, %0
+cand %2 %3
+
+
+; CHECK: (v0:i32 << C1:i32) >> C1
+; CHECK:   =>
+; CHECK: v0 & (-1 >> C1)

@@ -198,12 +198,7 @@ std::string ReplacementContext::printInstImpl(Inst *I, llvm::raw_ostream &Out,
         if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())
           Out << " (knownBits=" << Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes)
               << ")";
-        if (I->SymKnownZeros) {
-          Out << "(knownZeros=%" << I->SymKnownZeros->Name << ")";
-        }
-        if (I->SymKnownOnes) {
-          Out << "(knownOnes=%" << I->SymKnownOnes->Name << ")";
-        }
+
         if (I->NonNegative)
           Out << " (nonNegative)";
         if (I->Negative)
@@ -1275,10 +1270,6 @@ Inst *souper::getInstCopy(Inst *I, InstContext &IC,
   assert(Copy);
   InstCache[I] = Copy;
   Copy->Name = I->Name;
-  Copy->SymKnownOnes = I->SymKnownOnes;
-  Copy->SymKnownZeros = I->SymKnownZeros;
-  Copy->SymOneOf = I->SymOneOf;
-  Copy->SymZeroOf = I->SymZeroOf;
   return Copy;
 }
 

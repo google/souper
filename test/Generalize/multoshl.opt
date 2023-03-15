@@ -1,0 +1,11 @@
+; RUN: %generalize -basic -no-width -souper-debug-level=2 %s > /dev/null 2>%t
+; RUN: %FileCheck %s < %t
+
+%x:i8 = var
+%y = mul %x, 2
+%z = shl %x, 1
+cand %y %z
+
+; CHECK: x:i8 * C1:i8 (powerOfTwo)
+; CHECK:  =>
+; CHECK: x << logb(C1)
