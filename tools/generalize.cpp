@@ -17,6 +17,7 @@
 #include "souper/Util/DfaUtils.h"
 #include <cstdlib>
 #include <sstream>
+#include <optional>
 
 using namespace llvm;
 using namespace souper;
@@ -125,6 +126,377 @@ bool All(const C &c, F f) {
   return true;
 }
 
+size_t InferWidth(Inst::Kind K, const std::vector<Inst *> &Ops) {
+  switch (K) {
+    case Inst::KnownOnesP:
+    case Inst::KnownZerosP:
+    case Inst::Slt:
+    case Inst::Sle:
+    case Inst::Ult:
+    case Inst::Ule: return 1;
+    default: return Ops[0]->Width;
+  }
+}
+
+struct InfixPrinter {
+  InfixPrinter(ParsedReplacement P_, bool ShowImplicitWidths = true)
+    : P(P_), ShowImplicitWidths(ShowImplicitWidths) {
+    varnum = 0;
+    std::vector<InstMapping> NewPCs;
+    for (auto &&PC : P.PCs) {
+      countUses(PC.LHS);
+      countUses(PC.RHS);
+      if (!registerSymDFVars(PC.LHS)) {
+        NewPCs.push_back(PC);
+      }
+      countUses(P.Mapping.LHS);
+      countUses(P.Mapping.RHS);
+    }
+    P.PCs = NewPCs;
+    registerSymDBVar();
+    registerWidthConstraints();
+  }
+
+  void registerWidthConstraints() {
+    for (auto &&PC : P.PCs) {
+      if (PC.LHS->K == Inst::Eq && PC.LHS->Ops[0]->K == Inst::BitWidth) {
+        // PC.LHS looks like (width %x) == 32
+        WidthConstraints[PC.LHS->Ops[0]->Ops[0]] = PC.LHS->Ops[1]->Val.getZExtValue();
+      }
+    }
+  }
+
+  void registerSymDBVar() {
+    if (P.Mapping.LHS->K == Inst::DemandedMask) {
+      Syms[P.Mapping.LHS->Ops[1]] = "@db";
+      assert(P.Mapping.RHS->K == Inst::DemandedMask && "Expected RHS to be a demanded mask.");
+      assert(P.Mapping.LHS->Ops[1] == P.Mapping.RHS->Ops[1] && "Expected same mask.");
+      P.Mapping.LHS = P.Mapping.LHS->Ops[0];
+      P.Mapping.RHS = P.Mapping.RHS->Ops[0];
+    }
+  }
+
+  bool registerSymDFVars(Inst *I) {
+    if (I->K == Inst::KnownOnesP && I->Ops[0]->K == Inst::Var &&
+      I->Ops[1]->Name.starts_with("sym")) {
+      Syms[I->Ops[1]] = I->Ops[0]->Name + ".k1";
+      // VisitedVars.insert(I->Ops[1]->Name);
+      return true;
+    }
+    if (I->K == Inst::KnownZerosP && I->Ops[0]->K == Inst::Var &&
+      I->Ops[1]->Name.starts_with("sym")) {
+      Syms[I->Ops[1]] = I->Ops[0]->Name + ".k0";
+      // VisitedVars.insert(I->Ops[1]->Name);
+      return true;
+    }
+    return false;
+  }
+
+  void countUses(Inst *I) {
+    for (auto &&Op : I->Ops) {
+      if (Op->K != Inst::Var && Op->K != Inst::Const) {
+        UseCount[Op]++;
+      }
+      countUses(Op);
+    }
+  }
+
+  template<typename Stream>
+  void operator()(Stream &S) {
+    if (!P.PCs.empty()) {
+      printPCs(S);
+      S << "\n  |= \n";
+    }
+    S << printInst(P.Mapping.LHS, S, true);
+    if (!P.Mapping.LHS->DemandedBits.isAllOnesValue()) {
+      S << " (" << "demandedBits="
+       << Inst::getDemandedBitsString(P.Mapping.LHS->DemandedBits)
+       << ")";
+    }
+    S << "\n  =>\n";
+
+    S << printInst(P.Mapping.RHS, S, true) << "\n";
+  }
+
+  template<typename Stream>
+  std::string printInst(Inst *I, Stream &S, bool Root = false) {
+    if (Syms.count(I)) {
+      return Syms[I];
+    }
+
+    // x ^ -1 => ~x
+    if (I->K == Inst::Xor && I->Ops[1]->K == Inst::Const &&
+        I->Ops[1]->Val.isAllOnesValue()) {
+      return "~" + printInst(I->Ops[0], S);
+    }
+    if (I->K == Inst::Xor && I->Ops[0]->K == Inst::Const &&
+        I->Ops[0]->Val.isAllOnesValue()) {
+      return "~" + printInst(I->Ops[1], S);
+    }
+
+
+    if (UseCount[I] > 1) {
+      std::string Name = "var" + std::to_string(varnum++);
+      Syms[I] = Name;
+      S << "let " << Name << " = ";
+    }
+
+    if (I->K == Inst::Const) {
+      if (I->Val.ule(16)) {
+        return I->Val.toString(10, false);
+      } else {
+        return "0x" + I->Val.toString(16, false);
+      }
+    } else if (I->K == Inst::Var) {
+      auto Name = I->Name;
+      if (isDigit(Name[0])) {
+        Name = "x" + Name;
+      }
+      if (I->Name.starts_with("symconst_")) {
+        Name = "C" + I->Name.substr(9);
+      }
+      if (VisitedVars.count(I->Name)) {
+        return Name;
+      } else {
+        VisitedVars.insert(I->Name);
+        Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes);
+
+        std::string Buf;
+        llvm::raw_string_ostream Out(Buf);
+
+        if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())
+          Out << " (knownBits=" << Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes)
+              << ")";
+        if (I->NonNegative)
+          Out << " (nonNegative)";
+        if (I->Negative)
+          Out << " (negative)";
+        if (I->NonZero)
+          Out << " (nonZero)";
+        if (I->PowOfTwo)
+          Out << " (powerOfTwo)";
+        if (I->NumSignBits > 1)
+          Out << " (signBits=" << I->NumSignBits << ")";
+        if (!I->Range.isFullSet())
+          Out << " (range=[" << I->Range.getLower()
+              << "," << I->Range.getUpper() << "))";
+
+        std::string W = ShowImplicitWidths ? ":i" + std::to_string(I->Width) : "";
+
+        if (WidthConstraints.count(I)) {
+          W = ":i" + std::to_string(WidthConstraints[I]);
+        }
+
+        return Name + W + Out.str();
+      }
+    } else {
+      std::string Op;
+      switch (I->K) {
+      case Inst::Add: Op = "+"; break;
+      case Inst::AddNSW: Op = "+nsw"; break;
+      case Inst::AddNUW: Op = "+nuw"; break;
+      case Inst::AddNW: Op = "+nw"; break;
+      case Inst::Sub: Op = "-"; break;
+      case Inst::SubNSW: Op = "-nsw"; break;
+      case Inst::SubNUW: Op = "-nuw"; break;
+      case Inst::SubNW: Op = "-nw"; break;
+      case Inst::Mul: Op = "*"; break;
+      case Inst::MulNSW: Op = "*nsw"; break;
+      case Inst::MulNUW: Op = "*nuw"; break;
+      case Inst::MulNW: Op = "*nw"; break;
+      case Inst::UDiv: Op = "/u"; break;
+      case Inst::SDiv: Op = "/s"; break;
+      case Inst::URem: Op = "\%u"; break;
+      case Inst::SRem: Op = "\%s"; break;
+      case Inst::And: Op = "&"; break;
+      case Inst::Or: Op = "|"; break;
+      case Inst::Xor: Op = "^"; break;
+      case Inst::Shl: Op = "<<"; break;
+      case Inst::ShlNSW: Op = "<<nsw"; break;
+      case Inst::ShlNUW: Op = "<<nuw"; break;
+      case Inst::ShlNW: Op = "<<nw"; break;
+      case Inst::LShr: Op = ">>l"; break;
+      case Inst::AShr: Op = ">>a"; break;
+      case Inst::Eq: Op = "=="; break;
+      case Inst::Ne: Op = "!="; break;
+      case Inst::Ult: Op = "<u"; break;
+      case Inst::Slt: Op = "<s"; break;
+      case Inst::Ule: Op = "<=u"; break;
+      case Inst::Sle: Op = "<=s"; break;
+      default: Op = Inst::getKindName(I->K); break;
+      }
+
+      std::string Result;
+
+      std::vector<Inst *> Ops = I->orderedOps();
+
+      if (Inst::isCommutative(I->K)) {
+        std::sort(Ops.begin(), Ops.end(), [](Inst *A, Inst *B) {
+          if (A->K == Inst::Const) {
+            return false; // c OP expr
+          } else if (B->K == Inst::Const) {
+            return true; // expr OP c
+          } else if (A->K == Inst::Var && B->K != Inst::Var) {
+            return true; // var OP expr
+          } else if (A->K != Inst::Var && B->K == Inst::Var) {
+            return false; // expr OP var
+          } else if (A->K == Inst::Var && B->K == Inst::Var) {
+            return A->Name > B->Name; // Tends to put vars before symconsts
+          } else {
+            return A->K < B->K; // expr OP expr
+          }
+        });
+      }
+
+      if (Ops.size() == 2) {
+        auto Meat = printInst(Ops[0], S) + " " + Op + " " + printInst(Ops[1], S);
+        Result = Root ? Meat : "(" + Meat + ")";
+      } else if (Ops.size() == 1) {
+        Result = Op + "(" + printInst(Ops[0], S) + ")";
+      }
+      else {
+        std::string Ret = Root ? "" : "(";
+        Ret += Op;
+        Ret += " ";
+        for (auto &&Op : Ops) {
+          Ret += printInst(Op, S) + " ";
+        }
+        while (Ret.back() == ' ') {
+          Ret.pop_back();
+        }
+        if (!Root) {
+          Ret += ")";
+        }
+        Result = Ret;
+      }
+      if (UseCount[I] > 1) {
+        S << Result << ";\n";
+        return Syms[I];
+      } else {
+        return Result;
+      }
+    }
+  }
+
+  template<typename Stream>
+  void printPCs(Stream &S) {
+    bool first = true;
+    for (auto &&PC : P.PCs) {
+      // if (PC.LHS->K == Inst::KnownOnesP || PC.LHS->K == Inst::KnownZerosP) {
+      //   continue;
+      // }
+      if (first) {
+        first = false;
+      } else {
+        S << " && \n";
+      }
+      if (PC.RHS->K == Inst::Const && PC.RHS->Val == 0) {
+        S << "!(" << printInst(PC.LHS, S, true) << ")";
+      } else if (PC.RHS->K == Inst::Const && PC.RHS->Val == 1) {
+        S << printInst(PC.LHS, S, true);
+      } else {
+        S << printInst(PC.LHS, S, true) << " == " << printInst(PC.RHS, S);
+      }
+    }
+  }
+
+  ParsedReplacement P;
+  std::set<std::string> VisitedVars;
+  std::map<Inst *, std::string> Syms;
+  size_t varnum;
+  std::map<Inst *, size_t> UseCount;
+  std::map<Inst *, size_t> WidthConstraints;
+  bool ShowImplicitWidths;
+};
+
+struct ShrinkWrap {
+  ShrinkWrap(InstContext &IC, Solver *S, ParsedReplacement Input,
+             size_t TargetWidth = 8) : IC(IC), S(S), Input(Input),
+                                       TargetWidth(TargetWidth) {}
+  InstContext &IC;
+  Solver *S;
+  ParsedReplacement Input;
+  size_t TargetWidth;
+
+  std::map<Inst *, Inst *> InstCache;
+
+  Inst *ShrinkInst(Inst *I) {
+    if (InstCache.count(I)) {
+      return InstCache[I];
+    }
+    if (I->K == Inst::Var) {
+      auto V = IC.createVar(TargetWidth, I->Name);
+      InstCache[I] = V;
+      return V;
+    } else if (I->K == Inst::Const) {
+      if (I->Val.getLimitedValue() == 0) {
+        auto C = IC.getConst(APInt(TargetWidth, 0));
+        InstCache[I] = C;
+        return C;
+      } else if (I->Val.getLimitedValue() == 1) {
+        auto C = IC.getConst(APInt(TargetWidth, 1));
+        InstCache[I] = C;
+        return C;
+      } else if (I->Val.isAllOnesValue()) {
+        auto C = IC.getConst(APInt::getAllOnesValue(TargetWidth));
+        InstCache[I] = C;
+        return C;
+      } else {
+        auto C = IC.createSynthesisConstant(TargetWidth, I->Val.getLimitedValue());
+        InstCache[I] = C;
+        return C;
+      }
+    } else {
+      std::vector<Inst *> Ops;
+      for (auto Op : I->Ops) {
+        Ops.push_back(ShrinkInst(Op));
+      }
+      return IC.getInst(I->K, InferWidth(I->K, Ops), Ops);
+    }
+  }
+
+  std::optional<ParsedReplacement> operator()() {
+    // Find Sext, Zext, Trunc
+    std::vector<Inst *> WidthChangeInsts;
+    findInsts(Input.Mapping.LHS, WidthChangeInsts, [&](Inst *I) {
+      return I->K == Inst::SExt || I->K == Inst::ZExt || I->K == Inst::Trunc;});
+    findInsts(Input.Mapping.RHS, WidthChangeInsts, [&](Inst *I) {
+      return I->K == Inst::SExt || I->K == Inst::ZExt || I->K == Inst::Trunc;});
+
+    // Ignore PC for now
+
+    // This can be relaxed a bit
+    if (!WidthChangeInsts.empty() || Input.Mapping.LHS->Width <= TargetWidth) {
+      return {};
+    }
+
+    // Abort if inputs are of <= Target width
+    std::vector<Inst *> Inputs;
+    findVars(Input.Mapping.LHS, Inputs);
+    for (auto I : Inputs) {
+      if (I->Width <= TargetWidth) {
+        return {};
+      }
+    }
+
+    ParsedReplacement New;
+    New.Mapping.LHS = ShrinkInst(Input.Mapping.LHS);
+    New.Mapping.RHS = ShrinkInst(Input.Mapping.RHS);
+    for (auto PC : Input.PCs) {
+      New.PCs.push_back({ShrinkInst(PC.LHS), ShrinkInst(PC.RHS)});
+    }
+
+    New.print(llvm::errs(), true);
+
+    auto Clone = Verify(New, IC, S);
+    if (Clone.Mapping.LHS) {
+      return Clone;
+    } else {
+      return {};
+    }
+  }
+};
+
 std::vector<Inst *> findConcreteConsts(const ParsedReplacement &Input) {
   std::vector<Inst *> Consts;
   auto Pred = [](Inst *I) {
@@ -142,6 +514,28 @@ std::vector<Inst *> findConcreteConsts(const ParsedReplacement &Input) {
     Result.push_back(C);
   }
   return Result;
+}
+
+std::vector<Inst *> FilterExprsByValue(const std::vector<Inst *> &Exprs,
+  llvm::APInt TargetVal, const std::vector<std::pair<Inst *, llvm::APInt>> &CMap) {
+  std::unordered_map<Inst *, EvalValue> ValueCache;
+  for (auto &&[I, V] : CMap) {
+    ValueCache[I] = EvalValue(V);
+  }
+  std::vector<Inst *> FilteredExprs;
+  ConcreteInterpreter CPos(ValueCache);
+  for (auto &&E : Exprs) {
+    auto Result = CPos.evaluateInst(E);
+    if (!Result.hasValue()) {
+      // Don't want to drop a candidate just because we couldn't evaluate it
+      FilteredExprs.push_back(E);
+    } else {
+      if (Result.getValue() == TargetVal) {
+        FilteredExprs.push_back(E);
+      }
+    }
+  }
+  return FilteredExprs;
 }
 
 std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
@@ -679,7 +1073,10 @@ FirstValidCombination(ParsedReplacement Input,
     Clone.Mapping.RHS = nullptr;
 
     auto SOLVE = [&](ParsedReplacement P) -> bool {
-      // P.print(llvm::errs(), true);
+      // InfixPrinter IP(P);
+      // IP(llvm::errs());
+      // llvm::errs() << "\n";
+
       if (GEN) {
         Clone = Verify(P, IC, S);
         if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
@@ -718,10 +1115,12 @@ FirstValidCombination(ParsedReplacement Input,
       return Clone;
     }
 
-    Copy.Mapping.LHS = Replace(Copy.Mapping.LHS, IC, ReverseMap);
-    Copy.Mapping.RHS = Replace(Copy.Mapping.RHS, IC, ReverseMap);
-    if (SOLVE(Copy)) {
-      return Clone;
+    if (!ReverseMap.empty()) {
+      Copy.Mapping.LHS = Replace(Copy.Mapping.LHS, IC, ReverseMap);
+      Copy.Mapping.RHS = Replace(Copy.Mapping.RHS, IC, ReverseMap);
+      if (SOLVE(Copy)) {
+        return Clone;
+      }
     }
 
   }
@@ -743,12 +1142,19 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
     if (I == ParentConst) {
       continue;
     }
+    if (I->Width != Target.getBitWidth()) {
+      continue;
+    }
     if (!ConstMode) {
-      if (I->Width == Target.getBitWidth() && Val == Target) {
+      if (Val == Target) {
         Results.push_back(I);
       }
+      auto One = llvm::APInt(I->Width, 1);
+      if (One.shl(Val) == Target) {
+        Results.push_back(Builder(IC, One).Shl(I)());
+      }
     } else {
-      if (I->Width == Target.getBitWidth()) {
+      if (ParentConst) {
         Results.push_back(Builder(IC, Target)());
       }
     }
@@ -945,7 +1351,15 @@ const std::vector<std::pair<Inst *, llvm::APInt>> &ConstMap,
   std::vector<std::vector<Inst *>> Results;
   for (auto R : RHS) {
     auto Cands = IOSynthesize(R->Val, ConstMap, IC, depth, false);
-    Results.push_back(Cands);
+    std::set<Inst *> Temp;
+    for (auto C : Cands) {
+      Temp.insert(C);
+    }
+    std::vector<Inst *> DedupedCands;
+    for (auto C : Temp) {
+      DedupedCands.push_back(C);
+    }
+    Results.push_back(DedupedCands);
     std::sort(Results.back().begin(), Results.back().end(),
               [](Inst *A, Inst *B) { return instCount(A) < instCount(B);});
   }
@@ -1112,6 +1526,7 @@ const std::vector<std::pair<Inst *, llvm::APInt>> &ConstMap,
 
 std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
                                            std::set<Inst *> AtomicComps, InstContext &IC,
+                                           const std::vector<std::pair<Inst *, llvm::APInt>> &ConstMap,
                                            size_t NumInsts = 1) {
     std::vector<std::vector<Inst *>> Candidates;
 
@@ -1132,7 +1547,7 @@ std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
     }
 
     for (auto &&Target : RHSConsts) {
-      Candidates.push_back({});
+      std::vector<Inst *> CandsForTarget;
       EnumerativeSynthesis ES;
       auto Guesses = ES.generateExprs(IC, NumInsts, Components,
                                       Target->Width);
@@ -1141,12 +1556,14 @@ std::vector<std::vector<Inst *>> Enumerate(std::vector<Inst *> RHSConsts,
         souper::getConstants(Guess, ConstSet);
         if (!ConstSet.empty()) {
           if (SymbolizeConstSynthesis) {
-            Candidates.back().push_back(Guess);
+            CandsForTarget.push_back(Guess);
           }
         } else {
-          Candidates.back().push_back(Guess);
+          CandsForTarget.push_back(Guess);
         }
       }
+      // Filter by value
+      Candidates.push_back(FilterExprsByValue(CandsForTarget, Target->Val, ConstMap));
     }
     return Candidates;
 }
@@ -1191,6 +1608,25 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   // Print first successful result and exit, no result sorting.
   // Prelude
+  bool Nested = !ConstMap.empty();
+
+  if (!NoWidth && !Nested) {
+    ShrinkWrap Shrink(IC, S, Input, 4);
+    auto Smol = Shrink();
+    if (Smol) {
+      if (DebugLevel > 2) {
+        llvm::errs() << "Shrinked: \n";
+        InfixPrinter P(Smol.value());
+        P(llvm::errs());
+        Smol->print(llvm::errs(), true);
+        llvm::errs() << "\n";
+      }
+      Input = Smol.value();
+
+      // Input.print(llvm::errs(), true);
+
+    }
+  }
 
   auto Fresh = Input;
   size_t ticks = std::clock();
@@ -1205,8 +1641,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Changed = true;
   };
 
-  bool Nested = !ConstMap.empty();
-
   auto LHSConsts = findConcreteConsts(Input.Mapping.LHS);
 
   auto RHSConsts = findConcreteConsts(Input.Mapping.RHS);
@@ -1220,7 +1654,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     RHSConsts.erase(C);
   }
 
-
   ParsedReplacement Result = Input;
 
   std::map<Inst *, Inst *> SymConstMap;
@@ -1232,10 +1665,9 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   int i = 1;
   for (auto I : LHSConsts) {
     auto Name = "symconst_" + std::to_string(i++);
-    if (I->Name != "") {
-      Name = I->Name;
-    }
     SymConstMap[I] = IC.createVar(I->Width, Name);
+
+    // llvm::errs() << "HERE : " << Name << '\t' << SymConstMap[I]->Name << "\n";
 
     InstCache[I] = SymConstMap[I];
     SymCS[SymConstMap[I]] = I->Val;
@@ -1245,9 +1677,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       continue;
     }
     auto Name = "symconst_" + std::to_string(i++);
-    if (I->Name != "") {
-      Name = I->Name;
-    }
     SymConstMap[I] = IC.createVar(I->Width, Name);
     InstCache[I] = SymConstMap[I];
 //    SymCS[SymConstMap[I]] = I->Val;
@@ -1267,6 +1696,9 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   std::map<Inst *, Inst *> CommonConsts;
   for (auto C : LHSConsts) {
     CommonConsts[C] = SymConstMap[C];
+
+    llvm::errs() << "Common Const: " << C->Val << "\t" << SymConstMap[C]->Name << "\n";
+
   }
   if (!CommonConsts.empty()) {
     Result = Replace(Result, IC, CommonConsts);
@@ -1369,11 +1801,11 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   }
 
   std::vector<std::vector<Inst *>> SimpleCandidates =
-    InferSpecialConstExprsAllSym(RHSFresh, ConstMap, IC, /*depth=*/ 4);
+    InferSpecialConstExprsAllSym(RHSFresh, ConstMap, IC, /*depth=*/ 3);
 
   if (!SimpleCandidates.empty()) {
     if (DebugLevel > 4) {
-      llvm::errs() << "InferSpecialConstExprsAllSym candidates: " << SimpleCandidates[0].size() << "\n";
+      llvm::errs() << "InferSpecialConstExprsAllSym candidates: " << SimpleCandidates[0].size() << " x " << ConstantLimits.size() << "\n";
     }
     auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
                                        InstCache, IC, S, SymCS,
@@ -1403,7 +1835,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     Components.insert(C.first);
   }
 
-  auto EnumeratedCandidates = Enumerate(RHSFresh, Components, IC);
+  auto EnumeratedCandidates = Enumerate(RHSFresh, Components, IC, ConstMap);
   //   if (DebugLevel > 4) {
   //   llvm::errs() << "RHSFresh: " << RHSFresh.size() << "\n";
   //   llvm::errs() << "Components: " << Components.size() << "\n";
@@ -1417,6 +1849,30 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       return Clone;
     }
     Refresh("Enumerated cands, no constraints");
+  }
+
+
+  // Step 4.75 : Enumerate 2 instructions when single RHS Constant.
+  std::vector<std::vector<Inst *>> EnumeratedCandidatesTwoInsts;
+  if (RHSFresh.size() == 1) {
+    EnumeratedCandidatesTwoInsts = Enumerate(RHSFresh, Components, IC, ConstMap, 2);
+
+    // llvm::errs() << "Guesses: " << EnumeratedCandidatesTwoInsts[0].size() << "\n";
+
+    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
+                                  InstCache, IC, S, SymCS, true, false, false);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
+  }
+  Refresh("Enumerated 2 insts for single RHS const cases");
+
+  if (!EnumeratedCandidates.empty()) {
+    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                  InstCache, IC, S, SymCS, false, true, true);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
+    }
 
     // Enumerated Expressions with some relational constraints
     if (ConstMap.size() == 2) {
@@ -1435,36 +1891,15 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       }
     }
     Refresh("Relational constraints for enumerated cands.");
-  }
 
-
-  // Step 4.75 : Enumerate 2 instructions when single RHS Constant.
-  std::vector<std::vector<Inst *>> EnumeratedCandidatesTwoInsts;
-  if (RHSFresh.size() == 1) {
-    EnumeratedCandidatesTwoInsts = Enumerate(RHSFresh, Components, IC, 2);
-
-    // llvm::errs() << "Guesses: " << EnumeratedCandidatesTwoInsts[0].size() << "\n";
-
-    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
-                                  InstCache, IC, S, SymCS, true, false, false);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      return Clone;
-    }
-  }
-  Refresh("Enumerated 2 insts for single RHS const cases");
-
-  if (!EnumeratedCandidates.empty()) {
-    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                  InstCache, IC, S, SymCS, false, true, true);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      return Clone;
-    }
   }
   Refresh("Enumerated exprs with constraints");
 
   if (RHSFresh.size() == 1 && !Nested) {
     // Enumerated Expressions with some relational constraints
     if (ConstMap.size() == 2) {
+      llvm::errs() << "Enum2 : " << EnumeratedCandidatesTwoInsts.back().size()
+                   << "\tRels: " << Relations.size() << "\n";
       for (auto &&R : Relations) {
         Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
         auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
@@ -1699,24 +2134,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   return Input;
 }
 
-size_t InferWidth(Inst::Kind K, const std::vector<Inst *> &Ops) {
-  switch (K) {
-    case Inst::LShr:
-    case Inst::Shl:
-    case Inst::And:
-    case Inst::Or:
-    case Inst::Xor:
-    case Inst::Sub:
-    case Inst::Mul:
-    case Inst::Add: return Ops[0]->Width;
-    case Inst::Slt:
-    case Inst::Sle:
-    case Inst::Ult:
-    case Inst::Ule: return 1;
-    default: llvm_unreachable((std::string("Unimplemented ") + Inst::getKindName(K)).c_str());
-  }
-}
-
 Inst *CloneInst(InstContext &IC, Inst *I, std::map<Inst *, Inst *> &Vars) {
   if (I->K == Inst::Var) {
     return Vars[I];
@@ -1796,6 +2213,7 @@ ParsedReplacement InstantiateWidthChecks(InstContext &IC,
   return Input;
 }
 
+
 ParsedReplacement ReduceBasic(InstContext &IC,
                               Solver *S, ParsedReplacement Input) {
   Reducer R(IC, S);
@@ -1815,245 +2233,6 @@ ParsedReplacement ReduceBasic(InstContext &IC,
   Input = R.ReducePCsToDF(Input);
   return Input;
 }
-
-struct InfixPrinter {
-  InfixPrinter(ParsedReplacement P_) : P(P_) {
-    varnum = 0;
-    std::vector<InstMapping> NewPCs;
-    for (auto &&PC : P.PCs) {
-      countUses(PC.LHS);
-      countUses(PC.RHS);
-      if (!registerSymDFVars(PC.LHS)) {
-        NewPCs.push_back(PC);
-      }
-      countUses(P.Mapping.LHS);
-      countUses(P.Mapping.RHS);
-    }
-    P.PCs = NewPCs;
-    registerSymDBVar();
-  }
-
-  void registerSymDBVar() {
-    if (P.Mapping.LHS->K == Inst::DemandedMask) {
-      Syms[P.Mapping.LHS->Ops[1]] = "@db";
-      assert(P.Mapping.RHS->K == Inst::DemandedMask && "Expected RHS to be a demanded mask.");
-      assert(P.Mapping.LHS->Ops[1] == P.Mapping.RHS->Ops[1] && "Expected same mask.");
-      P.Mapping.LHS = P.Mapping.LHS->Ops[0];
-      P.Mapping.RHS = P.Mapping.RHS->Ops[0];
-    }
-  }
-
-  bool registerSymDFVars(Inst *I) {
-    if (I->K == Inst::KnownOnesP && I->Ops[0]->K == Inst::Var &&
-      I->Ops[1]->Name.starts_with("sym")) {
-      Syms[I->Ops[1]] = I->Ops[0]->Name + ".k1";
-      // VisitedVars.insert(I->Ops[1]->Name);
-      return true;
-    }
-    if (I->K == Inst::KnownZerosP && I->Ops[0]->K == Inst::Var &&
-      I->Ops[1]->Name.starts_with("sym")) {
-      Syms[I->Ops[1]] = I->Ops[0]->Name + ".k0";
-      // VisitedVars.insert(I->Ops[1]->Name);
-      return true;
-    }
-    return false;
-  }
-
-  void countUses(Inst *I) {
-    for (auto &&Op : I->Ops) {
-      if (Op->K != Inst::Var && Op->K != Inst::Const) {
-        UseCount[Op]++;
-      }
-      countUses(Op);
-    }
-  }
-
-  template<typename Stream>
-  void operator()(Stream &S) {
-    if (!P.PCs.empty()) {
-      printPCs(S);
-      S << "\n  |= \n";
-    }
-    S << printInst(P.Mapping.LHS, S, true);
-    if (!P.Mapping.LHS->DemandedBits.isAllOnesValue()) {
-      S << " (" << "demandedBits="
-       << Inst::getDemandedBitsString(P.Mapping.LHS->DemandedBits)
-       << ")";
-    }
-    S << "\n  =>\n";
-
-    S << printInst(P.Mapping.RHS, S, true);
-  }
-
-  template<typename Stream>
-  std::string printInst(Inst *I, Stream &S, bool Root = false) {
-    if (Syms.count(I)) {
-      return Syms[I];
-    }
-
-    // x ^ -1 => ~x
-    if (I->K == Inst::Xor && I->Ops[1]->K == Inst::Const &&
-        I->Ops[1]->Val.isAllOnesValue()) {
-      return "~" + printInst(I->Ops[0], S);
-    }
-    if (I->K == Inst::Xor && I->Ops[0]->K == Inst::Const &&
-        I->Ops[0]->Val.isAllOnesValue()) {
-      return "~" + printInst(I->Ops[1], S);
-    }
-
-
-    if (UseCount[I] > 1) {
-      std::string Name = "var" + std::to_string(varnum++);
-      Syms[I] = Name;
-      S << "let " << Name << " = ";
-    }
-
-    if (I->K == Inst::Const) {
-      if (I->Val.ule(16)) {
-        return I->Val.toString(10, false);
-      } else {
-        return "0x" + I->Val.toString(16, false);
-      }
-    } else if (I->K == Inst::Var) {
-      auto Name = I->Name;
-      if (isDigit(Name[0])) {
-        Name = "x" + Name;
-      }
-      if (I->Name.starts_with("symconst_")) {
-        Name = "C" + I->Name.substr(9);
-      }
-      if (VisitedVars.count(I->Name)) {
-        return Name;
-      } else {
-        VisitedVars.insert(I->Name);
-        Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes);
-
-        std::string Buf;
-        llvm::raw_string_ostream Out(Buf);
-
-        if (I->KnownZeros.getBoolValue() || I->KnownOnes.getBoolValue())
-          Out << " (knownBits=" << Inst::getKnownBitsString(I->KnownZeros, I->KnownOnes)
-              << ")";
-        if (I->NonNegative)
-          Out << " (nonNegative)";
-        if (I->Negative)
-          Out << " (negative)";
-        if (I->NonZero)
-          Out << " (nonZero)";
-        if (I->PowOfTwo)
-          Out << " (powerOfTwo)";
-        if (I->NumSignBits > 1)
-          Out << " (signBits=" << I->NumSignBits << ")";
-        if (!I->Range.isFullSet())
-          Out << " (range=[" << I->Range.getLower()
-              << "," << I->Range.getUpper() << "))";
-        return Name + ":i" + std::to_string(I->Width) + Out.str();
-      }
-    } else {
-      std::string Op;
-      switch (I->K) {
-      case Inst::Add: Op = "+"; break;
-      case Inst::Sub: Op = "-"; break;
-      case Inst::Mul: Op = "*"; break;
-      case Inst::UDiv: Op = "/u"; break;
-      case Inst::SDiv: Op = "/s"; break;
-      case Inst::URem: Op = "\%u"; break;
-      case Inst::SRem: Op = "\%s"; break;
-      case Inst::And: Op = "&"; break;
-      case Inst::Or: Op = "|"; break;
-      case Inst::Xor: Op = "^"; break;
-      case Inst::Shl: Op = "<<"; break;
-      case Inst::LShr: Op = ">>"; break;
-      case Inst::AShr: Op = ">>"; break;
-      case Inst::Eq: Op = "=="; break;
-      case Inst::Ne: Op = "!="; break;
-      case Inst::Ult: Op = "<u"; break;
-      case Inst::Slt: Op = "<s"; break;
-      case Inst::Ule: Op = "<=u"; break;
-      case Inst::Sle: Op = "<=s"; break;
-      default: Op = Inst::getKindName(I->K); break;
-      }
-
-      std::string Result;
-
-      std::vector<Inst *> Ops = I->orderedOps();
-
-      if (Inst::isCommutative(I->K)) {
-        std::sort(Ops.begin(), Ops.end(), [](Inst *A, Inst *B) {
-          if (A->K == Inst::Const) {
-            return false; // c OP expr
-          } else if (B->K == Inst::Const) {
-            return true; // expr OP c
-          } else if (A->K == Inst::Var && B->K != Inst::Var) {
-            return true; // var OP expr
-          } else if (A->K != Inst::Var && B->K == Inst::Var) {
-            return false; // expr OP var
-          } else if (A->K == Inst::Var && B->K == Inst::Var) {
-            return A->Name > B->Name; // Tends to put vars before symconsts
-          } else {
-            return A->K < B->K; // expr OP expr
-          }
-        });
-      }
-
-      if (Ops.size() == 2) {
-        auto Meat = printInst(Ops[0], S) + " " + Op + " " + printInst(Ops[1], S);
-        Result = Root ? Meat : "(" + Meat + ")";
-      } else if (Ops.size() == 1) {
-        Result = Op + "(" + printInst(Ops[0], S) + ")";
-      }
-      else {
-        std::string Ret = Root ? "" : "(";
-        Ret += Op;
-        Ret += " ";
-        for (auto &&Op : Ops) {
-          Ret += printInst(Op, S) + " ";
-        }
-        while (Ret.back() == ' ') {
-          Ret.pop_back();
-        }
-        if (!Root) {
-          Ret += ")";
-        }
-        Result = Ret;
-      }
-      if (UseCount[I] > 1) {
-        S << Result << ";\n";
-        return Syms[I];
-      } else {
-        return Result;
-      }
-    }
-  }
-
-  template<typename Stream>
-  void printPCs(Stream &S) {
-    bool first = true;
-    for (auto &&PC : P.PCs) {
-      // if (PC.LHS->K == Inst::KnownOnesP || PC.LHS->K == Inst::KnownZerosP) {
-      //   continue;
-      // }
-      if (first) {
-        first = false;
-      } else {
-        S << " && \n";
-      }
-      if (PC.RHS->K == Inst::Const && PC.RHS->Val == 0) {
-        S << "!(" << printInst(PC.LHS, S, true) << ")";
-      } else if (PC.RHS->K == Inst::Const && PC.RHS->Val == 1) {
-        S << printInst(PC.LHS, S, true);
-      } else {
-        S << printInst(PC.LHS, S, true) << " == " << printInst(PC.RHS, S);
-      }
-    }
-  }
-
-  ParsedReplacement P;
-  std::set<std::string> VisitedVars;
-  std::map<Inst *, std::string> Syms;
-  size_t varnum;
-  std::map<Inst *, size_t> UseCount;
-};
 
 template<typename Stream>
 Stream &operator<<(Stream &S, InfixPrinter IP) {
@@ -2120,7 +2299,7 @@ int main(int argc, char **argv) {
 
         if (DebugLevel > 1) {
           llvm::errs() << "\n\tInput:\n\n";
-          llvm::errs() << InfixPrinter(Input) << "\n\n\tGeneralized:\n\n" << InfixPrinter(Result);
+          llvm::errs() << InfixPrinter(Input) << "\n\tGeneralized:\n\n" << InfixPrinter(Result, NoWidth);
         }
       }
       continue;

@@ -197,6 +197,14 @@ private:
         identifiers[x] = ptr;
         return ptr;
       }
+      if (x.find("var_sym") != std::string::npos) {
+        auto i = std::make_unique<IR::Input>(t, std::move(x));
+        auto ptr = i.get();
+        F.addInput(std::move(i));
+        // FIXME: force non poison
+        identifiers[x] = ptr;
+        return ptr;
+      }
       auto i = std::make_unique<IR::Input>(t, std::move(x));
       auto ptr = i.get();
       F.addInput(std::move(i));
@@ -626,6 +634,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
   switch (I->K) {
     case souper::Inst::Var: {
       ExprCache[I] = Builder.var(t, Name);
+      // llvm::errs() << "Var: " << Name << "\n";
       if (IsLHS) {
         Inputs.push_back({I, ExprCache[I]});
       }

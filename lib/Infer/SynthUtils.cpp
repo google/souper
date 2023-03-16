@@ -86,25 +86,26 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
 // Returns clone if verified, nullptrs if not
 ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
 
-  if (Input.PCs.empty()) {
-    SynthesisContext SC{IC, S->getSMTLIBSolver(), Input.Mapping.LHS, nullptr,
-                Input.PCs,Input.BPCs, false, 15};
-    std::vector<Inst *> Vars;
-    findVars(Input.Mapping.LHS, Vars);
+  // if (Input.PCs.empty()) {
+  //   SynthesisContext SC{IC, S->getSMTLIBSolver(), Input.Mapping.LHS, nullptr,
+  //               Input.PCs,Input.BPCs, false, 15};
+  //   std::vector<Inst *> Vars;
+  //   findVars(Input.Mapping.LHS, Vars);
 
-    PruningManager Pruner(SC, Vars, 0);
-    Pruner.init();
+  //   PruningManager Pruner(SC, Vars, 0);
+  //   Pruner.init();
 
-    if (Pruner.isInfeasible(Input.Mapping.RHS, 0)) {
-      Input.Mapping.LHS = nullptr;
-      Input.Mapping.RHS = nullptr;
-      return Input;
-    }
-  }
+  //   if (Pruner.isInfeasible(Input.Mapping.RHS, 0)) {
+  //     Input.Mapping.LHS = nullptr;
+  //     Input.Mapping.RHS = nullptr;
+  //     return Input;
+  //   }
+  // }
 
   Input = Clone(Input, IC);
   std::set<Inst *> ConstSet;
   souper::getConstants(Input.Mapping.RHS, ConstSet);
+  souper::getConstants(Input.Mapping.LHS, ConstSet);
   if (!ConstSet.empty()) {
     std::map <Inst *, llvm::APInt> ResultConstMap;
     ConstantSynthesis CS;
