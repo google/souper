@@ -540,7 +540,7 @@ std::vector<Inst *> FilterExprsByValue(const std::vector<Inst *> &Exprs,
 
 std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
                         const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
-                        ValueCache CEX) {
+                        std::vector<ValueCache> CEXs) {
   std::unordered_map<Inst *, EvalValue> ValueCache;
   for (auto &&[I, V] : CMap) {
     ValueCache[I] = EvalValue(V);
@@ -552,33 +552,40 @@ std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
   // }
 
   ConcreteInterpreter CPos(ValueCache);
-  ConcreteInterpreter CNeg(CEX);
+  std::vector<ConcreteInterpreter> CNegs;
+  for (auto &&CEX : CEXs) {
+    CNegs.push_back(CEX);
+  }
 
   std::vector<Inst *> FilteredRelations;
   for (auto &&R : Relations) {
     auto Result = CPos.evaluateInst(R);
-    EvalValue ResultNeg = CEX.empty() ? EvalValue() : CNeg.evaluateInst(R);
+    // Positive example
+    if (Result.hasValue() && !Result.getValue().isAllOnesValue()) {
+      continue;
+    }
 
-    // llvm::errs() << "P: " << Result.getValue().toString(2, false) << ' ' << Result.getValue().isAllOnesValue() << "\n";
-    // llvm::errs() << "N: " << ResultNeg.getValue().toString(2, false) << ' ' << ResultNeg.getValue().isNullValue()<< "\n";
-
-    if (Result.hasValue() && Result.getValue().isAllOnesValue()) {
-      // llvm::errs() << "Keeping "<< "\n";
-      if (ResultNeg.hasValue()) {
-        if (ResultNeg.getValue().isNullValue()) {
-          FilteredRelations.push_back(R);
-        }
-      } else {
-        FilteredRelations.push_back(R);
+    // Negative examples
+    bool foundUnsound = false;
+    for (auto &&CNeg : CNegs) {
+      auto ResultNeg = CNeg.evaluateInst(R);
+      if (ResultNeg.hasValue() && !ResultNeg.getValue().isNullValue()) {
+        foundUnsound = true;
+        break;
       }
     }
+    if (foundUnsound) {
+      continue;
+    }
+    FilteredRelations.push_back(R);
   }
   return FilteredRelations;
 }
 
 std::vector<Inst *> InferConstantLimits(
   const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
-        InstContext &IC, const ParsedReplacement &Input, ValueCache CEX) {
+        InstContext &IC, const ParsedReplacement &Input,
+        std::vector<ValueCache> CEXs) {
   std::vector<Inst *> Results;
   if (!FindConstantRelations) {
     return Results;
@@ -642,7 +649,7 @@ std::vector<Inst *> InferConstantLimits(
       }
     }
   }
-  return FilterRelationsByValue(Results, CMap, CEX);
+  return FilterRelationsByValue(Results, CMap, CEXs);
 }
 
 // Enforce commutativity to prune search space
@@ -675,7 +682,7 @@ std::vector<Inst *> BitFuncs(Inst *I, InstContext &IC) {
 
 std::vector<Inst *> InferPotentialRelations(
         const std::vector<std::pair<Inst *, llvm::APInt>> &CMap,
-        InstContext &IC, const ParsedReplacement &Input, ValueCache CEX,
+        InstContext &IC, const ParsedReplacement &Input, std::vector<ValueCache> CEXs,
         bool LatticeChecks = false) {
   std::vector<Inst *> Results;
   if (!FindConstantRelations) {
@@ -861,7 +868,7 @@ std::vector<Inst *> InferPotentialRelations(
   //   Results.push_back(R);
   // }
   // llvm::errs() << "HERE: " << Results.size() << '\n';
-  Results = FilterRelationsByValue(Results, CMap, CEX);
+  Results = FilterRelationsByValue(Results, CMap, CEXs);
 
   if (LatticeChecks) {
     // TODO Less brute force
@@ -1726,12 +1733,12 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   for (auto &&C : LHSConsts) {
     ConstMap.push_back({SymConstMap[C], C->Val});
   }
-  auto CEX = GetCEX(Result, IC, S);
+  auto CounterExamples = GetMultipleCEX(Result, IC, S, 3);
   if (Nested) {
-    CEX = {};
+    CounterExamples = {};
     // FIXME : Figure out how to get CEX for symbolic dataflow
   }
-  auto Relations = InferPotentialRelations(ConstMap, IC, Input, CEX, Nested);
+  auto Relations = InferPotentialRelations(ConstMap, IC, Input, CounterExamples, Nested);
 
   std::map<Inst *, Inst *> JustLHSSymConstMap;
 
@@ -1771,7 +1778,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   Refresh("All LHS Constraints");
 
-  auto ConstantLimits = InferConstantLimits(ConstMap, IC, Input, CEX);
+  auto ConstantLimits = InferConstantLimits(ConstMap, IC, Input, CounterExamples);
 
   // Step 3 : Special RHS constant exprs, no constants
 

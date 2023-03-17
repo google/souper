@@ -228,4 +228,24 @@ ValueCache GetCEX(const ParsedReplacement &Input, InstContext &IC, Solver *S) {
   }
 }
 
+std::vector<ValueCache> GetMultipleCEX(ParsedReplacement Input, InstContext &IC, Solver *S, size_t MaxCount = 2) {
+  std::vector<ValueCache> Results;
+  while (MaxCount--) {
+    auto &&Result = GetCEX(Input, IC, S);
+    if (Result.empty()) {
+      return Results;
+    }
+    for (auto &&CEX : Result) {
+      if (!CEX.second.hasValue()) {
+        return Results;
+      }
+    }
+    Results.push_back(Result);
+    for (auto &&CEX : Result) {
+      Input.PCs.push_back({Builder(IC, CEX.first).Ne(CEX.second.getValue())(), IC.getConst(llvm::APInt(1, 1))});
+    }
+  }
+  return Results;
+}
+
 }

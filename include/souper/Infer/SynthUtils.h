@@ -135,5 +135,8 @@ std::vector<std::map<Inst *, llvm::APInt>> findValidConsts(ParsedReplacement Inp
 
 ValueCache GetCEX(const ParsedReplacement &Input, InstContext &IC, Solver *S);
 
+std::vector<ValueCache> GetMultipleCEX(ParsedReplacement Input, InstContext &IC, Solver *S, size_t MaxCount);
+
+
 }
 #endif
