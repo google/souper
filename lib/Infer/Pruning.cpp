@@ -605,7 +605,8 @@ void PruningManager::init() {
     };
   }
 
-  ConcreteInterpreter BlankCI;
+  ValueCache C;
+  ConcreteInterpreter BlankCI(C);
   LHSKnownBitsNoSpec =  KnownBitsAnalysis().findKnownBits(SC.LHS, BlankCI, false);
   LHSMustDemandedBits = MustDemandedBitsAnalysis().findMustDemandedBits(SC.LHS);
   improveMustDemandedBits(LHSMustDemandedBits);

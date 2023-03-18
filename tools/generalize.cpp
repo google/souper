@@ -1603,10 +1603,102 @@ void findDangerousConstants(Inst *I, std::set<Inst *> &Results) {
   }
 }
 
-struct GeneralizationProblem {
-  ParsedReplacement Input;
+size_t BruteForceModelCount(Inst *Pred) {
+  if (Pred->Width >= 8) {
+    llvm::errs() << "Too wide for brute force model counting.\n";
+    return 0;
+  }
 
-};
+  std::vector<Inst *> Inputs;
+  findVars(Pred, Inputs);
+
+  ValueCache Cache;
+  for (auto I : Inputs) {
+    Cache[I] = EvalValue(llvm::APInt(I->Width, 0));
+  }
+
+  auto Update = [&]() {
+    for (auto I : Inputs) {
+      if (Cache[I].getValue() == llvm::APInt(I->Width, -1)) {
+        continue;
+      } else {
+        Cache[I] = EvalValue(Cache[I].getValue() + 1);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  size_t ModelCount = 0;
+
+  do {
+    ConcreteInterpreter CI(Cache);
+    if (CI.evaluateInst(Pred).getValue().getBoolValue()) {
+      ++ModelCount;
+    }
+  } while (Update());
+
+  return ModelCount;
+}
+
+void SortPredsByModelCount(std::vector<Inst *> &Preds) {
+  std::unordered_map<Inst *, size_t> ModelCounts;
+  for (auto P : Preds) {
+    ModelCounts[P] = BruteForceModelCount(P);
+  }
+  std::sort(Preds.begin(), Preds.end(), [&](Inst *A, Inst *B) {
+    return ModelCounts[A] > ModelCounts[B];
+  });
+}
+
+std::optional<ParsedReplacement> VerifyWithRels(InstContext &IC, Solver *S,
+                                 ParsedReplacement Input,
+                                 std::vector<Inst *> &Rels) {
+  std::vector<Inst *> ValidRels;
+
+  ParsedReplacement FirstValidResult = Input;
+
+  for (auto Rel : Rels) {
+    Input.PCs.push_back({Rel, IC.getConst(llvm::APInt(1, 1))});
+    auto Clone = Verify(Input, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      ValidRels.push_back(Rel);
+      FirstValidResult = Clone;
+      if (Rels.size() > 10) {
+        return Clone;
+      }
+    }
+    Input.PCs.pop_back();
+  }
+
+  if (ValidRels.empty()) {
+    return std::nullopt;
+  }
+
+  std::vector<Inst *> Inputs;
+  findVars(Input.Mapping.LHS, Inputs);
+
+  size_t MaxWidth = 0;
+  for (auto I : Inputs) {
+    if (I->Width > MaxWidth) {
+      MaxWidth = I->Width;
+    }
+  }
+
+  if (MaxWidth > 8) {
+    if (DebugLevel > 4) {
+      llvm::errs() << "Too wide for brute force model counting.\n";
+    }
+    // TODO: Use approximate model counting?
+    return FirstValidResult;
+  }
+
+  SortPredsByModelCount(ValidRels);
+  // TODO: Construct WP
+  // For now, return the weakest valid result
+  Input.PCs.push_back({ValidRels[0], IC.getConst(llvm::APInt(1, 1))});
+  return Input;
+}
 
 // Assuming the input has leaves pruned and preconditions weakened
 ParsedReplacement SuccessiveSymbolize(InstContext &IC,
@@ -1747,14 +1839,18 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   }
 
   auto Copy = Replace(Input, IC, JustLHSSymConstMap);
-  for (auto &&R : Relations) {
-    Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-    // Copy.print(llvm::errs(), true);
-    auto Clone = Verify(Copy, IC, S);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      return Clone;
-    }
-    Copy.PCs.pop_back();
+  // for (auto &&R : Relations) {
+  //   Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
+  //   // Copy.print(llvm::errs(), true);
+  //   auto Clone = Verify(Copy, IC, S);
+  //   if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+  //     return Clone;
+  //   }
+  //   Copy.PCs.pop_back();
+  // }
+
+  if (auto RelV = VerifyWithRels(IC, S, Copy, Relations)) {
+    return RelV.value();
   }
 
   Refresh("Direct + simple rel constraints");
