@@ -1020,6 +1020,104 @@ if(s) return Clone;};
   return Clone;
 }
 
+size_t BruteForceModelCount(Inst *Pred) {
+  if (Pred->Width >= 8) {
+    llvm::errs() << "Too wide for brute force model counting.\n";
+    return 0;
+  }
+
+  std::vector<Inst *> Inputs;
+  findVars(Pred, Inputs);
+
+  ValueCache Cache;
+  for (auto I : Inputs) {
+    Cache[I] = EvalValue(llvm::APInt(I->Width, 0));
+  }
+
+  auto Update = [&]() {
+    for (auto I : Inputs) {
+      if (Cache[I].getValue() == llvm::APInt(I->Width, -1)) {
+        continue;
+      } else {
+        Cache[I] = EvalValue(Cache[I].getValue() + 1);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  size_t ModelCount = 0;
+
+  do {
+    ConcreteInterpreter CI(Cache);
+    if (CI.evaluateInst(Pred).getValue().getBoolValue()) {
+      ++ModelCount;
+    }
+  } while (Update());
+
+  return ModelCount;
+}
+
+void SortPredsByModelCount(std::vector<Inst *> &Preds) {
+  std::unordered_map<Inst *, size_t> ModelCounts;
+  for (auto P : Preds) {
+    ModelCounts[P] = BruteForceModelCount(P);
+  }
+  std::sort(Preds.begin(), Preds.end(), [&](Inst *A, Inst *B) {
+    return ModelCounts[A] > ModelCounts[B];
+  });
+}
+
+std::optional<ParsedReplacement> VerifyWithRels(InstContext &IC, Solver *S,
+                                 ParsedReplacement Input,
+                                 std::vector<Inst *> &Rels) {
+  std::vector<Inst *> ValidRels;
+
+  ParsedReplacement FirstValidResult = Input;
+
+  for (auto Rel : Rels) {
+    Input.PCs.push_back({Rel, IC.getConst(llvm::APInt(1, 1))});
+    auto Clone = Verify(Input, IC, S);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      ValidRels.push_back(Rel);
+      FirstValidResult = Clone;
+      if (Rels.size() > 10) {
+        return Clone;
+      }
+    }
+    Input.PCs.pop_back();
+  }
+
+  if (ValidRels.empty()) {
+    return std::nullopt;
+  }
+
+  std::vector<Inst *> Inputs;
+  findVars(Input.Mapping.LHS, Inputs);
+
+  size_t MaxWidth = 0;
+  for (auto I : Inputs) {
+    if (I->Width > MaxWidth) {
+      MaxWidth = I->Width;
+    }
+  }
+
+  if (MaxWidth > 8) {
+    if (DebugLevel > 4) {
+      llvm::errs() << "Too wide for brute force model counting.\n";
+    }
+    // TODO: Use approximate model counting?
+    return FirstValidResult;
+  }
+
+  SortPredsByModelCount(ValidRels);
+  // TODO: Construct WP
+  // For now, return the weakest valid result
+  Input.PCs.push_back({ValidRels[0], IC.getConst(llvm::APInt(1, 1))});
+  return Input;
+}
+
+
 ParsedReplacement
 FirstValidCombination(ParsedReplacement Input,
                       const std::vector<Inst *> &Targets,
@@ -1029,7 +1127,8 @@ FirstValidCombination(ParsedReplacement Input,
                       std::map<Inst *, llvm::APInt> SymCS,
                       bool GEN,
                       bool SDF,
-                      bool DFF) {
+                      bool DFF,
+                      std::vector<Inst *> Rels = {}) {
   std::vector<int> Counts;
   for (auto &&Cand : Candidates) {
     Counts.push_back(Cand.size());
@@ -1087,6 +1186,14 @@ FirstValidCombination(ParsedReplacement Input,
       if (GEN) {
         Clone = Verify(P, IC, S);
         if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+          return true;
+        }
+      }
+
+      if (!Rels.empty()) {
+        auto Result = VerifyWithRels(IC, S, P, Rels);
+        if (Result) {
+          Clone = *Result;
           return true;
         }
       }
@@ -1603,103 +1710,6 @@ void findDangerousConstants(Inst *I, std::set<Inst *> &Results) {
   }
 }
 
-size_t BruteForceModelCount(Inst *Pred) {
-  if (Pred->Width >= 8) {
-    llvm::errs() << "Too wide for brute force model counting.\n";
-    return 0;
-  }
-
-  std::vector<Inst *> Inputs;
-  findVars(Pred, Inputs);
-
-  ValueCache Cache;
-  for (auto I : Inputs) {
-    Cache[I] = EvalValue(llvm::APInt(I->Width, 0));
-  }
-
-  auto Update = [&]() {
-    for (auto I : Inputs) {
-      if (Cache[I].getValue() == llvm::APInt(I->Width, -1)) {
-        continue;
-      } else {
-        Cache[I] = EvalValue(Cache[I].getValue() + 1);
-        return true;
-      }
-    }
-    return false;
-  };
-
-  size_t ModelCount = 0;
-
-  do {
-    ConcreteInterpreter CI(Cache);
-    if (CI.evaluateInst(Pred).getValue().getBoolValue()) {
-      ++ModelCount;
-    }
-  } while (Update());
-
-  return ModelCount;
-}
-
-void SortPredsByModelCount(std::vector<Inst *> &Preds) {
-  std::unordered_map<Inst *, size_t> ModelCounts;
-  for (auto P : Preds) {
-    ModelCounts[P] = BruteForceModelCount(P);
-  }
-  std::sort(Preds.begin(), Preds.end(), [&](Inst *A, Inst *B) {
-    return ModelCounts[A] > ModelCounts[B];
-  });
-}
-
-std::optional<ParsedReplacement> VerifyWithRels(InstContext &IC, Solver *S,
-                                 ParsedReplacement Input,
-                                 std::vector<Inst *> &Rels) {
-  std::vector<Inst *> ValidRels;
-
-  ParsedReplacement FirstValidResult = Input;
-
-  for (auto Rel : Rels) {
-    Input.PCs.push_back({Rel, IC.getConst(llvm::APInt(1, 1))});
-    auto Clone = Verify(Input, IC, S);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      ValidRels.push_back(Rel);
-      FirstValidResult = Clone;
-      if (Rels.size() > 10) {
-        return Clone;
-      }
-    }
-    Input.PCs.pop_back();
-  }
-
-  if (ValidRels.empty()) {
-    return std::nullopt;
-  }
-
-  std::vector<Inst *> Inputs;
-  findVars(Input.Mapping.LHS, Inputs);
-
-  size_t MaxWidth = 0;
-  for (auto I : Inputs) {
-    if (I->Width > MaxWidth) {
-      MaxWidth = I->Width;
-    }
-  }
-
-  if (MaxWidth > 8) {
-    if (DebugLevel > 4) {
-      llvm::errs() << "Too wide for brute force model counting.\n";
-    }
-    // TODO: Use approximate model counting?
-    return FirstValidResult;
-  }
-
-  SortPredsByModelCount(ValidRels);
-  // TODO: Construct WP
-  // For now, return the weakest valid result
-  Input.PCs.push_back({ValidRels[0], IC.getConst(llvm::APInt(1, 1))});
-  return Input;
-}
-
 // Assuming the input has leaves pruned and preconditions weakened
 ParsedReplacement SuccessiveSymbolize(InstContext &IC,
                             Solver *S, ParsedReplacement Input, bool &Changed,
@@ -1890,15 +1900,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     //   llvm::errs() << "FOO: " << UnitaryCandidates[0][0]->Name << "\n";
     // }
 
-    for (auto &&R : Relations) {
-      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-      // Input.print(llvm::errs(), true);
-      auto Clone = FirstValidCombination(Input, RHSFresh, UnitaryCandidates,
-                                    InstCache, IC, S, SymCS, true, false, false);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-      Input.PCs.pop_back();
+    auto Clone = FirstValidCombination(Input, RHSFresh, UnitaryCandidates,
+                                  InstCache, IC, S, SymCS, true, false, false, Relations);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
     }
     Refresh("Unitary cands, rel constraints");
   }
@@ -1917,15 +1922,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       return Clone;
     }
 
-    for (auto &&R : ConstantLimits) {
-      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-      // Input.print(llvm::errs(), true);
-      Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
-                                    InstCache, IC, S, SymCS, true, false, false);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-      Input.PCs.pop_back();
+    Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
+                                  InstCache, IC, S, SymCS, true, false, false, ConstantLimits);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
     }
 
   }
@@ -1982,15 +1982,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       // llvm::errs() << "Relations: " << Relations.size() << "\n";
       // llvm::errs() << "Guesses: " << EnumeratedCandidates[0].size() << "\n";
 
-      for (auto &&R : Relations) {
-        Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-
-        auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                           InstCache, IC, S, SymCS, true, false, false);
-        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-          return Clone;
-        }
-        Input.PCs.pop_back();
+      auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                          InstCache, IC, S, SymCS, true, false, false, Relations);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
       }
     }
     Refresh("Relational constraints for enumerated cands.");
@@ -2003,14 +1998,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     if (ConstMap.size() == 2) {
       llvm::errs() << "Enum2 : " << EnumeratedCandidatesTwoInsts.back().size()
                    << "\tRels: " << Relations.size() << "\n";
-      for (auto &&R : Relations) {
-        Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-        auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
-                                           InstCache, IC, S, SymCS, true, false, false);
-        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-          return Clone;
-        }
-        Input.PCs.pop_back();
+      auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
+                                          InstCache, IC, S, SymCS, true, false, false, Relations);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        return Clone;
       }
     }
   }
@@ -2035,14 +2026,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   // Enumerated exprs with constraints
 
   if (!EnumeratedCandidates.empty() && !Nested) {
-    for (auto &&R : Relations) {
-      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-
-      auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                         InstCache, IC, S, SymCS, true, true, true);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
+    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                        InstCache, IC, S, SymCS, true, true, true, Relations);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
     }
     Refresh("Enumerated exprs with constraints and relations");
   }
@@ -2057,16 +2044,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
     Refresh("Simple cands with constraints");
 
-    for (auto &&R : Relations) {
-      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-
-      auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
-                                         InstCache, IC, S, SymCS, true, false, false);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-
-      Input.PCs.pop_back();
+    Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
+                                        InstCache, IC, S, SymCS, true, false, false, Relations);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
     }
     Refresh("Simple cands with constraints and relations");
   }
@@ -2081,17 +2062,12 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     }
     Refresh("Simple cands+consts with constraints");
 
-    for (auto &&R : Relations) {
-      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-
-      auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
-                                         InstCache, IC, S, SymCS, true, true, true);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-
-      Input.PCs.pop_back();
+    Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
+                                        InstCache, IC, S, SymCS, true, true, true, Relations);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
     }
+
     Refresh("Simple cands+consts with constraints and relations");
   }
 
@@ -2114,29 +2090,19 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   // }
 
   if (!EnumeratedCandidates.empty()) {
-    for (auto &&R : ConstantLimits) {
-      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-
-      auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
-                                         InstCache, IC, S, SymCS, true, true, false);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-      Input.PCs.pop_back();
+    auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
+                                        InstCache, IC, S, SymCS, true, true, false, ConstantLimits);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
     }
     Refresh("Enumerated expressions+consts and constant limits");
   }
 
   if (!SimpleCandidatesWithConsts.empty()) {
-    for (auto &&R : ConstantLimits) {
-      Input.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-
-      auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
-                                         InstCache, IC, S, SymCS, true, false, false);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-      Input.PCs.pop_back();
+    auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
+                                        InstCache, IC, S, SymCS, true, false, false, ConstantLimits);
+    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      return Clone;
     }
     Refresh("Simple expressions+consts and constant limits");
   }
@@ -2145,13 +2111,8 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   {
     auto Copy = Replace(Input, IC, JustLHSSymConstMap);
-    for (auto &&R : ConstantLimits) {
-      Copy.PCs.push_back({R, IC.getConst(llvm::APInt(1, 1))});
-      auto Clone = Verify(Copy, IC, S);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-        return Clone;
-      }
-      Copy.PCs.pop_back();
+    if (auto VRel = VerifyWithRels(IC, S, Copy, ConstantLimits)) {
+      return VRel.value();
     }
     Refresh("Constant limit constraints on LHS");
   }
