@@ -409,6 +409,69 @@ struct InfixPrinter {
   bool ShowImplicitWidths;
 };
 
+using ConstMapT = std::vector<std::pair<Inst *, llvm::APInt>>;
+std::pair<ConstMapT, ParsedReplacement>
+AugmentForSymKBDB(ParsedReplacement Original, InstContext &IC) {
+  auto Input = Clone(Original, IC);
+  std::vector<std::pair<Inst *, llvm::APInt>> ConstMap;
+  if (Input.Mapping.LHS->DemandedBits.getBitWidth() == Input.Mapping.LHS->Width &&
+    !Input.Mapping.LHS->DemandedBits.isAllOnesValue()) {
+    auto DB = Input.Mapping.LHS->DemandedBits;
+    auto SymDFVar = IC.createVar(DB.getBitWidth(), "symDF_DB");
+    // SymDFVar->Name = "symDF_DB";
+
+    SymDFVar->KnownOnes = llvm::APInt(DB.getBitWidth(), 0);
+    SymDFVar->KnownZeros = llvm::APInt(DB.getBitWidth(), 0);
+    // SymDFVar->Val = DB;
+
+    Input.Mapping.LHS->DemandedBits.setAllBits();
+    Input.Mapping.RHS->DemandedBits.setAllBits();
+
+    auto W = Input.Mapping.LHS->Width;
+
+    Input.Mapping.LHS = IC.getInst(Inst::DemandedMask, W, {Input.Mapping.LHS, SymDFVar});
+    Input.Mapping.RHS = IC.getInst(Inst::DemandedMask, W, {Input.Mapping.RHS, SymDFVar});
+
+    ConstMap.push_back({SymDFVar, DB});
+  }
+
+  std::vector<Inst *> Inputs;
+  findVars(Input.Mapping.LHS, Inputs);
+
+  for (auto &&I : Inputs) {
+    auto Width = I->Width;
+    if (I->KnownZeros.getBitWidth() == I->Width &&
+        I->KnownOnes.getBitWidth() == I->Width &&
+        !(I->KnownZeros == 0 && I->KnownOnes == 0)) {
+      if (I->KnownZeros != 0) {
+        Inst *Zeros = IC.createVar(Width, "symDF_K0");
+
+        // Inst *AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(Width));
+        // Inst *NotZeros = IC.getInst(Inst::Xor, Width,
+        //                         {Zeros, AllOnes});
+        // Inst *VarNotZero = IC.getInst(Inst::Or, Width, {I, NotZeros});
+        // Inst *ZeroBits = IC.getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
+        Inst *ZeroBits = IC.getInst(Inst::KnownZerosP, 1, {I, Zeros});
+        Input.PCs.push_back({ZeroBits, IC.getConst(llvm::APInt(1, 1))});
+        ConstMap.push_back({Zeros, I->KnownZeros});
+        I->KnownZeros = llvm::APInt(I->Width, 0);
+      }
+
+      if (I->KnownOnes != 0) {
+        Inst *Ones = IC.createVar(Width, "symDF_K1");
+        // Inst *VarAndOnes = IC.getInst(Inst::And, Width, {I, Ones});
+        // Inst *OneBits = IC.getInst(Inst::Eq, 1, {VarAndOnes, Ones});
+        Inst *OneBits = IC.getInst(Inst::KnownOnesP, 1, {I, Ones});
+        Input.PCs.push_back({OneBits, IC.getConst(llvm::APInt(1, 1))});
+        ConstMap.push_back({Ones, I->KnownOnes});
+        I->KnownOnes = llvm::APInt(I->Width, 0);
+      }
+    }
+  }
+
+  return {ConstMap, Input};
+}
+
 struct ShrinkWrap {
   ShrinkWrap(InstContext &IC, Solver *S, ParsedReplacement Input,
              size_t TargetWidth = 8) : IC(IC), S(S), Input(Input),
@@ -420,58 +483,85 @@ struct ShrinkWrap {
 
   std::map<Inst *, Inst *> InstCache;
 
-  Inst *ShrinkInst(Inst *I) {
+  Inst *ShrinkInst(Inst *I, Inst *Parent, size_t ResultWidth) {
     if (InstCache.count(I)) {
       return InstCache[I];
     }
     if (I->K == Inst::Var) {
-      auto V = IC.createVar(TargetWidth, I->Name);
+      if (I->Width == 1) {
+        return I;
+      }
+      auto V = IC.createVar(ResultWidth, I->Name);
       InstCache[I] = V;
       return V;
     } else if (I->K == Inst::Const) {
+      if (I->Width == 1) {
+        return I;
+      }
+      // Treat 0, 1, and -1 specially
       if (I->Val.getLimitedValue() == 0) {
-        auto C = IC.getConst(APInt(TargetWidth, 0));
+        auto C = IC.getConst(APInt(ResultWidth, 0));
         InstCache[I] = C;
         return C;
       } else if (I->Val.getLimitedValue() == 1) {
-        auto C = IC.getConst(APInt(TargetWidth, 1));
+        auto C = IC.getConst(APInt(ResultWidth, 1));
         InstCache[I] = C;
         return C;
       } else if (I->Val.isAllOnesValue()) {
-        auto C = IC.getConst(APInt::getAllOnesValue(TargetWidth));
+        auto C = IC.getConst(APInt::getAllOnesValue(ResultWidth));
         InstCache[I] = C;
         return C;
       } else {
-        auto C = IC.createSynthesisConstant(TargetWidth, I->Val.getLimitedValue());
+        auto C = IC.createSynthesisConstant(ResultWidth, I->Val.getLimitedValue());
         InstCache[I] = C;
         return C;
       }
     } else {
+
+      if (I->K == Inst::Trunc) {
+        size_t Target = 0;
+        if (I->Ops[0]->Width == I->Width + 1) {
+          Target = ResultWidth + 1;
+        } else if (I->Ops[0]->Width == 2 * I->Width) {
+          Target = ResultWidth * 2;
+        } else {
+          // Maintain ratio
+          Target = ResultWidth * I->Ops[0]->Width * 1.0 / I->Width;
+        }
+        return IC.getInst(Inst::Trunc, ResultWidth, { ShrinkInst(I->Ops[0], I, Target)});
+      }
+      if (I->K == Inst::ZExt || I->K == Inst::SExt) {
+        size_t Target = 0;
+        if (I->Ops[0]->Width == I->Width - 1) {
+          Target = ResultWidth - 1;
+        } else if (I->Ops[0]->Width == I->Width / 2) {
+          Target = ResultWidth / 2;
+        } else {
+          // Maintain ratio
+          Target = ResultWidth * I->Ops[0]->Width * 1.0 / I->Width;
+        }
+        return IC.getInst(I->K, ResultWidth, { ShrinkInst(I->Ops[0], I, Target)});
+      }
+
       std::vector<Inst *> Ops;
       for (auto Op : I->Ops) {
-        Ops.push_back(ShrinkInst(Op));
+        Ops.push_back(ShrinkInst(Op, I, ResultWidth));
       }
       return IC.getInst(I->K, InferWidth(I->K, Ops), Ops);
     }
   }
 
   std::optional<ParsedReplacement> operator()() {
-    // Find Sext, Zext, Trunc
-    std::vector<Inst *> WidthChangeInsts;
-    findInsts(Input.Mapping.LHS, WidthChangeInsts, [&](Inst *I) {
-      return I->K == Inst::SExt || I->K == Inst::ZExt || I->K == Inst::Trunc;});
-    findInsts(Input.Mapping.RHS, WidthChangeInsts, [&](Inst *I) {
-      return I->K == Inst::SExt || I->K == Inst::ZExt || I->K == Inst::Trunc;});
 
-    // Ignore PC for now
+    auto [CM, Aug] = AugmentForSymKBDB(Input, IC);
 
-    // This can be relaxed a bit
-    if (!WidthChangeInsts.empty() || Input.Mapping.LHS->Width <= TargetWidth) {
-      return {};
+    if (!CM.empty()) {
+      Input = Aug;
     }
 
     // Abort if inputs are of <= Target width
     std::vector<Inst *> Inputs;
+    // TODO: Is there a better decision here?
     findVars(Input.Mapping.LHS, Inputs);
     for (auto I : Inputs) {
       if (I->Width <= TargetWidth) {
@@ -480,10 +570,11 @@ struct ShrinkWrap {
     }
 
     ParsedReplacement New;
-    New.Mapping.LHS = ShrinkInst(Input.Mapping.LHS);
-    New.Mapping.RHS = ShrinkInst(Input.Mapping.RHS);
+    New.Mapping.LHS = ShrinkInst(Input.Mapping.LHS, nullptr, TargetWidth);
+    New.Mapping.RHS = ShrinkInst(Input.Mapping.RHS, nullptr, TargetWidth);
     for (auto PC : Input.PCs) {
-      New.PCs.push_back({ShrinkInst(PC.LHS), ShrinkInst(PC.RHS)});
+      New.PCs.push_back({ShrinkInst(PC.LHS, nullptr, TargetWidth),
+                         ShrinkInst(PC.RHS, nullptr, TargetWidth)});
     }
 
     New.print(llvm::errs(), true);
@@ -1480,8 +1571,6 @@ const std::vector<std::pair<Inst *, llvm::APInt>> &ConstMap,
   return Results;
 }
 
-using ConstMapT = std::vector<std::pair<Inst *, llvm::APInt>>;
-
 std::pair<ConstMapT, ParsedReplacement>
 AugmentForSymDB(ParsedReplacement Original, InstContext &IC) {
   auto Input = Clone(Original, IC);
@@ -1556,69 +1645,6 @@ AugmentForSymKB(ParsedReplacement Original, InstContext &IC) {
 
 
 // }
-
-std::pair<ConstMapT, ParsedReplacement>
-AugmentForSymKBDB(ParsedReplacement Original, InstContext &IC) {
-  auto Input = Clone(Original, IC);
-  std::vector<std::pair<Inst *, llvm::APInt>> ConstMap;
-  if (Input.Mapping.LHS->DemandedBits.getBitWidth() == Input.Mapping.LHS->Width &&
-    !Input.Mapping.LHS->DemandedBits.isAllOnesValue()) {
-    auto DB = Input.Mapping.LHS->DemandedBits;
-    auto SymDFVar = IC.createVar(DB.getBitWidth(), "symDF_DB");
-    // SymDFVar->Name = "symDF_DB";
-
-    SymDFVar->KnownOnes = llvm::APInt(DB.getBitWidth(), 0);
-    SymDFVar->KnownZeros = llvm::APInt(DB.getBitWidth(), 0);
-    // SymDFVar->Val = DB;
-
-    Input.Mapping.LHS->DemandedBits.setAllBits();
-    Input.Mapping.RHS->DemandedBits.setAllBits();
-
-    auto W = Input.Mapping.LHS->Width;
-
-    Input.Mapping.LHS = IC.getInst(Inst::DemandedMask, W, {Input.Mapping.LHS, SymDFVar});
-    Input.Mapping.RHS = IC.getInst(Inst::DemandedMask, W, {Input.Mapping.RHS, SymDFVar});
-
-    ConstMap.push_back({SymDFVar, DB});
-  }
-
-  std::vector<Inst *> Inputs;
-  findVars(Input.Mapping.LHS, Inputs);
-
-  for (auto &&I : Inputs) {
-    auto Width = I->Width;
-    if (I->KnownZeros.getBitWidth() == I->Width &&
-        I->KnownOnes.getBitWidth() == I->Width &&
-        !(I->KnownZeros == 0 && I->KnownOnes == 0)) {
-      if (I->KnownZeros != 0) {
-        Inst *Zeros = IC.createVar(Width, "symDF_K0");
-
-        // Inst *AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(Width));
-        // Inst *NotZeros = IC.getInst(Inst::Xor, Width,
-        //                         {Zeros, AllOnes});
-        // Inst *VarNotZero = IC.getInst(Inst::Or, Width, {I, NotZeros});
-        // Inst *ZeroBits = IC.getInst(Inst::Eq, 1, {VarNotZero, NotZeros});
-        Inst *ZeroBits = IC.getInst(Inst::KnownZerosP, 1, {I, Zeros});
-        Input.PCs.push_back({ZeroBits, IC.getConst(llvm::APInt(1, 1))});
-        ConstMap.push_back({Zeros, I->KnownZeros});
-        I->KnownZeros = llvm::APInt(I->Width, 0);
-      }
-
-      if (I->KnownOnes != 0) {
-        Inst *Ones = IC.createVar(Width, "symDF_K1");
-        // Inst *VarAndOnes = IC.getInst(Inst::And, Width, {I, Ones});
-        // Inst *OneBits = IC.getInst(Inst::Eq, 1, {VarAndOnes, Ones});
-        Inst *OneBits = IC.getInst(Inst::KnownOnesP, 1, {I, Ones});
-        Input.PCs.push_back({OneBits, IC.getConst(llvm::APInt(1, 1))});
-        ConstMap.push_back({Ones, I->KnownOnes});
-        I->KnownOnes = llvm::APInt(I->Width, 0);
-      }
-    }
-  }
-
-  return {ConstMap, Input};
-}
-
 
 std::vector<std::vector<Inst *>>
 InferSpecialConstExprsWithConcretes(std::vector<Inst *> RHS,
@@ -2118,78 +2144,25 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   }
 
   if (SymbolicDF) {
-  bool canTrySymDB = false;
-  bool canTrySymKB = false;
-
-  Refresh("PUSH SYMDF_DB");
-  auto [SymDBConstMap, Augmented] = AugmentForSymDB(Input, IC);
-  canTrySymDB = !SymDBConstMap.empty();
-  if (canTrySymDB) {
-    // bool SymDFChanged = false;
-    // Augmented.print(llvm::errs(), true);
-    // auto Clone = Verify(Augmented, IC, S);
-    // if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-    //   // Symbolic demanded bits can be unconstrained
-    //   return Clone;
-    // }
-
-    // auto Generalized = SuccessiveSymbolize(IC, S, Augmented, SymDFChanged, SymDBConstMap);
-    // if (SymDFChanged) {
-    //   return Generalized;
-    // }
-  }
-  Refresh("POP SYMDF_DB");
-
-  Refresh("PUSH SYMDF_KB");
-  {
-    auto [SymKBConstMap, Augmented] = AugmentForSymKB(Input, IC);
-    canTrySymKB = !SymKBConstMap.empty();
-
-    // auto Clone = Verify(Augmented, IC, S);
-    // if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-    //   // Symbolic known bits can be unconstrained
-    //   return Clone;
-    // }
-
-    // if (canTrySymKB) {
-    //   bool SymDFChanged = false;
-    //   // Augmented.print(llvm::errs(), true);
-    //   auto Generalized = SuccessiveSymbolize(IC, S, Augmented,
-    //   SymDFChanged, SymKBConstMap);
-    //   if (SymDFChanged) {
-    //     return Generalized;
-    //   }
-    // }
-  }
-  Refresh("POP SYMDF_KB");
-
-
-
-  if (canTrySymDB && canTrySymKB) {
     Refresh("PUSH SYMDF_KB_DB");
     auto [CM, Aug] = AugmentForSymKBDB(Input, IC);
     // auto [CM2, Aug2] = AugmentForSymKB(Aug1, IC);
-    bool SymDFChanged = false;
+    if (!CM.empty()) {
+      bool SymDFChanged = false;
 
-    // Aug2.print(llvm::errs(), true);
+      auto Clone = Verify(Aug, IC, S);
+      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        // Symbolic db+kb can be unconstrained
+        // very unlikely? test if needed
+        return Clone;
+      }
 
-    // for (auto P : CM1) {
-      // CM2.push_back(P);
-    // }
-
-    auto Clone = Verify(Aug, IC, S);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      // Symbolic db+kb can be unconstrained
-      // very unlikely? test if needed
-      return Clone;
-    }
-
-    auto Generalized = SuccessiveSymbolize(IC, S, Aug, SymDFChanged, CM);
-    if (SymDFChanged) {
-      return Generalized;
+      auto Generalized = SuccessiveSymbolize(IC, S, Aug, SymDFChanged, CM);
+      if (SymDFChanged) {
+        return Generalized;
+      }
     }
     Refresh("POP SYMDF_KB_DB");
-  }
 
   }
 

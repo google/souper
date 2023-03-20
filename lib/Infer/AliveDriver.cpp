@@ -593,6 +593,23 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     return true; // Already translated
   }
 
+  if (I->K == Inst::KnownOnesP) {
+    auto *VarAndOnes = IC.getInst(Inst::And, I->Width, {I->Ops[0], I->Ops[1]});
+    auto *Eq = IC.getInst(Inst::Eq, 1, {VarAndOnes, I->Ops[1]});
+    auto Ret = translateAndCache(Eq, F, ExprCache);
+    ExprCache[I] = ExprCache[Eq];
+    return Ret;
+  }
+  if (I->K == Inst::KnownZerosP) {
+    auto *FlipZeros = IC.getInst(Inst::Xor, I->Width, {I->Ops[1],
+      IC.getConst(llvm::APInt::getAllOnesValue(I->Width))});
+    auto *VarNotZeros = IC.getInst(Inst::Or, I->Width, {I->Ops[0], FlipZeros});
+    auto *Eq = IC.getInst(Inst::Eq, 1, {VarNotZeros, FlipZeros});
+    auto Ret = translateAndCache(Eq, F, ExprCache);
+    ExprCache[I] = ExprCache[Eq];
+    return Ret;
+  }
+
   auto Ops = I->Ops;
   if (souper::Inst::isOverflowIntrinsicMain(I->K)) {
     Ops = Ops[0]->Ops;
@@ -722,6 +739,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     BINOPF(MulNUW, Mul, NUW);
     BINOPF(MulNW, Mul, NSW | IR::BinOp::NUW);
     BINOP(And, And);
+    BINOP(DemandedMask, And);
     BINOP(Or, Or);
     BINOP(Xor, Xor);
     BINOP(Shl, Shl);
