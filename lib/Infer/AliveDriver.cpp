@@ -474,7 +474,6 @@ bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
     size_t correct = 0;
     size_t incorrect = 0;
     for (; types; ++types) {
-
       tv.fixupTypes(types);
       if (auto errs = tv.verify()) {
         if (DebugLevel > 4) {
@@ -534,6 +533,7 @@ bool souper::AliveDriver::verify (Inst *RHS, Inst *RHSAssumptions) {
 
 bool souper::AliveDriver::translateRoot(const souper::Inst *I, const Inst *PC,
                                         IR::Function &F, Cache &ExprCache) {
+
   if (!translateAndCache(I, F, ExprCache)) {
     return false;
   }

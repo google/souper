@@ -68,13 +68,18 @@ public:
     auto AllOnes = IC.getConst(llvm::APInt::getAllOnesValue(L->Width));
     return Builder(IC.getInst(Inst::Xor, L->Width, {L, AllOnes}), IC);
   }
+  Builder Negate() {
+    auto L = I;
+    auto Zero = IC.getConst(llvm::APInt(L->Width, 0));
+    return Builder(IC.getInst(Inst::Sub, L->Width, {Zero, L}), IC);
+  }
 
 #define UNOPW(K)                                                 \
   Builder K(size_t W) {                                          \
     auto L = I;                                                  \
     return Builder(IC.getInst(Inst::K, W, {L}), IC);             \
   }
-  UNOPW(ZExt)
+  UNOPW(ZExt) UNOPW(SExt) UNOPW(Trunc)
 #undef UNOPW
 
 private:

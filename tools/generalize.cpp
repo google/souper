@@ -130,10 +130,13 @@ size_t InferWidth(Inst::Kind K, const std::vector<Inst *> &Ops) {
   switch (K) {
     case Inst::KnownOnesP:
     case Inst::KnownZerosP:
+    case Inst::Eq:
+    case Inst::Ne:
     case Inst::Slt:
     case Inst::Sle:
     case Inst::Ult:
     case Inst::Ule: return 1;
+    case Inst::Select: return Ops[1]->Width;
     default: return Ops[0]->Width;
   }
 }
@@ -238,7 +241,7 @@ struct InfixPrinter {
     if (UseCount[I] > 1) {
       std::string Name = "var" + std::to_string(varnum++);
       Syms[I] = Name;
-      S << "let " << Name << " = ";
+      S << "(let " << Name << " = ";
     }
 
     if (I->K == Inst::Const) {
@@ -370,7 +373,7 @@ struct InfixPrinter {
         Result = Ret;
       }
       if (UseCount[I] > 1) {
-        S << Result << ";\n";
+        S << Result << ")";
         return Syms[I];
       } else {
         return Result;
@@ -472,6 +475,55 @@ AugmentForSymKBDB(ParsedReplacement Original, InstContext &IC) {
   return {ConstMap, Input};
 }
 
+bool typeCheck(Inst *I) {
+  if (I->Ops.size() == 2) {
+    if (I->Ops[0]->Width != I->Ops[1]->Width) {
+      if (DebugLevel > 4) llvm::errs() << "Operands must have the same width\n";
+      return false;
+    }
+  }
+  if (I->K == Inst::Select) {
+    if (I->Ops[0]->Width != 1) {
+      if (DebugLevel > 4) llvm::errs() << "Select condition must be 1 bit wide\n";
+      return false;
+    }
+    if (I->Ops[1]->Width != I->Ops[2]->Width) {
+      if (DebugLevel > 4) llvm::errs() << "Select operands must have the same width\n";
+      return false;
+    }
+  }
+  if (Inst::isCmp(I->K)) {
+    if (I->Width != 1) {
+      if (DebugLevel > 4) llvm::errs() << "Comparison must be 1 bit wide\n";
+      return false;
+    }
+  }
+  return true;
+}
+bool typeCheck(ParsedReplacement &R) {
+  if (R.Mapping.LHS->Width != R.Mapping.RHS->Width) {
+    if (DebugLevel > 4) llvm::errs() << "LHS and RHS must have the same width\n";
+    return false;
+  }
+
+  if (!typeCheck(R.Mapping.LHS)) {
+    return false;
+  }
+  if (!typeCheck(R.Mapping.RHS)) {
+    return false;
+  }
+
+  for (auto &&PC : R.PCs) {
+    if (!typeCheck(PC.LHS)) {
+      return false;
+    }
+    if (!typeCheck(PC.RHS)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 struct ShrinkWrap {
   ShrinkWrap(InstContext &IC, Solver *S, ParsedReplacement Input,
              size_t TargetWidth = 8) : IC(IC), S(S), Input(Input),
@@ -517,17 +569,25 @@ struct ShrinkWrap {
         return C;
       }
     } else {
-
       if (I->K == Inst::Trunc) {
         size_t Target = 0;
+        // llvm::errs() << "HERE: " << I->Width << " " << I->Ops[0]->Width << '\n';
         if (I->Ops[0]->Width == I->Width + 1) {
+          // llvm::errs() << "a\n";
           Target = ResultWidth + 1;
         } else if (I->Ops[0]->Width == 2 * I->Width) {
           Target = ResultWidth * 2;
+          // llvm::errs() << "b\n";
+        } else if (I->Width == 1 && I->Ops[0]->Width != 1) {
+          // llvm::errs() << "c\n";
+          Target = TargetWidth;
+          ResultWidth = 1;
         } else {
           // Maintain ratio
+          // llvm::errs() << "d\n";
           Target = ResultWidth * I->Ops[0]->Width * 1.0 / I->Width;
         }
+        // llvm::errs() << "HERE: " << ResultWidth << " " << Target << '\n';
         return IC.getInst(Inst::Trunc, ResultWidth, { ShrinkInst(I->Ops[0], I, Target)});
       }
       if (I->K == Inst::ZExt || I->K == Inst::SExt) {
@@ -536,11 +596,20 @@ struct ShrinkWrap {
           Target = ResultWidth - 1;
         } else if (I->Ops[0]->Width == I->Width / 2) {
           Target = ResultWidth / 2;
+        } else if (I->Ops[0]->Width == 1) {
+          Target = 1;
         } else {
           // Maintain ratio
           Target = ResultWidth * I->Ops[0]->Width * 1.0 / I->Width;
         }
         return IC.getInst(I->K, ResultWidth, { ShrinkInst(I->Ops[0], I, Target)});
+      }
+
+      if (I->K == Inst::Eq || I->K == Inst::Ne ||
+          I->K == Inst::Ult || I->K == Inst::Slt ||
+          I->K == Inst::Ule || I->K == Inst::Sle ||
+          I->K == Inst::KnownOnesP || I->K == Inst::KnownZerosP) {
+        ResultWidth = TargetWidth;
       }
 
       std::vector<Inst *> Ops;
@@ -567,6 +636,9 @@ struct ShrinkWrap {
       if (I->Width <= TargetWidth) {
         return {};
       }
+      if (!I->Range.isFullSet()) {
+        return {};
+      }
     }
 
     ParsedReplacement New;
@@ -577,8 +649,11 @@ struct ShrinkWrap {
                          ShrinkInst(PC.RHS, nullptr, TargetWidth)});
     }
 
-    New.print(llvm::errs(), true);
-
+    // New.print(llvm::errs(), true);
+    if (!typeCheck(New)) {
+      llvm::errs() << "Type check failed\n";
+      return {};
+    }
     auto Clone = Verify(New, IC, S);
     if (Clone.Mapping.LHS) {
       return Clone;
@@ -721,6 +796,9 @@ std::vector<Inst *> InferConstantLimits(
   for (auto &&[XI, XC] : CMap) {
     for (auto &&[YI, YC] : CMap) {
       if (XI == YI) {
+        continue;
+      }
+      if (XI->Width != YI->Width) {
         continue;
       }
       auto Sum = Builder(XI, IC).Add(YI)();
@@ -1335,14 +1413,40 @@ FirstValidCombination(ParsedReplacement Input,
   return Input;
 }
 
+
+
 std::vector<Inst *> IOSynthesize(llvm::APInt Target,
 const std::vector<std::pair<Inst *, llvm::APInt>> &ConstMap,
 InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) {
 
   std::vector<Inst *> Results;
 
-  // Just symbolic or Concrete constant
+  // Handle width changes
+  for (const auto &[I, Val] : ConstMap) {
+    if (Target.getBitWidth() == I->Width) {
+      continue;
+    }
 
+    llvm::APInt NewTarget = Target;
+    if (Target.getBitWidth() < I->Width) {
+      NewTarget = Target.sgt(0) ? Target.zext(I->Width) : Target.sext(I->Width);
+    } else {
+      NewTarget = Target.trunc(I->Width);
+    }
+    for (auto X : IOSynthesize(NewTarget, ConstMap, IC, Threshold - 1, ConstMode, nullptr)) {
+      ReplacementContext RC;
+      RC.printInst(X, llvm::errs(), true);
+
+      if (X->Width < Target.getBitWidth()) {
+        Results.push_back(Builder(IC, X).Trunc(Target.getBitWidth())());
+      } else {
+        Results.push_back(Builder(IC, X).SExt(Target.getBitWidth())());
+        Results.push_back(Builder(IC, X).ZExt(Target.getBitWidth())());
+      }
+    }
+  }
+
+  // Just symbolic or Concrete constant
   for (const auto &[I, Val] : ConstMap) {
     if (I == ParentConst) {
       continue;
@@ -1353,7 +1457,12 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
     if (!ConstMode) {
       if (Val == Target) {
         Results.push_back(I);
+      } else if (Val == 0 - Target) {
+        Results.push_back(Builder(IC, I).Negate()());
+      } else if (Val == ~Target) {
+        Results.push_back(Builder(IC, I).Flip()());
       }
+
       auto One = llvm::APInt(I->Width, 1);
       if (One.shl(Val) == Target) {
         Results.push_back(Builder(IC, One).Shl(I)());
@@ -1736,6 +1845,20 @@ void findDangerousConstants(Inst *I, std::set<Inst *> &Results) {
   }
 }
 
+// TODO: memoize
+bool hasMultiArgumentPhi(Inst *I) {
+  if (I->K == Inst::Phi) {
+    return I->Ops.size() > 1;
+  }
+  for (auto Op : I->Ops) {
+    if (hasMultiArgumentPhi(Op)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
 // Assuming the input has leaves pruned and preconditions weakened
 ParsedReplacement SuccessiveSymbolize(InstContext &IC,
                             Solver *S, ParsedReplacement Input, bool &Changed,
@@ -1745,8 +1868,8 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   // Prelude
   bool Nested = !ConstMap.empty();
 
-  if (!NoWidth && !Nested) {
-    ShrinkWrap Shrink(IC, S, Input, 4);
+  if (!NoWidth && !Nested && !hasMultiArgumentPhi(Input.Mapping.LHS)) {
+    ShrinkWrap Shrink(IC, S, Input, 8);
     auto Smol = Shrink();
     if (Smol) {
       if (DebugLevel > 2) {
@@ -1760,6 +1883,10 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
       // Input.print(llvm::errs(), true);
 
+    } else {
+      if (DebugLevel > 2) {
+        llvm::errs() << "Shrinking failed\n";
+      }
     }
   }
 
@@ -1832,7 +1959,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   for (auto C : LHSConsts) {
     CommonConsts[C] = SymConstMap[C];
 
-    llvm::errs() << "Common Const: " << C->Val << "\t" << SymConstMap[C]->Name << "\n";
+    // llvm::errs() << "Common Const: " << C->Val << "\t" << SymConstMap[C]->Name << "\n";
 
   }
   if (!CommonConsts.empty()) {
@@ -2022,8 +2149,8 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   if (RHSFresh.size() == 1 && !Nested) {
     // Enumerated Expressions with some relational constraints
     if (ConstMap.size() == 2) {
-      llvm::errs() << "Enum2 : " << EnumeratedCandidatesTwoInsts.back().size()
-                   << "\tRels: " << Relations.size() << "\n";
+      // llvm::errs() << "Enum2 : " << EnumeratedCandidatesTwoInsts.back().size()
+                  //  << "\tRels: " << Relations.size() << "\n";
       auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
                                           InstCache, IC, S, SymCS, true, false, false, Relations);
       if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
@@ -2209,37 +2336,37 @@ Inst *CombinePCs(const std::vector<InstMapping> &PCs, InstContext &IC) {
 
 ParsedReplacement InstantiateWidthChecks(InstContext &IC,
   Solver *S, ParsedReplacement Input) {
-  // TODO: minimize width?
 
-  // Instantiate Alive driver with Symbolic width.
-  AliveDriver Alive(Input.Mapping.LHS,
-  Input.PCs.empty() ? nullptr : CombinePCs(Input.PCs, IC),
-  IC, {}, true);
+  if (!hasMultiArgumentPhi(Input.Mapping.LHS)) {
+    // Instantiate Alive driver with Symbolic width.
+    AliveDriver Alive(Input.Mapping.LHS,
+    Input.PCs.empty() ? nullptr : CombinePCs(Input.PCs, IC),
+    IC, {}, true);
 
-  // Find set of valid widths.
-  if (Alive.verify(Input.Mapping.RHS)) {
-    if (DebugLevel > 4) {
-      llvm::errs() << "WIDTH: Generalized opt is valid for all widths.\n";
+    // Find set of valid widths.
+    if (Alive.verify(Input.Mapping.RHS)) {
+      if (DebugLevel > 4) {
+        llvm::errs() << "WIDTH: Generalized opt is valid for all widths.\n";
+      }
+      // Completely width independent. No width checks needed.
+      return Input;
     }
-    // Completely width independent. No width checks needed.
-    return Input;
-  }
 
-  auto &&ValidTypings = Alive.getValidTypings();
+    auto &&ValidTypings = Alive.getValidTypings();
 
-  if (ValidTypings.empty()) {
-    // Something went wrong, generalized opt is not valid at any width.
-    if (DebugLevel > 4) {
-      llvm::errs() << "WIDTH: Generalized opt is not valid for any width.\n";
+    if (ValidTypings.empty()) {
+      // Something went wrong, generalized opt is not valid at any width.
+      if (DebugLevel > 4) {
+        llvm::errs() << "WIDTH: Generalized opt is not valid for any width.\n";
+      }
+      Input.Mapping.LHS = nullptr;
+      Input.Mapping.RHS = nullptr;
+      return Input;
     }
-    Input.Mapping.LHS = nullptr;
-    Input.Mapping.RHS = nullptr;
-    return Input;
-  }
 
   // Abstract width to a range or relational precondition
   // TODO: Abstraction
-
+  }
 
   // If abstraction fails, insert checks for existing widths.
   std::vector<Inst *> Inputs;

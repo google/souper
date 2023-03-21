@@ -101,7 +101,7 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
   //     return Input;
   //   }
   // }
-
+  // Input.print(llvm::errs(), true);
   Input = Clone(Input, IC);
   std::set<Inst *> ConstSet;
   souper::getConstants(Input.Mapping.RHS, ConstSet);
