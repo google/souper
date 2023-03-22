@@ -8,6 +8,6 @@
 cand %2 %3
 
 
-; CHECK: (v0:i32 << C1:i32) >> C1
+; CHECK: (v0:i32 << C1:i32) >>l C1
 ; CHECK:   =>
-; CHECK: v0 & (-1 >>l C1)
+; CHECK: v0 & (sext(1) >>l C1)

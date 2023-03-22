@@ -802,11 +802,11 @@ std::vector<Inst *> InferConstantLimits(
         continue;
       }
       auto Sum = Builder(XI, IC).Add(YI)();
-      // Sum related to width
-      auto Width = Builder(Sum, IC).BitWidth();
-      Results.push_back(Builder(Sum, IC).Ult(Width)());
-      Results.push_back(Builder(Sum, IC).Ule(Width)());
-      Results.push_back(Builder(Sum, IC).Eq(Width)());
+      // // Sum related to width
+      // auto Width = Builder(Sum, IC).BitWidth();
+      // Results.push_back(Builder(Sum, IC).Ult(Width)());
+      // Results.push_back(Builder(Sum, IC).Ule(Width)());
+      // Results.push_back(Builder(Sum, IC).Eq(Width)());
 
       // Sum less than const, Sum greater= than const
       for (auto C : ConcreteConsts) {
@@ -1008,8 +1008,8 @@ std::vector<Inst *> InferPotentialRelations(
 
     }
     Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth().Sub(1))());
-    Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth().UDiv(2))());
-    Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth())());
+    // Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth().UDiv(2))());
+    // Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth())());
   }
 
   // TODO: Make sure this works.
@@ -1446,7 +1446,6 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
     }
   }
 
-  // Just symbolic or Concrete constant
   for (const auto &[I, Val] : ConstMap) {
     if (I == ParentConst) {
       continue;
@@ -1463,9 +1462,25 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
         Results.push_back(Builder(IC, I).Flip()());
       }
 
+      // llvm::errs() << "Trying to synthesize " << Target << " from " << Val << "\n";
+
       auto One = llvm::APInt(I->Width, 1);
+      // llvm::errs() << "1: " << One.shl(Val) << "\n";
       if (One.shl(Val) == Target) {
         Results.push_back(Builder(IC, One).Shl(I)());
+      }
+      auto MinusOneVal = llvm::APInt::getAllOnesValue(I->Width);
+
+      auto OneBitOne = llvm::APInt(1, 1);
+      auto MinusOne = Builder(IC, OneBitOne).SExt(I->Width)();
+
+      // llvm::errs() << "2: " << MinusOne.shl(Val) << "\n";
+      if (MinusOneVal.shl(Val) == Target) {
+        Results.push_back(Builder(IC, MinusOne).Shl(I)());
+      }
+      // llvm::errs() << "3: " << MinusOne.lshr(Val) << "\n";
+      if (MinusOneVal.lshr(Val) == Target) {
+        Results.push_back(Builder(IC, MinusOne).LShr(I)());
       }
     } else {
       if (ParentConst) {
@@ -2336,6 +2351,10 @@ Inst *CombinePCs(const std::vector<InstMapping> &PCs, InstContext &IC) {
 
 ParsedReplacement InstantiateWidthChecks(InstContext &IC,
   Solver *S, ParsedReplacement Input) {
+  Input.print(llvm::errs(), true);
+  InfixPrinter IP(Input, true);
+  llvm::errs() << "WIDTH: Instantiating width checks.\n";
+  IP(llvm::errs());
 
   if (!hasMultiArgumentPhi(Input.Mapping.LHS)) {
     // Instantiate Alive driver with Symbolic width.
