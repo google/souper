@@ -37,8 +37,12 @@ static cl::opt<std::string>
                   cl::desc("<input souper exression (default=stdin)>"),
                   cl::init("-"));
 
-static cl::opt<bool> Complete(
-    "c", cl::desc("input a replacement, instead of a RHS"),
+static cl::opt<bool> LHS(
+    "lhs", cl::desc("input a replacement and convert ths LHS"),
+    cl::init(false));
+
+static cl::opt<bool> RHS(
+    "rhs", cl::desc("input a replacement and convert ths RHS"),
     cl::init(false));
 
 static cl::opt<std::string> OutputFilename(
@@ -51,7 +55,7 @@ int Work(const MemoryBufferRef &MB) {
   std::string ErrStr;
 
   const ParsedReplacement &Rep =
-    Complete ? 
+    (LHS || RHS) ? 
     ParseReplacement(IC, MB.getBufferIdentifier(), MB.getBuffer(), ErrStr) : 
     ParseReplacementRHS(IC, MB.getBufferIdentifier(), MB.getBuffer(), RC, ErrStr);
 
@@ -61,15 +65,29 @@ int Work(const MemoryBufferRef &MB) {
   }
 
   llvm::LLVMContext Context;
-  llvm::Module Module("souper.ll", Context);
-  if (genModule(IC, Complete ? Rep.Mapping.LHS : Rep.Mapping.RHS, Module))
-    return 1;
 
-  std::error_code EC;
-  llvm::raw_fd_ostream OS(OutputFilename, EC);
-  OS << Module;
-  OS.flush();
+  if (LHS) {
+    llvm::Module Module("souper.ll", Context);
+    if (genModule(IC, Rep.Mapping.LHS, Module))
+      return 1;
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(OutputFilename, EC);
+    OS << "; cost = " << cost(Rep.Mapping.LHS) << "\n\n";
+    OS << Module;
+    OS.flush();
+  }
 
+  if (RHS || (!LHS && !RHS)) {
+    llvm::Module Module("souper.ll", Context);
+    if (genModule(IC, Rep.Mapping.RHS, Module))
+      return 1;
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(OutputFilename, EC);
+    OS << "; cost = " << cost(Rep.Mapping.RHS) << "\n\n";
+    OS << Module;
+    OS.flush();
+  }
+  
   return 0;
 }
 
