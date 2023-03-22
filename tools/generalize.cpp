@@ -227,6 +227,14 @@ struct InfixPrinter {
       return Syms[I];
     }
 
+    std::ostringstream OS;
+
+    if (UseCount[I] > 1) {
+      std::string Name = "var" + std::to_string(varnum++);
+      Syms[I] = Name;
+      OS << "let " << Name << " = ";
+    }
+
     // x ^ -1 => ~x
     if (I->K == Inst::Xor && I->Ops[1]->K == Inst::Const &&
         I->Ops[1]->Val.isAllOnesValue()) {
@@ -235,13 +243,6 @@ struct InfixPrinter {
     if (I->K == Inst::Xor && I->Ops[0]->K == Inst::Const &&
         I->Ops[0]->Val.isAllOnesValue()) {
       return "~" + printInst(I->Ops[1], S);
-    }
-
-
-    if (UseCount[I] > 1) {
-      std::string Name = "var" + std::to_string(varnum++);
-      Syms[I] = Name;
-      S << "(let " << Name << " = ";
     }
 
     if (I->K == Inst::Const) {
@@ -373,7 +374,8 @@ struct InfixPrinter {
         Result = Ret;
       }
       if (UseCount[I] > 1) {
-        S << Result << ")";
+        OS << Result << ";\n";
+        S << OS.str();
         return Syms[I];
       } else {
         return Result;
@@ -1423,7 +1425,7 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
 
   // Handle width changes
   for (const auto &[I, Val] : ConstMap) {
-    if (Target.getBitWidth() == I->Width) {
+    if (Target.getBitWidth() == I->Width || !Threshold ) {
       continue;
     }
 
@@ -1434,9 +1436,8 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
       NewTarget = Target.trunc(I->Width);
     }
     for (auto X : IOSynthesize(NewTarget, ConstMap, IC, Threshold - 1, ConstMode, nullptr)) {
-      ReplacementContext RC;
-      RC.printInst(X, llvm::errs(), true);
-
+      // ReplacementContext RC;
+      // RC.printInst(X, llvm::errs(), true);
       if (X->Width < Target.getBitWidth()) {
         Results.push_back(Builder(IC, X).Trunc(Target.getBitWidth())());
       } else {
