@@ -34,8 +34,12 @@ DebugFlagParser("souper-debug-level",
 
 static cl::opt<std::string>
     InputFilename(cl::Positional,
-                  cl::desc("<input souper RHS (default=stdin)>"),
+                  cl::desc("<input souper exression (default=stdin)>"),
                   cl::init("-"));
+
+static cl::opt<bool> Complete(
+    "c", cl::desc("input a replacement, instead of a RHS"),
+    cl::init(false));
 
 static cl::opt<std::string> OutputFilename(
     "o", cl::desc("<output destination for textual LLVM IR (default=stdout)>"),
@@ -46,8 +50,10 @@ int Work(const MemoryBufferRef &MB) {
   ReplacementContext RC;
   std::string ErrStr;
 
-  const ParsedReplacement &RepRHS = ParseReplacementRHS(
-      IC, MB.getBufferIdentifier(), MB.getBuffer(), RC, ErrStr);
+  const ParsedReplacement &Rep =
+    Complete ? 
+    ParseReplacement(IC, MB.getBufferIdentifier(), MB.getBuffer(), ErrStr) : 
+    ParseReplacementRHS(IC, MB.getBufferIdentifier(), MB.getBuffer(), RC, ErrStr);
 
   if (!ErrStr.empty()) {
     llvm::errs() << ErrStr << '\n';
@@ -56,7 +62,7 @@ int Work(const MemoryBufferRef &MB) {
 
   llvm::LLVMContext Context;
   llvm::Module Module("souper.ll", Context);
-  if (genModule(IC, RepRHS.Mapping.RHS, Module))
+  if (genModule(IC, Complete ? Rep.Mapping.LHS : Rep.Mapping.RHS, Module))
     return 1;
 
   std::error_code EC;
