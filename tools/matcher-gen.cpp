@@ -38,6 +38,11 @@ static llvm::cl::opt<bool> NoDispatch("no-dispatch",
                    "(default=false)"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool> ExplicitWidths("explicit-width-checks",
+    llvm::cl::desc("Only generate width checks when explicitly specified."
+                   "(default=false)"),
+    llvm::cl::init(false));
+
 static llvm::cl::opt<bool> Sort("sortf",
     llvm::cl::desc("Sort matchers according to listfile"
                    "(default=false)"),
@@ -216,6 +221,22 @@ struct K1 : public Constraint {
   std::string Name, Val;
 };
 
+struct SymK0 : public Constraint {
+  SymK0(std::string Name_, std::string Bind_) : Name(Name_), Bind(Bind_) {}
+  std::string print() override {
+    return "util::symk0(" + Name + ", " + Bind + ")";
+  }
+  std::string Name, Bind;
+};
+
+struct SymK1 : public Constraint {
+  SymK1(std::string Name_, std::string Bind_) : Name(Name_), Bind(Bind_) {}
+  std::string print() override {
+    return "util::symk1(" + Name + ", " + Bind + ")";
+  }
+  std::string Name, Bind;
+};
+
 struct CR : public Constraint {
   CR(std::string Name_, std::string L_, std::string H_) : Name(Name_), L(L_), H(H_) {}
   std::string print() override {
@@ -294,6 +315,10 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
       return Children[0].first + "." + Str + "(" + Children[1].first + ")";
     };
 
+    auto WC = [&](auto Str) {
+      return Children[0].first + "." + Str + "(" + std::to_string(I->Width) + ")";
+    };
+
 //    auto B = []
 
     auto OP = [&](auto Str) {
@@ -344,20 +369,52 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     case Inst::Ule : return {MET("ule"), true};
     case Inst::Eq : return {MET("eq"), true};
     case Inst::Ne : return {MET("ne"), true};
+    case Inst::ZExt : return {WC("zext"), true};
+    case Inst::SExt : return {WC("sext"), true};
+    case Inst::Trunc : return {WC("trunc"), true};
 
-    default: return {"", false};
+    default: {
+      llvm::errs() << "Unimplemented op in PC: " << Inst::getKindName(I->K) << "\n";
+      return {"", false};
+    }
     }
 
   }
 
+  Constraint *ConvertPCToWidthConstraint(InstMapping PC) {
+    if (PC.LHS->K != Inst::Eq)
+      return nullptr;
+    if (PC.LHS->Ops[0]->K == Inst::BitWidth) {
+      return new WidthEq(this->at(PC.LHS->Ops[0]->Ops[0])[0],
+                                 PC.LHS->Ops[1]->Val.getLimitedValue());
+    }
+    if (PC.LHS->Ops.size() > 1 && PC.LHS->Ops[1]->K == Inst::BitWidth) {
+      return new WidthEq(this->at(PC.LHS->Ops[1]->Ops[0])[0],
+                                 PC.LHS->Ops[0]->Val.getLimitedValue());
+    }
+    return nullptr;
+  }
+
   bool GenPCConstraints(std::vector<InstMapping> PCs) {
     for (auto M : PCs) {
-      auto L = Translate(M.LHS);
-      auto R = Translate(M.RHS);
-      if (!L.second || !R.second) {
-        return false;
+      if (M.LHS->K == Inst::KnownZerosP) {
+        Constraint *C = new SymK0(this->at(M.LHS->Ops[0])[0],
+                                  this->at(M.LHS->Ops[1])[0]);
+        Constraints.push_back(C);
+      } else if (M.LHS->K == Inst::KnownOnesP) {
+        Constraint *C = new SymK1(this->at(M.LHS->Ops[0])[0],
+                                  this->at(M.LHS->Ops[1])[0]);
+        Constraints.push_back(C);
+      } else if (auto WC = ConvertPCToWidthConstraint(M)) {
+        Constraints.push_back(WC);
+      } else {
+        auto L = Translate(M.LHS);
+        auto R = Translate(M.RHS);
+        if (!L.second || !R.second) {
+          return false;
+        }
+        Constraints.push_back(new PC(L.first, R.first));
       }
-      Constraints.push_back(new PC(L.first, R.first));
     }
     return true;
   }
@@ -418,7 +475,7 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
     for (auto V : Vars) {
       auto Name = this->at(V)[0];
 
-      if (!WidthIndependent) {
+      if (!WidthIndependent || LHS->Width == 1 || V->Width == 1) {
         Constraints.push_back(new WidthEq(Name, V->Width));
       }
 
@@ -592,12 +649,17 @@ bool GenRHSCreator(Inst *I, Stream &Out, SymbolTable &Syms) {
 }
 
 template <typename Stream>
-bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
+bool InitSymbolTable(ParsedReplacement Input, Stream &Out, SymbolTable &Syms) {
+  auto Root = Input.Mapping.LHS;
+  auto RHS = Input.Mapping.RHS;
   std::set<Inst *> LHSInsts;
 
-//  Paths[Root] = {}; // root has an empty path
   std::vector<Inst *> Stack{Root};
-//
+  for (auto M : Input.PCs) {
+    Stack.push_back(M.LHS);
+    Stack.push_back(M.RHS);
+  }
+
   int varnum = 0;
   while (!Stack.empty()) {
     auto I = Stack.back();
@@ -611,15 +673,13 @@ bool InitSymbolTable(Inst *Root, Inst *RHS, Stream &Out, SymbolTable &Syms) {
       Syms.Consts.insert(I);
     }
     for (int i = 0; i < I->Ops.size(); ++i) {
-//      Paths[I->Ops[i]] = Paths[I]; // Child inherits parent's path
-//      Paths[I->Ops[i]].push_back(i);
       Stack.push_back(I->Ops[i]); // Souper exprs are DAGs
     }
   }
 
-  std::set<Inst *> LHSRefs;
   std::set<Inst *> Visited;
   Stack.push_back(RHS);
+
   while (!Stack.empty()) {
     auto I = Stack.back();
     Stack.pop_back();
@@ -699,7 +759,7 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
     return false;
   }
 
-  if (!InitSymbolTable(Input.Mapping.LHS, Input.Mapping.RHS, Out, Syms)) {
+  if (!InitSymbolTable(Input, Out, Syms)) {
     return false;
   }
 //  Out << "  llvm::errs() << \"NOW \" << " << OptID << "<< \"\\n\";\n";
@@ -735,22 +795,22 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
   }
   Syms.PrintConstraintsPre(Out);
 
-  Out << "  St.hit(" << OptID << ", " << prof  << ");\n";
-
   Syms.PrintConstDecls(Out);
 
+  Out << "  auto ret";
+
   if (Syms.find(Input.Mapping.RHS) != Syms.end()) {
-    Out << "  return " << Syms[Input.Mapping.RHS][0] << ";";
+    Out << " = " << Syms[Input.Mapping.RHS][0] << ";";
   } else if (Input.Mapping.RHS->K == Inst::DemandedMask && Syms.find(Input.Mapping.RHS->Ops[0]) != Syms.end()) {
     assert(DemandedMask == Input.Mapping.RHS->Ops[1] && "DemandedMask mismatch");
-    Out << "  return " << Syms[Input.Mapping.RHS->Ops[0]][0] << ";";
+    Out << " = " << Syms[Input.Mapping.RHS->Ops[0]][0] << ";";
   } else if (Input.Mapping.RHS->K == Inst::Const) {
-    Out << "  APInt Result("
+    Out << " APInt Result("
         << Input.Mapping.RHS->Width <<", "
         << Input.Mapping.RHS->Val << ");\n";
-    Out << "  return ConstantInt::get(TheContext, Result);";
+    Out << " = ConstantInt::get(TheContext, Result);";
   } else {
-    Out << "  return ";
+    Out << " = ";
     if (Input.Mapping.RHS->K == Inst::DemandedMask) {
       assert(DemandedMask == Input.Mapping.RHS->Ops[1] && "DemandedMask mismatch");
       if (!GenRHSCreator(Input.Mapping.RHS->Ops[0], Out, Syms)) {
@@ -763,7 +823,10 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
     }
     Out << ";";
   }
-  Out << "\n}\n}";
+  Out << "\nif (util::check_width(ret, I)) {\n";
+  Out << "  St.hit(" << OptID << ", " << prof  << ");\n";
+  Out << "  return ret;\n";
+  Out << "\n}\n}\n}";
 
   Syms.PrintConstraintsPost(Out);
 
@@ -785,6 +848,12 @@ bool PCHasVar(const ParsedReplacement &Input) {
   for (auto &&PC : Input.PCs) {
     if (PC.LHS->K == Inst::KnownOnesP || PC.LHS->K == Inst::KnownZerosP)
       continue;
+
+    if (PC.LHS->K == Inst::Eq && (PC.LHS->Ops[0]->K == Inst::BitWidth ||
+                                  PC.LHS->Ops[1]->K == Inst::BitWidth )) {
+      continue;
+    }
+
     findVars(PC.LHS, Vars);
     findVars(PC.RHS, Vars);
   }
@@ -1032,7 +1101,7 @@ int main(int argc, char **argv) {
     std::string Str;
     llvm::raw_string_ostream Out(Str);
 
-    if (GenMatcher(Input, Out, optnumber, IsWidthIndependent(IC, S.get(), Input))) {
+    if (GenMatcher(Input, Out, optnumber, ExplicitWidths)) {
       auto current = optnumber++;
       if (!optnumbers.empty()
           && optnumbers.find(current) == optnumbers.end()) {

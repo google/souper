@@ -500,6 +500,18 @@ bool typeCheck(Inst *I) {
       return false;
     }
   }
+  if (I->K == Inst::Trunc) {
+    if (I->Ops[0]->Width <= I->Width) {
+      if (DebugLevel > 4) llvm::errs() << "Trunc operand must be wider than result\n";
+      return false;
+    }
+  }
+  if (I->K == Inst::ZExt || I->K == Inst::SExt) {
+    if (I->Ops[0]->Width >= I->Width) {
+      if (DebugLevel > 4) llvm::errs() << "Ext operand must be narrower than result\n";
+      return false;
+    }
+  }
   return true;
 }
 bool typeCheck(ParsedReplacement &R) {
@@ -714,11 +726,6 @@ std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
     ValueCache[I] = EvalValue(V);
   }
 
-  // for (auto P : CEX) {
-  //   llvm::errs() << "CEX: " << P.first->Name << ' '
-  //                << P.second.getValue().toString(2, false) << "\n";
-  // }
-
   ConcreteInterpreter CPos(ValueCache);
   std::vector<ConcreteInterpreter> CNegs;
   for (auto &&CEX : CEXs) {
@@ -771,18 +778,18 @@ std::vector<Inst *> InferConstantLimits(
   for (auto &&[XI, XC] : CMap) {
     // X < Width, X <= Width
     auto Width = Builder(XI, IC).BitWidth();
-    Results.push_back(Builder(XI, IC).Ult(Width)());
-    Results.push_back(Builder(XI, IC).Ule(Width)());
+    // Results.push_back(Builder(XI, IC).Ult(Width)());
+    // Results.push_back(Builder(XI, IC).Ule(Width)());
 
     // X slt SMAX, x ult UMAX
     auto WM1 = Width.Sub(1);
     auto SMax = Builder(IC, llvm::APInt(XI->Width, 1)).Shl(WM1).Sub(1)();
     Results.push_back(Builder(XI, IC).Slt(SMax)());
 
-    auto gZ = Builder(XI, IC).Ugt(0)();
+    // auto gZ = Builder(XI, IC).Ugt(0)();
 
-    Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
-    Results.push_back(Builder(XI, IC).Ule(Width).And(gZ)());
+    // Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
+    // Results.push_back(Builder(XI, IC).Ule(Width).And(gZ)());
 
     // 2 * X < C, 2 * X >= C
     for (auto C : ConcreteConsts) {
@@ -930,6 +937,10 @@ std::vector<Inst *> InferPotentialRelations(
         continue;
       }
 
+      if (~XC == YC) {
+        Results.push_back(Builder(XI, IC).Flip().Eq(YI)());
+      }
+
       // if (C2 && XC == YC) {
       //   Results.push_back(Builder(XI, IC).Eq(YI)());
       // }
@@ -980,25 +991,25 @@ std::vector<Inst *> InferPotentialRelations(
         }
       }
 
-      // TODO Check if this is too slow
-      // if (Input.Mapping.LHS->Width == 1) {
-        // need both signed and unsigned?
-        // What about s/t/e/ versions?
-        if (XC.slt(YC)) Results.push_back(Builder(XI, IC).Slt(YI)());
-        if (XC.ult(YC)) Results.push_back(Builder(XI, IC).Ult(YI)());
-        if (YC.slt(XC)) Results.push_back(Builder(YI, IC).Slt(XI)());
-        if (YC.ult(XC)) Results.push_back(Builder(YI, IC).Ult(XI)());
+      // // TODO Check if this is too slow
+      // // if (Input.Mapping.LHS->Width == 1) {
+      //   // need both signed and unsigned?
+      //   // What about s/t/e/ versions?
+      //   if (XC.slt(YC)) Results.push_back(Builder(XI, IC).Slt(YI)());
+      //   if (XC.ult(YC)) Results.push_back(Builder(XI, IC).Ult(YI)());
+      //   if (YC.slt(XC)) Results.push_back(Builder(YI, IC).Slt(XI)());
+      //   if (YC.ult(XC)) Results.push_back(Builder(YI, IC).Ult(XI)());
+      // // }
+
+      // auto XBits = BitFuncs(XI, IC);
+      // auto YBits = BitFuncs(YI, IC);
+
+      // for (auto &&XBit : XBits) {
+      //   for (auto &&YBit : YBits) {
+      //     Results.push_back(Builder(XBit, IC).Ule(YBit)());
+      //     Results.push_back(Builder(XBit, IC).Ult(YBit)());
+      //   }
       // }
-
-      auto XBits = BitFuncs(XI, IC);
-      auto YBits = BitFuncs(YI, IC);
-
-      for (auto &&XBit : XBits) {
-        for (auto &&YBit : YBits) {
-          Results.push_back(Builder(XBit, IC).Ule(YBit)());
-          Results.push_back(Builder(XBit, IC).Ult(YBit)());
-        }
-      }
 
       // No example yet where this is useful
       // for (auto &&XBit : XBits) {
@@ -1438,11 +1449,11 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
     for (auto X : IOSynthesize(NewTarget, ConstMap, IC, Threshold - 1, ConstMode, nullptr)) {
       // ReplacementContext RC;
       // RC.printInst(X, llvm::errs(), true);
-      if (X->Width < Target.getBitWidth()) {
-        Results.push_back(Builder(IC, X).Trunc(Target.getBitWidth())());
-      } else {
-        Results.push_back(Builder(IC, X).SExt(Target.getBitWidth())());
+      if (I->Width < X->Width) {
         Results.push_back(Builder(IC, X).ZExt(Target.getBitWidth())());
+        Results.push_back(Builder(IC, X).SExt(Target.getBitWidth())());
+      } else {
+        Results.push_back(Builder(IC, X).Trunc(Target.getBitWidth())());
       }
     }
   }
@@ -1874,6 +1885,50 @@ bool hasMultiArgumentPhi(Inst *I) {
   return false;
 }
 
+ParsedReplacement ReduceBasic(InstContext &IC,
+                              Solver *S, ParsedReplacement Input) {
+  Reducer R(IC, S);
+  Input = R.ReducePCs(Input);
+  Input = R.ReduceRedundantPhis(Input);
+  Input = R.ReduceGreedy(Input);
+  Input = R.ReducePairsGreedy(Input);
+  Input = R.ReduceTriplesGreedy(Input);
+  Input = R.WeakenKB(Input);
+  Input = R.WeakenCR(Input);
+  Input = R.WeakenDB(Input);
+  Input = R.WeakenOther(Input);
+  if (ReduceKBIFY) {
+    Input = R.ReduceGreedyKBIFY(Input);
+  }
+  Input = R.ReducePCs(Input);
+  Input = R.ReducePCsToDF(Input);
+  return Input;
+}
+
+ParsedReplacement DeAugment(InstContext &IC,
+                            Solver *S, ParsedReplacement Augmented) {
+  auto Result = ReduceBasic(IC, S, Augmented);
+  Inst *SymDBVar = nullptr;
+  if (Result.Mapping.LHS->K == Inst::DemandedMask) {
+    SymDBVar = Result.Mapping.LHS->Ops[1];
+  }
+
+  if (!SymDBVar) {
+    return Result;
+  }
+
+  auto LHSUses = CountUses(Result.Mapping.LHS);
+  auto RHSUses = CountUses(Result.Mapping.RHS);
+
+  if (LHSUses[SymDBVar] == 1 && RHSUses[SymDBVar] == 1) {
+    // We can remove the SymDBVar
+    Result.Mapping.LHS = Result.Mapping.LHS->Ops[0];
+    Result.Mapping.RHS = Result.Mapping.RHS->Ops[0];
+    return Result;
+  } else {
+    return Result;
+  }
+}
 
 // Assuming the input has leaves pruned and preconditions weakened
 ParsedReplacement SuccessiveSymbolize(InstContext &IC,
@@ -1883,7 +1938,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   // Print first successful result and exit, no result sorting.
   // Prelude
   bool Nested = !ConstMap.empty();
-
+  auto Original = Input;
   if (!NoWidth && !Nested && !hasMultiArgumentPhi(Input.Mapping.LHS)) {
     ShrinkWrap Shrink(IC, S, Input, 8);
     auto Smol = Shrink();
@@ -1894,6 +1949,9 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
         P(llvm::errs());
         Smol->print(llvm::errs(), true);
         llvm::errs() << "\n";
+        if (DebugLevel > 4) {
+          Smol.value().print(llvm::errs(), true);
+        }
       }
       Input = Smol.value();
 
@@ -2078,7 +2136,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   }
 
   std::vector<std::vector<Inst *>> SimpleCandidates =
-    InferSpecialConstExprsAllSym(RHSFresh, ConstMap, IC, /*depth=*/ 3);
+    InferSpecialConstExprsAllSym(RHSFresh, ConstMap, IC, /*depth=*/ 2);
 
   if (!SimpleCandidates.empty()) {
     if (DebugLevel > 4) {
@@ -2350,14 +2408,10 @@ Inst *CombinePCs(const std::vector<InstMapping> &PCs, InstContext &IC) {
   return Ante;
 }
 
-ParsedReplacement InstantiateWidthChecks(InstContext &IC,
+std::pair<ParsedReplacement, bool>
+InstantiateWidthChecks(InstContext &IC,
   Solver *S, ParsedReplacement Input) {
-  Input.print(llvm::errs(), true);
-  InfixPrinter IP(Input, true);
-  llvm::errs() << "WIDTH: Instantiating width checks.\n";
-  IP(llvm::errs());
-
-  if (!hasMultiArgumentPhi(Input.Mapping.LHS)) {
+  if (!NoWidth && !hasMultiArgumentPhi(Input.Mapping.LHS)) {
     // Instantiate Alive driver with Symbolic width.
     AliveDriver Alive(Input.Mapping.LHS,
     Input.PCs.empty() ? nullptr : CombinePCs(Input.PCs, IC),
@@ -2369,7 +2423,7 @@ ParsedReplacement InstantiateWidthChecks(InstContext &IC,
         llvm::errs() << "WIDTH: Generalized opt is valid for all widths.\n";
       }
       // Completely width independent. No width checks needed.
-      return Input;
+      return {Input, true};
     }
 
     auto &&ValidTypings = Alive.getValidTypings();
@@ -2381,7 +2435,7 @@ ParsedReplacement InstantiateWidthChecks(InstContext &IC,
       }
       Input.Mapping.LHS = nullptr;
       Input.Mapping.RHS = nullptr;
-      return Input;
+      return {Input, false};
     }
 
   // Abstract width to a range or relational precondition
@@ -2394,28 +2448,7 @@ ParsedReplacement InstantiateWidthChecks(InstContext &IC,
   for (auto &&I : Inputs) {
     Input.PCs.push_back(GetEqWidthConstraint(I, I->Width, IC));
   }
-  return Input;
-}
-
-
-ParsedReplacement ReduceBasic(InstContext &IC,
-                              Solver *S, ParsedReplacement Input) {
-  Reducer R(IC, S);
-  Input = R.ReducePCs(Input);
-  Input = R.ReduceRedundantPhis(Input);
-  Input = R.ReduceGreedy(Input);
-  Input = R.ReducePairsGreedy(Input);
-  Input = R.ReduceTriplesGreedy(Input);
-  Input = R.WeakenKB(Input);
-  Input = R.WeakenCR(Input);
-  Input = R.WeakenDB(Input);
-  Input = R.WeakenOther(Input);
-  if (ReduceKBIFY) {
-    Input = R.ReduceGreedyKBIFY(Input);
-  }
-  Input = R.ReducePCs(Input);
-  Input = R.ReducePCsToDF(Input);
-  return Input;
+  return {Input, false};
 }
 
 template<typename Stream>
@@ -2424,6 +2457,58 @@ Stream &operator<<(Stream &S, InfixPrinter IP) {
   return S;
 }
 
+void tagConstExprs(Inst *I, std::set<Inst *> &Set) {
+  if (I->K == Inst::Const || (I->K == Inst::Var && I->Name.starts_with("sym"))) {
+    Set.insert(I);
+  } else {
+    for (auto Op : I->Ops) {
+      tagConstExprs(Op, Set);
+    }
+  }
+
+  if (I->Ops.size() > 0) {
+    bool foundNonConst = false;
+    for (auto Op : I->Ops) {
+      if (Set.find(Op) == Set.end()) {
+        foundNonConst = true;
+        break;
+      }
+    }
+    if (!foundNonConst) {
+      Set.insert(I);
+    }
+  }
+}
+
+size_t constAwareCost(Inst *I) {
+  std::set<Inst *> ConstExprs;
+  tagConstExprs(I, ConstExprs);
+  return souper::cost(I, false, ConstExprs);
+}
+
+int profit(const ParsedReplacement &P) {
+  return constAwareCost(P.Mapping.LHS) - constAwareCost(P.Mapping.RHS);
+}
+
+void PrintInputAndResult(ParsedReplacement Input, ParsedReplacement Result) {
+  ReplacementContext RC;
+  Result.printLHS(llvm::outs(), RC, true);
+  Result.printRHS(llvm::outs(), RC, true);
+  llvm::outs() << "\n";
+
+  if (DebugLevel > 1) {
+      llvm::errs() << "IR Input: \n";
+    ReplacementContext RC;
+    Input.printLHS(llvm::outs(), RC, true);
+    Input.printRHS(llvm::outs(), RC, true);
+    llvm::outs() << "\n";
+    llvm::errs() << "\n\tInput (profit=" << profit(Input) <<  "):\n\n"
+                  << InfixPrinter(Input)
+                  << "\n\tGeneralized (profit=" << profit(Result) << "):\n\n"
+                  << InfixPrinter(Result, NoWidth) << "\n";
+    Result.print(llvm::errs(), true);
+  }
+}
 
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);
@@ -2453,6 +2538,13 @@ int main(int argc, char **argv) {
   // TODO: Write default action which chooses what to do based on input structure
 
   for (auto &&Input: Inputs) {
+    if (Input.Mapping.LHS == Input.Mapping.RHS) {
+      if (DebugLevel > 2) llvm::errs() << "Input == Output\n";
+      continue;
+    } else if (profit(Input) < 0) {
+      if (DebugLevel > 2) llvm::errs() << "Not an optimization\n";
+      continue;
+    }
     if (Basic) {
       ParsedReplacement Result = ReduceBasic(IC, S.get(), Input);
       if (!JustReduce) {
@@ -2466,33 +2558,31 @@ int main(int argc, char **argv) {
             }
             Result = SuccessiveSymbolize(IC, S.get(), Result, Changed);
           }
+          bool Indep = false;
           if (!NoWidth) {
-            Result = InstantiateWidthChecks(IC, S.get(), Result);
+            std::tie(Result, Indep) = InstantiateWidthChecks(IC, S.get(), Result);
           }
 //          Result.print(llvm::errs(), true);
-          if (!Result.Mapping.LHS) {
-            break;
+          if (!Result.Mapping.LHS && !NoWidth) {
+            Result = Input;
+            MaxTries++;
+            NoWidth = true;
+            continue; // Retry with no width checks
           }
+
+          if (!Indep && Result.Mapping.LHS && !NoWidth) {
+            MaxTries++;
+            NoWidth = true;
+            PrintInputAndResult(Input, Result);
+            Result = Input;
+            continue; // Retry with no width checks
+          }
+          Result = DeAugment(IC, S.get(), Result);
         } while (--MaxTries && Changed);
       }
       if (Result.Mapping.LHS && Result.Mapping.RHS) {
-        ReplacementContext RC;
-        Result.printLHS(llvm::outs(), RC, true);
-        Result.printRHS(llvm::outs(), RC, true);
-        llvm::outs() << "\n";
-
-        if (DebugLevel > 1) {
-          llvm::errs() << "\n\tInput:\n\n";
-          llvm::errs() << InfixPrinter(Input) << "\n\tGeneralized:\n\n" << InfixPrinter(Result, NoWidth);
-        }
+        PrintInputAndResult(Input, Result);
       }
-      continue;
-    }
-
-
-    if (FixIt) {
-      // TODO: Implement fixit with existing functionality when needed
-      llvm::errs() << "FixIt not implemented yet.\n";
     }
   }
   return 0;

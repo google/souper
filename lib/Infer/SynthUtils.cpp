@@ -208,6 +208,7 @@ std::vector<std::map<Inst *, llvm::APInt>> findValidConsts(ParsedReplacement Inp
 ValueCache GetCEX(const ParsedReplacement &Input, InstContext &IC, Solver *S) {
   std::vector<Inst *> Vars;
   findVars(Input.Mapping.LHS, Vars);
+  findVars(Input.Mapping.RHS, Vars);
   std::vector<std::pair<Inst *, llvm::APInt>> Models;
   bool IsValid;
   if (auto EC = S->isValid(IC, Input.BPCs, Input.PCs, Input.Mapping, IsValid, &Models)) {
@@ -228,7 +229,72 @@ ValueCache GetCEX(const ParsedReplacement &Input, InstContext &IC, Solver *S) {
   }
 }
 
+// ParsedReplacement MakeDummyConstexprs(ParsedReplacement Input, InstContext &IC) {
+//   std::map<Inst *, Inst *> InstCache;
+
+//   std::vector<Inst *> Stack{Input.Mapping.RHS};
+
+//   std::set<Inst *> Visited;
+
+//   size_t DummyConstID = 0;
+
+//   // DFS to find all RHS constants
+//   while (!Stack.empty()) {
+//     auto I = Stack.back();
+//     Stack.pop_back();
+//     Visited.insert(I);
+
+//     if (I->K == Inst::Const) {
+//       if (InstCache.find(I) == InstCache.end()) {
+//         InstCache[I] = IC.createVar(I->Width, "dummy" + std::to_string(DummyConstID++));
+//       }
+//     } else {
+//       for (auto &&Op : I->Ops) {
+//         if (Visited.find(Op) == Visited.end()) {
+//           Stack.push_back(Op);
+//         }
+//       }
+//     }
+//   }
+//   if (!InstCache.empty()) {
+//     Input.Mapping.RHS = Replace(Input.Mapping.RHS, IC, InstCache);
+//   }
+//   return Input;
+// }
+
+bool hasRHSConsts(ParsedReplacement Input) {
+  std::vector<Inst *> Stack{Input.Mapping.RHS};
+
+  std::set<Inst *> Visited;
+
+  // DFS to find all RHS constants
+  while (!Stack.empty()) {
+    auto I = Stack.back();
+    Stack.pop_back();
+    Visited.insert(I);
+
+    if (I->K == Inst::Const) {
+      return true;
+    } else {
+      for (auto &&Op : I->Ops) {
+        if (Visited.find(Op) == Visited.end()) {
+          Stack.push_back(Op);
+        }
+      }
+    }
+  }
+  return false;
+}
+
 std::vector<ValueCache> GetMultipleCEX(ParsedReplacement Input, InstContext &IC, Solver *S, size_t MaxCount = 2) {
+  // auto Input = MakeDummyConstexprs(Original, IC);
+
+  // Is there a way to get a CEX when there are RHS constants?
+
+  if (hasRHSConsts(Input)) {
+    return {};
+  }
+
   std::vector<ValueCache> Results;
   while (MaxCount--) {
     auto &&Result = GetCEX(Input, IC, S);

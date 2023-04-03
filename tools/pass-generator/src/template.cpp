@@ -314,24 +314,7 @@ inline CastClass_match_width<OpTy, Instruction::Trunc> m_Trunc(size_t W, const O
   return CastClass_match_width<OpTy, Instruction::Trunc>(W, Op);
 }
 
-// Utility functions to use in the DSL
 namespace util {
-  Value *node(Instruction *I, const std::vector<size_t> &Path) {
-    Value *Current = I;
-    for (auto &&P : Path) {
-      if (Instruction *CI = dyn_cast<Instruction>(Current)) {
-        if (CI->getNumOperands() > P) {
-          Current = CI->getOperand(P);
-        } else {
-          return nullptr;
-        }
-      } else {
-        return nullptr;
-      }
-    }
-    return Current;
-  }
-
   bool dc(llvm::DominatorTree *DT, llvm::Instruction *I, llvm::Value *V) {
     if (!V) {
       return false;
@@ -348,6 +331,14 @@ namespace util {
   bool check_width(llvm::Value *V, size_t W) {
     if (V && V->getType() && V->getType()->isIntegerTy()) {
       return V->getType()->getScalarSizeInBits() == W;
+    } else {
+      return false;
+    }
+  }
+
+  bool check_width(llvm::Value *V, Instruction *I) {
+    if (V && V->getType() && V->getType()->isIntegerTy()) {
+      return V->getType()->getScalarSizeInBits() == I->getType()->getScalarSizeInBits();
     } else {
       return false;
     }
@@ -459,6 +450,22 @@ namespace util {
 
     // 0 in DBUnderApprox implies 0 in ComputedDB
     return (V | ~ComputedDB).isAllOnes();
+  }
+
+  // TODO Implement
+  bool symk0(llvm::Value *V, llvm::Value *&Bind) {
+    return false;
+  }
+  bool symk1(llvm::Value *V, llvm::Value *&Bind) {
+    return false;
+  }
+
+  bool symdb(llvm::DemandedBits *DB, llvm::Instruction *I, llvm::Value *&V) {
+    auto ComputedDB = DB->getDemandedBits(I);
+
+    // Todo make a new llvm constant from ComputedDb and assign to V
+
+    return false;
   }
 
   bool nz(llvm::Value *V) {
@@ -639,9 +646,29 @@ struct SouperCombine : public FunctionPass {
     return nullptr;
   }
 
+  // struct SymConst {
+  //   SymConst(size_t Width, size_t Value, IRBuilder *B) : Width(Width), Value(Value), B(B) {}
+  //   size_t Width;
+  //   size_t Value; // TODO: APInt
+  //   IRBuilder *B;
+
+  //   llvm::Value *operator()() {
+  //     return B->getIntN(Width, Value);
+  //   }
+
+  //   llvm::Value *operator()(llvm::Value *Ctx) {
+  //     return B->getIntN(Ctx->getType()->getIntegerBitWidth(), Value);
+  //   }
+  // };
+
+  // SymConst C(size_t Width, size_t Value, IRBuilder *B) {
+  //   return SymConst(Width, Value, B);
+  // }
+
   Value *C(size_t Width, size_t Value, IRBuilder *B) {
     return B->getIntN(Width, Value);
   }
+
 
   Value *C(llvm::APInt Value, IRBuilder *B) {
     return ConstantInt::get(B->getIntNTy(Value.getBitWidth()), Value);

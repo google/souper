@@ -820,7 +820,7 @@ bool souper::AliveDriver::translateAndCache(const souper::Inst *I,
     // TODO: Desugar log2. Alive2 only supports log2 for concrete constants.
 
     default:{
-      llvm::outs() << "Unsupported Instruction Kind : " << I->getKindName(I->K) << "\n";
+      llvm::errs() << "Unsupported Instruction Kind : " << I->getKindName(I->K) << "\n";
       return false;
     }
   }

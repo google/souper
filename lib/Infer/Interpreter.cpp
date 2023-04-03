@@ -489,4 +489,11 @@ namespace souper {
       Cache[Root] = Result;
     return Result;
   }
+
+  void ConcreteInterpreter::printCache(llvm::raw_ostream &Out) {
+    for (auto &&KV : Cache) {
+      Out << KV.first->Name << " = " << KV.second.getValue() << '\n';
+    }
+  }
+
 }

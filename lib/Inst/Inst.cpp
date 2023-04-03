@@ -994,8 +994,8 @@ static int costHelper(Inst *I, Inst *Root, std::set<Inst *> &Visited,
   return Cost;
 }
 
-int souper::cost(Inst *I, bool IgnoreDepsWithExternalUses) {
-  std::set<Inst *> Visited;
+int souper::cost(Inst *I, bool IgnoreDepsWithExternalUses, std::set<Inst *> Ignore) {
+  std::set<Inst *> Visited = Ignore;
   return costHelper(I, I, Visited, IgnoreDepsWithExternalUses);
 }
 

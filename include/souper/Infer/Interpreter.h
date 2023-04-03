@@ -124,6 +124,9 @@ EvalValue evaluateAShr(llvm::APInt A, llvm::APInt B);
     }
     void setEvalPhiFirstBranch() {EvalPhiFirstBranch = true;};
     EvalValue evaluateInst(Inst *Root);
+
+    void printCache(llvm::raw_ostream &Out);
+
   };
 
 }

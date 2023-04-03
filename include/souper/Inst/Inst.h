@@ -290,7 +290,7 @@ struct SynthesisContext {
   unsigned Timeout;
 };
 
-int cost(Inst *I, bool IgnoreDepsWithExternalUses = false);
+int cost(Inst *I, bool IgnoreDepsWithExternalUses = false, std::set<Inst *> Ignore = {});
 int backendCost(Inst *I, bool IgnoreDepsWithExternalUses = false);
 int countHelper(Inst *I, std::set<Inst *> &Visited);
 int instCount(Inst *I);
