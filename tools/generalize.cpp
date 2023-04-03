@@ -2578,10 +2578,12 @@ int main(int argc, char **argv) {
             continue; // Retry with no width checks
           }
           Result = DeAugment(IC, S.get(), Result);
+
+          if (Result.Mapping.LHS && Result.Mapping.RHS) {
+            PrintInputAndResult(Input, Result);
+          }
+
         } while (--MaxTries && Changed);
-      }
-      if (Result.Mapping.LHS && Result.Mapping.RHS) {
-        PrintInputAndResult(Input, Result);
       }
     }
   }

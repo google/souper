@@ -89,7 +89,11 @@ static cl::opt<bool> CheckAllGuesses("souper-check-all-guesses",
     cl::init(false));
 
 static cl::opt<bool> Hash("hash",
-    cl::desc("Hash a trasnformation."),
+    cl::desc("Hash a trasnformation. (default=false)"),
+    cl::init(false));
+
+static cl::opt<bool> FilterRedundant("filter-redundant",
+    cl::desc("Filter redundant transformations based on static hashing (default=false)"),
     cl::init(false));
 
 
@@ -184,9 +188,40 @@ int SolveInst(const MemoryBufferRef &MB, Solver *S) {
   unsigned Index = 0;
   int Ret = 0;
   int Success = 0, Fail = 0, Error = 0;
+
+  std::unordered_set<size_t> Hashes;
+
   for (auto Rep : Reps) {
     if (Hash) {
       llvm::outs() << HashRep(Rep) << '\n';
+      continue;
+    }
+
+    if (FilterRedundant) {
+      auto Hash = HashRep(Rep);
+      if (Hashes.find(Hash) == Hashes.end()) {
+        Hashes.insert(Hash);
+        ReplacementContext RC;
+        Rep.printLHS(llvm::outs(), RC, true);
+        Rep.printRHS(llvm::outs(), RC, true);
+      } else {
+        llvm::outs() << "; Skipping redundant transformation.\n";
+        std::string S;
+        llvm::raw_string_ostream Str(S);
+        ReplacementContext RC;
+        Rep.printLHS(Str, RC, true);
+        Rep.printRHS(Str, RC, true);
+        Str.flush();
+        llvm::outs() << ';';
+        for (size_t i = 0; i < S.length(); ++i) {
+          auto c = S[i];
+          if ((c == '\n' || c == '\r') && i != S.length() - 1) {
+            llvm::outs() << c << ';';
+          } else {
+            llvm::outs() << c;
+          }
+        }
+      }
       continue;
     }
 
