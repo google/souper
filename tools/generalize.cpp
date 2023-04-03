@@ -2550,7 +2550,8 @@ int main(int argc, char **argv) {
       if (!JustReduce) {
 
         bool Changed = false;
-        size_t MaxTries = 1; // Increase this if we ever run with 10/100x timeout.
+        size_t MaxTries = 3; // Increase this if we ever run with 10/100x timeout.
+        bool FirstTime = true;
         do {
           if (!OnlyWidth) {
             if (Changed) {
@@ -2565,13 +2566,13 @@ int main(int argc, char **argv) {
 //          Result.print(llvm::errs(), true);
           if (!Result.Mapping.LHS && !NoWidth) {
             Result = Input;
-            MaxTries++;
+            if (MaxTries == 1) MaxTries++;
             NoWidth = true;
             continue; // Retry with no width checks
           }
 
           if (!Indep && Result.Mapping.LHS && !NoWidth) {
-            MaxTries++;
+            if (MaxTries == 1) MaxTries++;
             NoWidth = true;
             PrintInputAndResult(Input, Result);
             Result = Input;
@@ -2579,10 +2580,10 @@ int main(int argc, char **argv) {
           }
           Result = DeAugment(IC, S.get(), Result);
 
-          if (Result.Mapping.LHS && Result.Mapping.RHS) {
+          if ((Changed || FirstTime) && Result.Mapping.LHS && Result.Mapping.RHS) {
             PrintInputAndResult(Input, Result);
           }
-
+          if (FirstTime) FirstTime = false;
         } while (--MaxTries && Changed);
       }
     }
