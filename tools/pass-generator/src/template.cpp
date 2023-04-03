@@ -218,13 +218,16 @@ struct width_specific_intval : public specific_intval<false> {
   }
 };
 
-// FIXME Widths beyond 64
 inline width_specific_intval m_SpecificInt(size_t W, uint64_t V) {
   return width_specific_intval(APInt(64, V), W);
 }
 
 inline width_specific_intval m_SpecificInt(size_t W, std::string S) {
   return width_specific_intval(APInt(W, S, 10), W);
+}
+
+inline specific_intval<false> m_SpecificInt(std::string S) {
+  return specific_intval<false>(APInt(64, S, 10));
 }
 
 struct constant_matcher {
@@ -547,6 +550,9 @@ namespace util {
   llvm::APInt V(size_t Width, std::string Val) {
     return llvm::APInt(Width, Val, 2);
   }
+  llvm::APInt V(llvm::Value *Ctx, std::string Val) {
+    return llvm::APInt(Ctx->getType()->getIntegerBitWidth(), Val, 2);
+  }
 }
 
 struct SouperCombine : public FunctionPass {
@@ -646,28 +652,28 @@ struct SouperCombine : public FunctionPass {
     return nullptr;
   }
 
-  // struct SymConst {
-  //   SymConst(size_t Width, size_t Value, IRBuilder *B) : Width(Width), Value(Value), B(B) {}
-  //   size_t Width;
-  //   size_t Value; // TODO: APInt
-  //   IRBuilder *B;
+  struct SymConst {
+    SymConst(size_t Width, size_t Value, IRBuilder *B) : Width(Width), Value(Value), B(B) {}
+    size_t Width;
+    size_t Value; // TODO: APInt
+    IRBuilder *B;
 
-  //   llvm::Value *operator()() {
-  //     return B->getIntN(Width, Value);
-  //   }
+    llvm::Value *operator()() {
+      return B->getIntN(Width, Value);
+    }
 
-  //   llvm::Value *operator()(llvm::Value *Ctx) {
-  //     return B->getIntN(Ctx->getType()->getIntegerBitWidth(), Value);
-  //   }
-  // };
+    llvm::Value *operator()(llvm::Value *Ctx) {
+      return B->getIntN(Ctx->getType()->getIntegerBitWidth(), Value);
+    }
+  };
 
-  // SymConst C(size_t Width, size_t Value, IRBuilder *B) {
-  //   return SymConst(Width, Value, B);
-  // }
-
-  Value *C(size_t Width, size_t Value, IRBuilder *B) {
-    return B->getIntN(Width, Value);
+  SymConst C(size_t Width, size_t Value, IRBuilder *B) {
+    return SymConst(Width, Value, B);
   }
+
+  // Value *C(size_t Width, size_t Value, IRBuilder *B) {
+  //   return B->getIntN(Width, Value);
+  // }
 
 
   Value *C(llvm::APInt Value, IRBuilder *B) {

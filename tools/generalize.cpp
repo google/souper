@@ -1998,7 +1998,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
   std::map<Inst *, llvm::APInt> SymCS;
 
-  int i = 1;
+  static int i = 1;
   for (auto I : LHSConsts) {
     auto Name = "symconst_" + std::to_string(i++);
     SymConstMap[I] = IC.createVar(I->Width, Name);
@@ -2457,38 +2457,6 @@ Stream &operator<<(Stream &S, InfixPrinter IP) {
   return S;
 }
 
-void tagConstExprs(Inst *I, std::set<Inst *> &Set) {
-  if (I->K == Inst::Const || (I->K == Inst::Var && I->Name.starts_with("sym"))) {
-    Set.insert(I);
-  } else {
-    for (auto Op : I->Ops) {
-      tagConstExprs(Op, Set);
-    }
-  }
-
-  if (I->Ops.size() > 0) {
-    bool foundNonConst = false;
-    for (auto Op : I->Ops) {
-      if (Set.find(Op) == Set.end()) {
-        foundNonConst = true;
-        break;
-      }
-    }
-    if (!foundNonConst) {
-      Set.insert(I);
-    }
-  }
-}
-
-size_t constAwareCost(Inst *I) {
-  std::set<Inst *> ConstExprs;
-  tagConstExprs(I, ConstExprs);
-  return souper::cost(I, false, ConstExprs);
-}
-
-int profit(const ParsedReplacement &P) {
-  return constAwareCost(P.Mapping.LHS) - constAwareCost(P.Mapping.RHS);
-}
 
 void PrintInputAndResult(ParsedReplacement Input, ParsedReplacement Result) {
   ReplacementContext RC;
@@ -2508,6 +2476,7 @@ void PrintInputAndResult(ParsedReplacement Input, ParsedReplacement Result) {
                   << InfixPrinter(Result, NoWidth) << "\n";
     Result.print(llvm::errs(), true);
   }
+  llvm::outs().flush();
 }
 
 int main(int argc, char **argv) {
@@ -2550,7 +2519,7 @@ int main(int argc, char **argv) {
       if (!JustReduce) {
 
         bool Changed = false;
-        size_t MaxTries = 3; // Increase this if we ever run with 10/100x timeout.
+        size_t MaxTries = 2; // Increase this if we ever run with 10/100x timeout.
         bool FirstTime = true;
         do {
           if (!OnlyWidth) {

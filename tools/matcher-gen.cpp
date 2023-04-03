@@ -2,6 +2,7 @@
 
 #include "souper/Infer/Preconditions.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
+#include "souper/Infer/SynthUtils.h"
 #include "souper/Parser/Parser.h"
 #include "souper/Tool/GetSolver.h"
 
@@ -319,10 +320,8 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
       return Children[0].first + "." + Str + "(" + std::to_string(I->Width) + ")";
     };
 
-//    auto B = []
-
     auto OP = [&](auto Str) {
-      return Children[0].first + " " + Str + " " + Children[1].first;
+      return "(" + Children[0].first + " " + Str + " " + Children[1].first + ")";
     };
 
     switch (I->K) {
@@ -528,7 +527,7 @@ struct SymbolTable : public std::map<Inst *, std::vector<std::string>> {
 
     auto Print = [&](SymbolTable &Syms, Inst *C){
       auto Name = "C" + std::to_string(varnum++);
-      if (C->Width < 64) {
+      if (C->Width <= 64) {
         Out << "  auto " << Name << " = C("
             << C->Val.getBitWidth() <<", "
             << C->Val << ", B);\n";
@@ -592,7 +591,11 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms, bool IsRoot = false)
         Out << "&" << Syms[Child].back() << " <<= ";
       }
       auto Str = Child->Val.toString(10, false);
-      Out << "m_SpecificInt( " << Child->Width << ", \"" << Str << "\")";
+      if (ExplicitWidths) {
+        Out << "m_SpecificInt(\"" << Str << "\")";
+      } else {
+        Out << "m_SpecificInt( " << Child->Width << ", \"" << Str << "\")";
+      }
     } else if (Child->K == Inst::Var) {
       if (Child->Name.starts_with("symconst")) {
         Out << "m_Constant(&" << Syms[Child].back() << ")";
@@ -614,6 +617,19 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms, bool IsRoot = false)
   return true;
 }
 
+Inst *getSibling(Inst *Child, Inst *Parent) {
+  if (!Child || !Parent) {
+    return nullptr;
+  }
+
+  for (auto Op : Parent->Ops) {
+    if (Op != Child && Op->Width == Child->Width) {
+      return Op;
+    }
+  }
+  return nullptr;
+}
+
 template <typename Stream>
 bool GenRHSCreator(Inst *I, Stream &Out, SymbolTable &Syms) {
   auto It = CreateOps.find(I->K);
@@ -633,6 +649,16 @@ bool GenRHSCreator(Inst *I, Stream &Out, SymbolTable &Syms) {
     }
     if (Syms.find(Child) != Syms.end()) {
       Out << Syms[Child][0];
+      if (Child->K == Inst::Const && Syms[Child][0].starts_with("C")) {
+        auto Sib = getSibling(Child, I);
+        std::string S;
+        if (Syms.find(Sib) != Syms.end()) {
+          if (Syms[Sib][0].starts_with("x")) {
+            S = Syms[Sib][0];
+          }
+        }
+        Out << "(" << S << ")";
+      }
     } else {
       if (!GenRHSCreator(Child, Out, Syms)) {
         return false;
@@ -743,19 +769,15 @@ bool InitSymbolTable(ParsedReplacement Input, Stream &Out, SymbolTable &Syms) {
   return true;
 }
 
-int profitability(const ParsedReplacement &Input) {
-  return souper::cost(Input.Mapping.LHS) -
-    souper::cost(Input.Mapping.RHS);
-}
-
 template <typename Stream>
 bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIndependent) {
   SymbolTable Syms;
   Out << "{\n";
 
-  int prof = profitability(Input);
+  int prof = profit(Input);
   size_t LHSSize = souper::instCount(Input.Mapping.LHS);
-  if (prof < 0 || LHSSize > 15) {
+  if (prof <= 0 || LHSSize > 15) {
+    llvm::errs() << "Skipping replacement profit < 0 or LHS size > 15\n";
     return false;
   }
 
@@ -800,7 +822,11 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
   Out << "  auto ret";
 
   if (Syms.find(Input.Mapping.RHS) != Syms.end()) {
-    Out << " = " << Syms[Input.Mapping.RHS][0] << ";";
+    Out << " = " << Syms[Input.Mapping.RHS][0];
+    if (Syms[Input.Mapping.RHS][0].starts_with("C")) {
+      Out << "(I)";
+    }
+    Out << ";";
   } else if (Input.Mapping.RHS->K == Inst::DemandedMask && Syms.find(Input.Mapping.RHS->Ops[0]) != Syms.end()) {
     assert(DemandedMask == Input.Mapping.RHS->Ops[1] && "DemandedMask mismatch");
     Out << " = " << Syms[Input.Mapping.RHS->Ops[0]][0] << ";";

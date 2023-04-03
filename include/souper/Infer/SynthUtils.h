@@ -142,6 +142,7 @@ ValueCache GetCEX(const ParsedReplacement &Input, InstContext &IC, Solver *S);
 
 std::vector<ValueCache> GetMultipleCEX(ParsedReplacement Input, InstContext &IC, Solver *S, size_t MaxCount);
 
+int profit(const ParsedReplacement &P);
 
 }
 #endif

@@ -314,4 +314,37 @@ std::vector<ValueCache> GetMultipleCEX(ParsedReplacement Input, InstContext &IC,
   return Results;
 }
 
+void tagConstExprs(Inst *I, std::set<Inst *> &Set) {
+  if (I->K == Inst::Const || (I->K == Inst::Var && I->Name.starts_with("sym"))) {
+    Set.insert(I);
+  } else {
+    for (auto Op : I->Ops) {
+      tagConstExprs(Op, Set);
+    }
+  }
+
+  if (I->Ops.size() > 0) {
+    bool foundNonConst = false;
+    for (auto Op : I->Ops) {
+      if (Set.find(Op) == Set.end()) {
+        foundNonConst = true;
+        break;
+      }
+    }
+    if (!foundNonConst) {
+      Set.insert(I);
+    }
+  }
+}
+
+size_t constAwareCost(Inst *I) {
+  std::set<Inst *> ConstExprs;
+  tagConstExprs(I, ConstExprs);
+  return souper::cost(I, false, ConstExprs);
+}
+
+int profit(const ParsedReplacement &P) {
+  return constAwareCost(P.Mapping.LHS) - constAwareCost(P.Mapping.RHS);
+}
+
 }
