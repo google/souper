@@ -771,6 +771,9 @@ std::vector<Inst *> InferConstantLimits(
           });
 
   for (auto &&[XI, XC] : CMap) {
+    if (XI->Width == 1) {
+      continue;
+    }
     // X < Width, X <= Width
     auto Width = Builder(XI, IC).BitWidth();
     Results.push_back(Builder(XI, IC).Ult(Width)());
@@ -968,7 +971,7 @@ std::vector<Inst *> InferPotentialRelations(
       // Mul C
       if (C2 && YC!= 0 && XC.urem(YC) == 0) {
         auto Fact = XC.udiv(YC);
-        if (Fact != 1) {
+        if (Fact != 1 && Fact != 0) {
           Results.push_back(Builder(YI, IC).Mul(Fact).Eq(XI)());
         }
       }
@@ -981,7 +984,7 @@ std::vector<Inst *> InferPotentialRelations(
 
       if (C2 && XC != 0 && YC.urem(XC) == 0) {
         auto Fact = YC.udiv(XC);
-        if (Fact != 1) {
+        if (Fact != 1 && Fact != 0) {
           Results.push_back(Builder(XI, IC).Mul(Fact).Eq(YI)());
         }
       }
@@ -2483,14 +2486,14 @@ void PrintInputAndResult(ParsedReplacement Input, ParsedReplacement Result) {
   if (DebugLevel > 1) {
       llvm::errs() << "IR Input: \n";
     ReplacementContext RC;
-    Input.printLHS(llvm::outs(), RC, true);
-    Input.printRHS(llvm::outs(), RC, true);
-    llvm::outs() << "\n";
+    Input.printLHS(llvm::errs(), RC, true);
+    Input.printRHS(llvm::errs(), RC, true);
+    llvm::errs() << "\n";
     llvm::errs() << "\n\tInput (profit=" << profit(Input) <<  "):\n\n"
                   << InfixPrinter(Input)
                   << "\n\tGeneralized (profit=" << profit(Result) << "):\n\n"
                   << InfixPrinter(Result, NoWidth) << "\n";
-    Result.print(llvm::errs(), true);
+    // Result.print(llvm::errs(), true);
   }
   llvm::outs().flush();
 }

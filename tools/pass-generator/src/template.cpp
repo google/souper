@@ -567,6 +567,21 @@ namespace util {
   llvm::APInt V(llvm::Value *Ctx, std::string Val) {
     return llvm::APInt(Ctx->getType()->getIntegerBitWidth(), Val, 2);
   }
+
+  llvm::APInt W(llvm::Value *Ctx) {
+    return llvm::APInt(Ctx->getType()->getIntegerBitWidth(), Ctx->getType()->getIntegerBitWidth());
+  }
+  llvm::APInt W(llvm::Value *Ctx, size_t WidthOfWidth) {
+    return llvm::APInt(WidthOfWidth, Ctx->getType()->getIntegerBitWidth());
+  }
+}
+
+bool operator < (int x, const llvm::APInt &B) {
+  return llvm::APInt(B.getBitWidth(), x).ult(B);
+}
+
+llvm::APInt shl(int A, llvm::APInt B) {
+  return llvm::APInt(B.getBitWidth(), A).shl(B);
 }
 
 struct SouperCombine : public FunctionPass {
@@ -698,6 +713,10 @@ struct SouperCombine : public FunctionPass {
 
   Type *T(size_t W, IRBuilder *B) {
     return B->getIntNTy(W);
+  }
+
+  Type *T(llvm::Value *V) {
+    return V->getType();
   }
 
   InstructionWorklist W;
