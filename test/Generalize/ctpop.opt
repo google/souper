@@ -8,9 +8,9 @@ infer %2
 %3:i1 = eq 255:i8, %v0
 result %3
 
-; CHECK: C1:i8 == (width(v0:i8) - 1)
+; CHECK: C1:i8 == (width(C1) - 1)
 ; CHECK:  |=
-; CHECK: C1 <u ctpop(v0)
+; CHECK: C1 <u ctpop(v0:i8)
 ; CHECK:  =>
 ; CHECK: v0 == 0xFF
 ; TODO: synthesize independent fn instead of 255
