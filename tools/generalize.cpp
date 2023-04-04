@@ -729,11 +729,11 @@ std::vector<Inst *> FilterRelationsByValue(const std::vector<Inst *> &Relations,
 
   std::vector<Inst *> FilteredRelations;
   for (auto &&R : Relations) {
-    auto Result = CPos.evaluateInst(R);
-    // Positive example
-    if (Result.hasValue() && !Result.getValue().isAllOnesValue()) {
-      continue;
-    }
+    // auto Result = CPos.evaluateInst(R);
+    // // Positive example
+    // if (Result.hasValue() && !Result.getValue().isAllOnesValue()) {
+    //   continue;
+    // }
 
     // Negative examples
     bool foundUnsound = false;
@@ -760,6 +760,10 @@ std::vector<Inst *> InferConstantLimits(
   if (!FindConstantRelations) {
     return Results;
   }
+
+  std::vector<Inst *> Inputs;
+  findVars(Input.Mapping.LHS, Inputs);
+
   auto ConcreteConsts = findConcreteConsts(Input);
   std::sort(ConcreteConsts.begin(), ConcreteConsts.end(),
           [](auto A, auto B) {
@@ -772,19 +776,40 @@ std::vector<Inst *> InferConstantLimits(
 
   for (auto &&[XI, XC] : CMap) {
     // X < Width, X <= Width
-    auto Width = Builder(XI, IC).BitWidth();
-    Results.push_back(Builder(XI, IC).Ult(Width)());
-    Results.push_back(Builder(XI, IC).Ule(Width)());
+    Inputs.push_back(XI);
+    for (auto I : Inputs) {
+      Inst *W = Builder(I, IC).BitWidth()();
 
-    // X slt SMAX, x ult UMAX
-    auto WM1 = Width.Sub(1);
-    auto SMax = Builder(IC, llvm::APInt(XI->Width, 1)).Shl(WM1).Sub(1)();
-    Results.push_back(Builder(XI, IC).Slt(SMax)());
+      if (I->Width > XI->Width) {
+        W = Builder(W, IC).Trunc(XI->Width)();
+      } else if (I->Width < XI->Width) {
+        W = Builder(W, IC).ZExt(XI->Width)();
+      }
 
-    auto gZ = Builder(XI, IC).Ugt(0)();
+      auto Width = Builder(W, IC);
 
-    Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
-    Results.push_back(Builder(XI, IC).Ule(Width).And(gZ)());
+      // X Ule SMAX, x Ule UMAX
+      auto WM1 = Width.Sub(1);
+      auto SMax = Builder(IC, llvm::APInt(XI->Width, 1)).Shl(WM1).Sub(1);
+      auto UMax = SMax.Shl(1).Add(1);
+      Results.push_back(Builder(XI, IC).Ule(UMax)());
+      Results.push_back(Builder(XI, IC).Ule(SMax)());
+      Results.push_back(Builder(XI, IC).Ult(UMax)());
+      Results.push_back(Builder(XI, IC).Ult(SMax)());
+
+      Results.push_back(Builder(XI, IC).Ult(Width)());
+      Results.push_back(Builder(XI, IC).Ule(Width)());
+
+      auto gZ = Builder(XI, IC).Ugt(0)();
+
+      Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
+      Results.push_back(Builder(XI, IC).Ule(Width).And(gZ)());
+
+      Results.push_back(Builder(XI, IC).Eq(Width.Sub(1))());
+      Results.push_back(Builder(XI, IC).Eq(Width.UDiv(2))());
+      Results.push_back(Builder(XI, IC).Eq(Width)());
+    }
+    Inputs.pop_back();
 
     // 2 * X < C, 2 * X >= C
     for (auto C : ConcreteConsts) {
@@ -822,6 +847,7 @@ std::vector<Inst *> InferConstantLimits(
       }
     }
   }
+  // return Results;
   return FilterRelationsByValue(Results, CMap, CEXs);
 }
 
@@ -1015,9 +1041,6 @@ std::vector<Inst *> InferPotentialRelations(
       // }
 
     }
-    Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth().Sub(1))());
-    // Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth().UDiv(2))());
-    // Results.push_back(Builder(XI, IC).Eq(Builder(XI, IC).BitWidth())());
   }
 
   // TODO: Make sure this works.
@@ -1252,7 +1275,22 @@ std::optional<ParsedReplacement> VerifyWithRels(InstContext &IC, Solver *S,
 
   for (auto Rel : Rels) {
     Input.PCs.push_back({Rel, IC.getConst(llvm::APInt(1, 1))});
+
+    // Input.print(llvm::errs(), true);
+
+    // llvm::errs() << "\n";
+
+    // InfixPrinter IP(Input, true);
+    // IP(llvm::errs());
+
+    // llvm::errs() << "\n";
+
+
     auto Clone = Verify(Input, IC, S);
+
+    // llvm::errs() << "Valid? " << (Clone ? "yes" : "no") << "\n";
+
+
     if (Clone) {
       ValidRels.push_back(Rel);
       FirstValidResult = Clone.value();

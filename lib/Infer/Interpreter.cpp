@@ -480,13 +480,16 @@ namespace souper {
     if (Cache.find(Root) != Cache.end())
       return Cache[Root];
 
-    // TODO SmallVector
+    if (Root->K == Inst::BitWidth) {
+      return {llvm::APInt(Root->Width, Root->Width)};
+    }
+
     std::vector<EvalValue> EvaluatedArgs;
     for (auto &&I : Root->Ops)
       EvaluatedArgs.push_back(evaluateInst(I));
-    auto Result = evaluateSingleInst(Root, EvaluatedArgs);
-    if (CacheWritable)
-      Cache[Root] = Result;
+      auto Result = evaluateSingleInst(Root, EvaluatedArgs);
+      if (CacheWritable)
+        Cache[Root] = Result;
     return Result;
   }
 
