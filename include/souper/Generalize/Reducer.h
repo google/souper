@@ -25,7 +25,7 @@ public:
   // Eventually replace the functions in Preconditions{.h/.cpp} with this.
   // Does not produce exhaustive result. TODO Have an option to wrap in a cegis loop.
   bool inferKBPrecondition(ParsedReplacement &Input, std::vector<Inst *> Targets);
-  
+
   ParsedReplacement ReduceGreedyKBIFY(ParsedReplacement Input);
 
   ParsedReplacement ReduceRedundantPhis(ParsedReplacement Input);
@@ -42,6 +42,8 @@ public:
   ParsedReplacement WeakenOther(ParsedReplacement Input);
 
   ParsedReplacement ReducePCsToDF(ParsedReplacement Input);
+
+  ParsedReplacement ReducePoison(ParsedReplacement Input);
 
   bool VerifyInput(ParsedReplacement &Input);
 

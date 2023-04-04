@@ -668,12 +668,7 @@ struct ShrinkWrap {
       llvm::errs() << "Type check failed\n";
       return {};
     }
-    auto Clone = Verify(New, IC, S);
-    if (Clone.Mapping.LHS) {
-      return Clone;
-    } else {
-      return {};
-    }
+    return Verify(New, IC, S);
   }
 };
 
@@ -778,18 +773,18 @@ std::vector<Inst *> InferConstantLimits(
   for (auto &&[XI, XC] : CMap) {
     // X < Width, X <= Width
     auto Width = Builder(XI, IC).BitWidth();
-    // Results.push_back(Builder(XI, IC).Ult(Width)());
-    // Results.push_back(Builder(XI, IC).Ule(Width)());
+    Results.push_back(Builder(XI, IC).Ult(Width)());
+    Results.push_back(Builder(XI, IC).Ule(Width)());
 
     // X slt SMAX, x ult UMAX
     auto WM1 = Width.Sub(1);
     auto SMax = Builder(IC, llvm::APInt(XI->Width, 1)).Shl(WM1).Sub(1)();
     Results.push_back(Builder(XI, IC).Slt(SMax)());
 
-    // auto gZ = Builder(XI, IC).Ugt(0)();
+    auto gZ = Builder(XI, IC).Ugt(0)();
 
-    // Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
-    // Results.push_back(Builder(XI, IC).Ule(Width).And(gZ)());
+    Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
+    Results.push_back(Builder(XI, IC).Ule(Width).And(gZ)());
 
     // 2 * X < C, 2 * X >= C
     for (auto C : ConcreteConsts) {
@@ -1079,7 +1074,7 @@ std::set<Inst *> findConcreteConsts(Inst *I) {
   return Ret;
 }
 
-ParsedReplacement DFPreconditionsAndVerifyGreedy(
+std::optional<ParsedReplacement> DFPreconditionsAndVerifyGreedy(
   ParsedReplacement Input, InstContext &IC, Solver *S,
   std::map<Inst *, llvm::APInt> SymCS) {
 
@@ -1096,10 +1091,10 @@ ParsedReplacement DFPreconditionsAndVerifyGreedy(
     C.first->KnownOnes = C.second;
   }
 
-  ParsedReplacement Ret;
+  std::optional<ParsedReplacement> Ret;
   auto SOLVE = [&]() -> bool {
     Ret = Verify(Input, IC, S);
-    if (Ret.Mapping.LHS && Ret.Mapping.RHS) {
+    if (Ret) {
       return true;
     } else {
       return false;
@@ -1136,14 +1131,12 @@ ParsedReplacement DFPreconditionsAndVerifyGreedy(
       P.first->KnownZeros = P.second.first;
       P.first->KnownOnes = P.second.second;
     }
-    Clone.Mapping.LHS = nullptr;
-    Clone.Mapping.RHS = nullptr;
-    return Clone;
+    return Ret;
   }
 
 }
 
-ParsedReplacement SimplePreconditionsAndVerifyGreedy(
+std::optional<ParsedReplacement> SimplePreconditionsAndVerifyGreedy(
         ParsedReplacement Input, InstContext &IC,
         Solver *S, std::map<Inst *, llvm::APInt> SymCS) {
   // Assume Input is not valid
@@ -1155,13 +1148,11 @@ ParsedReplacement SimplePreconditionsAndVerifyGreedy(
   }
   std::swap(SymCS, NonBools);
 
-  ParsedReplacement Clone;
-  Clone.Mapping.LHS = nullptr;
-  Clone.Mapping.RHS = nullptr;
+  std::optional<ParsedReplacement> Clone = std::nullopt;
 
   auto SOLVE = [&]() -> bool {
     Clone = Verify(Input, IC, S);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return true;
     } else {
       return false;
@@ -1232,7 +1223,9 @@ size_t BruteForceModelCount(Inst *Pred) {
 
   do {
     ConcreteInterpreter CI(Cache);
-    if (CI.evaluateInst(Pred).getValue().getBoolValue()) {
+
+    if (CI.evaluateInst(Pred).hasValue() &&
+        CI.evaluateInst(Pred).getValue().getBoolValue()) {
       ++ModelCount;
     }
   } while (Update());
@@ -1260,9 +1253,9 @@ std::optional<ParsedReplacement> VerifyWithRels(InstContext &IC, Solver *S,
   for (auto Rel : Rels) {
     Input.PCs.push_back({Rel, IC.getConst(llvm::APInt(1, 1))});
     auto Clone = Verify(Input, IC, S);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       ValidRels.push_back(Rel);
-      FirstValidResult = Clone;
+      FirstValidResult = Clone.value();
       if (Rels.size() > 10) {
         return Clone;
       }
@@ -1300,7 +1293,7 @@ std::optional<ParsedReplacement> VerifyWithRels(InstContext &IC, Solver *S,
 }
 
 
-ParsedReplacement
+std::optional<ParsedReplacement>
 FirstValidCombination(ParsedReplacement Input,
                       const std::vector<Inst *> &Targets,
                       const std::vector<std::vector<Inst *>> &Candidates,
@@ -1356,9 +1349,7 @@ FirstValidCombination(ParsedReplacement Input,
       }
     }
 
-    auto Clone = Input;
-    Clone.Mapping.LHS = nullptr;
-    Clone.Mapping.RHS = nullptr;
+    std::optional<ParsedReplacement> Clone = std::nullopt;
 
     auto SOLVE = [&](ParsedReplacement P) -> bool {
       // InfixPrinter IP(P);
@@ -1367,7 +1358,7 @@ FirstValidCombination(ParsedReplacement Input,
 
       if (GEN) {
         Clone = Verify(P, IC, S);
-        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        if (Clone) {
           return true;
         }
       }
@@ -1383,14 +1374,14 @@ FirstValidCombination(ParsedReplacement Input,
       if (SDF) {
         Clone = SimplePreconditionsAndVerifyGreedy(P, IC, S, SymCS);
 
-        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        if (Clone) {
           return true;
         }
       }
 
       if (DFF) {
         Clone = DFPreconditionsAndVerifyGreedy(P, IC, S, SymCS);
-        if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+        if (Clone) {
           return true;
         }
       }
@@ -1421,9 +1412,7 @@ FirstValidCombination(ParsedReplacement Input,
 
   }
 
-  Input.Mapping.LHS = nullptr;
-  Input.Mapping.RHS = nullptr;
-  return Input;
+  return std::nullopt;
 }
 
 
@@ -1902,6 +1891,7 @@ ParsedReplacement ReduceBasic(InstContext &IC,
   }
   Input = R.ReducePCs(Input);
   Input = R.ReducePCsToDF(Input);
+  Input = R.ReducePoison(Input);
   return Input;
 }
 
@@ -1931,7 +1921,7 @@ ParsedReplacement DeAugment(InstContext &IC,
 }
 
 // Assuming the input has leaves pruned and preconditions weakened
-ParsedReplacement SuccessiveSymbolize(InstContext &IC,
+std::optional<ParsedReplacement> SuccessiveSymbolize(InstContext &IC,
                             Solver *S, ParsedReplacement Input, bool &Changed,
                             std::vector<std::pair<Inst *, llvm::APInt>> ConstMap = {}) {
 
@@ -1939,30 +1929,6 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   // Prelude
   bool Nested = !ConstMap.empty();
   auto Original = Input;
-  if (!NoWidth && !Nested && !hasMultiArgumentPhi(Input.Mapping.LHS)) {
-    ShrinkWrap Shrink(IC, S, Input, 8);
-    auto Smol = Shrink();
-    if (Smol) {
-      if (DebugLevel > 2) {
-        llvm::errs() << "Shrinked: \n";
-        InfixPrinter P(Smol.value());
-        P(llvm::errs());
-        Smol->print(llvm::errs(), true);
-        llvm::errs() << "\n";
-        if (DebugLevel > 4) {
-          Smol.value().print(llvm::errs(), true);
-        }
-      }
-      Input = Smol.value();
-
-      // Input.print(llvm::errs(), true);
-
-    } else {
-      if (DebugLevel > 2) {
-        llvm::errs() << "Shrinking failed\n";
-      }
-    }
-  }
 
   auto Fresh = Input;
   size_t ticks = std::clock();
@@ -2039,12 +2005,12 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   if (!CommonConsts.empty()) {
     Result = Replace(Result, IC, CommonConsts);
     auto Clone = Verify(Result, IC, S);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
 
     Clone = SimplePreconditionsAndVerifyGreedy(Result, IC, S, SymCS);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
 
@@ -2097,14 +2063,14 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     auto Copy = Replace(Input, IC, JustLHSSymConstMap);
 
     auto Clone = SimplePreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
 
     Refresh("LHS Constraints");
 
     Clone = DFPreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
   }
@@ -2129,7 +2095,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
     auto Clone = FirstValidCombination(Input, RHSFresh, UnitaryCandidates,
                                   InstCache, IC, S, SymCS, true, false, false, Relations);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
     Refresh("Unitary cands, rel constraints");
@@ -2145,16 +2111,9 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
                                        InstCache, IC, S, SymCS,
                                        true, false, false);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
-
-    Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
-                                  InstCache, IC, S, SymCS, true, false, false, ConstantLimits);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
-      return Clone;
-    }
-
   }
   Refresh("Special expressions, no constants");
 
@@ -2175,7 +2134,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   if (!EnumeratedCandidates.empty()) {
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
                                   InstCache, IC, S, SymCS, true, false, false);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
     Refresh("Enumerated cands, no constraints");
@@ -2191,7 +2150,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
                                   InstCache, IC, S, SymCS, true, false, false);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
   }
@@ -2200,7 +2159,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   if (!EnumeratedCandidates.empty()) {
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
                                   InstCache, IC, S, SymCS, false, true, true);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
 
@@ -2211,7 +2170,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
 
       auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
                                           InstCache, IC, S, SymCS, true, false, false, Relations);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      if (Clone) {
         return Clone;
       }
     }
@@ -2227,7 +2186,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
                   //  << "\tRels: " << Relations.size() << "\n";
       auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidatesTwoInsts,
                                           InstCache, IC, S, SymCS, true, false, false, Relations);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      if (Clone) {
         return Clone;
       }
     }
@@ -2243,7 +2202,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
     auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
                                         InstCache, IC, S, SymCS,
                                         true, false, false);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
   }
@@ -2255,7 +2214,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   if (!EnumeratedCandidates.empty() && !Nested) {
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
                                         InstCache, IC, S, SymCS, true, true, true, Relations);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
     Refresh("Enumerated exprs with constraints and relations");
@@ -2266,14 +2225,14 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   if (!SimpleCandidates.empty()) {
     auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
                                        InstCache, IC, S, SymCS, false, true, true);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
     Refresh("Simple cands with constraints");
 
     Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
                                         InstCache, IC, S, SymCS, true, false, false, Relations);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
     Refresh("Simple cands with constraints and relations");
@@ -2284,14 +2243,14 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   if (!SimpleCandidatesWithConsts.empty() && !Nested) {
     auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
                                        InstCache, IC, S, SymCS, false, true, true);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
     Refresh("Simple cands+consts with constraints");
 
     Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
                                         InstCache, IC, S, SymCS, true, true, true, Relations);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
 
@@ -2319,16 +2278,23 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
   if (!EnumeratedCandidates.empty()) {
     auto Clone = FirstValidCombination(Input, RHSFresh, EnumeratedCandidates,
                                         InstCache, IC, S, SymCS, true, true, false, ConstantLimits);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
     Refresh("Enumerated expressions+consts and constant limits");
   }
 
+  if (!SimpleCandidates.empty()) {
+      auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidates,
+                                  InstCache, IC, S, SymCS, true, false, false, ConstantLimits);
+    if (Clone) {
+      return Clone;
+    }
+  }
   if (!SimpleCandidatesWithConsts.empty()) {
     auto Clone = FirstValidCombination(Input, RHSFresh, SimpleCandidatesWithConsts,
                                         InstCache, IC, S, SymCS, true, false, false, ConstantLimits);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return Clone;
     }
     Refresh("Simple expressions+consts and constant limits");
@@ -2352,7 +2318,7 @@ ParsedReplacement SuccessiveSymbolize(InstContext &IC,
       bool SymDFChanged = false;
 
       auto Clone = Verify(Aug, IC, S);
-      if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+      if (Clone) {
         // Symbolic db+kb can be unconstrained
         // very unlikely? test if needed
         return Clone;
@@ -2451,12 +2417,62 @@ InstantiateWidthChecks(InstContext &IC,
   return {Input, false};
 }
 
+std::optional<ParsedReplacement> GeneralizeShrinked(
+  ParsedReplacement Input, InstContext &IC, Solver *S) {
+
+  if (hasMultiArgumentPhi(Input.Mapping.LHS)) {
+    return std::nullopt;
+  }
+
+  ShrinkWrap Shrink(IC, S, Input, 8);
+  auto Smol = Shrink();
+
+  if (Smol) {
+    if (DebugLevel > 2) {
+      llvm::errs() << "Shrinked: \n";
+      InfixPrinter P(Smol.value());
+      P(llvm::errs());
+      Smol->print(llvm::errs(), true);
+      llvm::errs() << "\n";
+      if (DebugLevel > 4) {
+        Smol.value().print(llvm::errs(), true);
+      }
+    }
+    Input = Smol.value();
+
+    // Input.print(llvm::errs(), true);
+
+  } else {
+    if (DebugLevel > 2) {
+      llvm::errs() << "Shrinking failed\n";
+    }
+    return std::nullopt;
+  }
+
+  bool Changed = false;
+
+  auto Gen = SuccessiveSymbolize(IC, S, Smol.value(), Changed);
+
+  if (!Changed || !Gen) {
+    if (DebugLevel > 2) {
+      llvm::errs() << "Shrinking failed\n";
+    }
+    return std::nullopt; // Generalization failed.
+  }
+
+  auto [GenWidth, WidthChanged] = InstantiateWidthChecks(IC, S, Gen.value());
+
+  if (!WidthChanged) {
+    return std::nullopt; // Width independence check failed.
+  }
+  return Gen;
+}
+
 template<typename Stream>
 Stream &operator<<(Stream &S, InfixPrinter IP) {
   IP(S);
   return S;
 }
-
 
 void PrintInputAndResult(ParsedReplacement Input, ParsedReplacement Result) {
   ReplacementContext RC;
@@ -2519,14 +2535,28 @@ int main(int argc, char **argv) {
       if (!JustReduce) {
 
         bool Changed = false;
-        size_t MaxTries = 2; // Increase this if we ever run with 10/100x timeout.
+        size_t MaxTries = 1; // Increase this if we ever run with 10/100x timeout.
         bool FirstTime = true;
         do {
           if (!OnlyWidth) {
             if (Changed) {
               Result = ReduceBasic(IC, S.get(), Result);
             }
-            Result = SuccessiveSymbolize(IC, S.get(), Result, Changed);
+
+            std::optional<ParsedReplacement> Opt;
+            if (!NoWidth) {
+              Opt = GeneralizeShrinked(Result, IC, S.get());
+            }
+
+            if (!Opt) {
+              Opt = SuccessiveSymbolize(IC, S.get(), Result, Changed);
+            } else {
+              Changed = true;
+            }
+
+            if (Opt) {
+              Result = *Opt;
+            }
           }
           bool Indep = false;
           if (!NoWidth) {

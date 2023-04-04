@@ -461,16 +461,6 @@ size_t WeakenSingleCR(ParsedReplacement Input, InstContext &IC, Solver *S,
     return 0; // fail
   }
 
-  ParsedReplacement Ret;
-  auto SOLVE = [&]() -> bool {
-    Ret = Verify(Input, IC, S);
-    if (Ret.Mapping.LHS && Ret.Mapping.RHS) {
-      return true;
-    } else {
-      return false;
-    }
-  };
-
   auto Restore = Target->Range;
 
   // Binary search to extend upper and lower boundaries
@@ -494,7 +484,7 @@ size_t WeakenSingleCR(ParsedReplacement Input, InstContext &IC, Solver *S,
       Attempt = Full.getLower();
     }
     Target->Range = llvm::ConstantRange(L, Attempt);
-    if (SOLVE()) {
+    if (Verify(Input, IC, S)) {
       U = Attempt;
 //      llvm::errs() << "U " << Attempt << '\n';
       inc *= 2;
@@ -513,7 +503,7 @@ size_t WeakenSingleCR(ParsedReplacement Input, InstContext &IC, Solver *S,
       Attempt = Full.getLower();
     }
     Target->Range = llvm::ConstantRange(Attempt, U);
-    if (SOLVE()) {
+    if (Verify(Input, IC, S)) {
       L = Attempt;
 //      llvm::errs() << "L " << Attempt << '\n';
       dec *= 2;
@@ -571,16 +561,6 @@ size_t WeakenSingleKB(ParsedReplacement Input, InstContext &IC, Solver *S,
     return 0; // No bits weakened
   }
 
-  ParsedReplacement Ret;
-  auto SOLVE = [&]() -> bool {
-    Ret = Verify(Input, IC, S);
-    if (Ret.Mapping.LHS && Ret.Mapping.RHS) {
-      return true;
-    } else {
-      return false;
-    }
-  };
-
   llvm::APInt RestoreZero = Target->KnownZeros;
   llvm::APInt RestoreOne = Target->KnownOnes;
 
@@ -598,7 +578,7 @@ size_t WeakenSingleKB(ParsedReplacement Input, InstContext &IC, Solver *S,
     if (OriO[i] == 1) Target->KnownOnes.clearBit(i);
     if (OriZ[i] == 1) Target->KnownZeros.clearBit(i);
 
-    if (!SOLVE()) {
+    if (!Verify(Input, IC, S)) {
       Target->KnownZeros = OriZ;
       Target->KnownOnes = OriO;
     } else {
@@ -665,7 +645,7 @@ ParsedReplacement Reducer::ReducePCs(ParsedReplacement Input) {
     }
 
     auto Clone = Verify(Result, IC, S);
-    if (Clone.Mapping.LHS && Clone.Mapping.RHS) {
+    if (Clone) {
       return ReducePCs(Result);
     }
   }
@@ -963,6 +943,92 @@ void Reducer::ReduceRec(ParsedReplacement Input_, std::vector<ParsedReplacement>
       }
     }
   }
+}
+
+Inst *NonPoisonReplacement(Inst *I, InstContext &IC) {
+  Inst::Kind K = I->K;
+  switch (I->K) {
+    case Inst::AddNW:
+    case Inst::AddNUW:
+    case Inst::AddNSW:
+      K = Inst::Add;
+      break;
+    case Inst::SubNW:
+    case Inst::SubNUW:
+    case Inst::SubNSW:
+      K = Inst::Sub;
+      break;
+    case Inst::MulNW:
+    case Inst::MulNUW:
+    case Inst::MulNSW:
+      K = Inst::Mul;
+      break;
+    case Inst::ShlNW:
+    case Inst::ShlNUW:
+    case Inst::ShlNSW:
+      K = Inst::Shl;
+      break;
+    case Inst::UDivExact:
+      K = Inst::UDiv;
+      break;
+    case Inst::SDivExact:
+      K = Inst::SDiv;
+      break;
+    default:
+      llvm_unreachable("Expected instruction with poison flag.");
+  }
+
+  auto Ret =  IC.getInst(K, I->Width, I->Ops);
+  Ret->Name = I->Name;
+  Ret->DemandedBits = I->DemandedBits;
+  return Ret;
+}
+
+void CollectPoisonInsts(Inst *I, std::set<Inst *> &PoisonInsts,
+                        std::set<Inst *> &Visited) {
+  if (Visited.find(I) != Visited.end()) {
+    return;
+  }
+  Visited.insert(I);
+
+  if (I->K == Inst::AddNSW || I->K == Inst::AddNUW || I->K == Inst::AddNW ||
+      I->K == Inst::SubNSW || I->K == Inst::SubNUW || I->K == Inst::SubNW ||
+      I->K == Inst::MulNSW || I->K == Inst::MulNUW || I->K == Inst::MulNW ||
+      I->K == Inst::ShlNSW || I->K == Inst::ShlNUW || I->K == Inst::ShlNW ||
+      I->K == Inst::UDivExact || I->K == Inst::SDivExact) {
+    PoisonInsts.insert(I);
+  }
+
+  for (auto &&Op : I->Ops) {
+    CollectPoisonInsts(Op, PoisonInsts, Visited);
+  }
+}
+
+ParsedReplacement Reducer::ReducePoison(ParsedReplacement Input) {
+  std::set<Inst *> PoisonInsts;
+  std::set<Inst *> Visited;
+  CollectPoisonInsts(Input.Mapping.LHS, PoisonInsts, Visited);
+  CollectPoisonInsts(Input.Mapping.RHS, PoisonInsts, Visited);
+  for (auto &&PC : Input.PCs) {
+    CollectPoisonInsts(PC.LHS, PoisonInsts, Visited);
+    CollectPoisonInsts(PC.RHS, PoisonInsts, Visited);
+  }
+
+  for (auto I : PoisonInsts) {
+    auto Rep = NonPoisonReplacement(I, IC);
+    if (!Rep) {
+      continue;
+    }
+    std::map<Inst *, Inst *> Cache = {{I, NonPoisonReplacement(I, IC)}};
+
+    auto Cand = Replace(Input, IC, Cache);
+
+    if (VerifyInput(Cand)) {
+      Input = Cand;
+    }
+  }
+
+  return Input;
 }
 
 

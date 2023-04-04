@@ -391,6 +391,10 @@ namespace util {
     }
     auto W = V->getType()->getIntegerBitWidth();
 
+    // if (Val.size() != W) {
+    //   return false;
+    // }
+
     llvm::APInt Value(W, Val, 2);
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
       auto X = Con->getUniqueInteger();
@@ -417,6 +421,11 @@ namespace util {
       return false;
     }
     auto W = V->getType()->getIntegerBitWidth();
+
+    // if (Val.size() != W) {
+    //   return false;
+    // }
+
     llvm::APInt Value(W, Val, 2);
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
       auto X = Con->getUniqueInteger();
@@ -445,6 +454,11 @@ namespace util {
   }
 
   bool vdb(llvm::DemandedBits *DB, llvm::Instruction *I, std::string DBUnderApprox) {
+
+    // if (DBUnderApprox.size() != I->getType()->getIntegerBitWidth()) {
+    //   return false;
+    // }
+
     llvm::APInt V = llvm::APInt(I->getType()->getIntegerBitWidth(), DBUnderApprox, 2);
     auto ComputedDB = DB->getDemandedBits(I);
 
@@ -597,7 +611,8 @@ struct SouperCombine : public FunctionPass {
             !isa<StoreInst>(&I) &&
             !isa<LoadInst>(&I) &&
             !isa<GetElementPtrInst>(&I) &&
-            !isa<CallInst>(&I)) {
+            !isa<CallInst>(&I) &&
+            I.getType()->isIntegerTy()) {
           W.push(&I);
         }
       }

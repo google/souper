@@ -131,7 +131,7 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC);
 
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
-ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S);
+std::optional<ParsedReplacement> Verify(ParsedReplacement Input, InstContext &IC, Solver *S);
 // bool IsValid(ParsedReplacement Input, InstContext &IC, Solver *S);
 
 std::map<Inst *, llvm::APInt> findOneConstSet(ParsedReplacement Input, const std::set<Inst *> &SymCS, InstContext &IC, Solver *S);

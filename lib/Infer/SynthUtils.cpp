@@ -84,7 +84,7 @@ ParsedReplacement Clone(ParsedReplacement In, InstContext &IC) {
 
 // Also Synthesizes given constants
 // Returns clone if verified, nullptrs if not
-ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
+std::optional<ParsedReplacement> Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
 
   // if (Input.PCs.empty()) {
   //   SynthesisContext SC{IC, S->getSMTLIBSolver(), Input.Mapping.LHS, nullptr,
@@ -131,8 +131,7 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
         llvm::errs() << "Constant Synthesis ((no Dataflow Preconditions)) failed. \n";
       }
     }
-    Input.Mapping = InstMapping(nullptr, nullptr);
-    return Input;
+    return std::nullopt;
   }
   std::vector<std::pair<Inst *, llvm::APInt>> Models;
   bool IsValid;
@@ -144,8 +143,7 @@ ParsedReplacement Verify(ParsedReplacement Input, InstContext &IC, Solver *S) {
   } else {
     static int C = 0;
 //    llvm::errs() << "C " << C++ << '\n';
-    Input.Mapping = InstMapping(nullptr, nullptr);
-    return Input;
+    return std::nullopt;
     // TODO: Better failure indication?
   }
 }

@@ -124,8 +124,7 @@ void souper::HarvestAndPrintOpts(InstContext &IC, ExprBuilderContext &EBC, llvm:
 
 //          Rep.print(llvm::outs(), true);
 
-          auto Clone = Verify(Rep, IC, S);
-          if (Clone.Mapping.RHS && Clone.Mapping.LHS) {
+          if (Verify(Rep, IC, S)) {
             if (isProfitable(Rep)) {
               BlockPCs BPCs;
               std::vector<InstMapping> PCs;

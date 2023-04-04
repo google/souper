@@ -1089,7 +1089,7 @@ std::string souper::GetReplacementLHSString(const BlockPCs &BPCs,
     Inst *LHS, ReplacementContext &Context, bool printNames) {
   std::string Str;
   llvm::raw_string_ostream SS(Str);
-  PrintReplacementLHS(SS, BPCs, PCs, LHS, Context);
+  PrintReplacementLHS(SS, BPCs, PCs, LHS, Context, printNames);
   return SS.str();
 }
 
