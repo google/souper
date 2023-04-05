@@ -533,7 +533,7 @@ struct SymbolTable : public std::map<Inst *, std::string> {
     for (auto V : Vars) {
       auto Name = this->at(V);
 
-      if (!WidthIndependent || LHS->Width == 1 || V->Width == 1) {
+      if (!WidthIndependent || V->Width == 1) {
         Constraints.push_back(new WidthEq(Name, V->Width));
       }
 
@@ -660,7 +660,7 @@ bool GenLHSMatcher(Inst *I, Stream &Out, SymbolTable &Syms, bool IsRoot = false)
       }
       auto Str = Child->Val.toString(10, false);
       if (OnlyExplicitWidths) {
-        Out << "m_SpecificInt(\"" << Str << "\")";
+        Out << "m_ExtInt(\"" << Str << "\", " << Child->Width << ")";
       } else {
         Out << "m_SpecificInt( " << Child->Width << ", \"" << Str << "\")";
       }

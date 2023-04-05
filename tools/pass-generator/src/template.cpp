@@ -226,8 +226,36 @@ inline width_specific_intval m_SpecificInt(size_t W, std::string S) {
   return width_specific_intval(APInt(W, S, 10), W);
 }
 
-inline specific_intval<false> m_SpecificInt(std::string S) {
-  return specific_intval<false>(APInt(64, S, 10));
+struct specific_ext_intval {
+  llvm::APInt Val;
+
+  specific_ext_intval(std::string S, size_t W) : Val(llvm::APInt(W, S, 10)) {}
+
+  template <typename ITy> bool match(ITy *V) {
+    const auto *CI = dyn_cast<ConstantInt>(V);
+    if (!CI && V->getType()->isVectorTy())
+      if (const auto *C = dyn_cast<Constant>(V))
+        CI = dyn_cast_or_null<ConstantInt>(C->getSplatValue(true));
+
+    if (!CI)
+      return false;
+
+    auto TargetVal = CI->getValue();
+    auto TargetWidth = TargetVal.getBitWidth();
+
+    if (llvm::APInt::isSameValue(TargetVal, Val.zextOrTrunc(TargetWidth))) {
+      return true;
+
+    } else if (llvm::APInt::isSameValue(TargetVal, Val.sextOrTrunc(TargetWidth))) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+};
+
+inline specific_ext_intval m_ExtInt(std::string S, size_t W) {
+  return specific_ext_intval(S, W);
 }
 
 struct constant_matcher {
@@ -469,11 +497,19 @@ namespace util {
     return (V | ~ComputedDB).isAllOnes();
   }
 
-  // TODO Implement
-  bool symk0(llvm::Value *V, llvm::Value *&Bind) {
+  bool symk0bind(llvm::Value *V, llvm::Value *&Bind) {
     return false;
   }
-  bool symk1(llvm::Value *V, llvm::Value *&Bind) {
+
+  bool symk0test(llvm::Value *V, llvm::Value *&Bind) {
+    return false;
+  }
+
+  bool symk1bind(llvm::Value *V, llvm::Value *&Bind) {
+    return false;
+  }
+
+  bool symk1test(llvm::Value *V, llvm::Value *&Bind) {
     return false;
   }
 

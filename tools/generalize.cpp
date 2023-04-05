@@ -626,10 +626,39 @@ struct ShrinkWrap {
         ResultWidth = TargetWidth;
       }
 
+
+      // print kind name
+      // llvm::errs() << "Par " << Inst::getKindName(I->K) << " " << I->Width << " " << ResultWidth << '\n';
+
+      std::map<Inst *, Inst *> OpMap;
+      std::vector<Inst *> OriginalOps = I->Ops;
+
+      std::sort(OriginalOps.begin(), OriginalOps.end(), [&](Inst *A, Inst *B) {
+        if (InstCache.find(A) != InstCache.end()) {
+          return true;
+        }
+        if (A->K == Inst::Const) {
+          return false;
+        }
+
+        if (A->K == Inst::Var && !(B->K == Inst::Var || B->K == Inst::Const)) {
+          return false;
+        }
+        return A->Width > B->Width;
+      });
+
+      for (auto Op : OriginalOps) {
+        OpMap[Op] = ShrinkInst(Op, I, ResultWidth);
+        if (Op->Width != 1) {
+          ResultWidth = OpMap[Op]->Width;
+        }
+      }
+
       std::vector<Inst *> Ops;
       for (auto Op : I->Ops) {
-        Ops.push_back(ShrinkInst(Op, I, ResultWidth));
+        Ops.push_back(OpMap[Op]);
       }
+
       return IC.getInst(I->K, InferWidth(I->K, Ops), Ops);
     }
   }
@@ -770,35 +799,53 @@ std::vector<Inst *> InferConstantLimits(
             }
           });
 
-  for (auto &&[XI, XC] : CMap) {
-    if (XI->Width == 1) {
-      continue;
-    }
-    // X < Width, X <= Width
-    auto Width = Builder(XI, IC).BitWidth();
-    Results.push_back(Builder(XI, IC).Ult(Width)());
-    Results.push_back(Builder(XI, IC).Ule(Width)());
+  std::vector<Inst *> Vars;
+  findVars(Input.Mapping.LHS, Vars);
 
-    // X slt SMAX, x ult UMAX
-    auto WM1 = Width.Sub(1);
-    auto SMax = Builder(IC, llvm::APInt(XI->Width, 1)).Shl(WM1).Sub(1)();
-    Results.push_back(Builder(XI, IC).Slt(SMax)());
-
-    auto gZ = Builder(XI, IC).Ugt(0)();
-
-    Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
-    Results.push_back(Builder(XI, IC).Ule(Width).And(gZ)());
-
-    // 2 * X < C, 2 * X >= C
-    for (auto C : ConcreteConsts) {
-      if (C->Width != XI->Width) {
+  for (auto V : Vars) {
+    for (auto &&[XI, XC] : CMap) {
+      if (XI->Width == 1) {
         continue;
       }
-      auto Sum = Builder(XI, IC).Add(XI)();
-      Results.push_back(Builder(Sum, IC).Ult(C->Val)());
-      Results.push_back(Builder(Sum, IC).Ugt(C->Val)());
+      // X < Width, X <= Width
+      auto Width = Builder(V, IC).BitWidth()();
+
+      if (XI->Width < V->Width) {
+        Width = Builder(Width, IC).Trunc(XI->Width)();
+      } else if (XI->Width > V->Width) {
+        Width = Builder(Width, IC).ZExt(XI->Width)();
+      }
+
+      Results.push_back(Builder(XI, IC).Ult(Width)());
+      Results.push_back(Builder(XI, IC).Ule(Width)());
+
+      // x ule UMAX
+      if (V->Width < XI->Width) {
+        auto UMax = Builder(IC, llvm::APInt(XI->Width, 1)).Shl(Width).Sub(1);
+        Results.push_back(Builder(XI, IC).Ule(UMax)());
+      }
+
+      // X ule SMAX
+      auto WM1 = Builder(Width, IC).Sub(1);
+      auto SMax = Builder(IC, llvm::APInt(XI->Width, 1)).Shl(WM1).Sub(1)();
+      Results.push_back(Builder(XI, IC).Ule(SMax)());
+
+      auto gZ = Builder(XI, IC).Ugt(0)();
+      Results.push_back(Builder(XI, IC).Ult(Width).And(gZ)());
+      Results.push_back(Builder(XI, IC).Ule(Width).And(gZ)());
+
+      // 2 * X < C, 2 * X >= C
+      for (auto C : ConcreteConsts) {
+        if (C->Width != XI->Width) {
+          continue;
+        }
+        auto Sum = Builder(XI, IC).Add(XI)();
+        Results.push_back(Builder(Sum, IC).Ult(C->Val)());
+        Results.push_back(Builder(Sum, IC).Ugt(C->Val)());
+      }
     }
   }
+
 
   for (auto &&[XI, XC] : CMap) {
     for (auto &&[YI, YC] : CMap) {
@@ -825,6 +872,7 @@ std::vector<Inst *> InferConstantLimits(
       }
     }
   }
+
   return FilterRelationsByValue(Results, CMap, CEXs);
 }
 
