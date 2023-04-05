@@ -181,13 +181,13 @@ struct InfixPrinter {
 
   bool registerSymDFVars(Inst *I) {
     if (I->K == Inst::KnownOnesP && I->Ops[0]->K == Inst::Var &&
-      I->Ops[1]->Name.starts_with("sym")) {
+      I->Ops[1]->Name.starts_with("symDF_K")) {
       Syms[I->Ops[1]] = I->Ops[0]->Name + ".k1";
       // VisitedVars.insert(I->Ops[1]->Name);
       return true;
     }
     if (I->K == Inst::KnownZerosP && I->Ops[0]->K == Inst::Var &&
-      I->Ops[1]->Name.starts_with("sym")) {
+      I->Ops[1]->Name.starts_with("symDF_K")) {
       Syms[I->Ops[1]] = I->Ops[0]->Name + ".k0";
       // VisitedVars.insert(I->Ops[1]->Name);
       return true;
@@ -327,6 +327,8 @@ struct InfixPrinter {
       case Inst::Slt: Op = "<s"; break;
       case Inst::Ule: Op = "<=u"; break;
       case Inst::Sle: Op = "<=s"; break;
+      case Inst::KnownOnesP : Op = "<<=1"; break;
+      case Inst::KnownZerosP : Op = "<<=0"; break;
       default: Op = Inst::getKindName(I->K); break;
       }
 
@@ -1673,10 +1675,9 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
   return Results;
 }
 
-std::map<Inst *, size_t> CountUses(Inst *I) {
+void CountUses(Inst *I, std::map<Inst *, size_t> &Count) {
   std::vector<Inst *> Stack{I};
   std::set<Inst *> Visited;
-  std::map<Inst *, size_t> Count;
   while (!Stack.empty()) {
     auto *I = Stack.back();
     Stack.pop_back();
@@ -1691,7 +1692,6 @@ std::map<Inst *, size_t> CountUses(Inst *I) {
       Stack.push_back(U);
     }
   }
-  return Count;
 }
 
 // // Filter candidates to rule out NOPs as much as possible
@@ -1927,7 +1927,7 @@ bool hasMultiArgumentPhi(Inst *I) {
 
 ParsedReplacement ReduceBasic(InstContext &IC,
                               Solver *S, ParsedReplacement Input) {
-  Reducer R(IC, S);
+  static Reducer R(IC, S);
   Input = R.ReducePCs(Input);
   Input = R.ReduceRedundantPhis(Input);
   Input = R.ReduceGreedy(Input);
@@ -1958,10 +1958,18 @@ ParsedReplacement DeAugment(InstContext &IC,
     return Result;
   }
 
-  auto LHSUses = CountUses(Result.Mapping.LHS);
-  auto RHSUses = CountUses(Result.Mapping.RHS);
+  std::map<Inst *, size_t> LHSCount, RHSCount;
+  CountUses(Result.Mapping.LHS, LHSCount);
+  for (auto M : Result.PCs) {
+    CountUses(M.LHS, LHSCount);
+    CountUses(M.RHS, LHSCount);
+  }
+  CountUses(Result.Mapping.RHS, RHSCount);
 
-  if (LHSUses[SymDBVar] == 1 && RHSUses[SymDBVar] == 1) {
+
+
+
+  if (LHSCount[SymDBVar] == 1 && RHSCount[SymDBVar] == 1) {
     // We can remove the SymDBVar
     Result.Mapping.LHS = Result.Mapping.LHS->Ops[0];
     Result.Mapping.RHS = Result.Mapping.RHS->Ops[0];
@@ -2120,10 +2128,10 @@ std::optional<ParsedReplacement> SuccessiveSymbolize(InstContext &IC,
 
     Refresh("LHS Constraints");
 
-    Clone = DFPreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
-    if (Clone) {
-      return Clone;
-    }
+    // Clone = DFPreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
+    // if (Clone) {
+    //   return Clone;
+    // }
   }
 
   Refresh("All LHS Constraints");
@@ -2136,6 +2144,8 @@ std::optional<ParsedReplacement> SuccessiveSymbolize(InstContext &IC,
 
   std::vector<std::vector<Inst *>> UnitaryCandidates =
     InferSpecialConstExprsAllSym(RHSFresh, ConstMap, IC, /*depth*/0);
+
+  // llvm::errs() << "Unitary candidates: " << UnitaryCandidates[0].size() << "\n";
 
   if (!UnitaryCandidates.empty()) {
     // if (Nested && DebugLevel > 4) {
@@ -2359,29 +2369,6 @@ std::optional<ParsedReplacement> SuccessiveSymbolize(InstContext &IC,
       return VRel.value();
     }
     Refresh("Constant limit constraints on LHS");
-  }
-
-  if (SymbolicDF) {
-    Refresh("PUSH SYMDF_KB_DB");
-    auto [CM, Aug] = AugmentForSymKBDB(Input, IC);
-    // auto [CM2, Aug2] = AugmentForSymKB(Aug1, IC);
-    if (!CM.empty()) {
-      bool SymDFChanged = false;
-
-      auto Clone = Verify(Aug, IC, S);
-      if (Clone) {
-        // Symbolic db+kb can be unconstrained
-        // very unlikely? test if needed
-        return Clone;
-      }
-
-      auto Generalized = SuccessiveSymbolize(IC, S, Aug, SymDFChanged, CM);
-      if (SymDFChanged) {
-        return Generalized;
-      }
-    }
-    Refresh("POP SYMDF_KB_DB");
-
   }
 
   Refresh("END");
@@ -2608,6 +2595,34 @@ int main(int argc, char **argv) {
             if (Opt) {
               Result = *Opt;
             }
+
+            if (SymbolicDF) {
+              // Refresh("PUSH SYMDF_KB_DB");
+              auto [CM, Aug] = AugmentForSymKBDB(Input, IC);
+              // auto [CM2, Aug2] = AugmentForSymKB(Aug1, IC);
+              if (!CM.empty()) {
+                bool SymDFChanged = false;
+
+                // auto Clone = Verify(Aug, IC, S);
+                // if (Clone) {
+                //   // Symbolic db+kb can be unconstrained
+                //   // Is this actually possible in practice?
+                //   return Clone;
+                // }
+
+                // Aug.print(llvm::errs(), true);
+
+                // llvm::errs() << "\n\n";
+
+                auto Generalized = SuccessiveSymbolize(IC, S.get(), Aug, SymDFChanged, CM);
+                if (Generalized) {
+                  Result = DeAugment(IC, S.get(), Generalized.value());
+                  Changed = true;
+                }
+              }
+              // Refresh("POP SYMDF_KB_DB");
+            }
+
           }
           bool Indep = false;
           if (!NoWidth) {
@@ -2628,7 +2643,7 @@ int main(int argc, char **argv) {
             Result = Input;
             continue; // Retry with no width checks
           }
-          Result = DeAugment(IC, S.get(), Result);
+          // Result = DeAugment(IC, S.get(), Result);
 
           if ((Changed || FirstTime) && Result.Mapping.LHS && Result.Mapping.RHS) {
             PrintInputAndResult(Input, Result);

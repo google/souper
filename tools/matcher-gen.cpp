@@ -202,7 +202,7 @@ struct DB : public Constraint {
 struct SymDB : public Constraint {
   SymDB(std::string Name_) : Name(Name_) {}
   std::string print() override {
-    return "util::symdb(DB, I, " + Name + ")";
+    return "util::symdb(DB, I, " + Name + ", B)";
   }
   std::string Name;
 };
@@ -225,21 +225,38 @@ struct K1 : public Constraint {
   size_t W;
 };
 
-struct SymK0 : public Constraint {
-  SymK0(std::string Name_, std::string Bind_) : Name(Name_), Bind(Bind_) {}
+struct SymK0Bind : public Constraint {
+  SymK0Bind(std::string Name_, std::string Bind_) : Name(Name_), Bind(Bind_) {}
   std::string print() override {
-    return "util::symk0(" + Name + ", " + Bind + ")";
+    return "util::symk0bind(" + Name + ", " + Bind + ", B)";
   }
   std::string Name, Bind;
 };
 
-struct SymK1 : public Constraint {
-  SymK1(std::string Name_, std::string Bind_) : Name(Name_), Bind(Bind_) {}
+struct SymK1Bind : public Constraint {
+  SymK1Bind(std::string Name_, std::string Bind_) : Name(Name_), Bind(Bind_) {}
   std::string print() override {
-    return "util::symk1(" + Name + ", " + Bind + ")";
+    return "util::symk1bind(" + Name + ", " + Bind + ", B)";
   }
   std::string Name, Bind;
 };
+
+struct SymK0Test : public Constraint {
+  SymK0Test(std::string Name_, std::string Name2_) : Name(Name_), Name2(Name2_) {}
+  std::string print() override {
+    return "util::symk0test(" + Name + ", " + Name2 + ")";
+  }
+  std::string Name, Name2;
+};
+
+struct SymK1Test : public Constraint {
+  SymK1Test(std::string Name_, std::string Name2_) : Name(Name_), Name2(Name2_) {}
+  std::string print() override {
+    return "util::symk1test(" + Name + ", " + Name2 + ")";
+  }
+  std::string Name, Name2;
+};
+
 
 struct CR : public Constraint {
   CR(std::string Name_, std::string L_, std::string H_) : Name(Name_), L(L_), H(H_) {}
@@ -250,7 +267,7 @@ struct CR : public Constraint {
 };
 
 struct SymbolTable : public std::map<Inst *, std::string> {
-  std::vector<Constraint *> Constraints;
+  std::deque<Constraint *> Constraints;
 
   std::map<Inst *, std::string> Preds;
   std::vector<Inst *> Vars;
@@ -293,15 +310,6 @@ struct SymbolTable : public std::map<Inst *, std::string> {
       Out << P.second;
     }
     Out << ";\n";
-  }
-  void GenVarEqConstraints() {
-    // for (auto &&S : *this) {
-    //   if (S.second.size() > 1) {
-    //     for (size_t i = 1; i < S.second.size(); ++i) {
-    //       Constraints.push_back(new VarEq(S.second[0], S.second[i]));
-    //     }
-    //   }
-    // }
   }
 
   // Try to translate Souper expressions to APInt operations.
@@ -459,13 +467,27 @@ struct SymbolTable : public std::map<Inst *, std::string> {
   bool GenPCConstraints(std::vector<InstMapping> PCs) {
     for (auto M : PCs) {
       if (M.LHS->K == Inst::KnownZerosP) {
-        Constraint *C = new SymK0(this->at(M.LHS->Ops[0]),
-                                  this->at(M.LHS->Ops[1]));
-        Constraints.push_back(C);
+        if (M.LHS->Ops[0]->K == Inst::Var && M.LHS->Ops[1]->Name.starts_with("symDF_K")) {
+          auto C = new SymK0Bind(this->at(M.LHS->Ops[0]),
+                                 this->at(M.LHS->Ops[1]));
+          Constraints.push_front(C);
+          // Binds have side effects, have to go in front.
+        } else {
+          auto C = new SymK0Test(this->at(M.LHS->Ops[0]),
+                                 this->at(M.LHS->Ops[1]));
+          Constraints.push_back(C);
+        }
       } else if (M.LHS->K == Inst::KnownOnesP) {
-        Constraint *C = new SymK1(this->at(M.LHS->Ops[0]),
-                                  this->at(M.LHS->Ops[1]));
-        Constraints.push_back(C);
+        if (M.LHS->Ops[0]->K == Inst::Var && M.LHS->Ops[1]->Name.starts_with("symDF_K")) {
+          auto C = new SymK1Bind(this->at(M.LHS->Ops[0]),
+                                 this->at(M.LHS->Ops[1]));
+          Constraints.push_front(C);
+          // Binds have side effects, have to go in front.
+        } else {
+          auto C = new SymK1Test(this->at(M.LHS->Ops[0]),
+                                 this->at(M.LHS->Ops[1]));
+          Constraints.push_back(C);
+        }
       } else if (auto WC = ConvertPCToWidthConstraint(M)) {
         Constraints.push_back(WC);
       } else {
@@ -913,7 +935,6 @@ bool GenMatcher(ParsedReplacement Input, Stream &Out, size_t OptID, bool WidthIn
     DemandedMask = Input.Mapping.LHS->Ops[1];
     Syms.Constraints.push_back(new SymDB(Syms[Input.Mapping.LHS->Ops[1]]));
   }
-  Syms.GenVarEqConstraints();
   Syms.GenVarPropConstraints(Input.Mapping.LHS, WidthIndependent);
   Syms.GenDomConstraints(Input.Mapping.RHS);
   Syms.GenDFConstraints(Input.Mapping.LHS);

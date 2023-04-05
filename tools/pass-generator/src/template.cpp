@@ -347,9 +347,6 @@ inline CastClass_match_width<OpTy, Instruction::Trunc> m_Trunc(size_t W, const O
 
 namespace util {
   bool dc(llvm::DominatorTree *DT, llvm::Instruction *I, llvm::Value *V) {
-    if (!V) {
-      return false;
-    }
     if (auto Def = dyn_cast<Instruction>(V)) {
       if (I->getParent() == Def->getParent()) {
         return true;
@@ -423,10 +420,6 @@ namespace util {
       return false;
     }
 
-    // if (Val.size() != W) {
-    //   return false;
-    // }
-
     llvm::APInt Value(W, Val, 2);
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
       auto X = Con->getUniqueInteger();
@@ -437,8 +430,8 @@ namespace util {
       DataLayout DL(I->getParent()->getParent()->getParent());
       computeKnownBits(V, Analyzed, DL, 4);
 
-      llvm::SmallVector<char> Result;
-      Analyzed.Zero.toString(Result, 2, false);
+      // llvm::SmallVector<char> Result;
+      // Analyzed.Zero.toString(Result, 2, false);
 
       auto b = KnownBitImplies(Value, Analyzed.Zero);
 //      llvm::errs() << "HERE: " << Result << ' ' << Val
@@ -501,28 +494,94 @@ namespace util {
     return (V | ~ComputedDB).isAllOnes();
   }
 
-  bool symk0bind(llvm::Value *V, llvm::Value *&Bind) {
+  bool symk0bind(llvm::Value *V, llvm::Value *&Bind, IRBuilder *B) {
+    if (!V || !V->getType() || !V->getType()->isIntegerTy() ) {
+      return false;
+    }
+
+    auto W = V->getType()->getIntegerBitWidth();
+
+    auto Analyzed = llvm::KnownBits(W);
+    if (Instruction *I = llvm::dyn_cast<Instruction>(V)) {
+      DataLayout DL(I->getParent()->getParent()->getParent());
+      computeKnownBits(V, Analyzed, DL, 4);
+      if (Analyzed.Zero == 0) {
+        return false;
+      }
+      Bind = B->getInt(Analyzed.Zero);
+      return true;
+    }
+
     return false;
   }
 
-  bool symk0test(llvm::Value *V, llvm::Value *&Bind) {
+  bool symk1bind(llvm::Value *V, llvm::Value *&Bind, IRBuilder *B) {
+    if (!V || !V->getType() || !V->getType()->isIntegerTy() ) {
+      return false;
+    }
+
+    auto W = V->getType()->getIntegerBitWidth();
+
+    auto Analyzed = llvm::KnownBits(W);
+    if (Instruction *I = llvm::dyn_cast<Instruction>(V)) {
+      DataLayout DL(I->getParent()->getParent()->getParent());
+      computeKnownBits(V, Analyzed, DL, 4);
+      if (Analyzed.One == 0) {
+        return false;
+      }
+      Bind = B->getInt(Analyzed.One);
+      return true;
+    }
+
     return false;
   }
 
-  bool symk1bind(llvm::Value *V, llvm::Value *&Bind) {
-    return false;
+  bool symk0test(llvm::Value *Bound, llvm::Value *OtherSymConst) {
+    llvm::Constant *BoundC = llvm::dyn_cast<llvm::Constant>(Bound);
+    llvm::Constant *OtherC = llvm::dyn_cast<llvm::Constant>(OtherSymConst);
+
+    if (!BoundC || !OtherC) {
+      return false;
+    }
+
+    // Width sanity check
+    if (BoundC->getType()->getIntegerBitWidth() != OtherC->getType()->getIntegerBitWidth()) {
+      return false;
+    }
+
+    return KnownBitImplies(OtherC->getUniqueInteger(), ~BoundC->getUniqueInteger());
   }
 
-  bool symk1test(llvm::Value *V, llvm::Value *&Bind) {
-    return false;
+  bool symk1test(llvm::Value *Bound, llvm::Value *OtherSymConst) {
+    llvm::Constant *BoundC = llvm::dyn_cast<llvm::Constant>(Bound);
+    llvm::Constant *OtherC = llvm::dyn_cast<llvm::Constant>(OtherSymConst);
+
+    if (!BoundC || !OtherC) {
+      return false;
+    }
+
+    // Width sanity check
+    if (BoundC->getType()->getIntegerBitWidth() != OtherC->getType()->getIntegerBitWidth()) {
+      return false;
+    }
+
+    // llvm::errs() << "SymK1Test: " << llvm::toString(OtherC->getUniqueInteger(), 2, false) << ' '
+    //              << llvm::toString(BoundC->getUniqueInteger(), 2, false) << "\n";
+
+    // llvm::errs() << "Result: " << KnownBitImplies(OtherC->getUniqueInteger(), BoundC->getUniqueInteger()) << "\n";
+
+    return KnownBitImplies(OtherC->getUniqueInteger(), BoundC->getUniqueInteger());
   }
 
-  bool symdb(llvm::DemandedBits *DB, llvm::Instruction *I, llvm::Value *&V) {
+  bool symdb(llvm::DemandedBits *DB, llvm::Instruction *I, llvm::Value *&V, IRBuilder *B) {
     auto ComputedDB = DB->getDemandedBits(I);
-
-    // Todo make a new llvm constant from ComputedDb and assign to V
-
-    return false;
+    // Are there other non trivial failure modes?
+    if (ComputedDB == 0) {
+      return false;
+    }
+    V = B->getInt(ComputedDB);
+    llvm::errs() << "SymDB: " << llvm::toString(ComputedDB, 2, false) << "\n";
+    return true;
   }
 
   bool nz(llvm::Value *V) {
