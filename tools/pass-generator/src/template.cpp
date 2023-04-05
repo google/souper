@@ -413,11 +413,15 @@ namespace util {
     return (~Big | Small).isAllOnes();
   }
 
-  bool k0(llvm::Value *V, std::string Val) {
+  bool k0(llvm::Value *V, std::string Val, size_t ExpectedWidth) {
     if (!V || !V->getType() || !V->getType()->isIntegerTy() ) {
       return false;
     }
     auto W = V->getType()->getIntegerBitWidth();
+
+    if (W != ExpectedWidth) {
+      return false;
+    }
 
     // if (Val.size() != W) {
     //   return false;
@@ -444,15 +448,15 @@ namespace util {
     return false;
   }
 
-  bool k1(llvm::Value *V, std::string Val) {
+  bool k1(llvm::Value *V, std::string Val, size_t ExpectedWidth) {
     if (!V || !V->getType() || !V->getType()->isIntegerTy()) {
       return false;
     }
     auto W = V->getType()->getIntegerBitWidth();
 
-    // if (Val.size() != W) {
-    //   return false;
-    // }
+    if (ExpectedWidth != W) {
+      return false;
+    }
 
     llvm::APInt Value(W, Val, 2);
     if (ConstantInt *Con = llvm::dyn_cast<ConstantInt>(V)) {
@@ -481,11 +485,11 @@ namespace util {
     return R.contains(CR);
   }
 
-  bool vdb(llvm::DemandedBits *DB, llvm::Instruction *I, std::string DBUnderApprox) {
+  bool vdb(llvm::DemandedBits *DB, llvm::Instruction *I, std::string DBUnderApprox, size_t ExpectedWidth) {
 
-    // if (DBUnderApprox.size() != I->getType()->getIntegerBitWidth()) {
-    //   return false;
-    // }
+    if (I->getType()->getIntegerBitWidth() != ExpectedWidth) {
+      return false;
+    }
 
     llvm::APInt V = llvm::APInt(I->getType()->getIntegerBitWidth(), DBUnderApprox, 2);
     auto ComputedDB = DB->getDemandedBits(I);

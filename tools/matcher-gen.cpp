@@ -191,11 +191,12 @@ struct PC : public Constraint {
 };
 
 struct DB : public Constraint {
-  DB(std::string Val_) : Val(Val_) {}
+  DB(std::string Val_, size_t W_) : Val(Val_), W(W_) {}
   std::string print() override {
-    return "util::vdb(DB, I, \"" + Val + "\")";
+    return "util::vdb(DB, I, \"" + Val + "\", " + std::to_string(W) + ")";
   }
   std::string Val;
+  size_t W;
 };
 
 struct SymDB : public Constraint {
@@ -207,19 +208,21 @@ struct SymDB : public Constraint {
 };
 
 struct K0 : public Constraint {
-  K0(std::string Name_, std::string Val_) : Name(Name_), Val(Val_) {}
+  K0(std::string Name_, std::string Val_, size_t W_) : Name(Name_), Val(Val_), W(W_) {}
   std::string print() override {
-    return "util::k0(" + Name + ", \"" + Val + "\")";
+    return "util::k0(" + Name + ", \"" + Val + "\", " + std::to_string(W) + ")";
   }
   std::string Name, Val;
+  size_t W;
 };
 
 struct K1 : public Constraint {
-  K1(std::string Name_, std::string Val_) : Name(Name_), Val(Val_) {}
+  K1(std::string Name_, std::string Val_, size_t W_) : Name(Name_), Val(Val_), W(W_) {}
   std::string print() override {
-    return "util::k1(" + Name + ", \"" + Val + "\")";
+    return "util::k1(" + Name + ", \"" + Val + "\", " + std::to_string(W) + ")";
   }
   std::string Name, Val;
+  size_t W;
 };
 
 struct SymK0 : public Constraint {
@@ -498,7 +501,7 @@ struct SymbolTable : public std::map<Inst *, std::string> {
   void GenDFConstraints(Inst *LHS) {
     if (LHS->DemandedBits.getBitWidth()
         == LHS->Width && !LHS->DemandedBits.isAllOnesValue()) {
-      Constraints.push_back(new DB(LHS->DemandedBits.toString(2, false)));
+      Constraints.push_back(new DB(LHS->DemandedBits.toString(2, false), LHS->Width));
     }
 
     std::vector<Inst *> Vars;
@@ -513,11 +516,11 @@ struct SymbolTable : public std::map<Inst *, std::string> {
       auto Name = this->at(V);
       if (V->KnownOnes.getBitWidth() == V->Width &&
           V->KnownOnes != 0) {
-        Constraints.push_back(new K1(Name, V->KnownOnes.toString(2, false)));
+        Constraints.push_back(new K1(Name, V->KnownOnes.toString(2, false), V->Width));
       }
       if (V->KnownZeros.getBitWidth() == V->Width &&
           V->KnownZeros != 0) {
-        Constraints.push_back(new K0(Name, V->KnownZeros.toString(2, false)));
+        Constraints.push_back(new K0(Name, V->KnownZeros.toString(2, false), V->Width));
       }
 
       if (!V->Range.isFullSet()) {
