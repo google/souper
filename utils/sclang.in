@@ -271,7 +271,7 @@ if ($souper) {
 }
 
 if (getenv("SOUPER_DISABLE_LLVM_PEEPHOLES")) {
-    push @ARGV, ("-mllvm", "-disable-all-peepholes");
+    push @ARGV, ("-mllvm", "-disable-peepholes");
 }
 
 if ((getenv("SOUPER_DYNAMIC_PROFILE") ||

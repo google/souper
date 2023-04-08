@@ -326,7 +326,7 @@ GetInputArgumentTypes(const InstContext &IC, llvm::LLVMContext &Context, Inst *R
   std::vector<llvm::Type *> ArgTypes;
   ArgTypes.reserve(AllVariables.size());
   for (const Inst *const Var : AllVariables) {
-    llvm::errs() << "arg with width " << Var->Width << " and number " << Var->Number << "\n";
+    // llvm::errs() << "arg with width " << Var->Width << " and number " << Var->Number << "\n";
     ArgTypes.emplace_back(Type::getIntNTy(Context, Var->Width));
   }
 

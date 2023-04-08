@@ -17,6 +17,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -43,7 +44,7 @@ DebugFlagParser("souper-debug-level",
      cl::location(DebugLevel), cl::init(1));
 
 static cl::opt<std::string>
-InputFilename(cl::Positional, cl::desc("<input bitcode file>"),
+InputFilename(cl::Positional, cl::desc("<input IR file>"),
     cl::init("-"), cl::value_desc("filename"));
 
 static cl::opt<std::string>
@@ -57,15 +58,23 @@ static cl::opt<bool>
 Check("check", cl::desc("Check input for expected results"),
     cl::init(false));
 
+static cl::opt<bool>
+Cost("cost", cl::desc("Print the cost"),
+     cl::init(false));
+
 static ExitOnError ExitOnErr;
 
 // adapted from llvm-dis.cpp
-static std::unique_ptr<Module> openInputFile(LLVMContext &Context) {
-  std::unique_ptr<MemoryBuffer> MB =
-      ExitOnErr(errorOrToExpected(MemoryBuffer::getFileOrSTDIN(InputFilename)));
-  std::unique_ptr<Module> M =
-      ExitOnErr(getOwningLazyBitcodeModule(std::move(MB), Context,
-                                           /*ShouldLazyLoadMetadata=*/true));
+std::unique_ptr<llvm::Module> openInputFile(llvm::LLVMContext &Context) {
+  auto MB =
+    ExitOnErr(errorOrToExpected(llvm::MemoryBuffer::getFileOrSTDIN(InputFilename)));
+  llvm::SMDiagnostic Diag;
+  auto M = getLazyIRModule(std::move(MB), Diag, Context,
+                           /*ShouldLazyLoadMetadata=*/true);
+  if (!M) {
+    Diag.print("", llvm::errs(), false);
+    return 0;
+  }
   ExitOnErr(M->materializeAll());
   return M;
 }
@@ -95,7 +104,7 @@ int main(int argc, char **argv) {
     if (ErrorMessage.size())
       llvm::errs() << ErrorMessage;
     else
-      llvm::errs() << "Bitcode did not read correctly";
+      llvm::errs() << "IR did not read correctly";
     return 1;
   }
 
