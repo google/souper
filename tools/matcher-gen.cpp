@@ -997,19 +997,42 @@ std::string getLLVMInstKindName(Inst::Kind K) {
 }
 
 bool PCHasVar(const ParsedReplacement &Input) {
-  std::vector<Inst *> Vars;
+  std::vector<Inst *> Stack;
   for (auto &&PC : Input.PCs) {
-    if (PC.LHS->K == Inst::KnownOnesP || PC.LHS->K == Inst::KnownZerosP)
-      continue;
+    // if (PC.LHS->K == Inst::KnownOnesP || PC.LHS->K == Inst::KnownZerosP)
+    //   continue;
 
-    if (PC.LHS->K == Inst::Eq && (PC.LHS->Ops[0]->K == Inst::BitWidth ||
-                                  PC.LHS->Ops[1]->K == Inst::BitWidth )) {
+    // if (PC.LHS->K == Inst::Eq && (PC.LHS->Ops[0]->K == Inst::BitWidth ||
+    //                               PC.LHS->Ops[1]->K == Inst::BitWidth )) {
+    //   continue;
+    // }
+    Stack.push_back(PC.LHS);
+    Stack.push_back(PC.RHS);
+  }
+
+  std::set<Inst *> Visited;
+  std::vector<Inst *> Vars;
+
+  while (!Stack.empty()) {
+    Inst *I = Stack.back();
+    Stack.pop_back();
+
+    if (Visited.count(I)) {
       continue;
     }
+    Visited.insert(I);
 
-    findVars(PC.LHS, Vars);
-    findVars(PC.RHS, Vars);
+    if (I->K == Inst::Var) {
+      Vars.push_back(I);
+    }
+
+    for (auto &&Op : I->Ops) {
+      if (I->K == Inst::KnownOnesP || I->K == Inst::KnownZerosP || I->K == Inst::BitWidth)
+        continue;
+      Stack.push_back(Op);
+    }
   }
+
 
   for (auto &&V : Vars) {
     // llvm::errs() << V->Name << "\n";
@@ -1021,56 +1044,6 @@ bool PCHasVar(const ParsedReplacement &Input) {
   return false;
 }
 
-bool IsWidthIndependent(InstContext &IC,
-                        Solver *S, ParsedReplacement Input) {
-
-  // FIXME Re-enable this later
-  return false;
-
-  if (Input.Mapping.LHS->Width == 1) {
-    return false;
-  }
-
-
-
-  std::vector<Inst *> Consts;
-  auto Pred = [](Inst *I) {return I->K == Inst::Const;};
-  findInsts(Input.Mapping.LHS, Consts, Pred);
-  findInsts(Input.Mapping.RHS, Consts, Pred);
-  for (auto M : Input.PCs) {
-    findInsts(M.LHS, Consts, Pred);
-    findInsts(M.RHS, Consts, Pred);
-  }
-
-  std::vector<Inst *> WidthChanges;
-  auto WPred = [](Inst *I) {return I->K == Inst::Trunc || I->K == Inst::SExt
-                                                 || I->K == Inst::ZExt;};
-
-  findInsts(Input.Mapping.LHS, WidthChanges, WPred);
-  findInsts(Input.Mapping.RHS, WidthChanges, WPred);
-  for (auto M : Input.PCs) {
-    findInsts(M.LHS, WidthChanges, WPred);
-    findInsts(M.RHS, WidthChanges, WPred);
-  }
-
-  if (!WidthChanges.empty()) {
-    return false;
-    // TODO This is too conservative.
-    // Figure out where this is allowed in a width independent manner.
-  }
-
-  // False if non zero const
-  for (auto &&C : Consts) {
-    if (C->K == Inst::Const && C->Val != 0) {
-      return false;
-    }
-  }
-
-  // TODO Set up constant sytnthesis problem to see if subexpressions
-  // simplify to non zero consts
-
-  return true;
-}
 
 int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv);

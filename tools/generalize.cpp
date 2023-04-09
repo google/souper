@@ -1039,15 +1039,19 @@ std::vector<Inst *> InferPotentialRelations(
         }
       }
 
-      // // TODO Check if this is too slow
-      // // if (Input.Mapping.LHS->Width == 1) {
-      //   // need both signed and unsigned?
-      //   // What about s/t/e/ versions?
-      //   if (XC.slt(YC)) Results.push_back(Builder(XI, IC).Slt(YI)());
-      //   if (XC.ult(YC)) Results.push_back(Builder(XI, IC).Ult(YI)());
-      //   if (YC.slt(XC)) Results.push_back(Builder(YI, IC).Slt(XI)());
-      //   if (YC.ult(XC)) Results.push_back(Builder(YI, IC).Ult(XI)());
-      // // }
+      auto One = llvm::APInt(XC.getBitWidth(), 1);
+
+      auto GENComps = [&] (Inst *A, llvm::APInt AVal, Inst *B, llvm::APInt BVal) {
+        if (AVal.sle(BVal)) Results.push_back(Builder(A, IC).Sle(B)());
+        if (AVal.ule(BVal)) Results.push_back(Builder(A, IC).Ule(B)());
+        if (AVal.slt(BVal)) Results.push_back(Builder(A, IC).Slt(B)());
+        if (AVal.ult(BVal)) Results.push_back(Builder(A, IC).Ult(B)());
+      };
+
+      GENComps(XI, XC, YI, YC);
+      // GENComps(Builder(IC, One).Shl(XI)() , One.shl(XC), YI, YC);
+      // GENComps(XI, XC, Builder(IC, One).Shl(YI)() , One.shl(YC));
+
 
       // auto XBits = BitFuncs(XI, IC);
       // auto YBits = BitFuncs(YI, IC);
@@ -1306,6 +1310,12 @@ std::optional<ParsedReplacement> VerifyWithRels(InstContext &IC, Solver *S,
   for (auto Rel : Rels) {
     Input.PCs.push_back({Rel, IC.getConst(llvm::APInt(1, 1))});
     auto Clone = Verify(Input, IC, S);
+
+    // InfixPrinter IP(Input);
+    // IP(llvm::errs());
+
+    // llvm::errs() << "RESULT: " << Clone.has_value() << "\n";
+
     if (Clone) {
       ValidRels.push_back(Rel);
       FirstValidResult = Clone.value();
@@ -2111,8 +2121,10 @@ std::optional<ParsedReplacement> SuccessiveSymbolize(InstContext &IC,
   //   Copy.PCs.pop_back();
   // }
 
+  // llvm::errs() << "Relations : " << Relations.size() << "\n";
+
   if (auto RelV = VerifyWithRels(IC, S, Copy, Relations)) {
-    return RelV.value();
+    return RelV;
   }
 
   Refresh("Direct + simple rel constraints");
@@ -2128,10 +2140,10 @@ std::optional<ParsedReplacement> SuccessiveSymbolize(InstContext &IC,
 
     Refresh("LHS Constraints");
 
-    // Clone = DFPreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
-    // if (Clone) {
-    //   return Clone;
-    // }
+    Clone = DFPreconditionsAndVerifyGreedy(Copy, IC, S, SymCS);
+    if (Clone) {
+      return Clone;
+    }
   }
 
   Refresh("All LHS Constraints");
@@ -2401,6 +2413,13 @@ InstMapping GetLessThanWidthConstraint(Inst *I, size_t Width, InstContext &IC) {
   // Don't need to check for >0.
   return {Builder(I, IC).BitWidth().Ule(Width)(), IC.getConst(llvm::APInt(1, 1))};
 }
+
+InstMapping GetWidthRangeConstraint(Inst *I, size_t Min, size_t Max, InstContext &IC) {
+  auto Right = Builder(I, IC).BitWidth().Ule(Max);
+  auto Left = Builder(IC, llvm::APInt(I->Width, Min)).BitWidth().Ule(Builder(I, IC).BitWidth());
+  return {Left.And(Right)(), IC.getConst(llvm::APInt(1, 1))};
+}
+
 // TODO: More as needed.
 
 Inst *CombinePCs(const std::vector<InstMapping> &PCs, InstContext &IC) {
@@ -2412,9 +2431,57 @@ Inst *CombinePCs(const std::vector<InstMapping> &PCs, InstContext &IC) {
   return Ante;
 }
 
+bool IsStaticallyWidthIndependent(ParsedReplacement Input) {
+
+  if (Input.Mapping.LHS->Width == 1) {
+    return false;
+  }
+
+  std::vector<Inst *> Consts;
+  auto Pred = [](Inst *I) {return I->K == Inst::Const;};
+  findInsts(Input.Mapping.LHS, Consts, Pred);
+  findInsts(Input.Mapping.RHS, Consts, Pred);
+  for (auto M : Input.PCs) {
+    findInsts(M.LHS, Consts, Pred);
+    findInsts(M.RHS, Consts, Pred);
+  }
+
+  std::vector<Inst *> WidthChanges;
+  auto WPred = [](Inst *I) {return I->K == Inst::Trunc || I->K == Inst::SExt
+                                                 || I->K == Inst::ZExt;};
+
+  findInsts(Input.Mapping.LHS, WidthChanges, WPred);
+  findInsts(Input.Mapping.RHS, WidthChanges, WPred);
+  for (auto M : Input.PCs) {
+    findInsts(M.LHS, WidthChanges, WPred);
+    findInsts(M.RHS, WidthChanges, WPred);
+  }
+
+  if (!WidthChanges.empty()) {
+    return false;
+  }
+
+  // False if non zero or non -1 const
+  for (auto &&C : Consts) {
+    if (C->K == Inst::Const && (C->Val != 0 || !C->Val.isAllOnesValue())) {
+      return false;
+    }
+  }
+
+  // TODO Set up constant synthesis problem to see if subexpressions
+  // simplify to non zero consts
+
+  return true;
+}
+
 std::pair<ParsedReplacement, bool>
 InstantiateWidthChecks(InstContext &IC,
   Solver *S, ParsedReplacement Input) {
+
+  if (IsStaticallyWidthIndependent(Input)) {
+    return {Input, true};
+  }
+
   if (!NoWidth && !hasMultiArgumentPhi(Input.Mapping.LHS)) {
     // Instantiate Alive driver with Symbolic width.
     AliveDriver Alive(Input.Mapping.LHS,
@@ -2444,6 +2511,27 @@ InstantiateWidthChecks(InstContext &IC,
 
   // Abstract width to a range or relational precondition
   // TODO: Abstraction
+
+    std::vector<Inst *> Inputs;
+    findVars(Input.Mapping.LHS, Inputs);
+    if (Inputs.size() == 1 && ValidTypings.size() > 1) {
+      auto I = Inputs[0];
+      auto Width = I->Width;
+
+      std::vector<size_t> Widths;
+      for (auto &&V : ValidTypings) {
+        Widths.push_back(V[I]);
+      }
+
+      size_t MaxWidth = *std::max_element(Widths.begin(), Widths.end());
+      size_t MinWidth = *std::min_element(Widths.begin(), Widths.end());
+
+      if (ValidTypings.size() == (MaxWidth - MinWidth + 1)) {
+        Input.PCs.push_back(GetWidthRangeConstraint(I, MinWidth, MaxWidth, IC));
+        return {Input, false};
+      }
+    }
+
   }
 
   // If abstraction fails, insert checks for existing widths.
@@ -2650,6 +2738,10 @@ int main(int argc, char **argv) {
           }
           if (FirstTime) FirstTime = false;
         } while (--MaxTries && Changed);
+      } else {
+        if (Result.Mapping.LHS && Result.Mapping.RHS) {
+          PrintInputAndResult(Input, Result);
+        }
       }
     }
   }

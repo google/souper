@@ -77,6 +77,8 @@ ParsedReplacement Reducer::ReducePairsGreedy(ParsedReplacement Input) {
             continue;
           }
 
+          // Input.print(llvm::errs(), true);
+
           if (!VerifyInput(Input)) {
             Input = Copy;
             continue;
@@ -833,7 +835,7 @@ bool Reducer::VerifyInput(ParsedReplacement &Input) {
 }
 
 bool Reducer::safeToRemove(Inst *I, ParsedReplacement &Input) {
-  if (I == Input.Mapping.LHS || I == Input.Mapping.RHS || I->K == Inst::Var || I->K == Inst::Const ||
+  if (I == Input.Mapping.LHS || I->K == Inst::Var || I->K == Inst::Const ||
       I->K == Inst::UMulWithOverflow || I->K == Inst::UMulO ||
       I->K == Inst::SMulWithOverflow || I->K == Inst::SMulO ||
       I->K == Inst::UAddWithOverflow || I->K == Inst::UAddO ||

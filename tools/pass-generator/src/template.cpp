@@ -243,14 +243,9 @@ struct specific_ext_intval {
     auto TargetVal = CI->getValue();
     auto TargetWidth = TargetVal.getBitWidth();
 
-    if (llvm::APInt::isSameValue(TargetVal, Val.zextOrTrunc(TargetWidth))) {
-      return true;
+    return llvm::APInt::isSameValue(TargetVal, Val.zextOrTrunc(TargetWidth)) ||
+           llvm::APInt::isSameValue(TargetVal, Val.sextOrTrunc(TargetWidth));
 
-    } else if (llvm::APInt::isSameValue(TargetVal, Val.sextOrTrunc(TargetWidth))) {
-      return true;
-    } else {
-      return false;
-    }
   }
 };
 
@@ -709,6 +704,7 @@ struct SouperCombine : public FunctionPass {
 
 
   bool runOnFunction(Function &F) override {
+    llvm::errs() << "SouperCombine: " << F.getName() << "\n";
     AssumptionCache AC(F);
 
     DT = new DominatorTree(F);
