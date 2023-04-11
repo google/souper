@@ -1,0 +1,13 @@
+; RUN: %generalize -basic -souper-debug-level=2 %s > /dev/null 2>%t
+; RUN: %FileCheck %s < %t
+
+%0:i64 = var
+%1 = lshr %0, 1
+%2 = udiv %1, 100
+infer %2
+%3 = udiv %0, 200
+result %3
+
+; CHECK: (v0 >>l 1) /u C2 (nonNegative)
+; CHECK:   =>
+; CHECK: v0 /u (C2 + C2)

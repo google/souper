@@ -1,0 +1,14 @@
+; RUN: %generalize -basic -souper-debug-level=2 %s > /dev/null 2>%t
+; RUN: %FileCheck %s < %t
+
+%v0:i16 = var
+%x:i32 = sext %v0
+%y:i32 = sub %x, 20:i32; hex 0x14
+%yt:i16 = trunc %y
+infer %yt
+%z = add %v0, -20:i16; hex 0xFFEC
+result %z
+
+; CHECK: trunc((sext(v0) - C1))
+; CHECK:  =>
+; CHECK: v0 + trunc((0 - C1))
