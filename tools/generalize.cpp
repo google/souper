@@ -1488,6 +1488,9 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
 
   // Handle width changes
   for (const auto &[I, Val] : ConstMap) {
+    if (I == ParentConst) {
+      continue;
+    }
     if (Target.getBitWidth() == I->Width || !Threshold ) {
       continue;
     }
@@ -1501,7 +1504,7 @@ InstContext &IC, size_t Threshold, bool ConstMode, Inst *ParentConst = nullptr) 
     for (auto X : IOSynthesize(NewTarget, ConstMap, IC, Threshold - 1, ConstMode, nullptr)) {
       // ReplacementContext RC;
       // RC.printInst(X, llvm::errs(), true);
-      if (I->Width < X->Width) {
+      if (NewTarget.getBitWidth() < Target.getBitWidth()) {
         Results.push_back(Builder(IC, X).ZExt(Target.getBitWidth())());
         Results.push_back(Builder(IC, X).SExt(Target.getBitWidth())());
       } else {
