@@ -52,6 +52,10 @@ static llvm::cl::opt<bool> HarvestUses(
     "souper-harvest-uses",
     llvm::cl::desc("Harvest operands (default=false)"),
     llvm::cl::init(false));
+static llvm::cl::opt<bool> MarkExternalUses(
+    "souper-mark-external-uses",
+    llvm::cl::desc("Mark external uses in harvesting (default=true)"),
+    llvm::cl::init(true));
 static llvm::cl::opt<bool> PrintNegAtReturn(
     "print-neg-at-return",
     llvm::cl::desc("Print negative dfa in each value returned from a function (default=false)"),
@@ -997,7 +1001,8 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
                 Inst *In = EB.getFromUse(U);
                 In->HarvestKind = HarvestType::HarvestedFromUse;
                 In->HarvestFrom = &BB;
-                EB.markExternalUses(In);
+                if (MarkExternalUses)
+                  EB.markExternalUses(In);
                 BCS->Replacements.emplace_back(U, InstMapping(In, 0));
                 assert(EB.get(U)->hasOrigin(U));
               }
@@ -1020,7 +1025,8 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       }
       In->HarvestKind = HarvestType::HarvestedFromDef;
       In->HarvestFrom = nullptr;
-      EB.markExternalUses(In);
+      if (MarkExternalUses)
+        EB.markExternalUses(In);
       BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
       assert(EB.get(&I)->K == Inst::Const || EB.get(&I)->hasOrigin(&I));
     }
