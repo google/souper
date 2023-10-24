@@ -997,7 +997,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
                 Inst *In = EB.getFromUse(U);
                 In->HarvestKind = HarvestType::HarvestedFromUse;
                 In->HarvestFrom = &BB;
-                EB.markExternalUses(In);
+                //EB.markExternalUses(In);
                 BCS->Replacements.emplace_back(U, InstMapping(In, 0));
                 assert(EB.get(U)->hasOrigin(U));
               }
@@ -1020,7 +1020,7 @@ void ExtractExprCandidates(Function &F, const LoopInfo *LI, DemandedBits *DB,
       }
       In->HarvestKind = HarvestType::HarvestedFromDef;
       In->HarvestFrom = nullptr;
-      EB.markExternalUses(In);
+      //EB.markExternalUses(In);
       BCS->Replacements.emplace_back(&I, InstMapping(In, 0));
       assert(EB.get(&I)->K == Inst::Const || EB.get(&I)->hasOrigin(&I));
     }
