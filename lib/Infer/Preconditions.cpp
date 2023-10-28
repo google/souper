@@ -75,7 +75,7 @@ std::vector<std::map<Inst *, llvm::KnownBits>>
           auto &I = Vars[i];
           auto W = I->Width;
           auto Zero = SC.IC.getConst(llvm::APInt(W, 0));
-          auto AllOnes = SC.IC.getConst(llvm::APInt::getAllOnesValue(W));
+          auto AllOnes = SC.IC.getConst(llvm::APInt::getAllOnes(W));
 
           auto A = SC.IC.getInst(Inst::And, W, {I, SC.IC.getConst(KB[I].One)});
 

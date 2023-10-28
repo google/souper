@@ -59,12 +59,6 @@ execute_process(
 )
 
 execute_process(
-  COMMAND ${LLVM_CONFIG_EXECUTABLE} --src-root
-  OUTPUT_VARIABLE LLVM_SRC
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --obj-root
   OUTPUT_VARIABLE LLVM_BUILD
   OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -76,7 +70,7 @@ include_directories("${CMAKE_SOURCE_DIR}/third_party")
 include_directories("${ALIVE_SRCDIR}")
 
 set(GTEST_CXXFLAGS "-DGTEST_HAS_RTTI=0")
-set(GTEST_INCLUDEDIR "${LLVM_SRC}/utils/unittest/googletest/include")
+set(GTEST_INCLUDEDIR "${LLVM_BINDIR}/../include/llvm-gtest/")
 set(GTEST_LIBS "-lllvm_gtest_main -lllvm_gtest")
 
 set(LLVM_CXXFLAGS "${LLVM_CXXFLAGS} -std=c++20")
@@ -91,6 +85,7 @@ include_directories(include third_party/klee/include)
 include_directories(include "${CMAKE_BINARY_DIR}/include")
 
 set(KLEE_EXPR_FILES
+  third_party/klee/lib/Expr/ArrayCache.cpp
   third_party/klee/lib/Expr/Constraints.cpp
   third_party/klee/lib/Expr/ExprBuilder.cpp
   third_party/klee/lib/Expr/Expr.cpp

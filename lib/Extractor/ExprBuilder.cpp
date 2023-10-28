@@ -331,7 +331,7 @@ Inst *ExprBuilder::getDataflowConditions(Inst *I) {
   Inst *One = LIC->getConst(llvm::APInt(Width, 1));
 
   if (I->KnownZeros.getBoolValue()) {
-    Inst *AllOnes = LIC->getConst(llvm::APInt::getAllOnesValue(Width));
+    Inst *AllOnes = LIC->getConst(llvm::APInt::getAllOnes(Width));
     Inst *NotZeros = LIC->getInst(Inst::Xor, Width,
                                   {LIC->getConst(I->KnownZeros), AllOnes});
     Inst *VarNotZero = LIC->getInst(Inst::Or, Width, {I, NotZeros});
@@ -914,7 +914,7 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
 
   // Get demanded bits
   Inst *DemandedBits = LIC->getConst(LHS->DemandedBits);
-  if (!LHS->DemandedBits.isAllOnesValue())
+  if (!LHS->DemandedBits.isAllOnes())
     LHS = LIC->getInst(Inst::And, LHS->Width, {LHS, DemandedBits});
 
   Inst *LHSUB;
@@ -945,7 +945,7 @@ Inst *ExprBuilder::GetCandidateExprForReplacement(
   Inst *RHS = Mapping.RHS;
 
   // Get demanded bits
-  if (!Mapping.LHS->DemandedBits.isAllOnesValue())
+  if (!Mapping.LHS->DemandedBits.isAllOnes())
     RHS = LIC->getInst(Inst::And, RHS->Width, {RHS, DemandedBits});
 
   // Get known bit constraints

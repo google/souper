@@ -547,7 +547,7 @@ void Inst::Profile(llvm::FoldingSetNodeID &ID) const {
     ID.AddPointer(B);
     break;
   default:
-    if (!DemandedBits.isAllOnesValue())
+    if (!DemandedBits.isAllOnes())
       ID.Add(DemandedBits);
     if (HarvestKind == HarvestType::HarvestedFromUse) {
       ID.Add(HarvestFrom);
@@ -664,7 +664,7 @@ Inst *InstContext::createVar(unsigned Width, llvm::StringRef Name) {
                     /*KnownZero=*/ llvm::APInt(Width, 0), /*KnownOne=*/ llvm::APInt(Width, 0),
                     /*NonZero=*/ false, /*NonNegative=*/ false, /*PowerOfTwo=*/ false,
                     /*Negative=*/ false, /*SignBits=*/ 1,
-                    /*DemandedBits=*/llvm::APInt::getAllOnesValue(Width), /*SynthesisConstID=*/0);
+                    /*DemandedBits=*/llvm::APInt::getAllOnes(Width), /*SynthesisConstID=*/0);
 }
 
 Inst *InstContext::createSynthesisConstant(unsigned Width, unsigned SynthesisConstID) {
@@ -673,7 +673,7 @@ Inst *InstContext::createSynthesisConstant(unsigned Width, unsigned SynthesisCon
                    /*KnownZero=*/ llvm::APInt(Width, 0), /*KnownOne=*/ llvm::APInt(Width, 0),
                    /*NonZero=*/ false, /*NonNegative=*/ false, /*PowerOfTwo=*/ false,
                    /*Negative=*/ false, /*SignBits=*/ 1,
-                   /*DemandedBits=*/llvm::APInt::getAllOnesValue(Width), /*SynthesisConstID=*/SynthesisConstID);
+                   /*DemandedBits=*/llvm::APInt::getAllOnes(Width), /*SynthesisConstID=*/SynthesisConstID);
 }
 
 
@@ -697,7 +697,7 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops, llvm::APInt 
   ID.AddPointer(B);
   for (auto O : Ops)
     ID.AddPointer(O);
-  if (!DemandedBits.isAllOnesValue())
+  if (!DemandedBits.isAllOnes())
     ID.Add(DemandedBits);
 
   void *IP = 0;
@@ -716,7 +716,7 @@ Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops, llvm::APInt 
 }
 
 Inst *InstContext::getPhi(Block *B, const std::vector<Inst *> &Ops) {
-  llvm::APInt DemandedBits = llvm::APInt::getAllOnesValue(Ops[0]->Width);
+  llvm::APInt DemandedBits = llvm::APInt::getAllOnes(Ops[0]->Width);
   return getPhi(B, Ops, DemandedBits);
 }
 
@@ -743,7 +743,7 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
   ID.AddInteger(Width);
   for (auto O : *InstOps)
     ID.AddPointer(O);
-  if (!DemandedBits.isAllOnesValue())
+  if (!DemandedBits.isAllOnes())
     ID.Add(DemandedBits);
 
   void *IP = 0;
@@ -766,7 +766,7 @@ Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
 Inst *InstContext::getInst(Inst::Kind K, unsigned Width,
                            const std::vector<Inst *> &Ops,
                            bool Available) {
-  llvm::APInt DemandedBits = llvm::APInt::getAllOnesValue(Width);
+  llvm::APInt DemandedBits = llvm::APInt::getAllOnes(Width);
   return getInst(K, Width, Ops, DemandedBits, Available);
 }
 
@@ -1012,7 +1012,7 @@ void souper::PrintReplacement(llvm::raw_ostream &Out,
   std::string SRef = Context.printInst(Mapping.LHS, Out, printNames);
   std::string RRef = Context.printInst(Mapping.RHS, Out, printNames);
   Out << "cand " << SRef << " " << RRef;
-  if (!Mapping.LHS->DemandedBits.isAllOnesValue()) {
+  if (!Mapping.LHS->DemandedBits.isAllOnes()) {
     Out<< " (" << "demandedBits="
        << Inst::getDemandedBitsString(Mapping.LHS->DemandedBits)
        << ")";
@@ -1045,7 +1045,7 @@ void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
   std::string SRef = Context.printInst(LHS, Out, printNames);
 
   Out << "infer " << SRef;
-  if (!LHS->DemandedBits.isAllOnesValue()) {
+  if (!LHS->DemandedBits.isAllOnes()) {
     Out<< " (" << "demandedBits="
        << Inst::getDemandedBitsString(LHS->DemandedBits)
        << ")";

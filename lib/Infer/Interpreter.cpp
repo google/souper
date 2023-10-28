@@ -230,7 +230,7 @@ namespace souper {
 
     case Inst::SDivExact:
       if (ARG1 == 0 ||
-          (ARG0.isMinSignedValue() && ARG1.isAllOnesValue()))
+          (ARG0.isMinSignedValue() && ARG1.isAllOnes()))
         return EvalValue::ub();
       if ((ARG0.sdiv(ARG1) * ARG1) != ARG0)
         return EvalValue::poison(ARG0.getBitWidth());
@@ -247,7 +247,7 @@ namespace souper {
 
     case Inst::SRem:
       if (ARG1 == 0 ||
-          (ARG0.isMinSignedValue() && ARG1.isAllOnesValue()))
+          (ARG0.isMinSignedValue() && ARG1.isAllOnes()))
         return EvalValue::ub();
       return {ARG0.srem(ARG1)};
 
@@ -345,7 +345,7 @@ namespace souper {
       return {{1, ARG0.sle(ARG1)}};
 
     case Inst::CtPop:
-      return {llvm::APInt(Inst->Width, ARG0.countPopulation())};
+      return {llvm::APInt(Inst->Width, ARG0.popcount())};
 
     case Inst::Ctlz:
       return {llvm::APInt(Inst->Width,
@@ -396,7 +396,7 @@ namespace souper {
       assert(ARG1.getBitWidth() == 1);
       unsigned W = ARG0.getBitWidth() + 1;
       auto Res = ARG0.zext(W);
-      if (ARG1.isOneValue())
+      if (ARG1.isOne())
         Res.setSignBit();
       return {Res};
     }
@@ -431,7 +431,7 @@ namespace souper {
       return { llvm::APInt(1, Ov) };
     }
     case Inst::ExtractValue: {
-      if (ARG1.isNullValue())
+      if (ARG1.isZero())
         return {ARG0.trunc(ARG0.getBitWidth() - 1)};
       else
         return {ARG0.getHiBits(1).trunc(1)};
@@ -439,7 +439,7 @@ namespace souper {
     case Inst::Freeze: {
       if (Args[0].K == EvalValue::ValueKind::Undef || Args[0].K == EvalValue::ValueKind::Poison) {
         return {llvm::APInt(Args[0].BitWidth,
-                std::rand() % llvm::APInt::getAllOnesValue(Args[0].BitWidth).getLimitedValue())};
+                std::rand() % llvm::APInt::getAllOnes(Args[0].BitWidth).getLimitedValue())};
       }
       return Args[0];
     }

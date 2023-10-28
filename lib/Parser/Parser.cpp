@@ -775,7 +775,7 @@ bool Parser::parseInstAttribute(std::string &ErrStr, Inst *LHS) {
   int DemandedBitsCount = 0;
   int HarvestKindCount = 0;
   LHS->HarvestKind = HarvestType::HarvestedFromDef;
-  LHS->DemandedBits = APInt::getAllOnesValue(LHS->Width);
+  LHS->DemandedBits = APInt::getAllOnes(LHS->Width);
   while (CurTok.K == Token::OpenParen) {
     llvm::APInt DemandedBitsVal = APInt(LHS->Width, 0, false);
     llvm::APInt ConstOne(LHS->Width, 1, false);
@@ -1237,11 +1237,11 @@ bool Parser::parseLine(std::string &ErrStr) {
         if (IK == Inst::Var)
           I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
                            NonNegative, PowOfTwo, Negative, SignBits,
-                           llvm::APInt::getAllOnesValue(InstWidth), 0);
+                           llvm::APInt::getAllOnes(InstWidth), 0);
         else if (IK == Inst::ReservedConst)
           I = IC.createVar(InstWidth, InstName, Range, Zero, One, NonZero,
                            NonNegative, PowOfTwo, Negative, SignBits,
-                           llvm::APInt::getAllOnesValue(InstWidth), ++ReservedConstCounter);
+                           llvm::APInt::getAllOnes(InstWidth), ++ReservedConstCounter);
         else if (IK == Inst::ReservedInst) {
           I = IC.createHole(InstWidth);
           I->Name = InstName;
