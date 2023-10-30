@@ -245,7 +245,6 @@ add_library(souperTool STATIC
 
 set(SOUPER_CODEGEN_FILES
   lib/Codegen/Codegen.cpp
-  # lib/Codegen/MachineCost.cpp
   include/souper/Codegen/Codegen.h
 )
 
