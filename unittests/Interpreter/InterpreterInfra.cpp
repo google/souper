@@ -428,7 +428,7 @@ bool CRTesting::testFn(Inst::Kind pred) {
 // -----------------------------
 
 bool RBTesting::nextRB(llvm::APInt &Val) {
-  if (Val.isAllOnesValue()) {
+  if (Val.isAllOnes()) {
     return false;
   } else {
     ++Val;

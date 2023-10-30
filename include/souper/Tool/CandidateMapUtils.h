@@ -36,7 +36,7 @@ typedef std::vector<CandidateReplacement> CandidateMap;
 void AddToCandidateMap(CandidateMap &M, const CandidateReplacement &CR);
 
 void AddModuleToCandidateMap(InstContext &IC, ExprBuilderContext &EBC,
-                             CandidateMap &CandMap, llvm::Module *M);
+                             CandidateMap &CandMap, llvm::Module &M);
 
 bool SolveCandidateMap(llvm::raw_ostream &OS, CandidateMap &M,
                        Solver *Solver, InstContext &IC,

@@ -751,7 +751,7 @@ souper::AliveDriver::translateDemandedBits(const souper::Inst* I,
 
   assert(DemandedBits.getBitWidth() == I-> Width && "Uninitialized DemandedBits");
 
-  if (!DemandedBits.isAllOnesValue()) {
+  if (!DemandedBits.isAllOnes()) {
     auto DBMask = Builder.val(getType(I->Width), DemandedBits);
 
     ExprCache[I] = Builder.binOp(getType(I->Width),

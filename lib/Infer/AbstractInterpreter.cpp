@@ -18,6 +18,7 @@
 #include "souper/Extractor/Candidates.h"
 #include "souper/Util/LLVMUtils.h"
 
+#include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Operator.h"
 
 using namespace llvm;
@@ -60,9 +61,9 @@ namespace souper {
 
   KnownBits KnownBitsAnalysis::getMostPreciseKnownBits(KnownBits A, KnownBits B) {
     unsigned unknownCountA =
-      A.getBitWidth() - (A.Zero.countPopulation() + A.One.countPopulation());
+      A.getBitWidth() - (A.Zero.popcount() + A.One.popcount());
     unsigned unknownCountB =
-      B.getBitWidth() - (B.Zero.countPopulation() + B.One.countPopulation());
+      B.getBitWidth() - (B.Zero.popcount() + B.One.popcount());
     return unknownCountA < unknownCountB ? A : B;
   }
 
@@ -322,7 +323,7 @@ namespace souper {
         return llvm::ConstantRange(LHS.getBitWidth(), /*isFullSet=*/false);
 
       APInt umax = APIntOps::umax(LHS.getUnsignedMin(), RHS.getUnsignedMin());
-      APInt res = APInt::getNullValue(LHS.getBitWidth());
+      APInt res = APInt::getZero(LHS.getBitWidth());
       if (!LHS.isWrappedSet() && !LHS.isUpperWrapped() &&
           !RHS.isWrappedSet() && !RHS.isUpperWrapped()) {
         APInt umaxupper = APIntOps::umax(LHS.getUnsignedMax(), RHS.getUnsignedMax());
@@ -344,10 +345,10 @@ namespace souper {
         return llvm::ConstantRange(LHS.getBitWidth(), /*isFullSet=*/false);
 
       APInt umin = APIntOps::umin(RHS.getUnsignedMax(), LHS.getUnsignedMax());
-      if (umin.isAllOnesValue())
+      if (umin.isAllOnes())
         return llvm::ConstantRange(LHS.getBitWidth(), /*isFullSet=*/true);
 
-      APInt res = APInt::getNullValue(LHS.getBitWidth());
+      APInt res = APInt::getZero(LHS.getBitWidth());
 
       const APInt upper1 = LHS.getUnsignedMax();
       const APInt upper2 = RHS.getUnsignedMax();
@@ -444,8 +445,8 @@ namespace souper {
     }
 #endif
 
-    APInt OneResult = APInt::getAllOnesValue(Width);
-    APInt ZeroResult = APInt::getAllOnesValue(Width);
+    APInt OneResult = APInt::getAllOnes(Width);
+    APInt ZeroResult = APInt::getAllOnes(Width);
     for (unsigned i = 0; i < Vec.size(); i++) {
       OneResult &= Vec[i].One;
       ZeroResult &= Vec[i].Zero;
@@ -1066,7 +1067,7 @@ namespace souper {
     InputVarInfo Result;
     switch (I->K) {
       case Inst::Var:
-        Result[I] = llvm::APInt::getAllOnesValue(I->Width);
+        Result[I] = llvm::APInt::getAllOnes(I->Width);
         break;
 
       // Ops(#) where:
@@ -1109,9 +1110,9 @@ namespace souper {
             continue;
           }
           if (A.find(V) == A.end())
-            A[V] = APInt::getNullValue(V->Width);
+            A[V] = APInt::getZero(V->Width);
           if (B.find(V) == B.end())
-            B[V] = APInt::getNullValue(V->Width);
+            B[V] = APInt::getZero(V->Width);
           Result[V] = (~RB1 & A[V]) | (~RB0 & B[V]);
         }
       }
@@ -1132,7 +1133,7 @@ namespace souper {
     findVars(I, Vars);
     for (auto &var : Vars) {
       if (Result.find(var) == Result.end()) {
-        Result[var] = APInt::getNullValue(var->Width);
+        Result[var] = APInt::getZero(var->Width);
       }
     }
 
@@ -1149,7 +1150,7 @@ namespace souper {
     findVars(Root, Inputs);
 
     for (auto V : Inputs) {
-      Result[V] = llvm::APInt::getNullValue(V->Width);
+      Result[V] = llvm::APInt::getZero(V->Width);
     }
 
     return Result;

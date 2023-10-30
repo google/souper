@@ -7,7 +7,7 @@
 
 int printf(const char *, ...);
 char a, c = 3;
-main() {
+int main() {
   char b = c;
   int d = 8;
   a = (d >= 32 || b > 0) ? b : b << 8;

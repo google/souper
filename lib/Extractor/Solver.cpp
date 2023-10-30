@@ -96,7 +96,7 @@ public:
   }
 
   llvm::APInt getClearedBit(unsigned Pos, unsigned W) {
-    APInt AllOnes = APInt::getAllOnesValue(W);
+    APInt AllOnes = APInt::getAllOnes(W);
     AllOnes.clearBit(Pos);
     return AllOnes;
   }
@@ -169,7 +169,7 @@ public:
                                    InstContext &IC) override {
     unsigned W = LHS->Width;
 
-    if (!LHS->DemandedBits.isAllOnesValue()) {
+    if (!LHS->DemandedBits.isAllOnes()) {
       LHS = IC.getInst(Inst::And, W, {LHS, IC.getConst(LHS->DemandedBits)});
     }
 
@@ -191,7 +191,7 @@ public:
          it != VarsVect.end(); ++it) {
        std::string VarName = it->first;
        unsigned VarWidth = VarsVect[VarName];
-       APInt ResultDB = APInt::getNullValue(VarWidth);
+       APInt ResultDB = APInt::getZero(VarWidth);
 
       for (unsigned Bit=0; Bit<VarWidth; Bit++) {
         std::map<Inst *, Inst *> InstCache;
@@ -215,7 +215,7 @@ public:
                    Inst *LHS, InstContext &IC) {
     unsigned W = LHS->Width;
     Inst *Mask = IC.getConst(APInt::getOneBitSet(W, W-1));
-    InstMapping Mapping(IC.getInst(Inst::And, W, { LHS, Mask }), IC.getConst(APInt::getNullValue(W)));
+    InstMapping Mapping(IC.getInst(Inst::And, W, { LHS, Mask }), IC.getConst(APInt::getZero(W)));
     bool IsSat;
     std::error_code EC = SMTSolver->isSatisfiable(BuildQuery(IC, BPCs, PCs,
                                                   Mapping, 0, /*Precondition=*/0),
@@ -307,8 +307,8 @@ public:
                           Inst *LHS, KnownBits &Known,
                           InstContext &IC) override {
     unsigned W = LHS->Width;
-    Known.One = APInt::getNullValue(W);
-    Known.Zero = APInt::getNullValue(W);
+    Known.One = APInt::getZero(W);
+    Known.Zero = APInt::getZero(W);
     for (unsigned I=0; I<W; I++) {
       APInt ZeroGuess = Known.Zero | APInt::getOneBitSet(W, I);
       if (testKnown(BPCs, PCs, ZeroGuess, Known.One, LHS, IC)) {
@@ -385,7 +385,7 @@ public:
       Inst *ShiftAmt = IC.getConst(APInt(W, W-I, false));
       Inst *Res = IC.getInst(Inst::AShr, W, {LHS, ShiftAmt});
       Inst *Guess1 = IC.getInst(Inst::Eq, 1, {Res, IC.getConst(APInt(W, 0, false))});
-      Inst *Guess2 = IC.getInst(Inst::Eq, 1, {Res, IC.getConst(APInt::getAllOnesValue(W))});
+      Inst *Guess2 = IC.getInst(Inst::Eq, 1, {Res, IC.getConst(APInt::getAllOnes(W))});
       Inst *Guess = IC.getInst(Inst::Or, 1, {Guess1, Guess2});
       InstMapping Mapping(Guess, True);
       bool IsSat;
@@ -619,7 +619,7 @@ public:
                                     InstContext &IC) override {
     unsigned W = LHS->Width;
 
-    APInt L = APInt(W, 1), R = APInt::getAllOnesValue(W);
+    APInt L = APInt(W, 1), R = APInt::getAllOnes(W);
     APInt BinSearchResultX, BinSearchResultC;
     bool BinSearchHasResult = false;
 

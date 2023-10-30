@@ -144,8 +144,8 @@ namespace souper {
       if (ResultSet.none())
         return ResultKB;
 
-      llvm::APInt AndResult = llvm::APInt::getAllOnesValue(WIDTH);
-      llvm::APInt OrResult = llvm::APInt::getNullValue(WIDTH);
+      llvm::APInt AndResult = llvm::APInt::getAllOnes(WIDTH);
+      llvm::APInt OrResult = llvm::APInt::getZero(WIDTH);
 
       for (int I = 0; I < SetSize; I++) {
         if (ResultSet[I]) {

@@ -16,7 +16,6 @@
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -69,8 +68,7 @@ std::unique_ptr<llvm::Module> openInputFile(llvm::LLVMContext &Context) {
   auto MB =
     ExitOnErr(errorOrToExpected(llvm::MemoryBuffer::getFileOrSTDIN(InputFilename)));
   llvm::SMDiagnostic Diag;
-  auto M = getLazyIRModule(std::move(MB), Diag, Context,
-                           /*ShouldLazyLoadMetadata=*/true);
+  auto M = parseIR(*MB, Diag, Context);
   if (!M) {
     Diag.print("", llvm::errs(), false);
     return 0;
@@ -100,7 +98,7 @@ int main(int argc, char **argv) {
   std::string ErrorMessage;
   std::unique_ptr<Module> M = openInputFile(Context);
 
-  if (M.get() == 0) {
+  if (M.get() == nullptr) {
     if (ErrorMessage.size())
       llvm::errs() << ErrorMessage;
     else
@@ -114,8 +112,7 @@ int main(int argc, char **argv) {
   InstContext IC;
   ExprBuilderContext EBC;
   CandidateMap CandMap;
-
-  AddModuleToCandidateMap(IC, EBC, CandMap, M.get());
+  AddModuleToCandidateMap(IC, EBC, CandMap, *M.get());
 
   if (Check) {
     return CheckCandidateMap(*M.get(), CandMap, S.get(), IC) ? 0 : 1;
