@@ -19,7 +19,7 @@
 #include "souper/Extractor/Candidates.h"
 #include "souper/Extractor/ExprBuilder.h"
 #include <memory>
-#include "gtest/gtest.h"
+#include "llvm-gtest/gtest/gtest.h"
 
 using namespace llvm;
 using namespace souper;
@@ -52,7 +52,7 @@ struct ExtractorTest : testing::Test {
     ExprBuilderOptions Opts;
     Opts.NamedArrays = true;
 
-    CS = ExtractCandidates(&*M->begin(), IC, EBC, Opts);
+    CS = ExtractCandidates(*M->begin(), IC, EBC, Opts);
     for (auto &B : CS.Blocks) {
       for (auto &R : B->Replacements) {
         if (R.Mapping.LHS->Width > 1)

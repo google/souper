@@ -15,6 +15,8 @@
 #ifndef SOUPER_UTIL_LLVMUTILS_H
 #define SOUPER_UTIL_LLVMUTILS_H
 
+#include "llvm/ADT/SmallString.h"
+
 namespace souper {
 
   std::string inline getPaddedBinaryString(llvm::APInt Result) {

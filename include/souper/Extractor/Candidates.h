@@ -100,13 +100,13 @@ struct ExprBuilderContext {
 };
 
 FunctionCandidateSet ExtractCandidatesFromPass(
-    llvm::Function *F, const llvm::LoopInfo *LI, llvm::DemandedBits *DB,
-    llvm::LazyValueInfo *LVI, llvm::ScalarEvolution *SE,
-    llvm::TargetLibraryInfo *TLI, InstContext &IC, ExprBuilderContext &EBC,
+    llvm::Function &F, const llvm::LoopInfo &LI, llvm::DemandedBits &DB,
+    llvm::LazyValueInfo &LVI, llvm::ScalarEvolution &SE,
+    llvm::TargetLibraryInfo &TLI, InstContext &IC, ExprBuilderContext &EBC,
     const ExprBuilderOptions &Opts = ExprBuilderOptions());
 
 FunctionCandidateSet ExtractCandidates(
-    llvm::Function *F, InstContext &IC, ExprBuilderContext &EBC,
+    llvm::Function &F, InstContext &IC, ExprBuilderContext &EBC,
     const ExprBuilderOptions &Opts = ExprBuilderOptions());
 
 llvm::APInt getSetSize(const llvm::ConstantRange &R);

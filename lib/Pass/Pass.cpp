@@ -230,7 +230,7 @@ public:
       FM2.run(F, FAM2);
     }
 
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(&F, &LI, &DB, &LVI, &SE, &TLI, IC, EBC);
+    FunctionCandidateSet CS = ExtractCandidatesFromPass(F, LI, DB, LVI, SE, TLI, IC, EBC);
 
     if (DebugLevel > 3)
       errs() << "; extracted candidates\n";

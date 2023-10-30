@@ -1206,7 +1206,7 @@ Inst *InstSynthesis::createCleanInst(Inst::Kind Kind, unsigned Width,
   case Inst::FShr:
     if (Ops[2]->K == Inst::Const) {
       APInt ShAmtModWidth(Width, Ops[2]->Val.urem(Width));
-      if (ShAmtModWidth.isNullValue()) {
+      if (ShAmtModWidth.isZero()) {
         if (Kind == Inst::FShl)
           return Ops[0];
         if (Kind == Inst::FShr)
@@ -1229,16 +1229,16 @@ Inst *InstSynthesis::createCleanInst(Inst::Kind Kind, unsigned Width,
 
   case Inst::SAddSat:
   case Inst::UAddSat:
-    if (Ops[0]->K == Inst::Const && Ops[0]->Val.isNullValue()) {
+    if (Ops[0]->K == Inst::Const && Ops[0]->Val.isZero()) {
       return Ops[1];
-    } else if (Ops[1]->K == Inst::Const && Ops[1]->Val.isNullValue()) {
+    } else if (Ops[1]->K == Inst::Const && Ops[1]->Val.isZero()) {
       return Ops[0];
     }
     break;
 
   case Inst::SSubSat:
   case Inst::USubSat:
-    if (Ops[1]->K == Inst::Const && Ops[1]->Val.isNullValue())
+    if (Ops[1]->K == Inst::Const && Ops[1]->Val.isZero())
       return Ops[0];
     break;
 
@@ -1431,7 +1431,7 @@ Inst *InstSynthesis::initConcreteInputWirings(Inst *Query, Inst *WiringQuery,
     }
     Inst *Copy = replaceVars(WiringQuery, *LIC, InputMap);
     Query = LIC->getInst(Inst::And, 1, {Query, Copy});
-    Query->DemandedBits = APInt::getAllOnesValue(Query->Width);
+    Query->DemandedBits = APInt::getAllOnes(Query->Width);
   }
 
   return Query;

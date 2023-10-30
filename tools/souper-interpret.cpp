@@ -58,15 +58,15 @@ namespace {
     APInt unknownB = ~(b.One ^ b.Zero);
 
     // report if there's any conflict in known bits
-    if (!((a.Zero & b.One).isNullValue()) || !((a.One & b.Zero).isNullValue()))
+    if (!((a.Zero & b.One).isZero()) || !((a.One & b.Zero).isZero()))
       return CompareDataflowResult::INCOMPARABLE;
 
-    if ((unknownA | unknownB).countPopulation() >
-	std::max(unknownA.countPopulation(), unknownB.countPopulation()))
+    if ((unknownA | unknownB).popcount() >
+	std::max(unknownA.popcount(), unknownB.popcount()))
       return CompareDataflowResult::INCOMPARABLE;
-    else if (unknownA.countPopulation() > unknownB.countPopulation())
+    else if (unknownA.popcount() > unknownB.popcount())
       return CompareDataflowResult::LESS;
-    else if (unknownA.countPopulation() < unknownB.countPopulation())
+    else if (unknownA.popcount() < unknownB.popcount())
       return CompareDataflowResult::GREATER;
     else
       return CompareDataflowResult::SAME;

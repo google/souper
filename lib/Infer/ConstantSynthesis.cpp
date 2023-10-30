@@ -84,7 +84,7 @@ Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
       IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }) : 
       IC.getInst(Inst::And, 1, {
         IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
-        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnes(C->Width)), C })
       });
 
   case Inst::Mul:
@@ -99,7 +99,7 @@ Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
     // neither operand can be 0 or -1
     return IC.getInst(Inst::And, 1, {
         IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
-        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnes(C->Width)), C })
       });
 
   case Inst::Shl:
@@ -117,7 +117,7 @@ Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
     return (OpNum == 0) ?
       IC.getInst(Inst::And, 1, {
         IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
-        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnes(C->Width)), C })
       }) :
       IC.getInst(Inst::And, 1, {
         IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
@@ -145,7 +145,7 @@ Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
       IC.getConst(llvm::APInt(1, true)) :
       IC.getInst(Inst::And, 1, {
         IC.getInst(Inst::Ult, 1, { IC.getConst(llvm::APInt(C->Width, 2)), C }),
-        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+        IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnes(C->Width)), C })
       });
     
   case Inst::SDiv:
@@ -170,10 +170,10 @@ Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
     return (OpNum == 0) ?
       IC.getInst(Inst::And, 1, {
           IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C }),
-            IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt::getAllOnesValue(C->Width) - 1) })
+            IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt::getAllOnes(C->Width) - 1) })
       }) :
       IC.getInst(Inst::And, 1, {
-          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C }),
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnes(C->Width)), C }),
           IC.getInst(Inst::Ult, 1, { IC.getConst(llvm::APInt(C->Width, 1)), C })
       });
 
@@ -188,10 +188,10 @@ Inst *getConstConstraint(Inst::Kind K, unsigned OpNum, Inst *C,
     return (OpNum == 0) ?
       IC.getInst(Inst::And, 1, {
           IC.getInst(Inst::Ult, 1, { IC.getConst(llvm::APInt(C->Width, 2)), C }),
-          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnesValue(C->Width)), C })
+          IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt::getAllOnes(C->Width)), C })
       }) :
       IC.getInst(Inst::And, 1, {
-          IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt::getAllOnesValue(C->Width) - 1) }),
+          IC.getInst(Inst::Ult, 1, { C, IC.getConst(llvm::APInt::getAllOnes(C->Width) - 1) }),
           IC.getInst(Inst::Ne, 1, { IC.getConst(llvm::APInt(C->Width, 0)), C })
       });    
 
@@ -456,7 +456,7 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
       ValueCache VC;
       for (unsigned J = 0; J != ModelInstsSecondQuery.size(); ++J) {
         Inst* Var = ModelInstsSecondQuery[J];
-        if (Var->Name == BlockPred && !ModelValsSecondQuery[J].isNullValue())
+        if (Var->Name == BlockPred && !ModelValsSecondQuery[J].isZero())
           for (auto B : Blocks)
             for (unsigned I = 0 ; I < B->PredVars.size(); ++I)
               if (B->PredVars[I] == Var)
