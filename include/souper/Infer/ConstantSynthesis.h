@@ -32,7 +32,7 @@ public:
   ConstantSynthesis(PruningManager *P = nullptr) : Pruner(P) {}
 
   // Synthesize a set of constants from the specification in LHS
-  std::error_code synthesize(SMTLIBSolver *SMTSolver,
+  virtual std::error_code synthesize(SMTLIBSolver *SMTSolver,
                              const BlockPCs &BPCs,
                              const std::vector<InstMapping> &PCs,
                              InstMapping Mapping, std::set <Inst *> &ConstSet,
@@ -40,9 +40,24 @@ public:
                              InstContext &IC, unsigned MaxTries, unsigned Timeout,
                              bool AvoidNops);
 
-private:
+protected:
   PruningManager *Pruner = nullptr;
 };
+
+class ConstantSynthesisZ3 : public ConstantSynthesis {
+public:
+  ConstantSynthesisZ3(PruningManager *P = nullptr) : ConstantSynthesis(P) {}
+
+  std::error_code synthesize(SMTLIBSolver *SMTSolver,
+                             const BlockPCs &BPCs,
+                             const std::vector<InstMapping> &PCs,
+                             InstMapping Mapping, std::set <Inst *> &ConstSet,
+                             std::map <Inst *, llvm::APInt> &ResultMap,
+                             InstContext &IC, unsigned MaxTries, unsigned Timeout,
+                             bool AvoidNops) override;
+
+};
+
 }
 
 #endif  // SOUPER_CONSTANT_SYNTHESIS_H
