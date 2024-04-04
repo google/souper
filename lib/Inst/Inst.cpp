@@ -1033,306 +1033,303 @@ std::string souper::GetReplacementString(const BlockPCs &BPCs,
 }
 
 void souper::PrintReplacementLHS(llvm::raw_ostream &Out,
-                                 const BlockPCs &BPCs,
-                                 const std::vector<InstMapping> &PCs,
-                                 Inst *LHS, ReplacementContext &Context,
-                                 bool printNames) {
-  assert(LHS);
-  assert(Context.empty());
+                                const BlockPCs &BPCs,
+                                const std::vector<InstMapping> &PCs,
+                                std::unique_ptr<Inst> &LHS, ReplacementContext &Context,
+                                bool printNames) {
+                                  assert(LHS);
+                                  assert(Context.empty());
 
-  Context.printPCs(PCs, Out, printNames);
-  Context.printBlockPCs(BPCs, Out, printNames);
-  std::string SRef = Context.printInst(LHS, Out, printNames);
+                                  Context.printPCs(PCs, Out, printNames);
+                                  Context.printBlockPCs(BPCs, Out, printNames);
+                                  std::string SRef = Context.printInst(LHS.get(), Out, printNames);
 
-  Out << "infer " << SRef;
-  if (!LHS->DemandedBits.isAllOnes()) {
-    Out<< " (" << "demandedBits="
-       << Inst::getDemandedBitsString(LHS->DemandedBits)
-       << ")";
-  }
-  if (LHS->HarvestKind == HarvestType::HarvestedFromUse) {
-    Out << " (harvestedFromUse)";
-  }
-  Out << "\n";
-}
+                                  Out << "infer " << SRef;
+                                  if (!LHS->DemandedBits.isAllOnes()) {
+                                    Out<< " (" << "demandedBits="
+                                       << Inst::getDemandedBitsString(LHS->DemandedBits)
+                                       << ")";
+                                  }
+                                  if (LHS->HarvestKind == HarvestType::HarvestedFromUse) {
+                                    Out << " (harvestedFromUse)";
+                                  }
+                                  Out << "\n";
+                                }
 
-std::string souper::GetReplacementLHSString(const BlockPCs &BPCs,
-    const std::vector<InstMapping> &PCs,
-    Inst *LHS, ReplacementContext &Context, bool printNames) {
-  std::string Str;
-  llvm::raw_string_ostream SS(Str);
-  PrintReplacementLHS(SS, BPCs, PCs, LHS, Context);
-  return SS.str();
-}
+                                std::string souper::GetReplacementLHSString(const BlockPCs &BPCs,
+                                    const std::vector<InstMapping> &PCs,
+                                    std::unique_ptr<Inst> &LHS, ReplacementContext &Context, bool printNames) {
+                                  std::string Str;
+                                  llvm::raw_string_ostream SS(Str);
+                                  PrintReplacementLHS(SS, BPCs, PCs, LHS, Context);
+                                  return SS.str();
+                                }
 
-void souper::PrintReplacementRHS(llvm::raw_ostream &Out, Inst *RHS,
-                                 ReplacementContext &Context, bool printNames) {
-  std::string SRef = Context.printInst(RHS, Out, printNames);
-  Out << "result " << SRef << '\n';
-}
+                                void souper::PrintReplacementRHS(llvm::raw_ostream &Out, std::unique_ptr<Inst> &RHS,
+                                                                 ReplacementContext &Context, bool printNames) {
+                                  std::string SRef = Context.printInst(RHS.get(), Out, printNames);
+                                  Out << "result " << SRef << '\n';
+                                }
 
-std::string souper::GetReplacementRHSString(Inst *RHS,
-                                            ReplacementContext &Context,
-                                            bool printNames) {
-  std::string Str;
-  llvm::raw_string_ostream SS(Str);
-  PrintReplacementRHS(SS, RHS, Context, printNames);
-  return SS.str();
-}
+                                std::string souper::GetReplacementRHSString(std::unique_ptr<Inst> &RHS,
+                                                                            ReplacementContext &Context,
+                                                                            bool printNames) {
+                                  std::string Str;
+                                  llvm::raw_string_ostream SS(Str);
+                                  PrintReplacementRHS(SS, RHS, Context, printNames);
+                                  return SS.str();
+                                }
 
-// breadth-first search
-void souper::findCands(Inst *Root, std::set<Inst *> &Guesses,
-		       bool WidthMustMatch, bool FilterVars,int Max) {
-  std::set<Inst *> Visited;
-  std::queue<Inst *> Q;
-  Q.push(Root);
-  while (!Q.empty()) {
-    Inst *I = Q.front();
-    Q.pop();
-    if (Visited.insert(I).second) {
-      for (auto Op : I->Ops)
-        Q.push(Op);
-      if (I->Available && I->K != Inst::Const
-          && I->K != Inst::UntypedConst) {
-        if (WidthMustMatch && I->Width != Root->Width)
-          continue;
-        if (FilterVars && I->K == Inst::Var)
-          continue;
-        if (I->K == Inst::SAddWithOverflow || I->K == Inst::UAddWithOverflow ||
-            I->K == Inst::SSubWithOverflow || I->K == Inst::USubWithOverflow ||
-            I->K == Inst::SMulWithOverflow || I->K == Inst::UMulWithOverflow ||
-            I->K == Inst::SAddO || I->K == Inst::UAddO ||
-            I->K == Inst::SSubO || I->K == Inst::USubO ||
-            I->K == Inst::SMulO || I->K == Inst::UMulO)
-          continue;
-        if (Guesses.size() < Max)
-	  Guesses.insert(I);
-      }
-    }
-  }
-}
+                                // breadth-first search
+                                void souper::findCands(std::unique_ptr<Inst> &Root, std::set<std::unique_ptr<Inst>> &Guesses,
+                                                       bool WidthMustMatch, bool FilterVars,int Max) {
+                                  std::set<std::unique_ptr<Inst>> Visited;
+                                  std::queue<std::unique_ptr<Inst>> Q;
+                                  Q.push(std::move(Root));
+                                  while (!Q.empty()) {
+                                    std::unique_ptr<Inst> I = std::move(Q.front());
+                                    Q.pop();
+                                    if (Visited.insert(I).second) {
+                                      for (auto& Op : I->Ops)
+                                        Q.push(std::move(Op));
+                                      if (I->Available && I->K != Inst::Const
+                                          && I->K != Inst::UntypedConst) {
+                                        if (WidthMustMatch && I->Width != Root->Width)
+                                          continue;
+                                        if (FilterVars && I->K == Inst::Var)
+                                          continue;
+                                        if (I->K == Inst::SAddWithOverflow || I->K == Inst::UAddWithOverflow ||
+                                            I->K == Inst::SSubWithOverflow || I->K == Inst::USubWithOverflow ||
+                                            I->K == Inst::SMulWithOverflow || I->K == Inst::UMulWithOverflow ||
+                                            I->K == Inst::SAddO || I->K == Inst::UAddO ||
+                                            I->K == Inst::SSubO || I->K == Inst::USubO ||
+                                            I->K == Inst::SMulO || I->K == Inst::UMulO)
+                                          continue;
+                                        if (Guesses.size() < Max)
+                                          Guesses.insert(std::move(I));
+                                      }
+                                    }
+                                  }
+                                }
 
-/* TODO call findCands instead */
-void souper::findVars(Inst *Root, std::vector<Inst *> &Vars) {
-  findInsts(Root, Vars, [](Inst *I) {
-    return I->K == Inst::Var && I->SynthesisConstID == 0;
-  });
-}
+                                /* TODO call findCands instead */
+                                void souper::findVars(std::unique_ptr<Inst> &Root, std::vector<std::unique_ptr<Inst>> &Vars) {
+                                  findInsts(Root, Vars, [](std::unique_ptr<Inst>& I) {
+                                    return I->K == Inst::Var && I->SynthesisConstID == 0;
+                                  });
+                                }
 
-void souper::findInsts(Inst *Root, std::vector<Inst *> &Insts, std::function<bool(Inst*)> Condition) {
-  // breadth-first search
-  if (Root == nullptr)
-    return;
+                                void souper::findInsts(std::unique_ptr<Inst> &Root, std::vector<std::unique_ptr<Inst>> &Insts, std::function<bool(std::unique_ptr<Inst>&)> Condition) {
+                                  // breadth-first search
+                                  if (!Root)
+                                    return;
 
-  std::set<Inst *> Visited;
-  std::queue<Inst *> Q;
-  Q.push(Root);
-  while (!Q.empty()) {
-    Inst *I = Q.front();
-    Q.pop();
-    if (!Visited.insert(I).second)
-      continue;
-    if (Condition(I))
-      Insts.push_back(I);
-    for (auto Op : I->Ops)
-      Q.push(Op);
-  }
-}
+                                  std::set<std::unique_ptr<Inst>> Visited;
+                                  std::queue<std::unique_ptr<Inst>> Q;
+                                  Q.push(std::move(Root));
+                                  while (!Q.empty()) {
+                                    std::unique_ptr<Inst> I = std::move(Q.front());
+                                    Q.pop();
+                                    if (!Visited.insert(I).second)
+                                      continue;
+                                    if (Condition(I))
+                                      Insts.push_back(std::move(I));
+                                    for (auto& Op : I->Ops)
+                                      Q.push(std::move(Op));
+                                  }
+                                }
 
-void hasConstantHelper(Inst *I, std::set<Inst *> &Visited,
-                       std::set<Inst *> &ConstSet) {
-  if (I->K == Inst::Var && I->SynthesisConstID != 0) {
-    ConstSet.insert(I);
-  } else {
-    if (Visited.insert(I).second)
-      for (auto Op : I->Ops)
-        hasConstantHelper(Op, Visited, ConstSet);
-  }
-}
+                                void hasConstantHelper(std::unique_ptr<Inst> &I, std::set<std::unique_ptr<Inst>> &Visited,
+                                                       std::set<std::unique_ptr<Inst>> &ConstSet) {
+                                  if (I->K == Inst::Var && I->SynthesisConstID != 0) {
+                                    ConstSet.insert(std::move(I));
+                                  } else {
+                                    if (Visited.insert(I).second)
+                                      for (auto& Op : I->Ops)
+                                        hasConstantHelper(Op, Visited, ConstSet);
+                                  }
+                                }
 
-// TODO do this a more efficient way
-void souper::getConstants(Inst *I, std::set<Inst *> &ConstSet) {
-  std::set<Inst *> Visited;
-  hasConstantHelper(I, Visited, ConstSet);
-}
+                                // TODO do this a more efficient way
+                                void souper::getConstants(std::unique_ptr<Inst> &I, std::set<std::unique_ptr<Inst>> &ConstSet) {
+                                  std::set<std::unique_ptr<Inst>> Visited;
+                                  hasConstantHelper(I, Visited, ConstSet);
+                                }
 
+                                // TODO: Convert to a more generic getGivenInst similar to hasGivenInst below
+                                void souper::getHoles(std::unique_ptr<Inst> &Root, std::vector<std::unique_ptr<Inst>> &Holes) {
+                                  // breadth-first search
+                                  std::set<std::unique_ptr<Inst>> Visited;
+                                  std::queue<std::unique_ptr<Inst>> Q;
+                                  Q.push(std::move(Root));
+                                  while (!Q.empty()) {
+                                    std::unique_ptr<Inst> I = std::move(Q.front());
+                                    Q.pop();
+                                    if (!Visited.insert(I).second)
+                                      continue;
+                                    if (I->K == Inst::Hole) {
+                                      assert(I->Width > 0);
+                                      Holes.push_back(std::move(I));
+                                    }
+                                    for (auto& Op : I->Ops)
+                                      Q.push(std::move(Op));
+                                  }
+                                }
 
+                                bool souper::hasGivenInst(std::unique_ptr<Inst> &Root, std::function<bool(std::unique_ptr<Inst>&)> InstTester) {
+                                  std::vector<std::unique_ptr<Inst>> Insts;
+                                  findInsts(Root, Insts, InstTester);
+                                  return Insts.size() > 0;
+                                }
 
-// TODO: Convert to a more generic getGivenInst similar to hasGivenInst below
-void souper::getHoles(Inst *Root, std::vector<Inst *> &Holes) {
-  // breadth-first search
-  std::set<Inst *> Visited;
-  std::queue<Inst *> Q;
-  Q.push(Root);
-  while (!Q.empty()) {
-    Inst *I = Q.front();
-    Q.pop();
-    if (!Visited.insert(I).second)
-      continue;
-    if (I->K == Inst::Hole) {
-      assert(I->Width > 0);
-      Holes.push_back(I);
-    }
-    for (auto Op : I->Ops)
-      Q.push(Op);
-  }
-}
+                                std::unique_ptr<Inst> souper::getInstCopy(std::unique_ptr<Inst> &I, InstContext &IC,
+                                                          std::map<std::unique_ptr<Inst>, std::unique_ptr<Inst>> &InstCache,
+                                                          std::map<Block *, Block *> &BlockCache,
+                                                          std::map<std::unique_ptr<Inst>, llvm::APInt> *ConstMap,
+                                                          bool CloneVars, bool CloneBlocks) {
 
-bool souper::hasGivenInst(Inst *Root, std::function<bool(Inst*)> InstTester) {
-  std::vector<Inst*> Insts;
-  findInsts(Root, Insts, InstTester);
-  return Insts.size() > 0;
-}
+                                  if (InstCache.count(I))
+                                    return std::move(InstCache.at(I));
 
-Inst *souper::getInstCopy(Inst *I, InstContext &IC,
-                          std::map<Inst *, Inst *> &InstCache,
-                          std::map<Block *, Block *> &BlockCache,
-                          std::map<Inst *, llvm::APInt> *ConstMap,
-                          bool CloneVars, bool CloneBlocks) {
+                                  std::vector<std::unique_ptr<Inst>> Ops;
+                                  for (auto const &Op : I->Ops)
+                                    Ops.push_back(getInstCopy(Op, IC, InstCache, BlockCache, ConstMap, CloneVars));
 
-  if (InstCache.count(I))
-    return InstCache.at(I);
+                                  std::unique_ptr<Inst> Copy = nullptr;
+                                  if (I->K == Inst::Var) {
+                                    if (ConstMap) {
+                                      auto it = ConstMap->find(I);
+                                      if (it != ConstMap->end()) {
+                                        {
+                                          llvm::APInt x = it->second;
+                                          /*
+                                          llvm::outs() << "found a var to replace with a constant width " <<
+                                            x.getBitWidth() << " and value " << x << "\n";
+                                          */
+                                        }
+                                        Copy = IC.getConst(it->second);
+                                      }
+                                    }
+                                    if (!Copy) {
+                                      if (CloneVars && I->SynthesisConstID == 0)
+                                        Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
+                                                            I->KnownOnes, I->NonZero, I->NonNegative,
+                                                            I->PowOfTwo, I->Negative, I->NumSignBits,
+                                                            I->DemandedBits,
+                                                            I->SynthesisConstID);
+                                      else {
+                                        Copy = std::move(I);
+                                      }
+                                    }
+                                  } else if (I->K == Inst::Phi) {
+                                    if (!BlockCache.count(I->B)) {
+                                      if (CloneBlocks) {
+                                        auto BlockCopy = IC.createBlock(I->B->Preds);
+                                        BlockCache[I->B] = BlockCopy;
+                                        Copy = IC.getPhi(BlockCopy, Ops, I->DemandedBits);
+                                      } else {
+                                        Copy = IC.getPhi(I->B, Ops, I->DemandedBits);
+                                      }
+                                    } else {
+                                      Copy = IC.getPhi(BlockCache.at(I->B), Ops, I->DemandedBits);
+                                    }
+                                  } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
+                                    Copy = std::move(I);
+                                  } else {
+                                    Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits, I->Available);
+                                  }
+                                  assert(Copy);
+                                  InstCache[I] = std::move(Copy);
+                                  return InstCache[I];
+                                }
 
-  std::vector<Inst *> Ops;
-  for (auto const &Op : I->Ops)
-    Ops.push_back(getInstCopy(Op, IC, InstCache, BlockCache, ConstMap, CloneVars));
+                                std::unique_ptr<Inst> souper::instJoin(std::unique_ptr<Inst> &I, std::unique_ptr<Inst> &EmptyInst, std::unique_ptr<Inst> &NewInst,
+                                                       std::map<std::unique_ptr<Inst>, std::unique_ptr<Inst>> &InstCache,
+                                                       InstContext &IC) {
+                                  if (InstCache.count(I))
+                                    return std::move(InstCache.at(I));
 
-  Inst *Copy = 0;
-  if (I->K == Inst::Var) {
-    if (ConstMap) {
-      auto it = ConstMap->find(I);
-      if (it != ConstMap->end()) {
-        {
-          llvm::APInt x = it->second;
-          /*
-          llvm::outs() << "found a var to replace with a constant width " <<
-            x.getBitWidth() << " and value " << x << "\n";
-          */
-        }
-        Copy = IC.getConst(it->second);
-      }
-    }
-    if (!Copy) {
-      if (CloneVars && I->SynthesisConstID == 0)
-        Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
-                            I->KnownOnes, I->NonZero, I->NonNegative,
-                            I->PowOfTwo, I->Negative, I->NumSignBits,
-                            I->DemandedBits,
-                            I->SynthesisConstID);
-      else {
-        Copy = I;
-      }
-    }
-  } else if (I->K == Inst::Phi) {
-    if (!BlockCache.count(I->B)) {
-      if (CloneBlocks) {
-        auto BlockCopy = IC.createBlock(I->B->Preds);
-        BlockCache[I->B] = BlockCopy;
-        Copy = IC.getPhi(BlockCopy, Ops, I->DemandedBits);
-      } else {
-        Copy = IC.getPhi(I->B, Ops, I->DemandedBits);
-      }
-    } else {
-      Copy = IC.getPhi(BlockCache.at(I->B), Ops, I->DemandedBits);
-    }
-  } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
-    Copy = I;
-  } else {
-    Copy = IC.getInst(I->K, I->Width, Ops, I->DemandedBits, I->Available);
-  }
-  assert(Copy);
-  InstCache[I] = Copy;
-  return Copy;
-}
+                                  std::vector<std::unique_ptr<Inst>> Ops;
 
-Inst *souper::instJoin(Inst *I, Inst *EmptyInst, Inst *NewInst,
-                       std::map<Inst *, Inst *> &InstCache,
-                       InstContext &IC) {
-  if (InstCache.count(I))
-    return InstCache.at(I);
+                                  for (auto const &Op : I->Ops) {
+                                    auto NewOp = instJoin(Op, EmptyInst, NewInst, InstCache, IC);
+                                    Ops.push_back(std::move(NewOp));
+                                  }
 
-  std::vector<Inst *> Ops;
+                                  std::unique_ptr<Inst> Copy = nullptr;
+                                  if (I == EmptyInst) {
+                                    Copy = std::move(NewInst);
+                                  } else if (I->K == Inst::Var) {
+                                    // copy constant
+                                    if (I->SynthesisConstID != 0) {
+                                      Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
+                                                          I->KnownOnes, I->NonZero, I->NonNegative,
+                                                          I->PowOfTwo, I->Negative, I->NumSignBits,
+                                                          I->DemandedBits,
+                                                          I->SynthesisConstID);
+                                    } else {
+                                      Copy = std::move(I);
+                                    }
+                                  } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
+                                    Copy = std::move(I);
+                                  } else {
+                                    Copy = IC.getInst(I->K, I->Width, Ops);
+                                  }
 
-  for (auto const &Op : I->Ops) {
-    auto NewOp = instJoin(Op, EmptyInst, NewInst, InstCache, IC);
-    Ops.push_back(NewOp);
-  }
+                                  assert(Copy);
+                                  InstCache[I] = std::move(Copy);
+                                  return InstCache[I];
+                                }
 
-  Inst *Copy = 0;
-  if (I == EmptyInst) {
-    Copy = NewInst;
-  } else if (I->K == Inst::Var) {
-    // copy constant
-    if (I->SynthesisConstID != 0) {
-      Copy = IC.createVar(I->Width, I->Name, I->Range, I->KnownZeros,
-                          I->KnownOnes, I->NonZero, I->NonNegative,
-                          I->PowOfTwo, I->Negative, I->NumSignBits,
-                          I->DemandedBits,
-                          I->SynthesisConstID);
-    } else {
-      Copy = I;
-    }
-  } else if (I->K == Inst::Const || I->K == Inst::UntypedConst) {
-    Copy = I;
-  } else {
-    Copy = IC.getInst(I->K, I->Width, Ops);
-  }
+                                void souper::separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
+                                                              std::map<std::unique_ptr<Inst>, std::unique_ptr<Inst>> &InstCache,
+                                                              std::map<Block *, Block *> &BlockCache,
+                                                              InstContext &IC,
+                                                              std::map<std::unique_ptr<Inst>, llvm::APInt> *ConstMap,
+                                                              bool CloneVars) {
+                                  for (const auto &BPC : BPCs) {
+                                    auto BPCCopy = BPC;
+                                    assert(BPC.B);
+                                    assert(BlockCache[BPC.B]);
+                                    BPCCopy.B = BlockCache[BPC.B];
+                                    BPCCopy.PC = InstMapping(getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache,
+                                                                         ConstMap, CloneVars),
+                                                             getInstCopy(BPC.PC.RHS, IC, InstCache, BlockCache,
+                                                                         ConstMap, CloneVars));
+                                    BPCsCopy.emplace_back(BPCCopy);
+                                  }
+                                }
 
-  assert(Copy);
-  InstCache[I] = Copy;
-  return Copy;
-}
+                                void souper::separatePCs(const std::vector<InstMapping> &PCs,
+                                                         std::vector<InstMapping> &PCsCopy,
+                                                         std::map<std::unique_ptr<Inst>, std::unique_ptr<Inst>> &InstCache,
+                                                         std::map<Block *, Block *> &BlockCache,
+                                                         InstContext &IC,
+                                                         std::map<std::unique_ptr<Inst>, llvm::APInt> *ConstMap,
+                                                         bool CloneVars) {
+                                  for (const auto &PC : PCs)
+                                    PCsCopy.emplace_back(getInstCopy(PC.LHS, IC, InstCache, BlockCache,
+                                                                     ConstMap, CloneVars),
+                                                         getInstCopy(PC.RHS, IC, InstCache, BlockCache,
+                                                                     ConstMap, CloneVars));
+                                }
 
-void souper::separateBlockPCs(const BlockPCs &BPCs, BlockPCs &BPCsCopy,
-                              std::map<Inst *, Inst *> &InstCache,
-                              std::map<Block *, Block *> &BlockCache,
-                              InstContext &IC,
-                              std::map<Inst *, llvm::APInt> *ConstMap,
-                              bool CloneVars) {
-  for (const auto &BPC : BPCs) {
-    auto BPCCopy = BPC;
-    assert(BPC.B);
-    assert(BlockCache[BPC.B]);
-    BPCCopy.B = BlockCache[BPC.B];
-    BPCCopy.PC = InstMapping(getInstCopy(BPC.PC.LHS, IC, InstCache, BlockCache,
-                                         ConstMap, CloneVars),
-                             getInstCopy(BPC.PC.RHS, IC, InstCache, BlockCache,
-                                         ConstMap, CloneVars));
-    BPCsCopy.emplace_back(BPCCopy);
-  }
-}
+                                std::vector<Block *> souper::getBlocksFromPhis(std::unique_ptr<Inst> &I) {
+                                  // breadth-first search
+                                  std::set<std::unique_ptr<Inst>> Visited;
+                                  std::vector<Block *> Result;
+                                  std::queue<std::unique_ptr<Inst>> Q;
+                                  // Populate the queue
+                                  Q.push(std::move(I));
+                                  while (!Q.empty()) {
+                                    std::unique_ptr<Inst> I = std::move(Q.front());
+                                    Q.pop();
+                                    if (I->K == Inst::Phi)
+                                      Result.push_back(I->B);
+                                    if (Visited.insert(I).second)
+                                      for (auto& Op : I->orderedOps())
+                                        Q.push(std::move(Op));
+                                  }
 
-void souper::separatePCs(const std::vector<InstMapping> &PCs,
-                         std::vector<InstMapping> &PCsCopy,
-                         std::map<Inst *, Inst *> &InstCache,
-                         std::map<Block *, Block *> &BlockCache,
-                         InstContext &IC,
-                         std::map<Inst *, llvm::APInt> *ConstMap,
-                         bool CloneVars) {
-  for (const auto &PC : PCs)
-    PCsCopy.emplace_back(getInstCopy(PC.LHS, IC, InstCache, BlockCache,
-                                     ConstMap, CloneVars),
-                         getInstCopy(PC.RHS, IC, InstCache, BlockCache,
-                                     ConstMap, CloneVars));
-}
-
-
-std::vector<Block *> souper::getBlocksFromPhis(Inst *I) {
-  // breadth-first search
-  std::set<Inst *> Visited;
-  std::vector<Block *> Result;
-  std::queue<Inst *> Q;
-  // Populate the queue
-  Q.push(I);
-  while (!Q.empty()) {
-    Inst *I = Q.front();
-    Q.pop();
-    if (I->K == Inst::Phi)
-      Result.push_back(I->B);
-    if (Visited.insert(I).second)
-      for (auto Op : I->orderedOps())
-        Q.push(Op);
-  }
-
-  return Result;
-}
+                                  return Result;
+                                }
