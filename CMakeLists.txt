@@ -17,8 +17,8 @@ if(NOT EXISTS ${LLVM_CONFIG_EXECUTABLE})
 endif()
 
 find_path(ZSTD_LIBRARY_DIR
-          NAMES libzstd.a libzstd.dylib libzstd.so
-          HINTS /usr/local/lib /opt/homebrew/lib)
+          NAMES libzstd.a libzstd.dylib libzstd.so libzstd.so.1
+          HINTS /usr/local/lib /opt/homebrew/lib /usr/lib/x86_64-linux-gnu)
 
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --includedir
