@@ -29,7 +29,7 @@ infer %5
 %6:i32 = add %1, %2
 result %6
 
-; CHECK: LGTM
+; CHECK: Invalid
 
 
 %0 = block 2

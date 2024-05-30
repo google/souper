@@ -128,9 +128,9 @@ public:
     Function *RegisterFunc = M->getFunction("_souper_profile_register");
     if (!RegisterFunc) {
       Type *RegisterArgs[] = {
-        PointerType::getInt8PtrTy(C),
-        PointerType::getInt8PtrTy(C),
-        PointerType::getInt64PtrTy(C),
+        PointerType::get(Type::getInt8Ty(C), 0),
+        PointerType::get(Type::getInt8Ty(C), 0),
+        PointerType::get(Type::getInt64Ty(C), 0),
       };
       FunctionType *RegisterType = FunctionType::get(Type::getVoidTy(C),
                                                      RegisterArgs, false);
@@ -143,7 +143,7 @@ public:
     Constant *ReplVar = new GlobalVariable(*M, Repl->getType(), true,
         GlobalValue::PrivateLinkage, Repl, "");
     Constant *ReplPtr = ConstantExpr::getPointerCast(ReplVar,
-        PointerType::getInt8PtrTy(C));
+        PointerType::get(Type::getInt8Ty(C), 0));
 
     Constant *Field = ConstantDataArray::getString(C, "dprofile " + Loc.str(),
                                                    true);
@@ -151,7 +151,7 @@ public:
                                             GlobalValue::PrivateLinkage, Field,
                                             "");
     Constant *FieldPtr = ConstantExpr::getPointerCast(FieldVar,
-        PointerType::getInt8PtrTy(C));
+        PointerType::get(Type::getInt8Ty(C), 0));
 
     Constant *CntVar = new GlobalVariable(*M, Type::getInt64Ty(C), false,
                                           GlobalValue::PrivateLinkage,
