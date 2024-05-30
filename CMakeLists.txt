@@ -16,6 +16,10 @@ if(NOT EXISTS ${LLVM_CONFIG_EXECUTABLE})
   message(FATAL_ERROR "llvm-config could not be found!")
 endif()
 
+find_path(ZSTD_LIBRARY_DIR
+          NAMES libzstd.a libzstd.dylib libzstd.so
+          HINTS /usr/local/lib /opt/homebrew/lib)
+
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --includedir
   OUTPUT_VARIABLE LLVM_INCLUDEDIR
@@ -51,6 +55,7 @@ execute_process(
 )
 
 set(PASS_LDFLAGS "${LLVM_LDFLAGS}")
+set(LLVM_LDFLAGS "${LLVM_LDFLAGS} -L ${ZSTD_LIBRARY_DIR}")
 
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --bindir

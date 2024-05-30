@@ -129,7 +129,7 @@ public:
   template <typename T>
   void assume(T &&V) {
     auto AI =
-      std::make_unique<IR::Assume>(*std::move(V), IR::Assume::Kind::IfNonPoison);
+      std::make_unique<IR::Assume>(*std::move(V), IR::Assume::Kind::AndNonPoison);
     F.getBB("").addInstr(std::move(AI));
   }
 
@@ -229,50 +229,13 @@ std::map<souper::Inst *, llvm::APInt>
 performCegisFirstQuery(tools::Transform &t,
                        std::map<std::string, souper::Inst *> &SouperConsts,
                        smt::expr &TriedExpr) {
-  IR::State SrcState(t.src, true);
-  IR::State TgtState(t.tgt, false);
-  util::sym_exec(SrcState);
-  util::sym_exec(TgtState);
-
-  auto &&Sv = SrcState.returnVal();
-  auto &&Tv = TgtState.returnVal();
-
-  std::map<souper::Inst *, llvm::APInt> SynthesisResult;
-  SynthesisResult.clear();
-
-  std::set<smt::expr> Vars;
-  std::map<std::string, smt::expr> SMTConsts;
-  for (auto &[Var, Val] : TgtState.getValues()) {
-    auto &Name = Var->getName();
-    if (startsWith("%reservedconst", Name)) {
-      SMTConsts[Name] = Val.val.value;
-    }
-  }
-
-  if (SkipAliveSolver)
-    return SynthesisResult;
-
-  auto R = smt::check_expr((Sv.val.value == Tv.val.value) && (TriedExpr));
-  // no more guesses, stop immediately
-  if (R.isUnsat()) {
-    if (DebugLevel > 3)
-      llvm::errs()<<"No more new possible guesses\n";
-    return {};
-  } else if (R.isSat()) {
-    auto &&Model = R.getModel();
-    smt::expr TriedAnte(false);
-
-    for (auto &[name, expr] : SMTConsts) {
-      TriedAnte |= (expr != smt::expr::mkUInt(Model.getInt(expr), expr.bits()));
-    }
-    TriedExpr &= TriedAnte;
-
-    for (auto &[name, expr] : SMTConsts) {
-      auto *I = SouperConsts[name];
-      SynthesisResult[I] = llvm::APInt(I->Width, Model.getInt(expr));
-    }
-  }
-  return SynthesisResult;
+  // Removed because implementation was bit-rotting.
+  // The combination of the options requiring this is
+  // not currently used.
+  // TODO implement either this or the solver based synthesis
+  // before removing KLEE backend
+  llvm::errs() << "CEGIS constant synthesis through alive unimplemented.";
+  return {};
 }
 
 std::map<souper::Inst *, llvm::APInt>

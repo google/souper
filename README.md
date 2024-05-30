@@ -11,7 +11,8 @@ You will need a reasonably modern compiler toolchain. LLVM has instructions
 on how to get one for Linux:
 http://llvm.org/docs/GettingStarted.html#getting-a-modern-host-c-toolchain
 
-You will also need CMake to build Souper and its dependencies.
+You will also need CMake to build Souper and its dependencies, and the zstd
+library from your package manager or from Homebrew.
 
 # Building Souper
 
