@@ -91,6 +91,10 @@ static llvm::cl::opt<bool> PrintDemandedBitsAtReturn(
     "print-demanded-bits-from-harvester",
     llvm::cl::desc("Print demanded bits (default=false)"),
     llvm::cl::init(false));
+static llvm::cl::opt<bool> ExtractPhi(
+    "extract-phi",
+    llvm::cl::desc("Follow PHI nodes when extracting from LLVM (default=true)"),
+    llvm::cl::init(true));
 
 extern bool UseAlive;
 
@@ -512,6 +516,9 @@ Inst *ExprBuilder::buildHelper(Value *V) {
     // a separate set of values for each iteration (as in bounded model
     // checking).
     if (UseAlive) { // FIXME: Remove this after alive supports phi
+      return makeArrayRead(V);
+    }
+    if (!ExtractPhi) {
       return makeArrayRead(V);
     }
     if (!isLoopEntryPoint(Phi)) {
