@@ -19,6 +19,7 @@
 #include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Infer/Interpreter.h"
 #include "souper/Infer/Pruning.h"
+#include "souper/Infer/Z3Driver.h"
 
 extern unsigned DebugLevel;
 
@@ -497,6 +498,184 @@ ConstantSynthesis::synthesize(SMTLIBSolver *SMTSolver,
     llvm::errs() << MaxTries;
     llvm::errs() << ")\n";
   }
+  return EC;
+}
+
+std::error_code
+ConstantSynthesisZ3::synthesize(SMTLIBSolver *SMTSolver,
+                                const BlockPCs &BPCs,
+                                const std::vector<InstMapping> &PCs,
+                                InstMapping Mapping, std::set<Inst *> &ConstSet,
+                                std::map <Inst *, llvm::APInt> &ResultMap,
+                                InstContext &IC, unsigned MaxTries, unsigned Timeout,
+                                bool AvoidNops) {
+  // TODO: Replace with Z3 API implementation of constant synthesis
+  // What to do about BlockPCs?
+
+  Inst *TrueConst = IC.getConst(llvm::APInt(1, true));
+  Inst *FalseConst = IC.getConst(llvm::APInt(1, false));
+
+//  Inst *Ante = IC.getConst(llvm::APInt(1, true));
+//  for (auto PC : PCs ) {
+//    Inst *Eq = IC.getInst(Inst::Eq, 1, {PC.LHS, PC.RHS});
+//    Ante = IC.getInst(Inst::And, 1, {Ante, Eq});
+//  }
+
+  std::vector<Inst *> Vars;
+  findVars(Mapping.LHS, Vars);
+
+  Z3Driver Solver(Mapping.LHS, PCs, IC, BPCs);
+
+  // generalization by substitution
+  Inst *SubstAnte = TrueConst;
+  Inst *TriedAnte = TrueConst;
+  std::error_code EC;
+
+  auto ConstConstraints = TrueConst;
+  std::set<Inst *> Visited;
+  visitConstants(Mapping.RHS, Visited, ConstConstraints, ConstSet, IC, AvoidNops);
+
+  for (int I = 0; I < MaxTries; ++I)  {
+    bool IsSat;
+    std::vector<Inst *> ModelInstsFirstQuery;
+    std::vector<llvm::APInt> ModelValsFirstQuery;
+
+    // TriedAnte /\ SubstAnte
+    Inst *FirstQueryAnte = IC.getInst(Inst::And, 1,
+                                      { ConstConstraints,
+                                        IC.getInst(Inst::And, 1, {SubstAnte, TriedAnte})});
+
+    if (Solver.verify(Mapping.RHS, FirstQueryAnte, true)) {
+      // lhs == rhs unsat
+      // no constant found
+      if (DebugLevel > 3) {
+        llvm::errs() << "first query is UNSAT-- no more guesses\n";
+      }
+      return std::error_code();
+    }
+
+    // FIXME error handling
+//    if (EC) {
+//      if (DebugLevel > 3)
+//        llvm::errs() << "ConstantSynthesis: solver returns error on first query\n";
+//      return EC;
+//    }
+
+
+    if (DebugLevel > 3)
+      llvm::errs() << "first query is SAT, returning the model:\n";
+
+    Inst* TriedAnteLocal = FalseConst;
+    std::map<Inst *, llvm::APInt> ConstMap;
+    for (auto J : ConstSet) {
+      auto Opt = Solver.getModelVal(J);
+      if (!Opt.has_value()) {
+        continue;
+        // Is there a situation where we need a value but there isn't one?
+      }
+      llvm::APInt JVal = Opt.value();
+
+      if (DebugLevel > 3) {
+        llvm::errs() << J->Name;
+        llvm::errs() << ": ";
+        llvm::errs() << JVal;
+        llvm::errs() << "\n";
+      }
+      Inst *Const = IC.getConst(JVal);
+      ConstMap.insert(std::pair<Inst *, llvm::APInt>(J, Const->Val));
+      Inst *Ne = IC.getInst(Inst::Ne, 1, {J, Const});
+      if (ConstSet.size() == 1) {
+        TriedAnteLocal = Ne;
+      } else {
+        TriedAnteLocal = IC.getInst(Inst::Or, 1, {TriedAnteLocal, Ne});
+      }
+    }
+
+    TriedAnte = IC.getInst(Inst::And, 1, {TriedAnte, TriedAnteLocal});
+
+    std::map<Inst *, Inst *> InstCache;
+    std::map<Block *, Block *> BlockCache;
+    Inst *RHSCopy = getInstCopy(Mapping.RHS, IC, InstCache, BlockCache, &ConstMap, false);
+
+    std::vector<Block *> Blocks = getBlocksFromPhis(Mapping.LHS);
+    for (auto Block : Blocks) {
+      Block->ConcretePred = 0;
+    }
+
+    // TODO: Make Pruner use Z3Driver
+//    if (DebugLevel > 2 && Pruner) {
+//      if (Pruner->isInfeasible(RHSCopy, DebugLevel)) {
+//        //TODO(manasij)
+//        llvm::errs() << "Second Query Skipping opportunity.\n";
+//      }
+//    }
+
+    if (Solver.verify(RHSCopy)) {
+      // lhs != rhscopy unsat
+      if (DebugLevel > 3) {
+        llvm::errs() << "second query is UNSAT-- this guess works\n";
+      }
+      ResultMap = std::move(ConstMap);
+      return EC;
+    } else {
+      // sat
+      if (DebugLevel > 3) {
+        llvm::errs() << "attempt " << I << ": second query is SAT-- constant doesn't work\n";
+      }
+
+      std::map<Inst *, llvm::APInt> SubstConstMap;
+      ValueCache VC;
+      for (auto Var : Vars) {
+        auto Opt = Solver.getModelVal(Var);
+        if (!Opt.has_value()) {
+          continue;
+          // Is there a situation where we need a value but there isn't one?
+        }
+        llvm::APInt VarVal = Opt.value();
+
+        if (Var->Name == BlockPred && !VarVal.isNullValue())
+          for (auto B : Blocks)
+            for (unsigned I = 0 ; I < B->PredVars.size(); ++I)
+              if (B->PredVars[I] == Var)
+                B->ConcretePred = I + 1;
+
+        if (ConstSet.find(Var) == ConstSet.end()) {
+          SubstConstMap.insert(std::pair<Inst *, llvm::APInt>(Var, VarVal));
+          VC.insert(std::pair<Inst *, llvm::APInt>(Var, VarVal));
+        }
+      }
+
+      Inst *ConcreteLHS = nullptr;
+      std::map<Inst *, Inst *> InstCache;
+      std::map<Block *, Block *> BlockCache;
+      if (EnableConcreteInterpreter) {
+        ConcreteInterpreter CI(Mapping.LHS, VC);
+        auto LHSV = CI.evaluateInst(Mapping.LHS);
+
+        if (!LHSV.hasValue()) {
+          llvm::report_fatal_error("the model returned from second query evaluates to poison for LHS");
+        }
+        ConcreteLHS = IC.getConst(LHSV.getValue());
+      } else {
+        ConcreteLHS = getInstCopy(Mapping.LHS, IC, InstCache,
+                                  BlockCache, &SubstConstMap, true);
+      }
+
+      SubstAnte = IC.getInst(Inst::And, 1,
+                             {IC.getInst(Inst::Eq, 1, {ConcreteLHS,
+                                                       getInstCopy(Mapping.RHS, IC, InstCache,
+                                                                   BlockCache, &SubstConstMap, true)}),
+                              SubstAnte});
+    }
+
+  }
+
+  if (DebugLevel > 3) {
+    llvm::errs() << "number of constant synthesis tries exceeds MaxTries(";
+    llvm::errs() << MaxTries;
+    llvm::errs() << ")\n";
+  }
+
   return EC;
 }
 

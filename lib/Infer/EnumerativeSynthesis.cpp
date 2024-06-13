@@ -16,6 +16,7 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Support/CommandLine.h"
 #include "souper/Infer/AliveDriver.h"
+#include "souper/Infer/Z3Driver.h"
 #include "souper/Infer/ConstantSynthesis.h"
 #include "souper/Infer/EnumerativeSynthesis.h"
 #include "souper/Infer/Pruning.h"
@@ -72,6 +73,9 @@ namespace {
   static cl::opt<bool, /*ExternalStorage=*/true>
     AliveFlagParser("souper-use-alive", cl::desc("Use Alive2 as the backend"),
     cl::Hidden, cl::location(UseAlive), cl::init(false));
+  static cl::opt<bool> UseNativeZ3("souper-in-process-z3-synthesis",
+    cl::desc("Use the Z3 C++ API for synthesis (default=false)"),
+    cl::init(false));
   static cl::opt<bool> LSBPruning("souper-lsb-pruning",
     cl::desc("Try to prune guesses by looking for a difference in LSB"),
     cl::init(false));
@@ -789,14 +793,134 @@ std::error_code synthesizeWithKLEE(SynthesisContext &SC, std::vector<Inst *> &RH
   return EC;
 }
 
+std::error_code synthesizeWithZ3(SynthesisContext &SC, std::vector<Inst *> &RHSs,
+                                 const std::vector<souper::Inst *> &Guesses) {
+  std::error_code EC;
+
+  // find the valid one
+  int GuessIndex = -1;
+
+  if (DebugLevel > 2) {
+    llvm::errs() << "\n--------------------- synthesizeWithZ3 ---------------------------\n";
+    ReplacementContext Context;
+    auto S = GetReplacementLHSString(SC.BPCs, SC.PCs,
+                                     SC.LHS, Context);
+    llvm::errs() << S << "\n";
+    llvm::errs() << "there are " << Guesses.size() << " guesses to check\n";
+  }
+
+  for (auto I : Guesses) {
+    GuessIndex++;
+    if (DebugLevel > 2) {
+      llvm::errs() << "\n--------------------------------\n";
+      llvm::errs() << "guess " << GuessIndex << "\n\n";
+      ReplacementContext RC;
+      RC.printInst(I, llvm::errs(), /*printNames=*/true);
+      llvm::errs() << "\n";
+      llvm::errs() << "Cost = " << souper::cost(I, /*IgnoreDepsWithExternalUses=*/true) << "\n";
+    }
+
+    Inst *RHS = nullptr;
+    std::set<Inst *> ConstSet;
+    std::map <Inst *, llvm::APInt> ResultConstMap;
+    souper::getConstants(I, ConstSet);
+    bool GuessHasConstant = !ConstSet.empty();
+    if (!GuessHasConstant) {
+      if (isTransformationValidZ3(SC.LHS, I, SC.PCs, SC.BPCs, SC.IC, SC.Timeout)) {
+        if (DebugLevel > 3)
+          llvm::errs() << "query is UNSAT, guess works\n";
+        RHS = I;
+      } else {
+        if (DebugLevel > 3)
+          llvm::errs() << "this guess doesn't work\n";
+        continue;
+      }
+    } else {
+      // guess has constant(s)
+      ConstantSynthesisZ3 CS;
+      EC = CS.synthesize(SC.SMTSolver, SC.BPCs, SC.PCs, InstMapping (SC.LHS, I), ConstSet,
+                         ResultConstMap, SC.IC, /*MaxTries=*/MaxTries, SC.Timeout,
+                         /*AvoidNops=*/true);
+      if (ResultConstMap.empty())
+        continue;
+      std::map<Inst *, Inst *> InstCache;
+      std::map<Block *, Block *> BlockCache;
+      RHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ResultConstMap, false, false);
+    }
+
+    assert(RHS);
+
+    if (DoubleCheckWithAlive) {
+      if (isTransformationValid(SC.LHS, RHS, SC.PCs, SC.BPCs, SC.IC)) {
+        if (DebugLevel > 3) {
+          llvm::errs() << "Transformation verified by alive.\n";
+        }
+      } else {
+        if (DebugLevel > 1) {
+          llvm::errs() << "Transformation could not be verified by alive.\n";
+          ReplacementContext RC;
+          auto str = RC.printInst(SC.LHS, llvm::errs(), /*printNames=*/true);
+          llvm::errs() << "infer " << str << "\n";
+          str = RC.printInst(RHS, llvm::errs(), /*printNames=*/true);
+          llvm::errs() << "result " << str << "\n";
+        }
+        RHS = nullptr;
+      }
+    }
+
+    if (TryShrinkConsts) {
+      // FIXME shrink constants properly, this is a placeholder where we
+      // just see if we can replace every constant with zero
+      // TODO(manasij) : Implement binary search, involve alive only when we find a solution
+      if (RHS && !ResultConstMap.empty() && DoubleCheckWithAlive) {
+        std::map <Inst *, llvm::APInt> ZeroConstMap;
+        for (auto it : ResultConstMap) {
+          auto I = it.first;
+          ZeroConstMap[I] = llvm::APInt(I->Width, 0);
+        }
+        std::map<Inst *, Inst *> InstCache;
+        std::map<Block *, Block *> BlockCache;
+        auto newRHS = getInstCopy(I, SC.IC, InstCache, BlockCache, &ZeroConstMap, false, false);
+        if (isTransformationValid(SC.LHS, newRHS, SC.PCs, SC.BPCs, SC.IC))
+          RHS = newRHS;
+      }
+    }
+
+    if (RHS) {
+      RHSs.emplace_back(RHS);
+      if (!SC.CheckAllGuesses) {
+        if (DebugLevel > 2)
+          llvm::errs() << "\n------ normal exit of synthesizeWithZ3 with 1 result ------\n";
+        return EC;
+      }
+      if (DebugLevel > 3) {
+        llvm::outs() << "; result " << RHSs.size() << ":\n";
+        ReplacementContext RC;
+        RC.printInst(RHS, llvm::outs(), true);
+        llvm::outs() << "\n";
+      }
+    }
+  }
+
+  if (DebugLevel > 2)
+    llvm::errs() << "\n------ normal exit of synthesizeWithZ3 ----------------\n";
+  return EC;
+}
+
+
 std::error_code verify(SynthesisContext &SC, std::vector<Inst *> &RHSs,
                        const std::vector<souper::Inst *> &Guesses) {
   std::error_code EC;
   if (SkipSolver || Guesses.empty())
     return EC;
 
-  return UseAlive ? synthesizeWithAlive(SC, RHSs, Guesses) :
-                    synthesizeWithKLEE(SC, RHSs, Guesses);
+  if (UseNativeZ3) {
+    return synthesizeWithZ3(SC, RHSs, Guesses);
+  } else if (UseAlive) {
+    return synthesizeWithAlive(SC, RHSs, Guesses);
+  } else {
+    return synthesizeWithKLEE(SC, RHSs, Guesses);
+  }
 }
 
 std::error_code
