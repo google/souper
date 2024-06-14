@@ -20,9 +20,9 @@ library from your package manager or from Homebrew.
 ```
 $ ./build_deps.sh $buildtype $extra_cmake_flags
 ```
-   $buildtype is optional; it defaults to Release and may be set to any LLVM
+   `$buildtype` is optional; it defaults to 'Release' and may be set to any LLVM
    build type.
-   $extra_cmake_flags is optional. It is passed to CMake.
+   `$extra_cmake_flags` is optional. It is passed to CMake.
 
 2. Run CMake from a build directory:
 ```
@@ -33,12 +33,12 @@ $ cmake -DCMAKE_BUILD_TYPE=$buildtype /path/to/souper
    Again, the build type is optional and defaults to Release. In any case it
    must match the build type used when compiling the dependencies.
 
-3. Run 'make' from the build directory.
+3. Run `make` from the build directory.
 
-4. Optionally run 'make check' to run Souper's test suite. To run the test suite
-   under Valgrind, run 'make check LIT_ARGS="-v --vg --vg-leak"' instead. By
+4. Optionally run `make check` to run Souper's test suite. To run the test suite
+   under Valgrind, run `make check LIT_ARGS="-v --vg --vg-leak"` instead. By
    default the solver is also run under Valgrind. This can be disabled by
-   by adding --vg-arg=--trace-children-skip=/path/to/solver to LIT_ARGS.
+   by adding `--vg-arg=--trace-children-skip=/path/to/solver` to `LIT_ARGS`.
 
 Note that GCC 4.8 and earlier have a bug in handling multiline string
 literals. You should build Souper using GCC 4.9+ or Clang.
@@ -46,8 +46,8 @@ literals. You should build Souper using GCC 4.9+ or Clang.
 # Using Souper
 
 After following the above instructions, you will have a Souper
-executable in /path/to/souper-build/souper and a Clang executable in
-/path/to/souper/third_party/llvm/$buildtype/bin/clang.  You can use the
+executable in `/path/to/souper-build/souper` and a Clang executable in
+`/path/to/souper/third_party/llvm/$buildtype/bin/clang`.  You can use the
 Clang executable to create an LLVM bitcode file like this:
 ```
 $ /path/to/clang -emit-llvm -c -o /path/to/file.bc /path/to/file.c
@@ -89,14 +89,14 @@ $ make
 ```
 
 Compilation using Souper can be sped up by caching queries. By default, Souper
-uses a non-persistent RAM-based cache. The -souper-external-cache flag causes
+uses a non-persistent RAM-based cache. The `-souper-external-cache` flag causes
 Souper to cache its queries in a Redis database. For this to work, Redis >=
 1.2.0 must be installed on the machine where you are running Souper and a Redis
 server must be listening on the default port (6379).
 
 sclang uses external caching by default since this often gives a substantial
 speedup for large compilations. This behavior may be disabled by setting the
-SOUPER_NO_EXTERNAL_CACHE environment variable. Souper's Redis cache does not yet
+`SOUPER_NO_EXTERNAL_CACHE` environment variable. Souper's Redis cache does not yet
 have any support for versioning; you should stop Redis and delete its dump file
 any time Souper is upgraded.
 
