@@ -58,7 +58,13 @@ public:
 
   Inst *getDataflowConditions(Inst *I);
   Inst *getUBInstCondition(Inst *Root);
-
+  Inst *GetCandidateExprForReplacement(
+         const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
+         InstMapping Mapping, Inst *Precondition, bool Negate, bool DropUB);
+  void setBlockPCMap(const BlockPCs &BPCs);
+  Inst *getBlockPCs(Inst *Root);
+  std::vector<Inst *> getVarInsts(const std::vector<Inst *> Insts);
+  Inst *getImpliesInst(Inst *Ante, Inst *I);
 protected:
   InstContext *LIC;
 
@@ -77,14 +83,10 @@ protected:
                               std::map<Inst *, bool> *SelectBranches,
                               UBPathInstMap &CachedUBPathInsts);
 
-  void setBlockPCMap(const BlockPCs &BPCs);
-
-  Inst *getBlockPCs(Inst *Root);
   std::map<Inst *, Inst *> getUBInstConstraints(Inst *Root);
   std::vector<Inst *> getUBPathInsts(Inst *Root);
-  std::vector<Inst *> getVarInsts(const std::vector<Inst *> Insts);
+
   Inst *getExtractInst(Inst *I, unsigned Offset, unsigned W);
-  Inst *getImpliesInst(Inst *Ante, Inst *I);
 
   Inst *addnswUB(Inst *I);
   Inst *addnuwUB(Inst *I);
@@ -102,9 +104,7 @@ protected:
   Inst *lshrExactUB(Inst *I);
   Inst *ashrExactUB(Inst *I);
 
-  Inst *GetCandidateExprForReplacement(
-         const BlockPCs &BPCs, const std::vector<InstMapping> &PCs,
-         InstMapping Mapping, Inst *Precondition, bool Negate, bool DropUB);
+
 };
 
 std::string BuildQuery(InstContext &IC, const BlockPCs &BPCs,
